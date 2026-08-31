@@ -31,12 +31,17 @@ during per-frame segmentation:
 """
 from __future__ import annotations
 
+import asyncio
 import base64
 import csv
+import hashlib
 import io
 import logging
 import os
+import threading
 import uuid
+from collections import OrderedDict
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, Dict, List, Literal, NamedTuple, Optional, Tuple
 
@@ -1017,6 +1022,25 @@ class KymographRequest(BaseModel):
     # 1-D plot instead of a 2-D heatmap. Used by the "intensity profiles" export
     # mode. Independent of ``detect_velocity``.
     render_profiles: bool = False
+    # Build ``csv_base64``: the sampled intensity matrix, one row per frame.
+    #
+    # Defaults True so a caller that omits the field gets exactly today's
+    # response, byte for byte. That covers the old-Node-against-new-ml
+    # direction. The OTHER direction is not covered and cannot be: this model
+    # is ``extra="forbid"``, so a Node container that sends ``include_csv`` to
+    # an ml container which has not been recreated yet gets a 422 on every
+    # kymograph. **Deploy ml before the Node caller that sets it.**
+    #
+    # Nothing sets it yet — ``backend/src/services/kymographService.ts`` builds
+    # the ML request and is where the opt-in belongs. Worth turning off for the
+    # interactive modal, which re-requests a kymograph on every channel switch
+    # and every ``intensity_width`` nudge but only reads the CSV when the user
+    # clicks download: on the 299-frame container above the matrix is 469 KB
+    # raw / 626 KB base64, roughly four fifths of the response body, for 12 ms
+    # of build time. It is the bytes on the wire that are worth saving, not the
+    # CPU — and ``KymographServiceResult.csvBase64`` must become `string | null`
+    # in the same change, or a null will reach the modal's download handler.
+    include_csv: bool = True
 
 
 class KymographTrack(BaseModel):
@@ -1062,7 +1086,12 @@ class KymographResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     png_base64: str
-    csv_base64: str
+    # The sampled intensity matrix as base64 CSV. None ONLY when the request set
+    # ``include_csv=False`` — never as a degraded fallback, so a caller that
+    # asked for the CSV and got None has hit a bug, not an empty kymograph (an
+    # empty one would still carry its header row). Not "" for the same reason:
+    # an empty string would download as a zero-byte file instead of failing.
+    csv_base64: Optional[str] = None
     frame_count: int
     length_px: int
     tracked: bool
@@ -1124,6 +1153,356 @@ def _arc_length_resample_polyline(
     local = np.clip(local, 0.0, 1.0)[:, None]
     out = pts_rc[seg_idx] + local * segs[seg_idx]
     return out.astype(np.float32)
+
+
+# ----------------------------------------------------------------------------
+#  Frame sampling: the 14 000x read amplification, and what to cache
+# ----------------------------------------------------------------------------
+#
+# Measured on a real 300-frame container (CH5_DO4 / 4972cad8, 1924x1476 16-bit
+# IRM PNGs, 4.24 MB each) at the default target_width=200:
+#
+#   bytes read per kymograph   1267 MB
+#   pixels actually used         59 800  (200 per frame)  -> 14 199x amplified
+#   PIL open                      0.05 s
+#   full-frame decode             9.48 s  (99% of the sampling loop)
+#   polyline resample             0.06 s
+#   map_coordinates               0.02 s
+#   whole sampling loop           9.62 s
+#
+# Two things follow, and they are the whole design of this section.
+#
+# 1. CACHE THE SAMPLED ROW, NOT THE DECODED FRAME. The 299 rows of that
+#    request are 233.6 KB in total; the 299 decoded frames are 3.4 GB (11.36 MB
+#    each as float32), against a 12 GB container limit shared with seven
+#    segmentation models. A frame cache small enough to fit would also be
+#    USELESS rather than merely small: a kymograph is a strict sequential scan
+#    of every frame, so an LRU shorter than the scan evicts each entry before
+#    the next request reaches it again and returns a 0% hit rate while still
+#    holding the memory. The row cache has no such failure mode — an entire
+#    request's working set is a quarter of a megabyte.
+#
+#    What it buys: a repeat of the same geometry (reopening the modal, toggling
+#    velocity detection, nudging `intensity_width`, exporting after viewing)
+#    skips the decode entirely. What it does NOT buy: a different microtubule,
+#    or the same one on another channel, is a different key and pays the cold
+#    cost. That is why (2) exists.
+#
+# 2. DECODE IN PARALLEL. Pillow releases the GIL inside the PNG decoder, so the
+#    cold path is thread-scalable. Measured on 60 of the frames above, inside
+#    the ml container's 4-CPU quota:
+#
+#      serial   1.999 s   x2  1.126 s   x4  0.559 s   x8  0.631 s   x12  0.762 s
+#
+#    3.58x at four threads, then it turns over — there are only four CPUs, and
+#    oversubscription costs more than it wins. cv2.imread was measured on the
+#    same frames (2.079 s serial, 0.832 s at x4) and is no faster than Pillow,
+#    so the hot path keeps the decoder it already had.
+#
+# The pool is capped rather than sized to the machine because the cap is the
+# container's CPU quota (`cpus: '4.0'` in docker-compose.production.yml), and
+# because this card is shared with the essays worker and Maptimize.
+
+_DECODE_WORKERS_CAP = 4
+
+
+def _decode_workers() -> int:
+    """Threads used to decode frame PNGs for one kymograph.
+
+    ``KYMOGRAPH_DECODE_WORKERS`` overrides it; 1 serialises the decodes again
+    (still on the pool — see ``_sample_rows`` for why inline is worse).
+    """
+    override = os.getenv("KYMOGRAPH_DECODE_WORKERS", "").strip()
+    if override:
+        try:
+            return max(1, min(_DECODE_WORKERS_CAP, int(override)))
+        except ValueError:
+            logger.warning(
+                "KYMOGRAPH_DECODE_WORKERS=%r is not an integer; using the default",
+                override,
+            )
+    try:
+        cpus = len(os.sched_getaffinity(0))  # respects a cpuset, unlike cpu_count
+    except AttributeError:  # pragma: no cover - non-Linux
+        cpus = os.cpu_count() or 1
+    return max(1, min(_DECODE_WORKERS_CAP, cpus))
+
+
+_DECODE_WORKERS = _decode_workers()
+_DECODE_POOL = ThreadPoolExecutor(
+    max_workers=_DECODE_WORKERS, thread_name_prefix="kymo-decode"
+)
+
+# Per-entry cost of the LRU beyond the row's own bytes: the OrderedDict link,
+# the 6-tuple key with its 16-byte digest, and the ndarray object header.
+# Measured with tracemalloc over 20 000 entries at target_width=200: 391.5 B on
+# top of an 800 B row. Rounded up. Counting it matters — at the default width
+# it is a third of what the entry actually holds (800 B of data, 1192 B
+# resident), so a budget that counted only the rows would be out by that much.
+_ENTRY_OVERHEAD_BYTES = 400
+
+_DEFAULT_SAMPLE_CACHE_MB = 64
+
+
+def _sample_cache_budget_bytes() -> int:
+    """Byte budget for the row cache, sized to the working set rather than to a
+    guess about frames — the mistake commit 24434138 fixed in the editor's
+    decode cache, where a constant chosen for one channel silently evicted a
+    three-channel window on every frame.
+
+    Here the working set is explicit: one 300-frame kymograph at
+    target_width=200 is 300 x (800 + 400) B = 352 KB, so 64 MB holds ~186
+    complete kymographs — every microtubule of a dense frame, on all three
+    channels, several times over. At the schema's maximum target_width=2000 an
+    entry is 8.4 KB and the budget still holds ~26 full-length kymographs.
+
+    ``KYMOGRAPH_SAMPLE_CACHE_MB`` overrides it. A malformed value must not take
+    the module's import down with it: this endpoint is registered by
+    ``api.main``, so a typo in the compose file would stop the whole ml service
+    rather than one route.
+    """
+    raw = os.getenv("KYMOGRAPH_SAMPLE_CACHE_MB", "").strip()
+    megabytes = _DEFAULT_SAMPLE_CACHE_MB
+    if raw:
+        try:
+            megabytes = max(1, int(raw))
+        except ValueError:
+            logger.warning(
+                "KYMOGRAPH_SAMPLE_CACHE_MB=%r is not an integer; using %d MB",
+                raw,
+                _DEFAULT_SAMPLE_CACHE_MB,
+            )
+    return megabytes * 1024 * 1024
+
+
+class _SampledRowCache:
+    """Bounded, byte-accounted LRU of sampled kymograph rows.
+
+    Keyed on ``(st_dev, st_ino, st_mtime_ns, st_size, n_samples, geometry)``.
+
+    The file half of that key is the stat identity rather than the path string,
+    because the bytes are what the row depends on: two spellings of one frame
+    (or a hard link) must hit, and a REWRITTEN frame must miss. Frame PNGs are
+    not immutable — ``drift_correction.correct_drift_in_place`` rewrites them
+    on disk after extraction, and ``add_channel_align`` writes new ones — so
+    "extracted once, never touched" would be a wrong assumption to cache on.
+    Size alone would not catch a re-registration that happens to re-compress to
+    the same length; mtime at nanosecond resolution does.
+
+    The geometry half is a digest of the request's polyline bytes together with
+    ``n_samples``, which are the only other inputs to a row: the resample is a
+    pure function of the two, and ``target_width`` reaches the row solely
+    through ``n_samples`` (so keying on the derived value is both narrower and
+    more correct than keying on the request field).
+    """
+
+    def __init__(self, budget_bytes: int) -> None:
+        self._budget = budget_bytes
+        self._lock = threading.Lock()
+        self._entries: "OrderedDict[Tuple[Any, ...], np.ndarray]" = OrderedDict()
+        self._bytes = 0
+        self.hits = 0
+        self.misses = 0
+        self.evictions = 0
+
+    @staticmethod
+    def _cost(row: np.ndarray) -> int:
+        return int(row.nbytes) + _ENTRY_OVERHEAD_BYTES
+
+    def get(self, key: Tuple[Any, ...]) -> Optional[np.ndarray]:
+        with self._lock:
+            row = self._entries.get(key)
+            if row is None:
+                self.misses += 1
+                return None
+            self._entries.move_to_end(key)
+            self.hits += 1
+            return row
+
+    def put(self, key: Tuple[Any, ...], row: np.ndarray) -> None:
+        cost = self._cost(row)
+        if cost > self._budget:
+            return
+        with self._lock:
+            previous = self._entries.pop(key, None)
+            if previous is not None:
+                self._bytes -= self._cost(previous)
+            self._entries[key] = row
+            self._bytes += cost
+            while self._bytes > self._budget:
+                _, evicted = self._entries.popitem(last=False)
+                self._bytes -= self._cost(evicted)
+                self.evictions += 1
+
+    def clear(self) -> None:
+        with self._lock:
+            self._entries.clear()
+            self._bytes = 0
+
+    def stats(self) -> Dict[str, int]:
+        with self._lock:
+            return {
+                "entries": len(self._entries),
+                "bytes": self._bytes,
+                "budget_bytes": self._budget,
+                "hits": self.hits,
+                "misses": self.misses,
+                "evictions": self.evictions,
+            }
+
+
+_SAMPLE_CACHE = _SampledRowCache(_sample_cache_budget_bytes())
+
+# One decoded frame per decode thread, kept alive until that thread decodes the
+# next one. Not a cache — nothing ever reads it — it exists only to stop glibc
+# handing 11 MB back to the kernel between frames.
+#
+# The loop this replaced held `img` across iterations by accident of being a
+# loop, so a new frame was always allocated while the previous one was still
+# live: the allocator kept a free block of exactly the right size and reused it
+# in place. Decoding in a function frees the block at every return, glibc trims
+# it, and the next frame faults its 2775 pages back in one at a time. Measured
+# over 299 real frames, that difference is 822 839 minor faults and 1.74 s of
+# system time per request against 5 312 faults and 0.24 s.
+#
+# The cost is memory the allocator now keeps instead of returning: measured
+# over three consecutive cold kymographs of different microtubules, RSS
+# plateaus at 286 MB against 147 MB without this line and 158 MB before the
+# whole change. Flat across all three requests — it is one frame per thread
+# plus the arena high-water mark, not a leak. ~128 MB against the ml service's
+# 12 GB limit, to stop paying 1.4 s of kernel time on every kymograph, and the
+# export path fans one request out over every microtubule in the container.
+#
+# The tidier-looking version — keep ONE buffer per thread and decode into it
+# with np.copyto — was measured and is worse on both axes (1 045 690 faults,
+# 1.63 s sys, 190 MB): Pillow still allocates and frees its own decode buffer
+# per frame, so the churn survives and the extra copy is pure cost.
+_DECODE_SCRATCH = threading.local()
+
+
+def _sample_frame_row(
+    path: Path, pts: np.ndarray, n_samples: int
+) -> np.ndarray:
+    """Decode one frame and read the intensity profile along ``pts``.
+
+    Runs on the decode pool, so it must touch no shared state. The returned
+    row is frozen read-only: it is handed straight into the cache, and
+    ``np.stack`` copies it into the kymograph matrix, so nothing downstream has
+    a reason to write through it — an accidental write should raise rather than
+    corrupt every later request that reads the same entry.
+    """
+    from PIL import Image as PILImage
+    from scipy.ndimage import map_coordinates
+
+    # Load at native bit depth. convert('L') would force 8-bit and lose
+    # half the dynamic range of 16-bit microscopy frames.
+    pil_frame = PILImage.open(path)
+    if pil_frame.mode in ('I;16', 'I;16B', 'I;16L', 'I', 'F'):
+        img = np.array(pil_frame, dtype=np.float32)
+    else:
+        img = np.array(pil_frame.convert("L"), dtype=np.float32)
+    _, _ = img.shape
+    # Step 1 (ImageJ-style): resample the polyline geometry to
+    # ``n_samples`` arc-length-uniform points. This is THE change
+    # that makes the kymograph spatially honest — vertex-only
+    # sampling was aliasing punctate signal between vertices.
+    sampled_pts = _arc_length_resample_polyline(pts, n_samples)
+    # Step 2: sample the underlying image at each interpolated point.
+    # order=0 = nearest pixel (no intensity blending). mode='constant',
+    # cval=0 = pixels outside the image read as 0 (matches ImageJ's
+    # getInterpolatedValue zero-fill, instead of edge-clamping which
+    # falsely brightened polylines that crossed the frame border).
+    profile = map_coordinates(
+        img,
+        np.stack([sampled_pts[:, 0], sampled_pts[:, 1]]),
+        order=0,
+        mode="constant",
+        cval=0.0,
+    )
+    row = profile.astype(np.float32)
+    row.setflags(write=False)
+    # See _DECODE_SCRATCH: hold this frame until the next one on this thread
+    # has been allocated, so the allocator reuses the block instead of
+    # returning it to the kernel and re-faulting every page.
+    _DECODE_SCRATCH.previous_frame = img
+    return row
+
+
+def _sample_rows(
+    frames: List[KymographFrameInput], n_samples: int
+) -> Tuple[List[np.ndarray], int, int]:
+    """Build one kymograph row per frame. Returns ``(rows, hits, misses)``.
+
+    Validation (path guard, existence, polyline shape) stays SERIAL and in
+    request order, so a bad frame produces the same error, naming the same
+    frame, as it did when the whole loop was serial. Only cache misses reach
+    the decode pool, so a fully warm request never leaves this thread.
+    """
+    rows: List[Optional[np.ndarray]] = [None] * len(frames)
+    misses: List[Tuple[int, Path, np.ndarray, Tuple[Any, ...]]] = []
+    hits = 0
+
+    for i, frame in enumerate(frames):
+        path = Path(frame.image_path)
+        _assert_safe_path(path, "image_path")
+        try:
+            st = os.stat(path)
+        except OSError:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Frame image missing: {frame.image_path}",
+            )
+        pts = np.asarray(frame.polyline_rc, dtype=np.float32)
+        if pts.ndim != 2 or pts.shape[1] != 2 or pts.shape[0] < 2:
+            logger.warning(
+                "kymograph: frame %s polyline has <2 points; row filled with zeros",
+                frame.frame,
+            )
+            rows[i] = np.zeros(n_samples, dtype=np.float32)
+            continue
+        key = (
+            st.st_dev,
+            st.st_ino,
+            st.st_mtime_ns,
+            st.st_size,
+            n_samples,
+            hashlib.blake2b(pts.tobytes(), digest_size=16).digest(),
+        )
+        cached = _SAMPLE_CACHE.get(key)
+        if cached is not None:
+            rows[i] = cached
+            hits += 1
+        else:
+            misses.append((i, path, pts, key))
+
+    if misses:
+        # Everything goes through the pool, including a single miss and a pool
+        # of one worker. The obvious optimisation — call inline when there is
+        # nothing to parallelise — measurably backfires: decoding on the
+        # calling thread allocates and frees an 11 MB frame buffer per call, so
+        # glibc munmaps it and the next frame faults its 2775 pages back in one
+        # at a time. Measured over 299 real frames: 1 390 621 minor faults and
+        # 2.33 s of system time inline, against 20 205 faults and 0.37 s
+        # through the pool, whose worker keeps one arena warm across calls.
+        # ``map`` preserves input order, which is what keeps row i == frame i.
+        sampled = _DECODE_POOL.map(
+            lambda job: _sample_frame_row(job[1], job[2], n_samples), misses
+        )
+        for (i, _path, _pts, key), row in zip(misses, sampled):
+            rows[i] = row
+            _SAMPLE_CACHE.put(key, row)
+
+    # Row i MUST be frame i: the CSV writer labels row i with ``frames[i].frame``
+    # and the tracker reads velocities off the row axis, so dropping an unfilled
+    # row would relabel every later frame instead of failing. Every index is
+    # written above; this is the assertion that keeps it that way.
+    unfilled = [frames[i].frame for i, row in enumerate(rows) if row is None]
+    if unfilled:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Kymograph sampling produced no row for frame(s) {unfilled[:5]}",
+        )
+    return rows, hits, len(misses)
 
 
 _VIRIDIS_RGB = np.array(
@@ -1239,27 +1618,54 @@ def _render_profiles(
     return profiles
 
 
+# One slot, on purpose.
+#
+# The body below is fully blocking — decode, SciPy, matplotlib, PNG encode —
+# and it used to run on the event loop, where a 10-30 s render stalled every
+# other request in the worker including the GET /health that the compose
+# healthcheck polls every 30 s with a 10 s timeout. The previous note here said
+# the fix "needs a bounded executor, not a keyword change. Measure before
+# switching", and declined to do either, because `def` would have handed this
+# to anyio's 40-slot threadpool: forty concurrent renders each holding a
+# full-frame float32 buffer, on the container that is also doing GPU inference,
+# all calling the process-global `matplotlib.use()`.
+#
+# A one-worker executor is that bounded executor. It keeps the concurrency the
+# event loop was providing — exactly one kymograph in flight, so matplotlib's
+# global state is reached by one thread at a time — and gives back the only
+# thing the event loop should never have been holding: the ability to answer
+# anything else.
+#
+# The memory peak is NOT unchanged, and the reason is the decode pool above,
+# not this executor: `_sample_rows` now holds up to `_DECODE_WORKERS` (4)
+# full-frame float32 buffers at once instead of one. Measured on the 299-frame
+# container, peak RSS went 146 MB -> 187 MB, i.e. +41 MB against 11.36 MB per
+# 1924x1476 frame — three extra frames in flight, as expected. On the 2048x2048
+# frames the old note sized, that is ~50 MB rather than ~17 MB. Both are small
+# against the service's 12 GB limit, but the arithmetic is why neither number
+# is free to raise: `max_workers` here multiplies by `_DECODE_WORKERS_CAP`
+# there, so growing either is a throughput decision that needs its own
+# measurement of the peak.
+_KYMOGRAPH_EXECUTOR = ThreadPoolExecutor(
+    max_workers=1, thread_name_prefix="kymograph"
+)
+
+
 @router.post("/kymograph", response_model=KymographResponse)
 async def kymograph(req: KymographRequest) -> KymographResponse:
     """Render a kymograph for one microtubule polyline.
 
-    NOTE: this is `async def` while the sibling /track is `def`, and the
-    asymmetry is deliberate *for now*. /track is pure numpy/scipy, so handing
-    it to FastAPI's threadpool is a free win. /kymograph is not equivalent:
-    its body holds a full-frame float32 array per frame (16 MB at 2048x2048)
-    and builds one matplotlib Figure per frame, and it calls the process-global
-    `matplotlib.use()`. Under `async def` the event loop serialises requests,
-    so exactly one runs at a time. Declaring it `def` would hand it to anyio's
-    40-slot threadpool instead — 40 concurrent renders, each holding those
-    buffers, on the container that is also doing GPU inference, plus concurrent
-    calls into matplotlib's global backend state.
-
-    So the blocking problem is real (a long render does stall /health, which
-    the compose healthcheck polls every 30 s), but the fix needs a bounded
-    executor, not a keyword change. Measure before switching.
+    Thin async wrapper: the work runs on ``_KYMOGRAPH_EXECUTOR`` so the event
+    loop stays free. See ``_kymograph_sync`` for the body.
     """
+    return await asyncio.get_running_loop().run_in_executor(
+        _KYMOGRAPH_EXECUTOR, _kymograph_sync, req
+    )
+
+
+def _kymograph_sync(req: KymographRequest) -> KymographResponse:
+    """Blocking body of /kymograph. Runs on the single-slot executor above."""
     from PIL import Image as PILImage
-    from scipy.ndimage import map_coordinates
 
     if not req.frames:
         raise HTTPException(status_code=400, detail="No frames provided")
@@ -1287,49 +1693,14 @@ async def kymograph(req: KymographRequest) -> KymographResponse:
     # Node backend multiplies by this before applying the µm calibration.
     px_per_column = seed_arc / (n_samples - 1) if n_samples > 1 else 1.0
 
-    rows: List[np.ndarray] = []
-    for frame in frames:
-        path = Path(frame.image_path)
-        _assert_safe_path(path, "image_path")
-        if not path.exists():
-            raise HTTPException(
-                status_code=404,
-                detail=f"Frame image missing: {frame.image_path}",
-            )
-        # Load at native bit depth. convert('L') would force 8-bit and lose
-        # half the dynamic range of 16-bit microscopy frames.
-        pil_frame = PILImage.open(path)
-        if pil_frame.mode in ('I;16', 'I;16B', 'I;16L', 'I', 'F'):
-            img = np.array(pil_frame, dtype=np.float32)
-        else:
-            img = np.array(pil_frame.convert("L"), dtype=np.float32)
-        _, _ = img.shape
-        pts = np.asarray(frame.polyline_rc, dtype=np.float32)
-        if pts.ndim != 2 or pts.shape[1] != 2 or pts.shape[0] < 2:
-            logger.warning(
-                "kymograph: frame %s polyline has <2 points; row filled with zeros",
-                frame.frame,
-            )
-            rows.append(np.zeros(n_samples, dtype=np.float32))
-            continue
-        # Step 1 (ImageJ-style): resample the polyline geometry to
-        # ``n_samples`` arc-length-uniform points. This is THE change
-        # that makes the kymograph spatially honest — vertex-only
-        # sampling was aliasing punctate signal between vertices.
-        sampled_pts = _arc_length_resample_polyline(pts, n_samples)
-        # Step 2: sample the underlying image at each interpolated point.
-        # order=0 = nearest pixel (no intensity blending). mode='constant',
-        # cval=0 = pixels outside the image read as 0 (matches ImageJ's
-        # getInterpolatedValue zero-fill, instead of edge-clamping which
-        # falsely brightened polylines that crossed the frame border).
-        profile = map_coordinates(
-            img,
-            np.stack([sampled_pts[:, 0], sampled_pts[:, 1]]),
-            order=0,
-            mode="constant",
-            cval=0.0,
-        )
-        rows.append(profile.astype(np.float32))
+    rows, cache_hits, cache_misses = _sample_rows(frames, n_samples)
+    logger.info(
+        "kymograph: %d frame(s), %d cached / %d decoded (%d worker(s))",
+        len(frames),
+        cache_hits,
+        cache_misses,
+        _DECODE_WORKERS,
+    )
 
     kymo = np.stack(rows, axis=0)  # (F, n_samples)
     if kymo.size == 0:
@@ -1438,12 +1809,19 @@ async def kymograph(req: KymographRequest) -> KymographResponse:
         except Exception:
             logger.exception("kymograph profile render failed; omitting profiles")
 
-    csv_buf = io.StringIO()
-    writer = csv.writer(csv_buf)
-    writer.writerow(["frame", *[f"x{i}" for i in range(n_samples)]])
-    for i, row in enumerate(kymo):
-        writer.writerow([frames[i].frame, *row.tolist()])
-    csv_b64 = base64.b64encode(csv_buf.getvalue().encode("utf-8")).decode("ascii")
+    # The intensity matrix as CSV, only when the caller asked for it — see
+    # ``KymographRequest.include_csv``. Row i is labelled with ``frames[i].frame``,
+    # which is why ``_sample_rows`` refuses to return a short list.
+    csv_b64: Optional[str] = None
+    if req.include_csv:
+        csv_buf = io.StringIO()
+        writer = csv.writer(csv_buf)
+        writer.writerow(["frame", *[f"x{i}" for i in range(n_samples)]])
+        for i, row in enumerate(kymo):
+            writer.writerow([frames[i].frame, *row.tolist()])
+        csv_b64 = base64.b64encode(
+            csv_buf.getvalue().encode("utf-8")
+        ).decode("ascii")
 
     return KymographResponse(
         png_base64=png_b64,
