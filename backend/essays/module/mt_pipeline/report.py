@@ -62,6 +62,14 @@ COLUMNS = [
     # A position with NO microtubules produces no row here at all, and so does a
     # position whose segmentation failed. focus_qc.csv carries one row for every
     # position that was read, which is where a badly defocused field shows up.
+    #
+    # focus_qc.csv also reports each channel's SHARPNESS descriptor, and that is
+    # deliberately NOT repeated here. This table is one row per MICROTUBULE, so
+    # every per-position column is duplicated across all of a position's
+    # filaments; the four below earn that because they carry the verdict, and a
+    # number nothing decides on does not. The per-position diagnostic sheet is
+    # where a reader goes to threshold it, and it is complete there — it covers
+    # the zero-microtubule positions this table cannot represent at all.
     "focus_irm_score", "focus_tirf_score", "focus_flagged", "focus_reason",
 ]
 
@@ -107,10 +115,66 @@ FOCUS_COLUMNS = [
     # Scores are focus_qc's descriptor: occupied structure area above 5 sigma,
     # in pixels per 10,000. `*_threshold` travels with them so a row stays
     # interpretable after a recalibration changes the thresholds.
+    #
+    # `*_sharpness` is REPORTED AND NOTHING DECIDES ON IT. It is focus_qc's
+    # second descriptor: the mean gradient magnitude over the structure pixels
+    # (|rn| > 4 sigma) of the noise-normalised, background-subtracted frame —
+    # so its unit is the frame's own noise sigma PER PIXEL, and like the score
+    # it is free of camera gain, of a constant offset and of smooth shading.
+    #
+    # It is here because it is the most acquisition-STABLE number focus_qc
+    # computes, and the score is the least. Measured 2026-09-01 over the shipped
+    # calibration cache (focus_qc/reference/scores_cache.json — 5 z-stacks x 2
+    # channels, 410 real per-plane measurements) against the spec's annotated
+    # sharp planes at tolerance 0.3 um / guard 0.1 um. SEPARATION is this
+    # project's own margin, p5 of in-focus over p95 of out-of-focus, computed
+    # exactly as `test_in_focus_and_out_of_focus_scores_stay_separated` does —
+    # below 1.0 the classes are inverted at the tails and no absolute threshold
+    # separates them. SPREAD is max/min of the per-stack geometric-midpoint
+    # threshold, i.e. how far a threshold fitted on one stack lands from the
+    # next one's:
+    #
+    #   descriptor   IRM sep   IRM spread   TIRF sep   TIRF spread
+    #   score          1.97x       2.67x      5.01x       23.50x
+    #   sharpness      1.07x       1.46x      0.88x        1.13x
+    #
+    # (The two score separations are the 1.97x / 5.01x already tabulated in
+    # focus_qc/README.md, which is how this reproduction was checked.)
+    #
+    # So a sharpness threshold fitted on one stack still roughly applies to the
+    # next (1.13-1.46x) where a score threshold does not (2.67x, and 23.50x on
+    # TIRF) — which is what a user with wells outside the shipped calibration
+    # needs, and every 2048x2048 well measured so far is outside it
+    # (`out_of_calibration:TIRF 488` on 3/3 positions).
+    #
+    # And the same table is EXACTLY why sharpness must not become the verdict:
+    # 0.88x on TIRF means the classes are inverted at the tails, so no absolute
+    # threshold separates them at all — one of the five stacks does not admit a
+    # threshold even in-sample — and 1.07x on IRM leaves nothing like the
+    # score's margin. Stable and unable to decide are not in tension: one says
+    # the number travels, the other says what it cannot be used for.
+    #
+    # One caveat that reading has to carry: all 144 NaNs in that cache are TIRF,
+    # and 143 of them sit on OUT-OF-FOCUS planes — a badly defocused
+    # fluorescence frame usually has too little structure to measure sharpness
+    # on at all. The figures above are over the planes that do have a number.
+    # Counting a NaN as zero instead only moves TIRF from 0.88x to 1.06x while
+    # blowing its spread out to 38.03x, so neither reading yields a threshold.
+    # Anyone who wants to promote this to a flag has to re-measure both columns
+    # first, on their own data.
+    #
+    # Blank — not 0 — when the descriptor declined to measure: fewer than
+    # MIN_STRUCTURE_PX = 50 structure pixels in the frame (focus_qc/metrics.py),
+    # which can happen on a frame that scored perfectly well.
+    #
+    # Slotted beside the noise it is expressed in rather than appended, which
+    # the rule above this list allows and results.csv's does not: this file has
+    # no positional readers, and appending would have split the `irm_*` block
+    # that the same rule requires to stay parallel with `tirf_*`.
     "irm_channel", "irm_score", "irm_flag", "irm_threshold",
-    "irm_noise_sigma", "irm_background",
+    "irm_sharpness", "irm_noise_sigma", "irm_background",
     "tirf_channel", "tirf_score", "tirf_flag", "tirf_threshold",
-    "tirf_noise_sigma", "tirf_background",
+    "tirf_sharpness", "tirf_noise_sigma", "tirf_background",
 ]
 
 #: Scores span ~0.0 to ~800 px/10,000 on real wells; four decimals keeps the
@@ -191,6 +255,12 @@ class FocusLog:
             # comparison exactly. Rounding 7.64036346269919 to 7.6404 would
             # decide a score that lands between them the other way.
             row[f"{prefix}_threshold"] = cell(channel.threshold if channel else None)
+            # Four decimals, like the score and unlike the two acquisition
+            # statistics below it: this is a descriptor a user is expected to
+            # threshold themselves, so it keeps the resolution the number the
+            # shipped threshold is applied to gets.
+            row[f"{prefix}_sharpness"] = cell(
+                _rounded(channel.sharpness) if channel else None)
             row[f"{prefix}_noise_sigma"] = cell(
                 _rounded(channel.noise_sigma, 3) if channel else None)
             row[f"{prefix}_background"] = cell(
