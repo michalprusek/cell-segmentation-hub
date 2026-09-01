@@ -165,10 +165,19 @@ function trackColor(netPxFrame: number): string {
 /** Constrain the viewer zoom to a sane range (5 %…2000 %). */
 const clampScale = (s: number) => Math.min(Math.max(s, 0.05), 20);
 
-/** Intensity-band width, clamped to the ML/route bounds (1…50 columns). The `3`
- *  default is hit only by NaN-producing (truly non-numeric) input; empty or
- *  whitespace input parses to 0 and clamps up to 1. */
-const DEFAULT_INTENSITY_WIDTH = 3;
+/** Intensity-band width, clamped to the ML/route bounds (1…50 columns). Not the
+ *  kymograph's line width: it is how many columns are read off the finished
+ *  kymograph around a detected trajectory as signal, with two background bands
+ *  of the same width a 2-column guard to either side.
+ *
+ *  Raised 3 → 5 on 2026-09-01 at the user's request; must stay in step with
+ *  `DEFAULT_INTENSITY_WIDTH` in `backend/src/services/kymographService.ts` and
+ *  `intensity_width` in the ML `KymographRequest`, or the modal's opening view
+ *  disagrees with what an export of the same microtubule reports.
+ *
+ *  The default is also the fallback for NaN-producing (truly non-numeric)
+ *  input; empty or whitespace input parses to 0 and clamps up to 1. */
+const DEFAULT_INTENSITY_WIDTH = 5;
 const clampWidth = (raw: string | number): number => {
   const n = Math.round(Number(raw));
   if (!Number.isFinite(n)) return DEFAULT_INTENSITY_WIDTH;

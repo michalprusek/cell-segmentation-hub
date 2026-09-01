@@ -542,9 +542,12 @@ describe('KymographModal', () => {
       await user.click(cta);
 
       await waitFor(() => expect(mockApiPost).toHaveBeenCalledTimes(2));
+      // 5 since 2026-09-01. It must match the backend and ML defaults, or the
+      // modal shows one set of intensities and an export of the same
+      // microtubule reports another.
       expect(requestBody()).toMatchObject({
         detectVelocity: true,
-        intensityWidth: 3,
+        intensityWidth: 5,
       });
     });
 

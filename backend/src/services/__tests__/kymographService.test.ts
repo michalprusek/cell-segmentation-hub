@@ -46,6 +46,7 @@ vi.mock('../../utils/logger', () => ({
     info: vi.fn(),
     warn: vi.fn(),
     error: vi.fn(),
+    debug: vi.fn(),
   },
 }));
 
@@ -396,7 +397,7 @@ describe('buildKymograph', () => {
       );
     });
 
-    it('sets tracked=false and target_width=200 in static-line mode', async () => {
+    it('sets tracked=false and sends no target_width in static-line mode', async () => {
       mockPrisma.image.findMany.mockResolvedValue([
         makeFrame(0, [POLYLINE_STATIC]),
       ]);
@@ -409,7 +410,27 @@ describe('buildKymograph', () => {
 
       const body = mockAxios.post.mock.calls[0][1];
       expect(body.tracked).toBe(false);
-      expect(body.target_width).toBe(200);
+      // The ML service sizes the column axis from the seed polyline's arc
+      // length and has ignored `target_width` since 2026-09-01. Sending a
+      // value it ignores would read as a setting that does something.
+      expect(body).not.toHaveProperty('target_width');
+    });
+
+    it('sends intensity_width 5 when the caller passes none', async () => {
+      // The default the export runs on, and therefore what decides every
+      // intensity column in velocity_metrics.xlsx. Raised 3 -> 5 on
+      // 2026-09-01; must match the ML field default and the editor modal.
+      mockPrisma.image.findMany.mockResolvedValue([
+        makeFrame(0, [POLYLINE_STATIC]),
+      ]);
+      await buildKymograph({
+        videoContainerId: 'container-1',
+        polylineId: 'poly-1',
+        frameIndex: 0,
+        sourceChannel: 'IRM',
+      });
+
+      expect(mockAxios.post.mock.calls[0][1].intensity_width).toBe(5);
     });
 
     it('sets tracked=true when the seed polyline has a trackId', async () => {
@@ -692,7 +713,7 @@ describe('buildKymograph', () => {
       // so the ML service can drop non-processive tracks before rendering.
       expect(mockAxios.post.mock.calls[0][1]).toMatchObject({
         detect_velocity: true,
-        intensity_width: 3,
+        intensity_width: 5,
         min_net_velocity_um_s: 0.01,
         pixel_size_um: 0.07245,
         frame_interval_ms: 400,
@@ -1528,13 +1549,110 @@ describe('buildKymographBatch', () => {
     expect(out[0].error).toBeInstanceOf(Error);
   });
 
-  it('throws when the result count does not match the item count', async () => {
+  it('fails every item of a request whose result count does not match', async () => {
     // Without this the k-th result would be read as the k-th item's kymograph
-    // and one microtubule's numbers would ship under another's name.
+    // and one microtubule's numbers would ship under another's name. Reported
+    // per item rather than thrown, because a batch may now travel as several
+    // requests and the ones that succeeded are still valid.
     mockAxios.post = vi.fn().mockResolvedValue({ data: { results: [item()] } });
-    await expect(
-      buildKymographBatch([inputFor('poly-a'), inputFor('poly-b')])
-    ).rejects.toThrow('1 result(s) for 2 item(s)');
+    const out = await buildKymographBatch([
+      inputFor('poly-a'),
+      inputFor('poly-b'),
+    ]);
+    expect(out.map(o => o.result)).toEqual([undefined, undefined]);
+    expect(out[0].error?.message).toContain('1 result(s) for 2 item(s)');
+    expect(out[1].error?.message).toContain('1 result(s) for 2 item(s)');
+  });
+
+  it('reports an ML request failure against its own items only', async () => {
+    // e.g. an ml container old enough not to have /kymograph/batch, or a
+    // network drop. Every item of that request fails; none is misattributed.
+    mockAxios.post = vi
+      .fn()
+      .mockRejectedValue(new Error('Request failed with status code 404'));
+    const out = await buildKymographBatch([
+      inputFor('poly-a'),
+      inputFor('poly-b'),
+    ]);
+    expect(out.map(o => o.error?.message)).toEqual([
+      'Request failed with status code 404',
+      'Request failed with status code 404',
+    ]);
+  });
+
+  describe('output-size budget', () => {
+    /** A polyline of a known arc length, so the item's output size (frames x
+     *  columns) is arithmetic rather than a guess. The ML column rule is one
+     *  column per pixel of the seed frame's arc length. */
+    const longPoly = (id: string, arcPx: number) => ({
+      id,
+      points: [
+        { x: 0, y: 0 },
+        { x: 0, y: arcPx },
+      ],
+      geometry: 'polyline',
+    });
+
+    /** 2 frames x (arc + 1) columns per item. At 2 000 000 px of arc that is
+     *  4 000 002 output pixels, so ONE item already exceeds the 3 840 000
+     *  budget and two can never share a request. */
+    const ARC = 2_000_000;
+
+    beforeEach(() => {
+      mockPrisma.image.findMany.mockResolvedValue([
+        makeFrame(0, [longPoly('poly-a', ARC), longPoly('poly-b', ARC)]),
+        makeFrame(1, [longPoly('poly-a', ARC), longPoly('poly-b', ARC)]),
+      ]);
+    });
+
+    it('splits into as many ML requests as the budget allows', async () => {
+      // The ML service refuses an oversized batch (413). Before the column cap
+      // was removed this could not arise: 64 items of 200 columns was the
+      // budget, so the item cap and the size bound were the same statement.
+      mockAxios.post = vi
+        .fn()
+        .mockResolvedValue({ data: { results: [item()] } });
+      const out = await buildKymographBatch([
+        inputFor('poly-a'),
+        inputFor('poly-b'),
+      ]);
+
+      expect(mockAxios.post).toHaveBeenCalledTimes(2);
+      expect(mockAxios.post.mock.calls[0][1].items).toHaveLength(1);
+      expect(mockAxios.post.mock.calls[1][1].items).toHaveLength(1);
+      expect(out.map(o => o.result?.lengthPx)).toEqual([55, 55]);
+    });
+
+    it('keeps the results of a request that already succeeded', async () => {
+      // The reason a failure is per item and not a throw: discarding a whole
+      // channel's finished kymographs because a later request dropped would be
+      // strictly worse than what the un-split batch did.
+      mockAxios.post = vi
+        .fn()
+        .mockResolvedValueOnce({ data: { results: [item({ length_px: 7 })] } })
+        .mockRejectedValueOnce(new Error('socket hang up'));
+      const out = await buildKymographBatch([
+        inputFor('poly-a'),
+        inputFor('poly-b'),
+      ]);
+
+      expect(out[0].result?.lengthPx).toBe(7);
+      expect(out[1].error?.message).toBe('socket hang up');
+    });
+
+    it('sends a single oversized item on its own rather than refusing it', async () => {
+      // `/kymograph` renders any one kymograph regardless of size, and the ML
+      // batch endpoint exempts a one-item batch for that reason. A 621-frame
+      // movie of a 2000 px microtubule must not become unexportable.
+      mockAxios.post = vi
+        .fn()
+        .mockResolvedValue({ data: { results: [item()] } });
+      const out = await buildKymographBatch([inputFor('poly-a')]);
+
+      expect(mockAxios.post).toHaveBeenCalledTimes(1);
+      expect(mockAxios.post.mock.calls[0][1].items).toHaveLength(1);
+      expect(out[0].result?.lengthPx).toBe(55);
+    });
   });
 
   it('forwards include_csv:false and maps the null back', async () => {
