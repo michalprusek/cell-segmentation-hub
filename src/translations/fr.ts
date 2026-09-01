@@ -2768,6 +2768,14 @@ export default {
       widthLabel: "Largeur d'intensité",
       widthHint:
         "Largeur (px) de la bande échantillonnée autour de chaque trajectoire pour le signal vs. l'intensité de fond.",
+      lineWidthLabel: 'Largeur de ligne',
+      lineWidthHint:
+        'Largeur (px) de la ligne échantillonnée le long du microtubule, mesurée en travers. 1 échantillonne un seul pixel.',
+      lineReduceLabel: 'Sur la largeur',
+      lineReduceHint:
+        'Comment les pixels sur la largeur de la ligne deviennent une seule valeur. La moyenne correspond à ImageJ ; le maximum est plus lumineux mais biaisé par des pixels chauds isolés.',
+      lineReduceMean: 'Moyenne',
+      lineReduceMax: 'Maximum',
       colVelocity: 'Vitesse nette',
       colRunLength: 'Longueur de segment (µm)',
       colRunTime: 'Durée de segment (s)',

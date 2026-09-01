@@ -1695,3 +1695,519 @@ def test_batch_does_not_decode_a_frame_twice_across_two_channels(
     assert resp.status_code == 200, resp.text
     assert len(resp.json()["results"]) == 6
     assert decodes["n"] == 6, "3 frames x 2 channels, once each"
+
+
+# ---------------------------------------------------------------------------
+#  Line width: bilinear sampling + the perpendicular band
+# ---------------------------------------------------------------------------
+#
+# Two changes land together here and they are independent:
+#
+# 1. Sampling went nearest-neighbour -> BILINEAR. Every ImageJ polyline path
+#    (ProfilePlot, Straightener) and KymoResliceWide sample with
+#    ImageProcessor.getInterpolatedValue, which is bilinear
+#    (ij/process/ImageProcessor.java L2005-2013); only KymographBuilder uses
+#    nearest. It changes every number in every kymograph — measured on frame 0
+#    of container 4972cad8, all 60 microtubules, |bilinear - nearest| is 0.59 %
+#    of the IRM frame's range on average and 3.86 % at worst, and 99.9 % of
+#    columns move.
+#
+# 2. `line_width` samples a BAND perpendicular to the polyline and reduces it
+#    with mean (default, ImageJ's convention) or max (KymoResliceWide's). The
+#    default is 1, which is the single-pixel line profile this endpoint has
+#    always produced.
+#
+# The band tests below are written to fail on Multi Kymograph's bug — it adds
+# the offset to x and y IDENTICALLY (MultipleKymograph_.java L150-151,
+# L299-302), a fixed 45-degree shift with no normal computed anywhere — which
+# is why every one of them uses a DIAGONAL feature. A horizontal or vertical
+# test passes with that bug present.
+
+
+def _write_ramp_png(path: Path, height: int = 16, width: int = 64) -> None:
+    """``value = col``: bilinear at a half-integer column reads the midpoint of
+    two neighbours, nearest reads one of them."""
+    from PIL import Image as PILImage
+
+    arr = np.tile(np.arange(width, dtype=np.uint8), (height, 1))
+    PILImage.fromarray(arr, mode="L").save(path)
+
+
+def _write_diagonal_ridge_png(
+    path: Path,
+    size: int = 96,
+    half_width: float = 3.0,
+    peak: int = 240,
+    base: int = 16,
+) -> None:
+    """A 45-degree plateau ridge: ``peak`` within ``half_width`` px
+    (PERPENDICULAR distance) of the line ``row == col``, ``base`` outside."""
+    from PIL import Image as PILImage
+
+    r = np.arange(size)[:, None]
+    c = np.arange(size)[None, :]
+    d = np.abs(r - c) / np.sqrt(2.0)
+    arr = np.where(d <= half_width, peak, base).astype(np.uint8)
+    PILImage.fromarray(arr, mode="L").save(path)
+
+
+def _read_png(path: Path) -> np.ndarray:
+    from PIL import Image as PILImage
+
+    return np.array(PILImage.open(path).convert("L"), dtype=np.float32)
+
+
+def _diag_polyline(lo: float = 20.0, hi: float = 75.0):
+    return [[lo, lo], [hi, hi]]
+
+
+def _resampled(polyline_rc) -> np.ndarray:
+    pts = np.asarray(polyline_rc, dtype=np.float32)
+    arc = float(np.sum(np.linalg.norm(np.diff(pts, axis=0), axis=1)))
+    n = max(2, int(round(arc)) + 1)
+    return tracker_kymograph._arc_length_resample_polyline(pts, n)
+
+
+def _bilinear(img: np.ndarray, rows, cols) -> np.ndarray:
+    from scipy.ndimage import map_coordinates
+
+    return map_coordinates(
+        img,
+        np.stack([np.asarray(rows).ravel(), np.asarray(cols).ravel()]),
+        order=1,
+        mode="constant",
+        cval=0.0,
+    )
+
+
+def test_resampler_forces_the_endpoint_and_round_L_plus_one_points():
+    """Locks the CITATION corrected on 2026-09-01 as much as the behaviour.
+
+    This is ``PolygonRoi.getEquidistantPoints`` (PolygonRoi.java L1035-1036) —
+    ``round(L) + 1`` points with the last one ON the endpoint — and NOT
+    ``Roi.getInterpolatedPolygon(step, smooth=false)`` (Roi.java L686-711),
+    which the docstring claimed for months and which DROPS an open polyline's
+    endpoint. If someone ever "fixes" the code to match the old comment, the
+    last column of every kymograph stops being the end of the microtubule and
+    this goes red."""
+    pts = np.array([[0.0, 0.0], [0.0, 10.0], [7.0, 10.0]], dtype=np.float32)
+    arc = 17.0
+    n = int(round(arc)) + 1
+    out = tracker_kymograph._arc_length_resample_polyline(pts, n)
+    assert out.shape == (18, 2)
+    assert np.allclose(out[0], pts[0])
+    assert np.allclose(out[-1], pts[-1]), "the endpoint must be forced"
+    steps = np.linalg.norm(np.diff(out, axis=0), axis=1)
+    assert np.allclose(steps, 1.0, atol=1e-4), "1.0 px arc-length step"
+
+
+def test_sampling_is_bilinear_not_nearest(tmp_path):
+    """``order=0`` was justified by a comment claiming it matched ImageJ's
+    ``getInterpolatedValue`` zero-fill. Only the zero-fill matched;
+    getInterpolatedValue is bilinear.
+
+    On a ``value = col`` ramp a half-integer column has an exact bilinear
+    answer, and nearest cannot produce it.
+
+    Mutation check: put ``order=0`` back in ``_sample_line_profile`` and this
+    goes red (every value becomes a whole number)."""
+    png = tmp_path / "ramp.png"
+    _write_ramp_png(png)
+    img = _read_png(png)
+    pts = np.array([[8.0, 10.5], [8.0, 11.5], [8.0, 12.5]], dtype=np.float32)
+
+    profile = tracker_kymograph._sample_line_profile(img, pts, 1, "mean")
+
+    assert np.allclose(profile, [10.5, 11.5, 12.5], atol=1e-5)
+    assert not np.allclose(profile, np.round(profile))
+
+
+def test_width_one_is_the_plain_line_profile_bit_for_bit(tmp_path):
+    """A width-1 band must BE the single-pixel line profile — not merely close
+    to it — or ``line_width`` stops being backward compatible the moment a
+    caller leaves it alone."""
+    png = tmp_path / "ridge.png"
+    _write_diagonal_ridge_png(png)
+    img = _read_png(png)
+    sp = _resampled(_diag_polyline())
+
+    got = tracker_kymograph._sample_line_profile(img, sp, 1, "mean")
+    ref = _bilinear(img, sp[:, 0], sp[:, 1]).astype(np.float32)
+
+    assert np.array_equal(got, ref)
+
+
+@pytest.mark.parametrize(
+    "deg", [0.0, 17.0, 30.0, 45.0, 63.0, 90.0, 123.0, 179.0]
+)
+def test_the_band_normal_is_perpendicular_at_every_angle(deg):
+    """The band is only a band ACROSS the line if the offsets go along a real
+    normal. Asserted as the dot product with the tangent, at eight angles, so
+    a rotation that happens to be right on the axes cannot pass.
+
+    Mutation check: change the rotation ``(tr, tc) -> (tc, -tr)`` to
+    ``(tr, tc)`` (Multi Kymograph's non-rotation) and every angle whose tangent
+    is not axis-aligned fails."""
+    th = np.deg2rad(deg)
+    direction = np.array([np.sin(th), np.cos(th)])
+    pts = np.arange(40, dtype=np.float64)[:, None] * direction
+
+    normals = tracker_kymograph._band_normals_rc(pts)
+
+    tangents = np.diff(pts, axis=0, prepend=pts[:1])
+    tangents[0] = tangents[1]
+    dots = np.sum(normals * tangents, axis=1)
+    assert np.max(np.abs(dots)) < 1e-9, f"not perpendicular: max |dot| {dots}"
+    assert np.allclose(np.linalg.norm(normals, axis=1), 1.0)
+
+
+def test_a_uniform_diagonal_ridge_keeps_its_true_intensity_at_width_5(tmp_path):
+    """A band entirely inside a uniform feature must report that feature's
+    intensity exactly — widening the line must not dim it.
+
+    The ridge is at 45 degrees and 8 px wide on each side, so every one of the
+    five samples lands deep inside the plateau and bilinear interpolation over
+    a constant region is exact."""
+    png = tmp_path / "wide_ridge.png"
+    _write_diagonal_ridge_png(png, half_width=8.0, peak=240, base=16)
+    img = _read_png(png)
+    sp = _resampled(_diag_polyline())
+
+    profile = tracker_kymograph._sample_line_profile(img, sp, 5, "mean")
+
+    assert np.all(profile == 240.0), f"band mean drifted: {np.unique(profile)}"
+
+
+def test_the_band_crosses_a_diagonal_ridge_rather_than_running_along_it(
+    tmp_path,
+):
+    """THE Multi Kymograph guard.
+
+    ``MultipleKymograph_`` adds its ``Linewidth`` offset to x and to y
+    identically (L150-151, L299-302) — a fixed 45-degree diagonal shift, no
+    normal anywhere — so on a 45-degree feature its "band" never leaves the
+    feature. This asserts the band matches an independently-computed
+    perpendicular one, and that the buggy parallel one is far away.
+
+    Mutation check: change the rotation to ``(tr, tc)`` and the profile becomes
+    the parallel one, i.e. exactly the value this test proves it is not."""
+    png = tmp_path / "thin_ridge.png"
+    _write_diagonal_ridge_png(png, half_width=3.0, peak=240, base=16)
+    img = _read_png(png)
+    sp = _resampled(_diag_polyline())
+    width = 11
+    offsets = (np.arange(width, dtype=np.float64) - (width - 1) / 2.0)[:, None]
+
+    got = tracker_kymograph._sample_line_profile(img, sp, width, "mean")
+
+    # Reference: the analytic normal of a 45-degree line in (row, col).
+    unit = np.array([1.0, -1.0]) / np.sqrt(2.0)
+    ref = (
+        _bilinear(
+            img,
+            sp[:, 0][None, :] + offsets * unit[0],
+            sp[:, 1][None, :] + offsets * unit[1],
+        )
+        .reshape(width, -1)
+        .mean(axis=0)
+    )
+    assert np.allclose(got, ref, atol=1e-4)
+
+    # Multi Kymograph's actual arithmetic: the same offset on both axes.
+    bug = (
+        _bilinear(
+            img,
+            sp[:, 0][None, :] + offsets,
+            sp[:, 1][None, :] + offsets,
+        )
+        .reshape(width, -1)
+        .mean(axis=0)
+    )
+    assert np.all(bug == 240.0), "the buggy band never leaves the ridge"
+    assert np.all(got < bug - 40.0), (
+        f"band mean {got.mean():.1f} is indistinguishable from the parallel "
+        f"one {bug.mean():.1f} — the offsets are not on a normal"
+    )
+
+
+def test_max_reduces_differently_from_mean(tmp_path):
+    """``mean`` is ImageJ's convention (ProfilePlot / Straightener average
+    across the width and offer no choice) and the default the user asked for;
+    ``max`` is KymoResliceWide's default and is offered for its users.
+
+    Mutation check: reduce with ``mean`` unconditionally and the max assertion
+    fails; reduce with ``max`` unconditionally and the mean assertion fails."""
+    png = tmp_path / "thin_ridge.png"
+    _write_diagonal_ridge_png(png, half_width=3.0, peak=240, base=16)
+    img = _read_png(png)
+    sp = _resampled(_diag_polyline())
+
+    mean_profile = tracker_kymograph._sample_line_profile(img, sp, 11, "mean")
+    max_profile = tracker_kymograph._sample_line_profile(img, sp, 11, "max")
+
+    # The centre sample is always on the plateau, so max pins to the peak...
+    assert np.all(max_profile == 240.0)
+    # ...while the mean carries the background the outer samples reach.
+    assert np.all(mean_profile < 200.0)
+
+
+def test_the_band_is_zero_filled_outside_the_image(tmp_path):
+    """Documented, matched behaviour, not an oversight: a band overhanging the
+    frame border reads 0 for the samples outside and COUNTS them in the mean,
+    so the profile is biased toward zero in proportion to how much of the band
+    is off-image. It is the same ``mode='constant', cval=0`` the single-pixel
+    path has used since edge-clamping was found to falsely brighten polylines
+    that cross the border; extending it across the width keeps one rule."""
+    png = tmp_path / "flat.png"
+    _write_constant_png(png, 200, height=16, width=64)
+    img = _read_png(png)
+    # Row 0: a width-5 band centred on it has offsets -2..+2, so two samples
+    # sit at rows -2 and -1, outside the image.
+    pts = np.array([[0.0, float(c)] for c in range(10, 40)], dtype=np.float32)
+
+    profile = tracker_kymograph._sample_line_profile(img, pts, 5, "mean")
+
+    assert np.allclose(profile, 200.0 * 3.0 / 5.0, atol=1e-4)
+
+
+def test_line_width_default_renders_exactly_what_it_did_before(
+    client, monkeypatch, tmp_path
+):
+    """The wire default. An omitted ``line_width`` and an explicit 1 must
+    produce byte-identical responses, or every existing kymograph moves the
+    day this deploys."""
+    td_path = tmp_path.resolve()
+    monkeypatch.setattr(tracker_kymograph, "_UPLOAD_ROOT", td_path)
+    pngs = [td_path / f"f{i}.png" for i in range(3)]
+    for p in pngs:
+        _write_diagonal_ridge_png(p)
+    polyline = _diag_polyline()
+
+    omitted = client.post(
+        "/api/v1/kymograph", json=_kymo_payload(pngs, polyline)
+    )
+    explicit = client.post(
+        "/api/v1/kymograph",
+        json=_kymo_payload(pngs, polyline, line_width=1, line_reduce="mean"),
+    )
+
+    assert omitted.status_code == 200, omitted.text
+    assert explicit.status_code == 200, explicit.text
+    assert omitted.json() == explicit.json()
+
+
+def test_line_width_reaches_the_sampler_through_the_endpoint(
+    client, monkeypatch, tmp_path
+):
+    """Tests the WIRING. A request that asks for a width-11 band must get one:
+    the CSV must equal the band profile, not the single-pixel one.
+
+    Mutation check: drop ``req.line_width`` from the ``_plan_rows`` call in
+    ``_plan_kymograph`` and this goes red while every unit test above stays
+    green."""
+    td_path = tmp_path.resolve()
+    monkeypatch.setattr(tracker_kymograph, "_UPLOAD_ROOT", td_path)
+    png = td_path / "f0.png"
+    _write_diagonal_ridge_png(png, half_width=3.0)
+    img = _read_png(png)
+    polyline = _diag_polyline()
+    sp = _resampled(polyline)
+
+    r = client.post(
+        "/api/v1/kymograph",
+        json=_kymo_payload([png], polyline, line_width=11),
+    )
+
+    assert r.status_code == 200, r.text
+    row = np.array([float(v) for v in _csv_rows(r.json())[0][1:]])
+    expected = tracker_kymograph._sample_line_profile(img, sp, 11, "mean")
+    assert np.allclose(row, expected, atol=1e-4)
+    plain = tracker_kymograph._sample_line_profile(img, sp, 1, "mean")
+    assert not np.allclose(row, plain, atol=1e-4)
+
+
+def test_line_reduce_reaches_the_sampler_through_the_endpoint(
+    client, monkeypatch, tmp_path
+):
+    """As above for the reduction: ``max`` must actually be applied."""
+    td_path = tmp_path.resolve()
+    monkeypatch.setattr(tracker_kymograph, "_UPLOAD_ROOT", td_path)
+    png = td_path / "f0.png"
+    _write_diagonal_ridge_png(png, half_width=3.0)
+    img = _read_png(png)
+    polyline = _diag_polyline()
+    sp = _resampled(polyline)
+
+    r = client.post(
+        "/api/v1/kymograph",
+        json=_kymo_payload([png], polyline, line_width=11, line_reduce="max"),
+    )
+
+    assert r.status_code == 200, r.text
+    row = np.array([float(v) for v in _csv_rows(r.json())[0][1:]])
+    assert np.allclose(
+        row,
+        tracker_kymograph._sample_line_profile(img, sp, 11, "max"),
+        atol=1e-4,
+    )
+    assert not np.allclose(
+        row,
+        tracker_kymograph._sample_line_profile(img, sp, 11, "mean"),
+        atol=1e-4,
+    )
+
+
+def test_row_cache_misses_when_the_line_width_or_reduction_changes(
+    client, monkeypatch, tmp_path
+):
+    """The sampled ROW depends on both, so both are in its key. Without them
+    the second request below would be served the first request's rows — the
+    user would nudge the width and see the identical picture.
+
+    Mutation check: drop ``line_width`` (or ``line_reduce``) from ``cache_key``
+    in ``_plan_rows`` and the decode counts collapse to 0."""
+    td_path = tmp_path.resolve()
+    monkeypatch.setattr(tracker_kymograph, "_UPLOAD_ROOT", td_path)
+    png = td_path / "f0.png"
+    _write_diagonal_ridge_png(png, half_width=3.0)
+    polyline = _diag_polyline()
+
+    first = client.post("/api/v1/kymograph", json=_kymo_payload([png], polyline))
+    decodes = _count_decodes(monkeypatch)
+    wide = client.post(
+        "/api/v1/kymograph",
+        json=_kymo_payload([png], polyline, line_width=11),
+    )
+    assert decodes["n"] == 1, "a new width must re-sample, not reuse the row"
+    widest = client.post(
+        "/api/v1/kymograph",
+        json=_kymo_payload([png], polyline, line_width=11, line_reduce="max"),
+    )
+    assert decodes["n"] == 2, "a new reduction must re-sample too"
+    warm = client.post(
+        "/api/v1/kymograph",
+        json=_kymo_payload([png], polyline, line_width=11),
+    )
+    assert decodes["n"] == 2, "the width-11 mean row is still cached"
+
+    assert first.json()["csv_base64"] != wide.json()["csv_base64"]
+    assert wide.json()["csv_base64"] != widest.json()["csv_base64"]
+    assert wide.json() == warm.json()
+
+
+def _write_offset_stripe_diagonal_png(
+    path: Path, size: int = 96, peak: int = 240, stripe: int = 255,
+    base: int = 16,
+) -> None:
+    """A 45-degree ridge with a BRIGHTER stripe 3-4 px off to one side.
+
+    The asymmetry is what separates the four settings the batch test posts: on
+    a symmetric ridge the brightest sample of any centred band is the centre
+    one, so ``max`` returns exactly the width-1 profile and two of the four
+    items come out identical for a reason that has nothing to do with the
+    plumbing under test."""
+    from PIL import Image as PILImage
+
+    r = np.arange(size)[:, None]
+    c = np.arange(size)[None, :]
+    # Bands of the INTEGER difference r - c, several pixels thick, so no sample
+    # the widths below take lands on a one-pixel feature where the assertion
+    # would depend on how bilinear interpolation rounds a boundary.
+    k = r - c
+    arr = np.full((size, size), base, dtype=np.uint8)
+    arr[np.abs(k) <= 2] = peak
+    arr[(k >= 5) & (k <= 8)] = stripe
+    PILImage.fromarray(arr, mode="L").save(path)
+
+
+def test_batch_carries_each_item_its_own_line_width(
+    client, monkeypatch, tmp_path
+):
+    """Batch items are plain ``KymographRequest`` bodies and the new fields
+    must flow through unchanged — including when four items want different
+    bands of the SAME frame, which is why the width and the reduction travel on
+    the ``_RowJob`` rather than being read off one request inside
+    ``_sample_frame_rows``.
+
+    Mutation check: read the width off ``req`` in ``_sample_frame_rows``
+    instead and every item gets the last-planned item's band."""
+    td_path = tmp_path.resolve()
+    monkeypatch.setattr(tracker_kymograph, "_UPLOAD_ROOT", td_path)
+    png = td_path / "f0.png"
+    _write_offset_stripe_diagonal_png(png)
+    polyline = _diag_polyline()
+    payloads = [
+        _kymo_payload([png], polyline),
+        _kymo_payload([png], polyline, line_width=5),
+        _kymo_payload([png], polyline, line_width=11),
+        _kymo_payload([png], polyline, line_width=11, line_reduce="max"),
+    ]
+
+    batch = client.post("/api/v1/kymograph/batch", json={"items": payloads})
+    assert batch.status_code == 200, batch.text
+    got = [item["kymograph"] for item in batch.json()["results"]]
+    assert all(k is not None for k in got)
+
+    for batched, payload in zip(got, payloads):
+        single = client.post("/api/v1/kymograph", json=payload).json()
+        assert batched["csv_base64"] == single["csv_base64"]
+    assert len({k["csv_base64"] for k in got}) == 4, (
+        "four different bands of one frame must give four different matrices"
+    )
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"line_width": 0},
+        {"line_width": 52},
+        {"line_reduce": "median"},
+    ],
+)
+def test_kymograph_rejects_an_impossible_line_setting(
+    client, monkeypatch, tmp_path, overrides
+):
+    """The bounds are the ML service's, and the Node route mirrors them. 51 is
+    ``_LINE_WIDTH_MAX``; ``line_reduce`` is a closed Literal."""
+    td_path = tmp_path.resolve()
+    monkeypatch.setattr(tracker_kymograph, "_UPLOAD_ROOT", td_path)
+    png = td_path / "f0.png"
+    _write_gradient_png(png)
+    r = client.post(
+        "/api/v1/kymograph",
+        json=_kymo_payload(
+            [png], [[8.0, float(x)] for x in range(64)], **overrides
+        ),
+    )
+    assert r.status_code == 422, r.text
+
+
+def test_an_even_width_band_is_centred_on_the_line(tmp_path):
+    """ImageJ ``Straightener``'s centring convention, not KymoResliceWide's.
+
+    ``Straightener.java`` L181-182 offsets by ``(w-1)/2`` for BOTH parities;
+    KymoResliceWide's ``processWideLine`` uses ``w/2``, which for an even width
+    puts the whole band 0.5 px to one side of the drawn line. Odd widths are
+    identical under both (``(5-1)/2 == 5//2``), so only an even one can tell
+    them apart.
+
+    On a field that varies linearly across the line, a CENTRED band of any
+    width returns the centre value exactly — so this is an exact assertion
+    rather than a tolerance on a fixture.
+
+    Mutation check: replace ``(line_width - 1) / 2.0`` with ``line_width // 2``
+    and the even-width profiles shift by 3 / (2*sqrt(2)) = 1.06 counts."""
+    size = 96
+    rows = np.arange(size, dtype=np.float32)[:, None]
+    cols = np.arange(size, dtype=np.float32)[None, :]
+    img = (4.0 * rows + cols).astype(np.float32)
+    sp = _resampled(_diag_polyline())
+
+    centre = tracker_kymograph._sample_line_profile(img, sp, 1, "mean")
+
+    for width in (2, 4, 3, 5):
+        band = tracker_kymograph._sample_line_profile(img, sp, width, "mean")
+        assert np.allclose(band, centre, atol=1e-2), (
+            f"width {width} band is off-centre by "
+            f"{np.mean(band - centre):+.4f} counts"
+        )

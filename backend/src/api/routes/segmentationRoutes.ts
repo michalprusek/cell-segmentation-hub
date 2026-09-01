@@ -348,6 +348,13 @@ router.post(
     // intensityWidth: signal-band width (kymograph columns) for the
     // background-subtracted intensity metric along each trajectory.
     body('intensityWidth').optional().isInt({ min: 1, max: 50 }),
+    // lineWidth: how many image pixels wide the sampled line is, PERPENDICULAR
+    // to the polyline (1 = a single-pixel line profile). Bounds mirror the ML
+    // `_LINE_WIDTH_MAX`; a value outside them 422s there.
+    body('lineWidth').optional().isInt({ min: 1, max: 51 }),
+    // lineReduce: how the lineWidth samples of one column collapse to one
+    // value. Closed set — the ML field is a Literal.
+    body('lineReduce').optional().isIn(['mean', 'max']),
   ],
   handleValidation,
   async (req: Request, res: Response) => {
@@ -408,6 +415,9 @@ router.post(
           req.body.intensityWidth != null
             ? Number(req.body.intensityWidth)
             : undefined,
+        lineWidth:
+          req.body.lineWidth != null ? Number(req.body.lineWidth) : undefined,
+        lineReduce: req.body.lineReduce as 'mean' | 'max' | undefined,
         // The modal re-asks for the same kymograph every time the user
         // reopens it, so this is the one caller a cached response pays for.
         useCache: true,

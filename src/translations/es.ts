@@ -2750,6 +2750,14 @@ export default {
       widthLabel: 'Ancho de intensidad',
       widthHint:
         'Ancho (px) de la banda muestreada alrededor de cada trayectoria para señal vs. intensidad de fondo.',
+      lineWidthLabel: 'Ancho de línea',
+      lineWidthHint:
+        'Ancho (px) de la línea muestreada a lo largo del microtúbulo, medido transversalmente. 1 muestrea un solo píxel.',
+      lineReduceLabel: 'A lo ancho',
+      lineReduceHint:
+        'Cómo los píxeles a lo ancho de la línea se convierten en un solo valor. La media coincide con ImageJ; el máximo es más brillante pero se sesga por píxeles calientes aislados.',
+      lineReduceMean: 'Media',
+      lineReduceMax: 'Máximo',
       colVelocity: 'Velocidad neta',
       colRunLength: 'Longitud de tramo (µm)',
       colRunTime: 'Duración de tramo (s)',

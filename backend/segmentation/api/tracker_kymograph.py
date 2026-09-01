@@ -981,6 +981,35 @@ def _track_sync(req: TrackRequest) -> TrackResponse:
 #  /kymograph
 # ----------------------------------------------------------------------------
 
+# Widest band ``line_width`` may ask for. See ``_sample_line_profile`` for the
+# whole method; the bound lives up here because the pydantic Field below needs
+# it. 51 spans 50 px between the outermost samples.
+#
+# It is a GUARD RAIL, not a recommendation, and the useful range is far below
+# it. Measured on frame 0 of the reference container (4972cad8, all 60
+# microtubules, 1924x1476, 17 684 columns) by averaging the transverse profile
+# over every column of every filament, as the fraction of the single-pixel
+# contrast (centre minus background at |offset| >= 20 px) that a band of each
+# width still carries:
+#
+#   width           1     3     5     7     9    11    15    21    51
+#   IRM          100%   80%   50%   26%   10%    0%   -10%  -16%  -13%
+#   488 nm       100%   96%   93%   88%   83%   79%    74%   70%   35%
+#
+# The two rows differ because the modalities do. In IRM a microtubule is a DARK
+# core (-199 counts) inside a BRIGHT interference halo that peaks at |offset|
+# 4-5 px, so widening the band first dilutes the core and then, past width 11,
+# inverts its sign — a "wider = smoother" intuition is actively wrong there. In
+# fluorescence the filament is a plain bright PSF and the decay is gentle, so a
+# wide band costs signal slowly and buys tolerance to a centerline that is a
+# pixel or two off. Sensible values are 1-5 on IRM and up to ~11 on a
+# fluorescence channel; ``mt_measure``'s own band is 5. 51 is simply the point
+# past which nothing on real data is still a measurement of one filament, and
+# it is also 51 ``map_coordinates`` samples per column — 31.7 M per frame at
+# the 2077 columns production's longest polyline spans.
+_LINE_WIDTH_MAX = 51
+
+
 class KymographFrameInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -1007,6 +1036,26 @@ class KymographRequest(BaseModel):
     # build sends it.
     target_width: int = Field(200, ge=10, le=2000)
     tracked: bool = False
+    # LINE WIDTH: how many pixels WIDE the sampled line is, perpendicular to the
+    # polyline. 1 is a single-pixel line profile — exactly what this endpoint
+    # did before 2026-09-01 and still the default, so an omitted field renders
+    # the identical kymograph. Everything about the band is in
+    # ``_sample_line_profile``.
+    #
+    # NOT ``intensity_width``, which is a band in kymograph COLUMN space around
+    # an already-detected trajectory on the finished image. This one decides
+    # what the image contains in the first place.
+    line_width: int = Field(1, ge=1, le=_LINE_WIDTH_MAX)
+    # How the ``line_width`` samples of one column collapse to one value.
+    #
+    # ``mean`` is the default and is what ImageJ's own polyline tools do —
+    # ``ProfilePlot``/``Straightener`` average across the width and offer no
+    # choice. KymoResliceWide defaults to ``max`` instead, which is brighter on
+    # a filament that wanders off the drawn line but is not comparable with an
+    # ImageJ number and is biased upward by a single hot pixel. The user asked
+    # for ImageJ-comparable intensities, so ``mean`` it is; ``max`` is offered
+    # because KymoResliceWide's users rely on it.
+    line_reduce: Literal["mean", "max"] = "mean"
     # Hex `#RRGGBB`. When supplied, the kymograph is rendered as a linear
     # black-to-color gradient (intensity → that hue) so it matches the
     # channel tint the user chose in the editor's multi-channel overlay.
@@ -1285,12 +1334,25 @@ def _arc_length_resample_polyline(
 ) -> np.ndarray:
     """Resample a polyline to ``n_samples`` arc-length-uniform points.
 
-    Mirrors ImageJ's ``PolygonRoi.getInterpolatedPolygon(step, smooth=false)``:
-    walk the polyline at fixed arc-length step ``= total / (n - 1)``, emit
-    one point per step. The result has uniform spatial spacing, so a
-    kymograph row built from it preserves "column N = the same fractional
-    position along the microtubule" across frames (the property a biologist
-    expects from an ImageJ-style kymograph).
+    Mirrors ImageJ's ``PolygonRoi.getEquidistantPoints`` (``PolygonRoi.java``
+    L1035-1036): ``round(L) + 1`` points at a fixed arc-length step, with the
+    LAST point forced onto the polyline's endpoint. ``_seed_columns`` supplies
+    exactly that count, so the step here is 1.0 px to within its rounding.
+
+    It is NOT ``Roi.getInterpolatedPolygon(step, smooth=false)`` (``Roi.java``
+    L686-711), which the docstring claimed until 2026-09-01. That one is a
+    chord walk: it steps along the polyline emitting a point whenever the
+    remaining distance to the next vertex falls below the step, and for an open
+    polyline it DROPS the endpoint (it stops at the last full step and appends
+    nothing). The code below has always forced the endpoint via
+    ``np.linspace(0, total, n)``, i.e. it has always been the other method. The
+    CODE is right and the citation was wrong — do not "fix" the code to match
+    the old comment.
+
+    Either way the result has uniform spatial spacing, so a kymograph row built
+    from it preserves "column N = the same fractional position along the
+    microtubule" across frames (the property a biologist expects from an
+    ImageJ-style kymograph).
     """
     if pts_rc.shape[0] < 2 or n_samples < 2:
         return pts_rc.astype(np.float32)
@@ -1315,6 +1377,146 @@ def _arc_length_resample_polyline(
     local = np.clip(local, 0.0, 1.0)[:, None]
     out = pts_rc[seg_idx] + local * segs[seg_idx]
     return out.astype(np.float32)
+
+
+def _band_normals_rc(pts_rc: np.ndarray) -> np.ndarray:
+    """Unit normals of a resampled polyline, one per point, in (row, col).
+
+    Transcribed from KymoResliceWide's ``processWideLine``
+    (``UU-cellbiology/KymoResliceWide`` @ 506760c4, L843-914): the tangent at
+    column k is the BACKWARD difference ``p[k] - p[k-1]`` of consecutive
+    resampled points, normalised, then rotated ``(dx, dy) -> (-dy, dx)``.
+    Column 0 has no predecessor and uses the forward difference instead.
+
+    The points here are (row, col) and the reference is (x, y) = (col, row), so
+    that rotation is ``(tr, tc) -> (tc, -tr)``. It is the same 90 degrees with
+    the opposite handedness, which cannot matter: the offsets applied along the
+    normal are symmetric about 0 and both reductions (mean, max) are order-
+    invariant, so flipping the normal permutes the band's samples and returns
+    the identical value.
+
+    A zero-length tangent yields a zero normal, which collapses the band onto
+    the centre point. That can only happen for a polyline of zero total arc
+    length, which ``_arc_length_resample_polyline`` has already degenerated to
+    a single repeated point — there is no band to draw across a point, and a
+    row of the centre value is the honest answer.
+    """
+    tangents = np.diff(pts_rc, axis=0, prepend=pts_rc[:1])
+    if tangents.shape[0] > 1:
+        # Column 0's backward difference is the zero vector (prepend of itself);
+        # ImageJ's forward-difference special case replaces it.
+        tangents[0] = tangents[1]
+    norms = np.linalg.norm(tangents, axis=1, keepdims=True)
+    unit = tangents / np.where(norms > 0.0, norms, 1.0)
+    # (tr, tc) -> (tc, -tr). Perpendicular by construction: the dot product with
+    # the tangent is tr*tc + tc*(-tr) = 0 exactly, at any angle.
+    return np.stack([unit[:, 1], -unit[:, 0]], axis=1)
+
+
+def _sample_line_profile(
+    img: np.ndarray,
+    pts_rc: np.ndarray,
+    line_width: int,
+    line_reduce: str,
+) -> np.ndarray:
+    """One kymograph row: intensity along ``pts_rc``, averaged across a band
+    ``line_width`` pixels wide, perpendicular to the line.
+
+    The recipe is KymoResliceWide's ``getIrregularProfileWide`` (L679-824) plus
+    ``processWideLine`` (L843-914), with two deliberate deviations noted below.
+    Sampling is BILINEAR with zero fill outside the image, which is what every
+    polyline path in ImageJ does — ``ImageProcessor.getInterpolatedValue``
+    (``ij/process/ImageProcessor.java`` L2005-2013) is bilinear, and
+    ``ProfilePlot``, ``Straightener`` and KymoResliceWide all call it.
+    Nearest-neighbour was the outlier here; only KymographBuilder uses it.
+
+    1. ``_arc_length_resample_polyline`` has already put the points at a
+       uniform ~1.0 px arc-length step, continuous across vertices. (The
+       reference walks the polyline carrying the fractional remainder from one
+       segment into the next; resampling the whole arc at once is the exact
+       version of the same thing.)
+    2. Normals from ``_band_normals_rc``.
+    3. ``line_width`` samples at 1.0 px spacing, offsets ``-(w-1)/2 ...
+       +(w-1)/2``. **Deviation:** ``(w-1)/2`` for BOTH parities, which is
+       ImageJ ``Straightener``'s convention (``Straightener.java`` L181-182).
+       KymoResliceWide uses an asymmetric ``w/2`` that puts an even-width band
+       0.5 px off-centre. Note the consequence: "width 5" spans 4 px between
+       the outermost samples, not 5.
+    4. Bilinear sample, zero fill.
+    5. Reduce with mean (default) or max.
+
+    Two things NONE of the reference implementations handle, matched here
+    anyway because matching them is the point:
+
+    - **Sharp vertices are not mitred.** On the outside of a corner the fan of
+      normals leaves an unsampled wedge; on the inside the bands of successive
+      columns overlap and the same pixels are counted twice. ImageJ, Multi
+      Kymograph and KymoResliceWide all do exactly this. ImageJ's own answer to
+      it is NOT copied: ``Straightener.straightenLine`` unconditionally calls
+      ``fitSplineForStraightening()`` (``Straightener.java`` L149) and
+      ``ProfilePlot`` routes every width>1 polyline through it
+      (``ProfilePlot.java`` L74-79), silently replacing the drawn polyline with
+      a natural cubic spline. Measured on realistic shapes, that spline leaves
+      the drawn path by 5.77 px (+3.0 % arc length) on a right angle and
+      4.99 px (+2.3 %) on an MT-like wiggle — a path error larger than the band
+      it is smoothing, which disqualifies it for filament measurement.
+    - **Out-of-image samples are zeros and are counted in the mean.** A band
+      overhanging the frame border is therefore biased toward zero, in
+      proportion to how much of it is outside. Same ``mode="constant",
+      cval=0.0`` the single-line path has used since edge-clamping was found to
+      falsely brighten polylines crossing the border; extending it across the
+      width keeps one rule rather than two.
+
+    Multi Kymograph's width is deliberately NOT a model: its ``Linewidth`` adds
+    the offset to x and to y IDENTICALLY (``MultipleKymograph_.java`` L150-151,
+    L299-302), i.e. a fixed 45 degree diagonal shift with no normal computed
+    anywhere, and it mutates the caller's ROI in place so the offsets
+    accumulate (``linewidth=3`` samples -1, -1, 0). It is broken.
+    """
+    from scipy.ndimage import map_coordinates
+
+    rows = pts_rc[:, 0].astype(np.float64)
+    cols = pts_rc[:, 1].astype(np.float64)
+    if line_width > 1:
+        normals = _band_normals_rc(pts_rc.astype(np.float64))
+        offsets = (
+            np.arange(line_width, dtype=np.float64) - (line_width - 1) / 2.0
+        )[:, None]
+        rows = rows[None, :] + offsets * normals[None, :, 0]
+        cols = cols[None, :] + offsets * normals[None, :, 1]
+    # order=1 = bilinear. This was order=0 (nearest) until 2026-09-01, under a
+    # comment claiming it matched "ImageJ's getInterpolatedValue zero-fill".
+    # Only the zero-fill half of that was ever true: getInterpolatedValue
+    # (ij/process/ImageProcessor.java L2005-2013) is BILINEAR, and so is every
+    # ImageJ polyline path that calls it.
+    #
+    # It changes every number in every kymograph, so: measured on frame 0 of
+    # container 4972cad8, all 60 microtubules, 17 684 columns per channel, as
+    # |bilinear - nearest| against the frame's own full range —
+    #
+    #   IRM      mean 0.59 % of range (68.6 counts), p95 1.62 %, max 3.86 %
+    #   488 nm   mean 0.09 %  ( 6.0 counts), p95 0.24 %, max 12.04 %
+    #   640 nm   mean 0.17 %  ( 5.4 counts), p95 0.45 %, max  8.12 %
+    #
+    # and 99.5-99.9 % of columns move at all. The mean is small; the max is
+    # not, and it lands exactly where a kymograph is read — a punctate spot,
+    # where nearest snaps to whichever pixel centre happens to be closest and
+    # so makes a moving particle's intensity flicker with sub-pixel position.
+    #
+    # mode='constant', cval=0 keeps the zero-fill: pixels outside the image
+    # read as 0 rather than edge-clamping, which falsely brightened polylines
+    # that crossed the frame border.
+    profile = map_coordinates(
+        img,
+        np.stack([rows.ravel(), cols.ravel()]),
+        order=1,
+        mode="constant",
+        cval=0.0,
+    )
+    if line_width > 1:
+        band = profile.reshape(line_width, -1)
+        profile = band.max(axis=0) if line_reduce == "max" else band.mean(axis=0)
+    return profile.astype(np.float32)
 
 
 # ----------------------------------------------------------------------------
@@ -1394,7 +1596,7 @@ def _decode_workers() -> int:
     """Threads used to decode frame PNGs for one kymograph.
 
     ``KYMOGRAPH_DECODE_WORKERS`` overrides it; 1 serialises the decodes again
-    (still on the pool — see ``_sample_rows`` for why inline is worse).
+    (still on the pool — see ``_run_row_jobs`` for why inline is worse).
     """
     override = os.getenv("KYMOGRAPH_DECODE_WORKERS", "").strip()
     if override:
@@ -1579,6 +1781,11 @@ class _RowJob(NamedTuple):
     ``row`` its frame. ``file_key`` is the stat identity of the PNG — the same
     identity ``_SampledRowCache`` keys on, so two spellings of one frame (or a
     hard link) group onto one decode and a rewritten frame does not.
+
+    ``line_width`` / ``line_reduce`` travel WITH the job rather than being read
+    off the request in ``_sample_frame_rows``, because a batch groups jobs from
+    different items onto one decode and two items may ask for different bands
+    of the same frame. They are in ``cache_key`` for the same reason.
     """
 
     item: int
@@ -1588,6 +1795,8 @@ class _RowJob(NamedTuple):
     pts: np.ndarray
     n_samples: int
     cache_key: Tuple[Any, ...]
+    line_width: int = 1
+    line_reduce: str = "mean"
 
 
 def _sample_frame_rows(path: Path, jobs: List[_RowJob]) -> List[np.ndarray]:
@@ -1609,7 +1818,6 @@ def _sample_frame_rows(path: Path, jobs: List[_RowJob]) -> List[np.ndarray]:
     than corrupt every later request that reads the same entry.
     """
     from PIL import Image as PILImage
-    from scipy.ndimage import map_coordinates
 
     # Load at native bit depth. convert('L') would force 8-bit and lose
     # half the dynamic range of 16-bit microscopy frames.
@@ -1626,19 +1834,12 @@ def _sample_frame_rows(path: Path, jobs: List[_RowJob]) -> List[np.ndarray]:
         # that makes the kymograph spatially honest — vertex-only
         # sampling was aliasing punctate signal between vertices.
         sampled_pts = _arc_length_resample_polyline(job.pts, job.n_samples)
-        # Step 2: sample the underlying image at each interpolated point.
-        # order=0 = nearest pixel (no intensity blending). mode='constant',
-        # cval=0 = pixels outside the image read as 0 (matches ImageJ's
-        # getInterpolatedValue zero-fill, instead of edge-clamping which
-        # falsely brightened polylines that crossed the frame border).
-        profile = map_coordinates(
-            img,
-            np.stack([sampled_pts[:, 0], sampled_pts[:, 1]]),
-            order=0,
-            mode="constant",
-            cval=0.0,
+        # Step 2: read the image along those points — one bilinear sample per
+        # column at line_width 1, a band of them reduced to one value above it.
+        # See ``_sample_line_profile``.
+        row = _sample_line_profile(
+            img, sampled_pts, job.line_width, job.line_reduce
         )
-        row = profile.astype(np.float32)
         row.setflags(write=False)
         rows.append(row)
     # See _DECODE_SCRATCH: hold this frame until the next one on this thread
@@ -1649,7 +1850,11 @@ def _sample_frame_rows(path: Path, jobs: List[_RowJob]) -> List[np.ndarray]:
 
 
 def _plan_rows(
-    frames: List[KymographFrameInput], n_samples: int, item: int = 0
+    frames: List[KymographFrameInput],
+    n_samples: int,
+    item: int = 0,
+    line_width: int = 1,
+    line_reduce: str = "mean",
 ) -> Tuple[List[Optional[np.ndarray]], List[_RowJob], int]:
     """Resolve every row of ONE kymograph to a finished row or a decode job.
 
@@ -1684,9 +1889,14 @@ def _plan_rows(
             rows[i] = np.zeros(n_samples, dtype=np.float32)
             continue
         file_key = (st.st_dev, st.st_ino, st.st_mtime_ns, st.st_size)
+        # Every input the sampled row depends on. ``line_width`` and
+        # ``line_reduce`` joined it on 2026-09-01: without them, asking for the
+        # same microtubule at width 5 would be served the width-1 row.
         cache_key = (
             *file_key,
             n_samples,
+            line_width,
+            line_reduce,
             hashlib.blake2b(pts.tobytes(), digest_size=16).digest(),
         )
         cached = _SAMPLE_CACHE.get(cache_key)
@@ -1695,7 +1905,17 @@ def _plan_rows(
             hits += 1
         else:
             jobs.append(
-                _RowJob(item, i, path, file_key, pts, n_samples, cache_key)
+                _RowJob(
+                    item,
+                    i,
+                    path,
+                    file_key,
+                    pts,
+                    n_samples,
+                    cache_key,
+                    line_width,
+                    line_reduce,
+                )
             )
 
     return rows, jobs, hits
@@ -1762,15 +1982,6 @@ def _assert_rows_complete(
             detail=f"Kymograph sampling produced no row for frame(s) {unfilled[:5]}",
         )
     return [row for row in rows if row is not None]
-
-
-def _sample_rows(
-    frames: List[KymographFrameInput], n_samples: int
-) -> Tuple[List[np.ndarray], int, int]:
-    """Build one kymograph row per frame. Returns ``(rows, hits, decoded)``."""
-    rows, jobs, hits = _plan_rows(frames, n_samples)
-    decoded = _run_row_jobs(jobs, [rows])
-    return _assert_rows_complete(frames, rows), hits, decoded
 
 
 _VIRIDIS_RGB = np.array(
@@ -1907,7 +2118,7 @@ def _render_profiles(
 # anything else.
 #
 # The memory peak is NOT unchanged, and the reason is the decode pool above,
-# not this executor: `_sample_rows` now holds up to `_DECODE_WORKERS` (4)
+# not this executor: `_run_row_jobs` now holds up to `_DECODE_WORKERS` (4)
 # full-frame float32 buffers at once instead of one. Measured on the 299-frame
 # container, peak RSS went 146 MB -> 187 MB, i.e. +41 MB against 11.36 MB per
 # 1924x1476 frame — three extra frames in flight, as expected. On the 2048x2048
@@ -2006,7 +2217,9 @@ def _plan_kymograph(req: KymographRequest, item: int = 0) -> _KymographPlan:
     # column-space velocities and run displacements before the µm calibration.
     px_per_column = seed_arc / (n_samples - 1) if n_samples > 1 else 1.0
 
-    rows, jobs, hits = _plan_rows(frames, n_samples, item)
+    rows, jobs, hits = _plan_rows(
+        frames, n_samples, item, req.line_width, req.line_reduce
+    )
     return _KymographPlan(frames, n_samples, px_per_column, rows, jobs, hits)
 
 
@@ -2294,7 +2507,7 @@ def _finish_kymograph(
 
     # The intensity matrix as CSV, only when the caller asked for it — see
     # ``KymographRequest.include_csv``. Row i is labelled with ``frames[i].frame``,
-    # which is why ``_sample_rows`` refuses to return a short list.
+    # which is why ``_assert_rows_complete`` refuses to return a short list.
     csv_b64: Optional[str] = None
     if req.include_csv:
         csv_buf = io.StringIO()

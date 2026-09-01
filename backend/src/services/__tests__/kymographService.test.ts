@@ -433,6 +433,80 @@ describe('buildKymograph', () => {
       expect(mockAxios.post.mock.calls[0][1].intensity_width).toBe(5);
     });
 
+    it('omits line_width / line_reduce when the caller wants a plain line', async () => {
+      // The whole backward-compatibility story: a caller that never heard of
+      // the line width posts byte-for-byte the body it posted before the field
+      // existed, and the ML service renders the identical kymograph.
+      mockPrisma.image.findMany.mockResolvedValue([
+        makeFrame(0, [POLYLINE_STATIC]),
+      ]);
+      await buildKymograph({
+        videoContainerId: 'container-1',
+        polylineId: 'poly-1',
+        frameIndex: 0,
+        sourceChannel: 'IRM',
+      });
+
+      const body = mockAxios.post.mock.calls[0][1];
+      expect(body).not.toHaveProperty('line_width');
+      expect(body).not.toHaveProperty('line_reduce');
+    });
+
+    it('forwards line_width and line_reduce when the caller asks for a band', async () => {
+      mockPrisma.image.findMany.mockResolvedValue([
+        makeFrame(0, [POLYLINE_STATIC]),
+      ]);
+      await buildKymograph({
+        videoContainerId: 'container-1',
+        polylineId: 'poly-1',
+        frameIndex: 0,
+        sourceChannel: 'IRM',
+        lineWidth: 9,
+        lineReduce: 'max',
+      });
+
+      const body = mockAxios.post.mock.calls[0][1];
+      expect(body.line_width).toBe(9);
+      expect(body.line_reduce).toBe('max');
+    });
+
+    it('clamps an out-of-range line width instead of letting the ML 422 it', async () => {
+      // Defence in depth: the route validates 1..51 first, but this service is
+      // also called from the export, which does not go through it.
+      mockPrisma.image.findMany.mockResolvedValue([
+        makeFrame(0, [POLYLINE_STATIC]),
+      ]);
+      await buildKymograph({
+        videoContainerId: 'container-1',
+        polylineId: 'poly-1',
+        frameIndex: 0,
+        sourceChannel: 'IRM',
+        lineWidth: 999,
+      });
+
+      expect(mockAxios.post.mock.calls[0][1].line_width).toBe(51);
+    });
+
+    it('drops line_reduce at width 1, where it cannot change a pixel', async () => {
+      // One sample per column: mean and max of it are the same number. Sending
+      // the choice anyway would split the response cache for nothing.
+      mockPrisma.image.findMany.mockResolvedValue([
+        makeFrame(0, [POLYLINE_STATIC]),
+      ]);
+      await buildKymograph({
+        videoContainerId: 'container-1',
+        polylineId: 'poly-1',
+        frameIndex: 0,
+        sourceChannel: 'IRM',
+        lineWidth: 1,
+        lineReduce: 'max',
+      });
+
+      const body = mockAxios.post.mock.calls[0][1];
+      expect(body).not.toHaveProperty('line_width');
+      expect(body).not.toHaveProperty('line_reduce');
+    });
+
     it('sets tracked=true when the seed polyline has a trackId', async () => {
       mockPrisma.image.findMany.mockResolvedValue([
         makeFrame(0, [POLYLINE_TRACKED]),
@@ -1051,6 +1125,11 @@ describe('buildKymograph', () => {
         { ...INPUT, detectVelocity: true, renderOverlay: true },
         { ...INPUT, renderProfiles: true },
         { ...INPUT, intensityWidth: 7 },
+        // The line width changes the sampled matrix itself, so two widths must
+        // never share an entry — a hit would show the user the same picture
+        // after they moved the control.
+        { ...INPUT, lineWidth: 5 },
+        { ...INPUT, lineWidth: 5, lineReduce: 'max' as const },
         { ...INPUT, frameFilter: [0] },
         { ...INPUT, videoContainerId: 'container-2' },
       ];

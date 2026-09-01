@@ -2775,6 +2775,14 @@ export default {
       widthLabel: 'Intensitätsbreite',
       widthHint:
         'Breite (px) des um jede Trajektorie abgetasteten Bandes für Signal vs. Hintergrundintensität.',
+      lineWidthLabel: 'Linienbreite',
+      lineWidthHint:
+        'Breite (px) der entlang des Mikrotubulus abgetasteten Linie, quer dazu gemessen. 1 tastet ein einzelnes Pixel ab.',
+      lineReduceLabel: 'Über die Breite',
+      lineReduceHint:
+        'Wie die Pixel über die Linienbreite zu einem Wert werden. Mittelwert entspricht ImageJ; Maximum ist heller, wird aber von einzelnen heißen Pixeln verzerrt.',
+      lineReduceMean: 'Mittelwert',
+      lineReduceMax: 'Maximum',
       colVelocity: 'Nettogeschwindigkeit',
       colRunLength: 'Lauflänge (µm)',
       colRunTime: 'Laufzeit (s)',

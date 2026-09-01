@@ -2775,6 +2775,14 @@ export default {
       widthLabel: 'Intensity width',
       widthHint:
         'Width (px) of the band sampled around each trajectory for signal vs. background intensity.',
+      lineWidthLabel: 'Line width',
+      lineWidthHint:
+        'Width (px) of the line sampled along the microtubule, measured across it. 1 samples a single pixel.',
+      lineReduceLabel: 'Across width',
+      lineReduceHint:
+        'How the pixels across the line width become one value. Mean matches ImageJ; max is brighter but biased by single hot pixels.',
+      lineReduceMean: 'Mean',
+      lineReduceMax: 'Max',
       colVelocity: 'Net velocity',
       colRunLength: 'Run length (µm)',
       colRunTime: 'Run time (s)',
