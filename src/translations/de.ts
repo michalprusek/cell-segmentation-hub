@@ -467,6 +467,15 @@ export default {
       chunkProgress: 'Teil {{current}}/{{total}}',
     },
   },
+  specimens: {
+    preview: {
+      byModel:
+        'Echte Aufnahmen, die dieses Modell segmentiert hat, mit den Konturen, die es geliefert hat.',
+      byType:
+        'Echte Aufnahmen aus Projekten dieses Typs, mit der Segmentierung ihres Modells.',
+      alt: 'Beispielaufnahme vom Typ {{type}} mit der von {{model}} erzeugten Segmentierung.',
+    },
+  },
   settings: {
     pageTitle: 'Einstellungen',
     profile: 'Profil',

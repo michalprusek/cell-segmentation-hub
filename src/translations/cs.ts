@@ -460,6 +460,15 @@ export default {
       chunkProgress: 'Část {{current}}/{{total}}',
     },
   },
+  specimens: {
+    preview: {
+      byModel:
+        'Skutečné snímky, které tento model segmentoval, i s obrysy, jež vrátil.',
+      byType:
+        'Skutečné snímky z projektů tohoto typu se segmentací, kterou vytvořil jejich model.',
+      alt: 'Ukázkový snímek typu {{type}} se segmentací od modelu {{model}}.',
+    },
+  },
   settings: {
     pageTitle: 'Nastavení',
     profile: 'Profil',

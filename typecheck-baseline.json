@@ -7,8 +7,8 @@
   "totals": {
     "tsconfig.app.json": 399,
     "tsconfig.node.json": 21,
-    "tsconfig.test.json": 1216,
-    "all": 1636
+    "tsconfig.test.json": 1223,
+    "all": 1643
   },
   "projects": {
     "tsconfig.app.json": {
@@ -630,6 +630,9 @@
       "src/components/header/MobileMenu.tsx": {
         "TS6307: File 'src/components/ui/sheet.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
       },
+      "src/components/landing/SpecimenShowcase.tsx": {
+        "TS6307: File 'src/components/specimens/SpecimenOutlineLayer.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
+      },
       "src/components/landing/__tests__/specimens.test.ts": {
         "TS6307: File 'src/components/landing/specimens.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
         "TS6307: File 'src/translations/en.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
@@ -679,6 +682,7 @@
       },
       "src/components/project/ProjectDialogForm.tsx": {
         "TS2322: Type 'string | string[]' is not assignable to type 'string | undefined'.": 2,
+        "TS6307: File 'src/components/specimens/SpecimenHoverCard.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
         "TS6307: File 'src/hooks/useProjectForm.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
       },
       "src/components/project/ProjectHeader.tsx": {
@@ -776,6 +780,9 @@
       "src/components/settings/__tests__/ModelSettingsSection.test.tsx": {
         "TS2739: Type '{ id: \"cbam_resunet\"; displayName: string; size: \"small\"; description: string; category: \"spheroid\"; }' is missing the following properties from type 'ModelInfo': name, defaultThreshold": 1,
         "TS2739: Type '{ id: \"segformer\"; displayName: string; size: \"medium\"; description: string; category: \"spheroid\"; }' is missing the following properties from type 'ModelInfo': name, defaultThreshold": 1
+      },
+      "src/components/specimens/SpecimenHoverCard.tsx": {
+        "TS6307: File 'src/components/ui/hover-card.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
       },
       "src/components/ui/badge.tsx": {
         "TS6307: File 'src/components/ui/badge-variants.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
@@ -1140,6 +1147,18 @@
       "src/lib/segmentationSelection.test.ts": {
         "TS6307: File 'src/lib/segmentationSelection.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
       },
+      "src/lib/specimens/__tests__/specimenPreviews.test.ts": {
+        "TS6307: File 'src/lib/specimens/previewGeometry.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
+        "TS6307: File 'src/lib/specimens/previewIndex.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
+        "TS6307: File 'src/lib/specimens/selectPreviews.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
+      },
+      "src/lib/specimens/previewGeometry.ts": {
+        "TS6307: File 'src/lib/specimens/specimenStroke.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
+      },
+      "src/lib/specimens/specimenStroke.ts": {
+        "TS6307: File 'src/pages/segmentation/utils/instanceColors.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
+        "TS6307: File 'src/pages/segmentation/utils/neuronClassStyle.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
+      },
       "src/lib/tiffConverter.ts": {
         "TS6307: File 'src/lib/tiffUtils.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
       },
@@ -1385,8 +1404,7 @@
         "TS6307: File 'src/pages/segmentation/components/context-menu/MtTypeLabelDialog.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
       },
       "src/pages/segmentation/components/PolygonListPanel.tsx": {
-        "TS2322: Type 'string | string[]' is not assignable to type 'string | undefined'.": 1,
-        "TS6307: File 'src/pages/segmentation/utils/neuronClassStyle.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
+        "TS2322: Type 'string | string[]' is not assignable to type 'string | undefined'.": 1
       },
       "src/pages/segmentation/components/SegmentationEditorLayout.tsx": {
         "TS2322: Type '(e: React.MouseEvent<HTMLDivElement>) => void' is not assignable to type '(e: MouseEvent<Element, MouseEvent>) => void'.": 3,
@@ -1565,9 +1583,6 @@
       },
       "src/pages/segmentation/hooks/useVideoFrames.ts": {
         "TS2339: Property 'data' does not exist on type '{}'.": 1
-      },
-      "src/pages/segmentation/utils/__tests__/instanceColors.test.ts": {
-        "TS6307: File 'src/pages/segmentation/utils/instanceColors.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
       },
       "src/pages/segmentation/utils/__tests__/mtTypeTargets.test.ts": {
         "TS6307: File 'src/pages/segmentation/utils/mtTypeTargets.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1

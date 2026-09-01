@@ -92,3 +92,7 @@ microtubules_v7_pysoax/
 .venv*/
 venv/
 **/.venv*/
+
+# Generated specimen preview geometry: compact on purpose (127 kB fetched on
+# hover), and re-indenting it would multiply that for no reader's benefit.
+public/specimens/previews/*.geom.json

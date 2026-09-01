@@ -1,6 +1,7 @@
 import React, { useCallback, useId, useMemo, useRef, useState } from 'react';
+import SpecimenOutlineLayer from '@/components/specimens/SpecimenOutlineLayer';
 import { useLanguage } from '@/contexts/useLanguage';
-import { SPECIMENS, type Specimen, type SpecimenId } from './specimens';
+import { SPECIMENS, type SpecimenId } from './specimens';
 
 /**
  * Keyframes and the reduced-motion opt-out live here rather than in a global
@@ -41,46 +42,6 @@ const SHOWCASE_CSS = `
  */
 const STAGGER_MS = 14;
 const MAX_STAGGER_STEPS = 26;
-
-interface OutlineLayerProps {
-  specimen: Specimen;
-  strokeWidth: number;
-  animate: boolean;
-}
-
-/** The real segmentation, drawn as vectors over the frame. */
-function OutlineLayer({ specimen, strokeWidth, animate }: OutlineLayerProps) {
-  return (
-    <svg
-      viewBox="0 0 1000 1000"
-      className={`pointer-events-none absolute inset-0 h-full w-full ${
-        animate ? 'specimen-draw' : ''
-      }`}
-      aria-hidden="true"
-      focusable="false"
-    >
-      <g fill="none" strokeLinecap="round" strokeLinejoin="round">
-        {specimen.outlines.map((outline, index) => (
-          <path
-            key={index}
-            d={outline.d}
-            stroke={outline.stroke}
-            strokeWidth={strokeWidth}
-            pathLength={1}
-            vectorEffect="non-scaling-stroke"
-            style={
-              animate
-                ? {
-                    animationDelay: `${Math.min(index, MAX_STAGGER_STEPS) * STAGGER_MS}ms`,
-                  }
-                : undefined
-            }
-          />
-        ))}
-      </g>
-    </svg>
-  );
-}
 
 /**
  * The landing page's centrepiece: a tray of real microscopy frames from this
@@ -157,11 +118,14 @@ function SpecimenShowcase() {
             className="h-full w-full object-cover"
             decoding="async"
           />
-          <OutlineLayer
+          <SpecimenOutlineLayer
             key={`outlines-${active.id}`}
-            specimen={active}
+            outlines={active.outlines}
             strokeWidth={1.6}
-            animate
+            className="specimen-draw"
+            pathStyle={index => ({
+              animationDelay: `${Math.min(index, MAX_STAGGER_STEPS) * STAGGER_MS}ms`,
+            })}
           />
         </div>
         <figcaption className="mt-4">
@@ -222,10 +186,9 @@ function SpecimenShowcase() {
                     loading="lazy"
                     decoding="async"
                   />
-                  <OutlineLayer
-                    specimen={specimen}
+                  <SpecimenOutlineLayer
+                    outlines={specimen.outlines}
                     strokeWidth={0.6}
-                    animate={false}
                   />
                 </span>
                 <span className="min-w-0">

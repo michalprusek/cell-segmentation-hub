@@ -426,6 +426,13 @@ export default {
       chunkProgress: '分块 {{current}}/{{total}}',
     },
   },
+  specimens: {
+    preview: {
+      byModel: '该模型分割过的真实图像，以及它输出的轮廓。',
+      byType: '此项目类型的真实图像，以及对应模型输出的分割结果。',
+      alt: '{{type}} 类型的示例图像，附 {{model}} 输出的分割结果。',
+    },
+  },
   settings: {
     manageSettings: '管理您的账户偏好',
     appearance: '外观',

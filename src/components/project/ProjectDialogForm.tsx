@@ -15,6 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import SpecimenHoverCard from '@/components/specimens/SpecimenHoverCard';
 import { useProjectForm } from '@/hooks/useProjectForm';
 import { useLanguage } from '@/contexts/useLanguage';
 import { PROJECT_TYPES, type ProjectType } from '@/types';
@@ -80,10 +81,21 @@ const ProjectDialogForm = ({ onSuccess, onClose }: ProjectDialogFormProps) => {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
+                {/* Each option previews real frames of that project type on
+                    hover — the type names alone ("spheroid", "microtubules")
+                    do not tell a new user which one matches their images. */}
                 {PROJECT_TYPES.map(pt => (
-                  <SelectItem key={pt} value={pt}>
-                    {t(`projects.types.${pt}`)}
-                  </SelectItem>
+                  <SpecimenHoverCard
+                    key={pt}
+                    kind="projectType"
+                    value={pt}
+                    side="right"
+                    align="start"
+                  >
+                    <SelectItem value={pt}>
+                      {t(`projects.types.${pt}`)}
+                    </SelectItem>
+                  </SpecimenHoverCard>
                 ))}
               </SelectContent>
             </Select>

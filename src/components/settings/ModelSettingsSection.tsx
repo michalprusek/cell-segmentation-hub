@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
+import SpecimenHoverCard from '@/components/specimens/SpecimenHoverCard';
 import { ModelType } from '@/contexts/useModel';
 import { useLanguage } from '@/contexts/useLanguage';
 import { useLocalizedModels } from '@/hooks/useLocalizedModels';
@@ -117,22 +118,31 @@ const ModelSettingsSection = () => {
     <div key={model.id} className="flex items-center space-x-4">
       <RadioGroupItem value={model.id} id={model.id} />
       <Label htmlFor={model.id} className="flex-1 cursor-pointer">
-        <Card className="transition-colors hover:bg-gray-50 dark:hover:bg-gray-800/50 dark:bg-gray-900">
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base flex items-center gap-2">
-                {getSizeIcon(model.size)}
-                {model.displayName}
-              </CardTitle>
-              <Badge className={getSizeBadgeColor(model.size)}>
-                {t(`settings.modelSize.${model.size}`)}
-              </Badge>
-            </div>
-            <CardDescription className="text-sm">
-              {t(`settings.modelDescription.${model.id}`)}
-            </CardDescription>
-          </CardHeader>
-        </Card>
+        {/* Hovering a model shows three real frames it segmented, so the
+            choice can be made on the output rather than on the name. */}
+        <SpecimenHoverCard
+          kind="model"
+          value={model.id as ModelType}
+          side="right"
+          align="start"
+        >
+          <Card className="transition-colors hover:bg-gray-50 dark:hover:bg-gray-800/50 dark:bg-gray-900">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base flex items-center gap-2">
+                  {getSizeIcon(model.size)}
+                  {model.displayName}
+                </CardTitle>
+                <Badge className={getSizeBadgeColor(model.size)}>
+                  {t(`settings.modelSize.${model.size}`)}
+                </Badge>
+              </div>
+              <CardDescription className="text-sm">
+                {t(`settings.modelDescription.${model.id}`)}
+              </CardDescription>
+            </CardHeader>
+          </Card>
+        </SpecimenHoverCard>
       </Label>
     </div>
   );
