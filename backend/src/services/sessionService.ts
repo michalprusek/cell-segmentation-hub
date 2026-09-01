@@ -5,7 +5,6 @@ import crypto from 'crypto';
 
 interface RefreshToken {
   userId: string;
-  token: string;
   expiresAt: string;
   family: string;
 }
@@ -14,15 +13,39 @@ class SessionService {
   private readonly REFRESH_TOKEN_PREFIX = 'refresh:';
   private readonly REFRESH_TOKEN_TTL = 60 * 60 * 24 * 30; // 30 days in seconds
 
+  /**
+   * Redis key for a refresh token: the prefix plus a SHA-256 of the token,
+   * never the token itself.
+   *
+   * Until 2026-08-31 the raw JWT was the key AND was stored again inside the
+   * value, so anyone who could read Redis -- a dump, a backup, the metrics
+   * exporter, another tenant on the box -- held working refresh tokens for
+   * every logged-in user. 235 were live when this was found.
+   *
+   * SHA-256 with no salt or iteration count is the right primitive here and
+   * not an oversight: the input is 32 bytes of `crypto.randomBytes`, so it
+   * has 256 bits of entropy and cannot be brute-forced or rainbow-tabled the
+   * way a password can. What a slow KDF would buy is nothing; what it would
+   * cost is a hash on the hot path of every request that refreshes.
+   *
+   * Lookup stays O(1) because the caller always presents the token itself --
+   * we hash what we are given and read that key.
+   */
+  private keyFor(token: string): string {
+    return (
+      this.REFRESH_TOKEN_PREFIX +
+      crypto.createHash('sha256').update(token).digest('hex')
+    );
+  }
+
   async storeRefreshToken(
     userId: string,
     token: string,
     family?: string
   ): Promise<void> {
-    const key = `${this.REFRESH_TOKEN_PREFIX}${token}`;
+    const key = this.keyFor(token);
     const tokenData: RefreshToken = {
       userId,
-      token,
       expiresAt: new Date(
         Date.now() + this.REFRESH_TOKEN_TTL * 1000
       ).toISOString(),
@@ -50,7 +73,7 @@ class SessionService {
   }
 
   async verifyRefreshToken(token: string): Promise<RefreshToken | null> {
-    const key = `${this.REFRESH_TOKEN_PREFIX}${token}`;
+    const key = this.keyFor(token);
 
     const data = await executeRedisCommand(async client => client.get(key));
     if (!data) {
@@ -70,7 +93,7 @@ class SessionService {
   }
 
   async deleteRefreshToken(token: string): Promise<boolean> {
-    const key = `${this.REFRESH_TOKEN_PREFIX}${token}`;
+    const key = this.keyFor(token);
 
     const result = await executeRedisCommand(async client => {
       const deleted = await client.del(key);
