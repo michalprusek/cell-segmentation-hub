@@ -705,6 +705,14 @@ export async function exportMicrotubuleKymographs(
     // channel a (header-only) worksheet.
     const rowSlots: Array<VelocityRow[] | undefined> = new Array(jobs.length);
 
+    // Files actually written, as distinct from jobs dispatched. The two differ
+    // whenever `includeSegmentedImages` is off: every kymograph is still
+    // rendered by the ML service (the velocity metrics are derived from it),
+    // and then discarded. Logging only `jobs.length` under the word "exported"
+    // made an export that wrote nothing look like one that wrote 63 — a false
+    // alarm that cost a real half hour on 2026-09-01.
+    let imageCount = 0;
+
     await forEachJobOutcome(
       (job, containerContext) => ({
         videoContainerId: job.containerId,
@@ -746,6 +754,7 @@ export async function exportMicrotubuleKymographs(
           }
 
           if (options.includeSegmentedImages && result.overlayPngBase64) {
+            imageCount++;
             await fs.writeFile(
               path.join(
                 outDir,
@@ -809,20 +818,42 @@ export async function exportMicrotubuleKymographs(
       (n, rows) => n + rows.length,
       0
     );
-    if (options.includeVelocityMetrics && velocityRowCount > 0) {
+    const wroteWorkbook =
+      options.includeVelocityMetrics && velocityRowCount > 0;
+    if (wroteWorkbook) {
       await writeVelocityWorkbook(
         path.join(outDir, 'velocity_metrics.xlsx'),
         rowsByChannel
       );
     }
 
-    logger.info('Microtubule kymographs exported', CTX, {
+    // `rendered` is what the ML service built; `images`/`workbook` are what
+    // reached the archive. Kept separate because they legitimately differ, and
+    // conflating them is actively misleading: with `includeSegmentedImages`
+    // off and no motility detected, this stage renders every kymograph and
+    // writes nothing at all.
+    const wroteNothing = imageCount === 0 && !wroteWorkbook;
+    const payload = {
       projectId,
       containers: containers.length,
-      kymographs: jobs.length,
+      rendered: jobs.length,
+      images: imageCount,
+      workbook: wroteWorkbook,
       velocityRows: velocityRowCount,
       channels: rowsByChannel.size,
-    });
+    };
+    if (wroteNothing && jobs.length > 0) {
+      logger.warn(
+        `Microtubule kymographs: rendered ${jobs.length} but wrote no file. ` +
+          `includeSegmentedImages=${!!options.includeSegmentedImages}, ` +
+          `includeVelocityMetrics=${!!options.includeVelocityMetrics}, ` +
+          `velocityRows=${velocityRowCount}.`,
+        CTX,
+        payload
+      );
+    } else {
+      logger.info('Microtubule kymographs exported', CTX, payload);
+    }
   } catch (err) {
     // Orchestration-level failure (DB / mkdir / final write): degrade to "no
     // kymograph output" rather than failing the whole export job.
