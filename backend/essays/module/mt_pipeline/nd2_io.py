@@ -207,12 +207,21 @@ class ChannelFocus:
     saturated, or sub-ADU noise), because a blank frame reporting 0 and a frame
     genuinely holding no structure are different claims and only one of them is
     a measurement.
+
+    ``sharpness`` is reported ALONGSIDE the verdict and takes no part in it —
+    see the note beside ``report.FOCUS_COLUMNS`` for the measurement that says
+    why. It has its own None case, distinct from the one above: the descriptor
+    returns NaN when a frame holds fewer than ``focus_qc.metrics``'
+    ``MIN_STRUCTURE_PX = 50`` structure pixels, i.e. it declined to measure a
+    frame it scored perfectly well. That is not "sharpness zero", so it must
+    reach the CSV as a blank cell like every other absent number here.
     """
 
     name: str
     score: float | None
     flagged: bool | None
     threshold: float | None
+    sharpness: float | None
     noise_sigma: float | None
     background: float | None
 
@@ -262,7 +271,7 @@ class FocusQuality:
 
 def _unmeasured(name: str) -> ChannelFocus:
     return ChannelFocus(name=name, score=None, flagged=None, threshold=None,
-                        noise_sigma=None, background=None)
+                        sharpness=None, noise_sigma=None, background=None)
 
 
 def _finite(value) -> float | None:
@@ -409,6 +418,11 @@ def judge_focus(irm: np.ndarray, tirf: np.ndarray, *,
                 score=_finite(stats.score),
                 flagged=bool(verdict.channel_flags[spec.name]),
                 threshold=float(detector.calibration.thresholds[spec.modality]),
+                # Advisory, and NEVER read by anything that decides. `_finite`
+                # matters more here than for its neighbours: sharpness is
+                # legitimately NaN on a frame that scored fine but holds fewer
+                # than MIN_STRUCTURE_PX = 50 structure pixels.
+                sharpness=_finite(stats.sharpness),
                 noise_sigma=_finite(stats.noise_sigma),
                 background=_finite(stats.background),
             )

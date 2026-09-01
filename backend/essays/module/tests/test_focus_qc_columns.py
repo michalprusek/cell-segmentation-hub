@@ -26,6 +26,17 @@ the positions that need it most would have had nowhere to live. `focus_qc.csv`
 carries one row per position that was READ, including positions whose
 segmentation later failed.
 
+The SHARPNESS column (added 2026-09-01) is the same bargain taken one step
+further: reported, and deliberately not a decision input. Measured over the
+shipped calibration cache (focus_qc/reference/scores_cache.json, 410 real
+per-plane measurements, tolerance 0.3 um / guard 0.1 um), the geometric-midpoint
+threshold moves 1.46x (IRM) / 1.13x (TIRF) between stacks against the score's
+2.67x / 23.50x -- the most acquisition-stable number focus_qc has, which is what
+a user outside the shipped calibration needs. But its separation (p5 in-focus /
+p95 out-of-focus, this project's own margin) is 1.07x on IRM and 0.88x on TIRF,
+and below 1.0 the classes are inverted at the tails, so no absolute threshold
+exists at all. Hence: a column, never a flag.
+
 Run with: pytest tests/ (no GPU, no checkpoint, no ND2 file needed).
 """
 
@@ -60,24 +71,35 @@ IRM_THRESHOLD = 7.640363462699190
 FLUOR_THRESHOLD = 0.184418486195967
 
 
-def _channel(name, score, flagged, threshold, sigma=25.0, background=16500.0):
+def _channel(name, score, flagged, threshold, sigma=25.0, background=16500.0,
+             sharpness=2.0):
     return ChannelFocus(name=name, score=score, flagged=flagged,
-                        threshold=threshold, noise_sigma=sigma,
-                        background=background)
+                        threshold=threshold, sharpness=sharpness,
+                        noise_sigma=sigma, background=background)
 
 
 def _in_focus() -> FocusQuality:
     return FocusQuality(
-        irm=_channel("IRM", 461.3776, False, IRM_THRESHOLD, 195.228, 14936.0),
-        tirf=_channel("TIRF 488", 70.6173, False, FLUOR_THRESHOLD, 7.902, 121.0),
+        irm=_channel("IRM", 461.3776, False, IRM_THRESHOLD, 195.228, 14936.0,
+                     sharpness=2.2971),
+        tirf=_channel("TIRF 488", 70.6173, False, FLUOR_THRESHOLD, 7.902, 121.0,
+                      sharpness=1.9845),
         reason="ok")
 
 
 def _out_of_focus() -> FocusQuality:
-    """A real one: WellD04 pos0's TIRF scored exactly 0.0 against a 0.184 cut."""
+    """A real one: WellD04 pos0's TIRF scored exactly 0.0 against a 0.184 cut.
+
+    Its sharpness is None for the reason that pairing is worth pinning: a TIRF
+    frame defocused enough to score 0.0 usually holds fewer than the 50
+    structure pixels the descriptor needs, so it declines to measure. 143 of the
+    144 NaN sharpness values in the shipped calibration cache are exactly this.
+    """
     return FocusQuality(
-        irm=_channel("IRM", 679.2653, False, IRM_THRESHOLD, 196.260, 14399.0),
-        tirf=_channel("TIRF 488", 0.0, True, FLUOR_THRESHOLD, 6.792, 116.0),
+        irm=_channel("IRM", 679.2653, False, IRM_THRESHOLD, 196.260, 14399.0,
+                     sharpness=1.8235),
+        tirf=_channel("TIRF 488", 0.0, True, FLUOR_THRESHOLD, 6.792, 116.0,
+                      sharpness=None),
         reason="oof:TIRF 488")
 
 
@@ -358,6 +380,78 @@ def test_focus_qc_csv_carries_what_a_recalibration_would_need(run_evaluate):
     assert list(row) == FOCUS_COLUMNS
 
 
+def test_focus_qc_csv_reports_the_sharpness_descriptor(run_evaluate):
+    """The second descriptor reaches the sheet, ADVISORY and rounded like a score.
+
+    It is here because it is the only acquisition-stable number focus_qc has.
+    Measured 2026-09-01 over the shipped calibration cache (410 real per-plane
+    measurements, tolerance 0.3 um / guard 0.1 um), the geometric-midpoint
+    threshold moves 1.46x (IRM) / 1.13x (TIRF) between stacks where the score's
+    moves 2.67x / 23.50x -- so a user whose wells are outside the shipped
+    calibration (every 2048x2048 well so far) has something they can threshold
+    per batch. What they must NOT do is let it decide, and the same cache says
+    why: separation is 1.07x on IRM and 0.88x on TIRF, the latter meaning the
+    classes are inverted at the tails.
+    """
+    row = run_evaluate(_in_focus()).focus[0]
+
+    assert float(row["irm_sharpness"]) == pytest.approx(2.2971)
+    assert float(row["tirf_sharpness"]) == pytest.approx(1.9845)
+    # ...and it changed nothing. Sharpness is not an input to any of these.
+    assert row["flagged"] == "0" and row["reason"] == "ok"
+    assert row["irm_flag"] == "0" and row["tirf_flag"] == "0"
+
+
+def test_a_sharpness_that_was_declined_is_blank_not_zero(run_evaluate):
+    """"Too little structure to measure" is not "sharpness zero".
+
+    The descriptor returns NaN below MIN_STRUCTURE_PX = 50 structure pixels
+    (focus_qc/metrics.py), on frames it scored perfectly well -- 143 of the 144
+    NaNs in the shipped cache are out-of-focus TIRF planes. A 0.0 in this cell
+    would read as the sharpest-possible claim about a frame nobody measured,
+    and would drag any average a user takes over the column towards zero.
+    """
+    run = run_evaluate(_out_of_focus())
+
+    assert run.focus[0]["tirf_sharpness"] == "", "blank, not 0"
+    # The channel is otherwise fully measured: this is a declined DESCRIPTOR,
+    # not an unscoreable frame.
+    assert run.focus[0]["tirf_score"] == "0.0"
+    assert float(run.focus[0]["tirf_noise_sigma"]) == pytest.approx(6.792)
+    assert float(run.focus[0]["irm_sharpness"]) == pytest.approx(1.8235)
+
+
+def test_sharpness_sits_beside_the_noise_it_is_expressed_in():
+    """Named columns, and the two channel blocks stay parallel and contiguous.
+
+    `FOCUS_COLUMNS` explicitly allows an insertion (nothing indexes this file by
+    position) and explicitly requires the blocks to stay parallel, so appending
+    would have split `irm_*`. `COLUMNS` allows neither, which is what
+    `test_focus_columns_are_appended_never_inserted` pins.
+    """
+    for prefix in ("irm", "tirf"):
+        assert (FOCUS_COLUMNS.index(f"{prefix}_sharpness")
+                == FOCUS_COLUMNS.index(f"{prefix}_noise_sigma") - 1)
+    irm = [c for c in FOCUS_COLUMNS if c.startswith("irm_")]
+    tirf = [c for c in FOCUS_COLUMNS if c.startswith("tirf_")]
+    assert [c[4:] for c in irm] == [c[5:] for c in tirf], "blocks must stay parallel"
+    # Contiguous: the irm block is not interrupted by a later append.
+    first = FOCUS_COLUMNS.index(irm[0])
+    assert FOCUS_COLUMNS[first:first + len(irm)] == irm
+
+
+def test_sharpness_is_not_repeated_in_results_csv():
+    """results.csv is one row per MICROTUBULE.
+
+    A per-position number nothing decides on would be duplicated across every
+    filament of the position for no reader's benefit, and the four focus columns
+    there are the verdict. The diagnostic sheet is where sharpness lives, and it
+    is complete there -- it also covers the zero-microtubule positions that get
+    no results.csv row at all.
+    """
+    assert not [c for c in COLUMNS if "sharp" in c]
+
+
 def test_a_position_without_a_verdict_leaves_the_focus_row_blank(run_evaluate):
     """One row per position READ, even when nothing judged it."""
     row = run_evaluate(None).focus[0]
@@ -580,6 +674,52 @@ def test_one_channel_in_both_roles_is_judged_under_both_polarities():
     assert got.reason.count("IRM") == got.reason.count(":")
 
 
+def test_the_reader_publishes_the_descriptor_s_own_sharpness():
+    """The wiring, on the real detector: `stats.sharpness` reaches `ChannelFocus`.
+
+    The CSV tests above inject a `FocusQuality`, so the call that actually
+    produces the number would survive their removal -- and a column populated
+    from the wrong field, or not populated at all, is exactly the failure they
+    cannot see.
+    """
+    from mt_pipeline.nd2_io import judge_focus
+    from focus_qc.metrics import focus_score
+
+    irm, tirf = _irm_frame(), _tirf_frame()
+    got = judge_focus(irm, tirf, irm_name="IRM", tirf_name="TIRF 488")
+
+    assert got.irm.sharpness == pytest.approx(focus_score(irm, "irm").sharpness)
+    assert got.tirf.sharpness == pytest.approx(focus_score(tirf, "fluor").sharpness)
+    # Not accidentally a copy of a neighbouring field.
+    assert got.irm.sharpness not in (got.irm.score, got.irm.noise_sigma,
+                                     got.irm.background, got.irm.threshold)
+
+
+def test_a_frame_with_too_little_structure_reports_no_sharpness_at_all():
+    """SCORED, and yet no sharpness -- the case a 0.0 would misreport.
+
+    Pure noise inside the IRM domain: the noise floor is measurable, so the
+    frame is scored (and correctly flagged out of focus), but fewer than
+    MIN_STRUCTURE_PX = 50 pixels clear 4 sigma, so the descriptor declines. This
+    is not the unscoreable path below -- everything else about the channel is
+    measured -- and it is the majority case on defocused fluorescence: 143 of
+    the 144 NaN sharpness values in the shipped calibration cache are exactly
+    this, all of them on TIRF out-of-focus planes.
+    """
+    from mt_pipeline.nd2_io import judge_focus
+
+    rng = np.random.default_rng(31)
+    noise = np.clip(np.round(rng.normal(16500.0, 167.0, (256, 256))),
+                    0, 65535).astype(np.uint16)
+    got = judge_focus(noise, noise, irm_name="IRM", tirf_name="TIRF 488")
+
+    assert got.irm.score is not None, "the frame WAS scored"
+    assert got.irm.noise_sigma is not None and got.irm.background is not None
+    assert "unscoreable" not in got.reason, got.reason
+    assert got.irm.sharpness is None, "declined to measure is not measured zero"
+    assert got.tirf.sharpness is None
+
+
 def test_judge_focus_never_raises_into_the_run():
     """A diagnostic must not be able to fail a well.
 
@@ -598,6 +738,7 @@ def test_judge_focus_never_raises_into_the_run():
     # ...and nothing is reported as a number: NaN in a cell reads as a
     # measurement, blank reads as the refusal it was.
     assert got.irm.score is None and got.irm.noise_sigma is None
+    assert got.irm.sharpness is None
 
 
 def test_a_measurement_failure_is_reported_not_raised(monkeypatch):
