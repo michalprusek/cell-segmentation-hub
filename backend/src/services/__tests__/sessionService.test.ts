@@ -23,6 +23,8 @@ vi.mock('../../utils/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), debug: vi.fn(), warn: vi.fn() },
 }));
 
+import crypto from 'crypto';
+
 import { sessionService } from '../sessionService';
 import { ApiError } from '../../middleware/error';
 
@@ -136,6 +138,57 @@ describe('SessionService', () => {
       mockGet.mockResolvedValueOnce(null);
       const result = await sessionService.rotateRefreshToken('rt_unknown');
       expect(result).toBeNull();
+    });
+  });
+  describe('the raw token never reaches Redis', () => {
+    // Until 2026-08-31 the raw JWT was the Redis KEY and was stored a second
+    // time inside the value. 235 were live when that was found, on a Redis
+    // with no password. These tests pin both halves of the fix; they fail if
+    // either the key or the value starts carrying the token again.
+    const TOKEN = 'rt_super_secret_value_that_must_not_be_stored';
+    const sha256 = (v: string) =>
+      crypto.createHash('sha256').update(v).digest('hex');
+
+    it('keys on the SHA-256 of the token, not the token', async () => {
+      await sessionService.storeRefreshToken(TEST_UUID, TOKEN);
+
+      const [key] = mockSetEx.mock.calls[0];
+      expect(key).toBe(`refresh:${sha256(TOKEN)}`);
+      expect(key).not.toContain(TOKEN);
+    });
+
+    it('does not write the token into the stored value', async () => {
+      await sessionService.storeRefreshToken(TEST_UUID, TOKEN);
+
+      const [, , value] = mockSetEx.mock.calls[0];
+      expect(value).not.toContain(TOKEN);
+      expect(JSON.parse(value as string)).not.toHaveProperty('token');
+    });
+
+    it('reads and deletes under the same hashed key', async () => {
+      const expected = `refresh:${sha256(TOKEN)}`;
+
+      mockGet.mockResolvedValueOnce(
+        JSON.stringify({
+          userId: TEST_UUID,
+          expiresAt: new Date(Date.now() + 60_000).toISOString(),
+          family: 'fam',
+        })
+      );
+      await sessionService.verifyRefreshToken(TOKEN);
+      expect(mockGet.mock.calls[0][0]).toBe(expected);
+
+      await sessionService.deleteRefreshToken(TOKEN);
+      expect(mockDel.mock.calls[0][0]).toBe(expected);
+    });
+
+    it('gives two different tokens two different keys', async () => {
+      await sessionService.storeRefreshToken(TEST_UUID, 'rt_a');
+      await sessionService.storeRefreshToken(TEST_UUID, 'rt_b');
+
+      const [keyA] = mockSetEx.mock.calls[0];
+      const [keyB] = mockSetEx.mock.calls[1];
+      expect(keyA).not.toBe(keyB);
     });
   });
 });

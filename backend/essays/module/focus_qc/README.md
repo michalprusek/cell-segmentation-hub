@@ -204,6 +204,27 @@ The two at the tolerance edge are within annotation uncertainty. The four kept
 frames at 0.5–0.6 µm are **genuine misses** — 0.6 µm is two planes past the guard
 band, too far to explain as a one-plane annotation error.
 
+### Transfer to an unrelated acquisition
+
+The figures above are leave-one-**stack**-out inside ONE session, so they validate
+the threshold *value* out of fold -- not the threshold rule, the descriptor
+constants, or the ±0.3 µm tolerance, all of which were chosen while looking at
+those same five stacks. The only evidence about a different acquisition is this,
+measured on 12 timelapses recorded six months earlier:
+
+| test | result |
+|---|---|
+| 12 unrelated timelapses, 732 frames | **0 false alarms** |
+| catching a real ~0.5 µm defocus in that acquisition | **10 of 12 fields** |
+
+Two of twelve were missed, and the reason is the field-density blind spot below,
+not noise: `pll336,100x,atp,ch1[I],059` dropped only 15.0x -> 11.6x under that
+defocus, where the calibration fields drop by 88 %.
+
+(Recorded here 2026-08-31 when the standalone deployment package was folded into
+this vendored copy; it was the only content of that package's README not already
+present in this file or in CLAUDE.md.)
+
 Both channels place focus within one plane (0.1 µm) of each other in all five
 stacks, so the OR rule is effectively one decision rather than two here. That may
 not hold for other optical setups; the calibration report prints the per-channel
