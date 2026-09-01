@@ -651,6 +651,75 @@ async def test_kymograph_detection_does_not_block_the_event_loop(monkeypatch):
     )
 
 
+def test_kymograph_measures_every_trajectory_against_a_neighbour_free_ring(
+    client, monkeypatch
+):
+    """The route must hand ALL trajectories to the intensity measurement at once.
+
+    A trajectory's background ring is its band dilated by
+    ``intensity_width * intensity_bg_margin`` MINUS the union of every
+    trajectory's band, exactly as a microtubule's is. That union is only
+    available if the route measures the whole kymograph in one call — measuring
+    one track at a time silently reintroduces the bug this replaced, because
+    each ring would then exclude nothing but its own band.
+
+    The fixture is three parallel streaks 6 columns apart on a flat field, i.e.
+    ordinary traffic. The middle one's ring reaches both neighbours. Measured
+    together its background is the field (40); measured alone its ring is half
+    neighbour, the ImageJ tie-rule median lands on the neighbour (200), and a
+    streak 5x brighter than the field reports ZERO contrast. So the assertion
+    below fails loudly on a per-track regression rather than drifting a few
+    percent.
+    """
+    from PIL import Image as PILImage
+
+    cols, field, bright, width, T = (20, 26, 32), 40, 200, 60, 20
+
+    def _stub_detect(kymo, **kwargs):
+        return [
+            {
+                "points": [[t, float(c)] for t in range(T)],
+                "net_pxframe": 0.0,
+                "snr": 5.0,
+                "total_run_time_frames": 0.0,
+                "total_run_displacement_px": 0.0,
+            }
+            for c in cols
+        ]
+
+    monkeypatch.setattr(tracker_kymograph, "detect_tracks", _stub_detect)
+
+    with tempfile.TemporaryDirectory() as td:
+        td_path = Path(td).resolve()
+        monkeypatch.setattr(tracker_kymograph, "_UPLOAD_ROOT", td_path)
+        row = np.full(width, field, dtype=np.uint8)
+        for c in cols:
+            row[c - 1:c + 2] = bright
+        png = td_path / "frame.png"
+        PILImage.fromarray(np.tile(row, (16, 1)), mode="L").save(png)
+
+        polyline_rc = [[8.0, float(x)] for x in range(width)]
+        r = client.post(
+            "/api/v1/kymograph",
+            json={
+                "frames": [
+                    {"frame": t, "polyline_rc": polyline_rc,
+                     "image_path": str(png)}
+                    for t in range(T)
+                ],
+                "target_width": width,
+                "detect_velocity": True,
+            },
+        )
+    assert r.status_code == 200, r.text
+    tracks = r.json()["tracks"]
+    assert len(tracks) == 3
+    for tr in tracks:
+        assert tr["intensity_signal"] == float(bright)
+        assert tr["intensity_background"] == float(field)
+        assert tr["intensity_minus_bg"] == float(bright - field)
+
+
 # ---------------------------------------------------------------------------
 #  viridis LUT
 # ---------------------------------------------------------------------------

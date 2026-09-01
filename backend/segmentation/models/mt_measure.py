@@ -1,11 +1,18 @@
 """Microtubule band + background geometry and statistics — the ONE copy.
 
-Both callers that turn a microtubule polyline into numbers import this module:
+Every caller that turns a polyline into intensity numbers imports this module:
 
 * ``api/mt_metrics.py`` — the ``/mt-metrics`` endpoint behind the project export;
 * ``backend/essays/module/mt_pipeline/measure.py`` — the Automated Essays batch,
   which reaches it through ``_mt_package.ensure_on_path()`` exactly as it reaches
-  the v7 model package.
+  the v7 model package;
+* ``api/kymograph_velocity.py`` — the background-subtracted intensity of a
+  KymoButler trajectory, added 2026-09-01. A kymograph IS an image (rows =
+  frames, columns = arc-length positions) and a trajectory IS a centerline on
+  it, so the same band, the same ring and the same statistics apply; the only
+  adaptation is the ``(frame, x)`` -> ``(x, y)`` swap. See that module's
+  ``tracks_intensity`` for the one place the analogy is imperfect — the ring is
+  isotropic on axes that are not the same quantity.
 
 They used to have separate implementations, and they drifted. The export was
 aligned to ImageJ *Measure* in 2026-07 (PR #301, #304) while the essays module

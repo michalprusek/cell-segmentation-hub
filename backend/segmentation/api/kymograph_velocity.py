@@ -36,9 +36,26 @@ from __future__ import annotations
 import logging
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence
 
 import numpy as np
+
+# Two things this module needs live in the models DIRECTORY and are imported off
+# it directly, not as ``models.<name>``: the shared microtubule measurement
+# (``mt_measure``, used by the intensity metrics below) and the vendored
+# KymoButler package (imported inside the functions that need torch). Going
+# through the package would execute ``models/__init__``, which pulls in
+# mamba_ssm and Triton and so needs a live CUDA driver; neither a kymograph nor
+# a pixel measurement needs one, and the import would make this module's tests
+# fail outright on any box without a GPU. Same spelling ``mt_metrics`` uses for
+# ``mt_measure`` — deliberately, so both callers name the one shared file the
+# same way — and appended, not prepended, for the same reason it gives: that
+# directory also holds generic names (unet.py, sperm.py) that must not shadow a
+# real dependency for the whole process.
+_MODELS_DIR = Path(__file__).resolve().parents[1] / "models"
+if str(_MODELS_DIR) not in sys.path:
+    sys.path.append(str(_MODELS_DIR))
+import mt_measure  # noqa: E402  (needs the path set above)
 
 logger = logging.getLogger(__name__)
 
@@ -173,24 +190,95 @@ def edge_touch(
     return "none"
 
 
-def track_intensity(
+# Background-ring margin for the trajectory intensity metric, as a multiple of
+# the signal band's width. Same parameterisation, same default and the same
+# meaning as the per-microtubule metric's ``MTMetricsRequest.margin_multiplier``
+# (``Field(2.0, ge=0.0, le=10.0)``) — the two are the same measurement, so they
+# get the same knob and the same number rather than two constants that drift.
+BG_MARGIN_MULTIPLIER = 2.0
+
+EMPTY_INTENSITY: Dict[str, Optional[float]] = {
+    "intensity_signal": None,
+    "intensity_background": None,
+    "intensity_minus_bg": None,
+}
+
+
+def tracks_intensity(
     kymo: np.ndarray,
-    points: List[List[float]],
+    point_lists: Sequence[Sequence[Sequence[float]]],
     width: int,
     *,
-    bg_gap: int = 2,
-    bg_width: Optional[int] = None,
+    margin_multiplier: float = BG_MARGIN_MULTIPLIER,
     polarity: float = 1.0,
-) -> Dict[str, Optional[float]]:
-    """Background-subtracted signal intensity along a kymograph trajectory.
+) -> List[Dict[str, Optional[float]]]:
+    """Background-subtracted intensity of every trajectory on one kymograph.
 
-    Mirrors the MT-metrics convention (mean signal − **median** background): for
-    each trajectory sample ``(t, x)`` read a centred signal band of ``2·⌊(width-1)/2⌋+1``
-    columns (i.e. ``width`` for odd widths, ``width-1`` for even) plus two
-    background bands of ``width`` columns offset ``bg_gap`` columns beyond it on
-    either side. Values come straight from the raw (un-normalised) kymograph
-    matrix, so the result is in the same units as the source channel's pixels —
-    directly comparable to the per-MT intensity metric.
+    Measures a trajectory **exactly the way ``mt_measure`` measures a
+    microtubule** — same band rasterisation, same background ring, same ImageJ
+    statistics — by treating the kymograph as the image it literally is::
+
+        image          <- the (T, X) kymograph matrix (raw, un-normalised)
+        centerline     <- the trajectory's points, [[frame, x], ...] = (row, col)
+        thickness_px   <- ``width`` (the request's ``intensity_width``)
+        margin_mult.   <- ``margin_multiplier``
+
+    ``mt_measure.frame_geometry`` then gives, per trajectory, an ImageJ
+    ``Roi.convertLineToArea`` band and a background ring
+    ``dilate(band, round(width * margin_multiplier))`` **minus the union of every
+    trajectory's band**; ``region_stats`` gives the band's mean and the ring's
+    ImageJ-tie-rule median (``sorted[n // 2]``, the upper of the two central
+    values — not ``numpy.median``'s average of them). The readout is the
+    per-microtubule one: mean signal minus **median** background.
+
+    Two things change versus the 1-D estimator this replaced, and both are the
+    point of the change:
+
+    * **Neighbours are excluded.** The old background was two blocks of ``width``
+      columns offset ``bg_gap = 2`` columns either side of the trajectory,
+      pooled over its whole temporal extent. A second trajectory a handful of
+      columns away therefore landed *inside* the background region and was
+      averaged in as if it were empty field, biasing the background toward the
+      signal and shrinking the reported contrast. The ring excludes every band
+      by construction, because every detected trajectory contributes one.
+    * **The band follows the trajectory.** The old band was ``width`` columns of
+      the same row (and silently ``width - 1`` for even widths, via
+      ``2·⌊(width-1)/2⌋+1``). The band here is ``width`` pixels measured
+      PERPENDICULAR to the trajectory with butt caps, so a fast (diagonal)
+      trajectory spans more columns per row than a static one — which is what a
+      biologist re-measuring the same streak as an ImageJ wide-line ROI gets.
+
+    **This is plural on purpose.** A ring is defined by *all* the bands on the
+    kymograph, so it cannot be built one trajectory at a time; passing a single
+    trajectory here is legitimate but measures it as if it had no neighbours.
+    ``mt_measure.frame_geometry`` carries the same warning for the same reason.
+
+    Anisotropy — read this before "fixing" the ring
+    ----------------------------------------------
+    A microtubule's ring is isotropic and dimensionally sound: both image axes
+    are µm, so a circular dilation means "within *r* µm of the filament". A
+    kymograph's axes are NOT the same quantity — rows are **frames** and columns
+    are **arc-length pixels** — so the same circular dilation means "within *r*
+    frames AND *r* columns", mixing time with space. That is deliberate, not an
+    oversight: the request was for the microtubule metric's region, and any
+    anisotropic variant would need a frames-per-pixel scale that is a property
+    of the acquisition (``frame_interval_ms`` / ``pixel_size_um``), not of the
+    measurement, and would stop being "the same as MT" the moment either moved.
+
+    It is also not a regression. The estimator this replaced mixed the axes more
+    crudely: it took a *spatial* offset and then pooled the result over the
+    trajectory's **entire** temporal extent, so a 300-frame trajectory's
+    background came from 300 frames of field. The ring is strictly more local in
+    time (± ``round(width * margin_multiplier)`` frames around the trajectory,
+    which for the defaults is ±10), which is the direction a drifting background
+    wants. ``margin_multiplier`` is the knob: raise it for a wider ring, set it
+    to 0 to collapse the ring onto the band itself, which leaves no non-signal
+    pixel in it and so reports a null background — no code change either way.
+
+    Defaults line up on purpose: ``mt_measure``'s own are ``thickness_px = 5``
+    and ``margin_multiplier = 2.0`` (a 10 px ring), so with ``intensity_width``
+    at 5 a kymograph trajectory and a microtubule are measured with the exact
+    same geometry in the exact same numbers.
 
     ``polarity`` is ``+1`` for a bright-on-dark kymograph and ``-1`` for an
     inverted one (see ``kymograph_polarity``). It signs ``intensity_minus_bg``
@@ -198,58 +286,66 @@ def track_intensity(
     rather than flipping sign with the channel. ``intensity_signal`` and
     ``intensity_background`` stay unsigned raw pixel values — that is their
     documented contract and what keeps them comparable with the per-MT metric.
-    The default ``+1`` reproduces the pre-KymoButler behaviour exactly; it
-    matters at all only because the detector that replaced the DoG blob finder
-    can see dark trajectories, which the old one structurally could not.
+    The default ``+1`` matters at all only because KymoButler can see dark
+    trajectories, which the DoG blob detector it replaced structurally could not.
 
-    Returns ``{intensity_signal, intensity_background, intensity_minus_bg}``.
-    ``intensity_background`` (and hence ``intensity_minus_bg``) is ``None`` only
-    when *no* sample had room for a background band on *either* side — i.e. the
-    kymograph is narrower than ``signal_band + gap + bg_band`` — not merely when
-    a track hugs one edge (the opposite side still contributes).
+    Cost, because the export calls this once per (microtubule x channel)
+    kymograph: measured 2026-09-01 on this box, 0.16 s for a 300x200 kymograph
+    with 5 trajectories, 0.27 s with 16, 1.02 s with 47 — against 2-15 ms for
+    the 1-D estimator it replaces, i.e. ~70x. The whole of it is
+    ``rasterize_band``'s per-segment Python loop, and the factor is simply how
+    many more vertices a trajectory has than a microtubule: one point per FRAME
+    (300) versus an RDP-simplified centerline's 4-20. It is nonetheless the same
+    order as the detection it sits beside (KymoButler is 0.03-0.14 s per
+    kymograph on GPU), and matching the per-microtubule number is the point of
+    the function — so do not buy the 70x back with an approximate band. If this
+    ever has to be faster, make ``mt_measure.rasterize_band`` vectorise over
+    segments, where the fix helps all three callers.
+
+    Returns one ``{intensity_signal, intensity_background, intensity_minus_bg}``
+    dict per entry of ``point_lists``, in the same order. ``intensity_signal`` is
+    ``None`` when the trajectory rasterises to no pixels (fewer than two points);
+    ``intensity_background`` (and hence ``intensity_minus_bg``) is ``None`` when
+    the ring is empty — the kymograph is so narrow, or so densely covered by
+    other trajectories, that no non-signal pixel lies within the margin. A null
+    there is load-bearing: a zero would silently report the whole raw signal as
+    contrast.
     """
-    empty = {
-        "intensity_signal": None,
-        "intensity_background": None,
-        "intensity_minus_bg": None,
-    }
-    if kymo.ndim != 2 or not points:
-        return empty
+    out: List[Dict[str, Optional[float]]] = [
+        dict(EMPTY_INTENSITY) for _ in point_lists
+    ]
+    if kymo.ndim != 2 or not out:
+        return out
     T, X = kymo.shape
-    half = max(0, (width - 1) // 2)
-    bw = width if bg_width is None else bg_width
-    sig_vals: List[float] = []
-    bg_vals: List[float] = []
-    for fr, x in points:
-        t = int(round(fr))
-        if t < 0 or t >= T:
+
+    # (frame, x) -> (x, frame): mt_measure works in [x, y] image order, and the
+    # kymograph's y IS the frame axis. Getting this swap wrong is invisible on a
+    # square kymograph, which is why it happens once, here.
+    polylines_xy: List[np.ndarray] = []
+    for pts in point_lists:
+        arr = np.asarray(pts, dtype=np.float64)
+        if arr.ndim != 2 or arr.shape[1] != 2 or arr.shape[0] < 2:
+            polylines_xy.append(np.zeros((0, 2), dtype=np.float32))
             continue
-        xc = int(round(x))
-        row = kymo[t]
-        lo, hi = max(0, xc - half), min(X, xc + half + 1)
-        if hi > lo:
-            sig_vals.extend(row[lo:hi].tolist())
-        # left background band: [xc-half-gap-bw, xc-half-gap)
-        bl1, bl2 = max(0, xc - half - bg_gap - bw), max(0, xc - half - bg_gap)
-        if bl2 > bl1:
-            bg_vals.extend(row[bl1:bl2].tolist())
-        # right background band: [xc+half+1+gap, xc+half+1+gap+bw)
-        br1 = min(X, xc + half + 1 + bg_gap)
-        br2 = min(X, xc + half + 1 + bg_gap + bw)
-        if br2 > br1:
-            bg_vals.extend(row[br1:br2].tolist())
-    signal = float(np.mean(sig_vals)) if sig_vals else None
-    background = float(np.median(bg_vals)) if bg_vals else None
-    minus_bg = (
-        polarity * (signal - background)
-        if (signal is not None and background is not None)
-        else None
-    )
-    return {
-        "intensity_signal": signal,
-        "intensity_background": background,
-        "intensity_minus_bg": minus_bg,
-    }
+        polylines_xy.append(np.ascontiguousarray(arr[:, ::-1], dtype=np.float32))
+
+    geom = mt_measure.frame_geometry(polylines_xy, T, X, width, margin_multiplier)
+    image = np.asarray(kymo, dtype=np.float64)
+    for i, (band, ring) in enumerate(zip(geom.bands, geom.vicinities)):
+        sig = mt_measure.region_stats(image, band)
+        bg = mt_measure.region_stats(image, ring)
+        signal = sig.mean if sig.n else None
+        background = bg.median if bg.n else None
+        out[i] = {
+            "intensity_signal": signal,
+            "intensity_background": background,
+            "intensity_minus_bg": (
+                polarity * (signal - background)
+                if (signal is not None and background is not None)
+                else None
+            ),
+        }
+    return out
 
 
 # Robust-outlier factor for the "too bright" flag: a trajectory whose mean
@@ -310,17 +406,9 @@ def flag_bright_outliers(
 
 # --- KymoButler detection core -----------------------------------------------
 #
-# The vendored package is imported off the models DIRECTORY, not as
-# ``models.kymobutler``. Going through the package would execute
-# ``models/__init__``, which pulls in mamba_ssm and Triton and so needs a live
-# CUDA driver; a kymograph needs neither, and the import would make this
-# module's tests fail outright on any box without a GPU. Same spelling
-# ``mt_metrics`` uses for ``mt_measure``, and appended for the same reason: that
-# directory also holds generic names (unet.py, sperm.py) that must not shadow a
-# real dependency for the whole process.
-_MODELS_DIR = Path(__file__).resolve().parents[1] / "models"
-if str(_MODELS_DIR) not in sys.path:
-    sys.path.append(str(_MODELS_DIR))
+# ``import kymobutler`` happens inside each function that needs it rather than at
+# module scope: it drags in torch, which the pure-numpy metrics above must not
+# pay for. The sys.path entry it resolves against is set at the top of this file.
 
 
 def kymograph_polarity(kymo: np.ndarray) -> float:
