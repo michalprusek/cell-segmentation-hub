@@ -23,6 +23,8 @@ vi.mock('../../../db/prismaClient', () => ({
 vi.mock('../../../utils/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
+
+import { logger } from '../../../utils/logger';
 // `buildKymographBatch` + `loadKymographContainerContext` are the two
 // boundaries the exporter drives; `utils/concurrency` is deliberately NOT
 // mocked — the dispatch order and the batching are exactly what is under test.
@@ -206,6 +208,60 @@ describe('exportMicrotubuleKymographs fan-out', () => {
     includeVelocityMetrics: true,
     includeSegmentedImages: true,
   };
+
+  // The log is the only signal an operator has for this stage, and it used to
+  // report `kymographs: jobs.length` under the word "exported" — so an export
+  // that wrote nothing at all looked identical to one that wrote 63 files.
+  // With `includeSegmentedImages` off, every kymograph is still rendered (the
+  // velocity metrics come from it) and then discarded; if nothing else lands
+  // either, the archive gets no kymograph output whatsoever.
+  describe('reports what it WROTE, not what it dispatched', () => {
+    const oneVideo = () =>
+      mockDb([
+        {
+          id: 'vidA',
+          name: 'A',
+          channels: [{ name: 'g', type: 'fluorescent' }],
+          frameCount: 3,
+          polylineIds: ['p1', 'p2'],
+        },
+      ]);
+
+    it('warns, and does not say "exported", when it wrote no file', async () => {
+      oneVideo();
+      // Rendered but discarded: no images asked for, and no motility found so
+      // the workbook is skipped too.
+      await exportMicrotubuleKymographs('proj', outDir, {
+        ...OPTS,
+        includeSegmentedImages: false,
+      });
+
+      expect(await fs.readdir(path.join(outDir, 'kymographs'))).toEqual([]);
+      expect(logger.info).not.toHaveBeenCalledWith(
+        'Microtubule kymographs exported',
+        expect.anything(),
+        expect.anything()
+      );
+      const warn = vi.mocked(logger.warn).mock.calls.at(-1);
+      expect(warn?.[0]).toContain('rendered 2 but wrote no file');
+      expect(warn?.[2]).toMatchObject({ rendered: 2, images: 0, workbook: false });
+    });
+
+    it('counts the images it actually wrote', async () => {
+      oneVideo();
+      await exportMicrotubuleKymographs('proj', outDir, OPTS);
+
+      const info = vi
+        .mocked(logger.info)
+        .mock.calls.find(c => c[0] === 'Microtubule kymographs exported');
+      expect(info?.[2]).toMatchObject({ rendered: 2, images: 2 });
+      expect(logger.warn).not.toHaveBeenCalledWith(
+        expect.stringContaining('wrote no file'),
+        expect.anything(),
+        expect.anything()
+      );
+    });
+  });
 
   it('loads a container\'s rows ONCE and hands them to every job', async () => {
     mockDb([
