@@ -50,12 +50,22 @@ const MIN_NET_VELOCITY_UM_S = 0.01;
  *  depth — the controller layer also validates. */
 const HEX_COLOR_RE = /^#[0-9A-Fa-f]{6}$/;
 
-/** Column count requested from the ML renderer. Part of the cache key, so
- *  changing it can never serve back an entry rendered at the old width. */
-const KYMOGRAPH_TARGET_WIDTH = 200;
-
-/** Signal-band width used when the caller passes no ``intensityWidth``. */
-const DEFAULT_INTENSITY_WIDTH = 3;
+/** Signal-band width used when the caller passes no `intensityWidth`.
+ *
+ *  NOT the kymograph's line width: it is the thickness, in kymograph columns,
+ *  of the ImageJ `Roi.convertLineToArea` band `tracks_intensity` rasterises
+ *  PERPENDICULAR to a detected trajectory on the FINISHED kymograph — the same
+ *  band a microtubule gets from `models/mt_measure.py`. It also scales the
+ *  background ring around it (the ML request's `intensity_bg_margin`, a
+ *  multiple of this width, default 2.0).
+ *
+ *  Raised 3 -> 5 on 2026-09-01 at the user's request. Band and ring widen
+ *  together, so every `intensitySignal` / `intensityBackground` /
+ *  `intensityMinusBackground` in `velocity_metrics.xlsx` changes: sheets from
+ *  before that date are not comparable with later ones. 5 is also
+ *  `mt_measure`'s own `thickness_px` default, so at these settings a
+ *  trajectory and a microtubule are measured by the identical geometry. */
+const DEFAULT_INTENSITY_WIDTH = 5;
 
 // ---------------------------------------------------------------------------
 // Response cache
@@ -63,10 +73,23 @@ const DEFAULT_INTENSITY_WIDTH = 3;
 
 const CACHE_NAMESPACE = 'kymograph';
 
-/** Bump when ``KymographServiceResult`` changes shape, so entries written by
- *  an older build hash to a different key instead of being read back missing
- *  fields the new code expects. */
-const CACHE_SCHEMA_VERSION = 1;
+/** Bump when a cached `KymographServiceResult` stops being what this build
+ *  would produce — in SHAPE (fields the new code expects are missing) or in
+ *  CONTENT (the same request now renders different pixels or different
+ *  numbers). Entries written by an older build then hash to a different key
+ *  instead of being served.
+ *
+ *  2 (2026-09-01): the column cap was removed, so every kymograph of a
+ *  microtubule longer than 200 px is now a different image; the
+ *  intensity-band default went 3 -> 5; and the intensity metric itself moved
+ *  onto the shared per-microtubule geometry (a perpendicular band plus a
+ *  background ring that excludes every OTHER trajectory's band, replacing two
+ *  1-D background blocks), so every velocity row's intensity columns moved.
+ *  The first two are visible in the descriptor below anyway — the
+ *  `targetWidth` field left it and `intensityWidth` changed value — but the
+ *  third is not, and a reader should not have to derive any of it from a hash
+ *  to know old entries are unreachable. */
+const CACHE_SCHEMA_VERSION = 2;
 
 /** 30 minutes.
  *
@@ -138,7 +161,8 @@ export interface KymographServiceInput {
    *  — the kymograph with detected tracks composited on top. Used by export. */
   renderOverlay?: boolean;
   /** Width (kymograph position columns) of the signal band sampled around each
-   *  trajectory for the background-subtracted intensity metric. Default 3. */
+   *  trajectory for the background-subtracted intensity metric. Defaults to
+   *  `DEFAULT_INTENSITY_WIDTH` (5 since 2026-09-01). */
   intensityWidth?: number;
   /** When true, the ML service also renders one matplotlib line plot per frame
    *  (intensity vs. position along the microtubule) and the result carries
@@ -341,7 +365,12 @@ interface FrameStamp {
  *  ``frameFilter`` and a frame being added or deleted both change the key.
  *  The container id stays in the clear as a prefix: it keeps the key
  *  greppable in ``redis-cli --scan`` and leaves a per-container
- *  ``invalidatePattern`` open should one ever be needed. */
+ *  ``invalidatePattern`` open should one ever be needed.
+ *
+ *  The kymograph's WIDTH is not listed because it is no longer an input: since
+ *  2026-09-01 it is one column per pixel of the seed polyline's arc length, and
+ *  editing that polyline bumps its frame's ``Segmentation.updatedAt`` — i.e.
+ *  ``frames[].seg`` already covers it. */
 function kymographCacheKey(
   input: KymographServiceInput,
   container: {
@@ -362,7 +391,6 @@ function kymographCacheKey(
       input.detectVelocity === true && input.renderOverlay === true,
     renderProfiles: input.renderProfiles === true,
     intensityWidth: input.intensityWidth ?? DEFAULT_INTENSITY_WIDTH,
-    targetWidth: KYMOGRAPH_TARGET_WIDTH,
     minNetVelocityUmS: MIN_NET_VELOCITY_UM_S,
     // Container calibration scales every velocity/length in the result. Held
     // explicitly as well as via `containerUpdatedAt` so the key stays correct
@@ -692,14 +720,18 @@ async function planKymograph(
   return { container, seedMeta, selectedFrames, frameFilterSet };
 }
 
-/** The ML `/kymograph` request body — one item of a `/kymograph/batch` too. */
+/** The ML `/kymograph` request body — one item of a `/kymograph/batch` too.
+ *
+ *  No `target_width`: the ML service sizes the column axis from the seed
+ *  polyline's arc length and has ignored the field since 2026-09-01. It still
+ *  ACCEPTS it (its models are `extra="forbid"`, so removing it there would 422
+ *  an un-recreated Node), which is what makes the deploy order free here. */
 interface MlKymographBody {
   frames: Array<{
     frame: number;
     polyline_rc: number[][];
     image_path: string;
   }>;
-  target_width: number;
   tracked: boolean;
   intensity_width: number;
   min_net_velocity_um_s: number;
@@ -803,7 +835,6 @@ async function buildMlBody(
 
   const body: MlKymographBody = {
     frames: framesPayload,
-    target_width: KYMOGRAPH_TARGET_WIDTH,
     tracked: trackedMode,
     intensity_width: intensityWidth ?? DEFAULT_INTENSITY_WIDTH,
     min_net_velocity_um_s: MIN_NET_VELOCITY_UM_S,
@@ -874,10 +905,13 @@ function mapMlPayload(
   const frameIntervalMs = plan.container.frameIntervalMs ?? null;
 
   // ML velocities + run displacements are in kymograph COLUMNS; one column spans
-  // `pxPerColumn` image pixels (>1 once a long MT's column axis is compressed at
-  // target_width). Scale columns -> µm via `umPerColumn`, and frames -> s via
-  // `secPerFrame`. All null when the relevant calibration is absent (treat 0 as
-  // uncalibrated, consistently with the >0 forwarding guard above).
+  // `pxPerColumn` image pixels. Since the column cap was removed (2026-09-01)
+  // that is 1.0 to within the rounding of the column count and can no longer
+  // exceed it — the multiplication below is kept because it is still the right
+  // conversion, not because it currently rescales anything. Scale columns -> µm
+  // via `umPerColumn`, and frames -> s via `secPerFrame`. All null when the
+  // relevant calibration is absent (treat 0 as uncalibrated, consistently with
+  // the >0 forwarding guard above).
   const pxPerColumn =
     typeof payload.px_per_column === 'number' && payload.px_per_column > 0
       ? payload.px_per_column
@@ -1064,6 +1098,47 @@ export interface KymographBatchOutcome {
   error?: Error;
 }
 
+/** Items per ML batch request. Mirrors `_BATCH_MAX_ITEMS` in
+ *  `tracker_kymograph.py`; exceeding it is a 422. */
+const ML_BATCH_MAX_ITEMS = 64;
+
+/** Summed kymograph pixels (frames x columns) per ML batch request. Mirrors
+ *  `_BATCH_MAX_OUTPUT_PIXELS` in `tracker_kymograph.py`, where the arithmetic
+ *  behind the number lives; exceeding it is a 413.
+ *
+ *  It has to be honoured HERE and not by the exporter, because only this layer
+ *  knows an item's column count: it is the seed polyline's arc length, and
+ *  `buildMlBody` is what resolves the polyline. */
+const ML_BATCH_MAX_OUTPUT_PIXELS = 3_840_000;
+
+/** Kymograph pixels one body renders: frames x columns.
+ *
+ *  Columns mirror `_seed_columns` in `tracker_kymograph.py` — one per pixel of
+ *  the SEED (lowest-numbered) frame's polyline arc length, uncapped. The two
+ *  can differ by one column on an exact half-pixel arc (JS rounds .5 up,
+ *  Python rounds to even), which is why this only ever SIZES a batch: the ML
+ *  bound is what refuses one, and a 1-in-3 840 000 discrepancy cannot cross it. */
+function mlBodyOutputPixels(body: MlKymographBody): number {
+  if (body.frames.length === 0) {
+    return 0;
+  }
+  let seed = body.frames[0];
+  for (const f of body.frames) {
+    if (f.frame < seed.frame) {
+      seed = f;
+    }
+  }
+  const pts = seed.polyline_rc;
+  if (!Array.isArray(pts) || pts.length < 2) {
+    return 0;
+  }
+  let arc = 0;
+  for (let i = 1; i < pts.length; i++) {
+    arc += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
+  }
+  return body.frames.length * Math.max(2, Math.round(arc) + 1);
+}
+
 /**
  * Build MANY kymographs in ONE ML call, so each frame is decoded once for all
  * of them instead of once per (microtubule x channel).
@@ -1073,6 +1148,15 @@ export interface KymographBatchOutcome {
  * (frame-major instead of polyline-major). Measured 2026-09-01 on container
  * 4972cad8, 60 microtubules x 300 frames of one channel: 60 requests /
  * 18 000 frame decodes / 186.2 s became 1 request / 300 decodes / 13.2 s.
+ *
+ * "ONE ML call" is the intent, not a guarantee. A batch whose combined output
+ * would exceed `ML_BATCH_MAX_OUTPUT_PIXELS` is split into as few requests as
+ * fit, because the ML service refuses an oversized one (413) and because the
+ * response is what that budget protects. Splitting costs the channel's frames
+ * one extra decode pass per extra request — nothing else changes, and the
+ * per-item results are identical either way. On real data only 2 of the 60
+ * microtubule containers in production split at all (into 3 and 2 requests);
+ * the largest batch the export builds today, 3 596 700 px, still travels whole.
  *
  * Requires the ML service to have been deployed FIRST: `/api/v1/kymograph/batch`
  * does not exist on an older ml container, and a 404 here would cost the export
@@ -1110,38 +1194,89 @@ export async function buildKymographBatch(
     return outcomes;
   }
 
-  const res = await axios.post(
-    `${config.SEGMENTATION_SERVICE_URL}/api/v1/kymograph/batch`,
-    { items: sent.map(s => s.body) },
-    { timeout: ML_KYMOGRAPH_TIMEOUT_MS }
-  );
-  const payload = res.data?.data ?? res.data ?? {};
-  const results = Array.isArray(payload.results) ? payload.results : [];
-  if (results.length !== sent.length) {
-    // The contract is one result per item, in order. Anything else and we
-    // cannot say which kymograph is which — fail every item of the batch
-    // rather than write one microtubule's velocities under another's name.
-    throw new Error(
-      `ML kymograph batch returned ${results.length} result(s) for ` +
-        `${sent.length} item(s)`
+  // Greedy pack into requests that fit both ML bounds. An item bigger than the
+  // whole budget travels alone rather than being refused: the un-batched
+  // `/kymograph` renders any single kymograph regardless of size, and the ML
+  // service exempts a one-item batch for exactly that reason.
+  const chunks: Array<typeof sent> = [];
+  let chunk: typeof sent = [];
+  let chunkPixels = 0;
+  for (const item of sent) {
+    const pixels = mlBodyOutputPixels(item.body);
+    if (
+      chunk.length > 0 &&
+      (chunk.length >= ML_BATCH_MAX_ITEMS ||
+        chunkPixels + pixels > ML_BATCH_MAX_OUTPUT_PIXELS)
+    ) {
+      chunks.push(chunk);
+      chunk = [];
+      chunkPixels = 0;
+    }
+    chunk.push(item);
+    chunkPixels += pixels;
+  }
+  if (chunk.length > 0) {
+    chunks.push(chunk);
+  }
+  if (chunks.length > 1) {
+    logger.debug(
+      `Kymograph batch of ${sent.length} item(s) split into ${chunks.length} ` +
+        `ML request(s) by the output-size budget`,
+      'KymographService'
     );
   }
 
-  for (let k = 0; k < sent.length; k++) {
-    const { index, plan, trackedMode } = sent[k];
-    const entry = results[k] as {
-      kymograph?: MlKymographPayload;
-      error?: string;
-    };
-    if (!entry?.kymograph) {
-      outcomes[index] = {
-        error: new Error(entry?.error ?? 'ML kymograph batch returned no item'),
-      };
-      continue;
+  for (const group of chunks) {
+    try {
+      const res = await axios.post(
+        `${config.SEGMENTATION_SERVICE_URL}/api/v1/kymograph/batch`,
+        { items: group.map(s => s.body) },
+        { timeout: ML_KYMOGRAPH_TIMEOUT_MS }
+      );
+      const payload = res.data?.data ?? res.data ?? {};
+      const results = Array.isArray(payload.results) ? payload.results : [];
+      if (results.length !== group.length) {
+        // The contract is one result per item, in order. Anything else and we
+        // cannot say which kymograph is which — fail every item of this request
+        // rather than write one microtubule's velocities under another's name.
+        throw new Error(
+          `ML kymograph batch returned ${results.length} result(s) for ` +
+            `${group.length} item(s)`
+        );
+      }
+
+      for (let k = 0; k < group.length; k++) {
+        const { index, plan, trackedMode } = group[k];
+        const entry = results[k] as {
+          kymograph?: MlKymographPayload;
+          error?: string;
+        };
+        if (!entry?.kymograph) {
+          outcomes[index] = {
+            error: new Error(
+              entry?.error ?? 'ML kymograph batch returned no item'
+            ),
+          };
+          continue;
+        }
+        outcomes[index] = {
+          result: mapMlPayload(
+            inputs[index],
+            plan,
+            trackedMode,
+            entry.kymograph
+          ),
+        };
+      }
+    } catch (err) {
+      // One failed request costs its own items and no others. Before the split
+      // existed a failure here threw and the caller failed the whole batch;
+      // discarding requests that already succeeded would be strictly worse, and
+      // the caller reports a missing `result` per microtubule either way.
+      for (const { index } of group) {
+        outcomes[index] = { error: err as Error };
+      }
     }
-    outcomes[index] = {
-      result: mapMlPayload(inputs[index], plan, trackedMode, entry.kymograph),
-    };
   }
 
   return outcomes;

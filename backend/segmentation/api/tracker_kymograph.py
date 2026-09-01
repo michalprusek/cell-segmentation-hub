@@ -994,6 +994,17 @@ class KymographRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     frames: List[KymographFrameInput]
+    # ACCEPTED AND IGNORED since 2026-09-01. The column axis is now one column
+    # per pixel of the seed polyline's arc length, always and without a ceiling
+    # (see ``_seed_columns``), so there is no width left to target.
+    #
+    # The field stays because this model is ``extra="forbid"``: deleting it
+    # would 422 every kymograph posted by a Node container that has not been
+    # recreated yet, and that would make the deploy order matter. Same
+    # treatment, for the same reason, as ``/track``'s ``embedding`` and
+    # ``emb_template_alpha``. ``backend/src/services/kymographService.ts`` no
+    # longer sends it; nothing reads it here. Delete it once no deployed Node
+    # build sends it.
     target_width: int = Field(200, ge=10, le=2000)
     tracked: bool = False
     # Hex `#RRGGBB`. When supplied, the kymograph is rendered as a linear
@@ -1026,7 +1037,19 @@ class KymographRequest(BaseModel):
     render_overlay: bool = False
     # Width (in kymograph position columns) of the signal band sampled around
     # each detected trajectory for the background-subtracted intensity metric.
-    intensity_width: int = Field(3, ge=1, le=50)
+    # NOT the kymograph's line width and not a rendering parameter at all: it is
+    # read off the FINISHED kymograph by ``tracks_intensity``, as the thickness
+    # of the ImageJ ``Roi.convertLineToArea`` band rasterised PERPENDICULAR to
+    # each trajectory, and it also sets the reach of the background ring around
+    # that band (see ``intensity_bg_margin``, which is a multiple of it).
+    #
+    # Default raised 3 -> 5 on 2026-09-01 at the user's request. Band and ring
+    # widen together, so every ``intensity_signal`` / ``intensity_background`` /
+    # ``intensity_minus_background`` in an export changes: numbers from before
+    # that date are NOT comparable with later ones. 5 is also ``mt_measure``'s
+    # own ``thickness_px`` default, so a trajectory and a microtubule are now
+    # measured with the identical geometry in the identical numbers.
+    intensity_width: int = Field(5, ge=1, le=50)
     # Half-width of the background ring drawn around that band, as a MULTIPLE of
     # it — the ring reaches ``round(intensity_width * intensity_bg_margin)``
     # pixels from the trajectory and excludes every OTHER trajectory's band, so a
@@ -1064,15 +1087,17 @@ class KymographRequest(BaseModel):
     # an ml container which has not been recreated yet gets a 422 on every
     # kymograph. **Deploy ml before the Node caller that sets it.**
     #
-    # Nothing sets it yet — ``backend/src/services/kymographService.ts`` builds
-    # the ML request and is where the opt-in belongs. Worth turning off for the
-    # interactive modal, which re-requests a kymograph on every channel switch
-    # and every ``intensity_width`` nudge but only reads the CSV when the user
-    # clicks download: on the 299-frame container above the matrix is 469 KB
-    # raw / 626 KB base64, roughly four fifths of the response body, for 12 ms
-    # of build time. It is the bytes on the wire that are worth saving, not the
-    # CPU — and ``KymographServiceResult.csvBase64`` must become `string | null`
-    # in the same change, or a null will reach the modal's download handler.
+    # The kymograph export mode sets it False (it writes the overlay PNG and
+    # the velocity workbook and never reads the matrix); the profiles export
+    # and the interactive modal leave it on. It is worth more since the column
+    # cap was removed on 2026-09-01, because the matrix is O(frames x columns)
+    # at ~8 B per value: on the 299-frame container above it was 469 KB raw /
+    # 626 KB base64 at 200 columns and is 2.9 MB / 3.9 MB at the 1251 columns
+    # that microtubule actually spans. Still worth turning off for the modal,
+    # which re-requests a kymograph on every channel switch and every
+    # ``intensity_width`` nudge but only reads the CSV when the user clicks
+    # download — and ``KymographServiceResult.csvBase64`` must become
+    # `string | null` in the same change, or a null reaches the download handler.
     include_csv: bool = True
 
 
@@ -1128,10 +1153,15 @@ class KymographResponse(BaseModel):
     frame_count: int
     length_px: int
     tracked: bool
-    # Image pixels per kymograph column (= seed arc length / (length_px-1)). The
-    # Node backend multiplies column-space velocities + run displacements by this
-    # before applying µm calibration, so long MTs (column axis compressed at
-    # target_width) report correct µm/s and µm.
+    # Image pixels per kymograph column (= seed arc length / (length_px-1)).
+    # Since the column cap was removed (2026-09-01) this is 1.0 to within the
+    # rounding of ``round(arc)+1``, i.e. |1 - px_per_column| < 1/(2·arc) — never
+    # exactly 1.0, and never compressed either. It stays on the wire because it
+    # is still the correct conversion, because dropping it would change the
+    # response shape for no gain, and because it is the one number that would
+    # move again if the column rule ever changed. The Node backend multiplies
+    # column-space velocities + run displacements by it before applying the µm
+    # calibration.
     px_per_column: float = 1.0
     # How many detected tracks were dropped by the net-velocity cut-off. Lets the
     # caller distinguish "hidden as non-processive" from "nothing detected".
@@ -1155,12 +1185,46 @@ class KymographResponse(BaseModel):
 #
 # The export caps a container at 60 microtubules
 # (``MAX_MT_PER_CONTAINER`` in ``mtKymographExporter.ts``) and sends one batch
-# per (container, channel), so 64 covers that with headroom. There has to be a
-# bound at all because the RESPONSE is O(items): a 300-frame kymograph is a
-# 128 KB PNG plus a 128 KB overlay, so 64 items is ~16 MB — and ~45 MB more if
-# the caller leaves ``include_csv`` on. The decode side does NOT scale with
-# items (that is the point of the endpoint); only the response does.
+# per (container, channel), so 64 covers that with headroom. The decode side
+# does NOT scale with items (that is the point of the endpoint); only the
+# response does.
 _BATCH_MAX_ITEMS = 64
+
+# Upper bound on the OUTPUT of one batch, as summed kymograph pixels
+# (frames x columns over the items). This is the bound that actually holds the
+# response down; ``_BATCH_MAX_ITEMS`` no longer can.
+#
+# It used to. Until 2026-09-01 every kymograph was at most ``target_width=200``
+# columns wide, so "64 items" and "64 x 300 x 200 output pixels" were the same
+# statement and the comment here sized the response as 64 x (128 KB PNG +
+# 128 KB overlay) ~ 16 MB. With the cap gone a kymograph is as wide as its
+# microtubule is long — 2077 columns for the longest one in production — so the
+# item count bounds nothing.
+#
+# 3 840 000 = 64 items x 300 frames x 200 columns is deliberately the SAME
+# envelope that sentence described, re-expressed in the unit that now varies.
+# Measured bytes per output pixel on real production frames (container
+# 4972cad8, 299 frames, channel 488_nm, and container 1b000528, 35 frames, IRM),
+# rendering both the capped and the uncapped width of the same microtubule:
+#
+#   PNG      1.40 - 1.97 B/px      overlay PNG   1.60 - 1.61 B/px
+#   CSV      ~8 B/px (the intensity matrix, only with ``include_csv``)
+#
+# So at this budget: PNG + overlay <= 4 B/px = 15.4 MB, x4/3 for base64 = 20 MB
+# on the wire, and ~41 MB more if the caller leaves ``include_csv`` on. Both
+# match the old sizing to within the estimate it was built on.
+#
+# Checked against every microtubule container in production (60 of them, up to
+# 300 frames): the largest batch the export builds TODAY is 3 596 700 px, i.e.
+# nothing that fits in one request now starts splitting. Uncapped, two
+# containers exceed the budget (7 977 000 and 5 305 200 px) and split into 3 and
+# 2 requests; the other 58 still travel in one.
+#
+# A batch of ONE is exempt: ``/kymograph`` renders any single kymograph without
+# a size bound, and making the batch endpoint refuse work its un-batched
+# equivalent accepts would cost that microtubule its kymograph outright. The
+# bound exists to stop N items multiplying, not to forbid a long movie.
+_BATCH_MAX_OUTPUT_PIXELS = 3_840_000
 
 
 class KymographBatchRequest(BaseModel):
@@ -1178,6 +1242,11 @@ class KymographBatchRequest(BaseModel):
     Nothing requires the items to share frames; the dedup is over the stat
     identity of each ``image_path``, so items that share none simply decode
     everything and cost exactly what N separate requests would.
+
+    Two bounds apply, and only the second one still bounds the response:
+    ``_BATCH_MAX_ITEMS`` here, and ``_BATCH_MAX_OUTPUT_PIXELS`` in the handler
+    (a schema validator cannot express it — it needs each item's seed arc
+    length, and it must exempt a single item).
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -1253,7 +1322,7 @@ def _arc_length_resample_polyline(
 # ----------------------------------------------------------------------------
 #
 # Measured on a real 300-frame container (CH5_DO4 / 4972cad8, 1924x1476 16-bit
-# IRM PNGs, 4.24 MB each) at the default target_width=200:
+# IRM PNGs, 4.24 MB each) while the column axis was still capped at 200:
 #
 #   bytes read per kymograph   1267 MB
 #   pixels actually used         59 800  (200 per frame)  -> 14 199x amplified
@@ -1350,10 +1419,11 @@ _DECODE_POOL = ThreadPoolExecutor(
 
 # Per-entry cost of the LRU beyond the row's own bytes: the OrderedDict link,
 # the 6-tuple key with its 16-byte digest, and the ndarray object header.
-# Measured with tracemalloc over 20 000 entries at target_width=200: 391.5 B on
-# top of an 800 B row. Rounded up. Counting it matters — at the default width
-# it is a third of what the entry actually holds (800 B of data, 1192 B
-# resident), so a budget that counted only the rows would be out by that much.
+# Measured with tracemalloc over 20 000 entries of 200 columns: 391.5 B on top
+# of an 800 B row. Rounded up. Counting it matters — at the MEDIAN production
+# microtubule (118 px of arc, so 119 columns / 476 B) it is nearly half of what
+# the entry actually holds, so a budget that counted only the rows would be out
+# by that much.
 _ENTRY_OVERHEAD_BYTES = 400
 
 _DEFAULT_SAMPLE_CACHE_MB = 64
@@ -1365,11 +1435,13 @@ def _sample_cache_budget_bytes() -> int:
     decode cache, where a constant chosen for one channel silently evicted a
     three-channel window on every frame.
 
-    Here the working set is explicit: one 300-frame kymograph at
-    target_width=200 is 300 x (800 + 400) B = 352 KB, so 64 MB holds ~186
-    complete kymographs — every microtubule of a dense frame, on all three
-    channels, several times over. At the schema's maximum target_width=2000 an
-    entry is 8.4 KB and the budget still holds ~26 full-length kymographs.
+    Here the working set is explicit, and since 2026-09-01 it scales with the
+    microtubule's length rather than sitting at a fixed 200 columns. At the
+    MEDIAN production microtubule (118 px of arc -> 119 columns) a 300-frame
+    kymograph is 300 x (476 + 400) B = 257 KB, so 64 MB holds ~261 of them —
+    every microtubule of a dense frame, on all three channels, several times
+    over. At the LONGEST one in production (2076 px -> 2077 columns) an entry is
+    8.5 KB and the budget still holds ~25 full-length kymographs.
 
     ``KYMOGRAPH_SAMPLE_CACHE_MB`` overrides it. A malformed value must not take
     the module's import down with it: this endpoint is registered by
@@ -1406,9 +1478,14 @@ class _SampledRowCache:
 
     The geometry half is a digest of the request's polyline bytes together with
     ``n_samples``, which are the only other inputs to a row: the resample is a
-    pure function of the two, and ``target_width`` reaches the row solely
-    through ``n_samples`` (so keying on the derived value is both narrower and
-    more correct than keying on the request field).
+    pure function of the two.
+
+    ``n_samples`` earns its place in the key even though it is now derived from
+    geometry, because it is derived from the SEED frame's geometry — not from
+    this row's. Two requests can carry a byte-identical polyline for frame 7
+    and still want different row lengths for it, because their frame 0 polylines
+    differ. Drop ``n_samples`` from the key and the second request is served the
+    first one's row at the wrong length.
     """
 
     def __init__(self, budget_bytes: int) -> None:
@@ -1783,8 +1860,10 @@ def _render_profiles(
 
     n_samples = int(kymo.shape[1])
     # Column index → position in image pixels along the MT (matches the
-    # kymograph's "Along microtubule (px)" x-axis; px_per_column ≈ 1 unless a
-    # long MT was compressed to target_width).
+    # kymograph's "Along microtubule (px)" x-axis). px_per_column is 1.0 to
+    # within rounding since the column cap was removed, so this is now very
+    # nearly an identity — kept because it is the correct expression of the
+    # axis, not because it currently rescales anything.
     x_px = np.arange(n_samples, dtype=np.float64) * float(px_per_column)
 
     profiles: List[ProfilePng] = []
@@ -1866,6 +1945,40 @@ class _KymographPlan(NamedTuple):
     hits: int
 
 
+def _seed_columns(polyline_rc: List[List[float]]) -> Optional[Tuple[int, float]]:
+    """``(columns, arc_length_px)`` for a kymograph seeded on this polyline, or
+    None when the geometry cannot seed one (fewer than two 2-D vertices).
+
+    ONE COLUMN PER PIXEL OF ARC LENGTH, with no ceiling. That is ImageJ's
+    convention for a line profile — ``Roi.getLine``/``ProfilePlot`` sample once
+    per pixel — and it is what makes the position axis readable in image pixels
+    rather than in an arbitrary fraction of them.
+
+    Until 2026-09-01 this was clamped to the request's ``target_width`` (200 by
+    default), which existed to bound the OUTPUT, not to make the measurement
+    right. It was doing real damage: measured over all 146 216 microtubule
+    polylines in production, the median arc is 118 px (unaffected) but the p95
+    is 625, the p99 985 and the longest 2076 — so **33 % of real microtubules
+    were being squeezed** into 200 columns, the p95 by 3.1x and the longest by
+    10.4x. Trajectory detection runs on those columns: on a real 299-frame
+    kymograph of a 1250 px microtubule (container 4972cad8, channel 488_nm),
+    200 columns yielded 5 trajectories and 1251 columns yielded 13. Squeezing
+    6.3 image pixels into one column merges neighbouring tracks.
+
+    Cost of removing it, on the same data: the PNG grows in proportion (84 KB
+    -> 524 KB for that kymograph; 14 KB -> 61 KB for the longest microtubule
+    over 35 frames). That is what ``_BATCH_MAX_OUTPUT_PIXELS`` now bounds.
+    """
+    try:
+        pts = np.asarray(polyline_rc, dtype=np.float64)
+    except (TypeError, ValueError):  # ragged / non-numeric geometry
+        return None
+    if pts.ndim != 2 or pts.shape[1] != 2 or pts.shape[0] < 2:
+        return None
+    arc = float(np.sum(np.linalg.norm(np.diff(pts, axis=0), axis=1)))
+    return max(2, int(round(arc)) + 1), arc
+
+
 def _plan_kymograph(req: KymographRequest, item: int = 0) -> _KymographPlan:
     """Validate one kymograph request and resolve its rows to cache hits or
     pending decode jobs. Raises HTTPException on anything malformed."""
@@ -1874,29 +1987,47 @@ def _plan_kymograph(req: KymographRequest, item: int = 0) -> _KymographPlan:
 
     frames = sorted(req.frames, key=lambda f: f.frame)
 
-    # Choose the canonical sample count: round to the nearest integer of
-    # the seed (first) frame's polyline arc length. Matches ImageJ's
-    # convention of one sample per pixel along the line. The request's
-    # ``target_width`` acts as a clamp so we still cap output dimensions.
-    seed_pts = np.asarray(frames[0].polyline_rc, dtype=np.float64)
-    if seed_pts.ndim != 2 or seed_pts.shape[1] != 2 or seed_pts.shape[0] < 2:
+    # The column count comes from the seed (lowest-numbered) frame's polyline
+    # and nothing else — see ``_seed_columns`` for the rule and why it has no
+    # ceiling. ``req.target_width`` is accepted and ignored.
+    seeded = _seed_columns(frames[0].polyline_rc)
+    if seeded is None:
         raise HTTPException(
             status_code=400,
             detail=(
-                f"Seed-frame polyline has {seed_pts.shape[0]} vertex(es); "
-                "need >= 2."
+                f"Seed-frame polyline has {len(frames[0].polyline_rc)} "
+                "vertex(es); need >= 2."
             ),
         )
-    seed_arc = float(np.sum(np.linalg.norm(np.diff(seed_pts, axis=0), axis=1)))
-    n_samples = max(2, min(int(round(seed_arc)) + 1, req.target_width))
-    # Image pixels spanned by one kymograph column. ≈1 while the arc length fits
-    # in target_width; >1 once the column axis is compressed (long MT capped at
-    # target_width). Velocities + run lengths are measured in columns, so the
-    # Node backend multiplies by this before applying the µm calibration.
+    n_samples, seed_arc = seeded
+    # Image pixels spanned by one kymograph column: 1.0 to within the rounding
+    # of ``round(arc)+1``, by construction, and no longer able to exceed it.
+    # Kept because it is still the exact conversion the Node backend applies to
+    # column-space velocities and run displacements before the µm calibration.
     px_per_column = seed_arc / (n_samples - 1) if n_samples > 1 else 1.0
 
     rows, jobs, hits = _plan_rows(frames, n_samples, item)
     return _KymographPlan(frames, n_samples, px_per_column, rows, jobs, hits)
+
+
+def _batch_output_pixels(items: List[KymographRequest]) -> int:
+    """Kymograph pixels (frames x columns) the batch would render, summed.
+
+    Cheap enough for the event loop: it touches only each item's seed polyline,
+    not its frames. An item whose seed geometry is unusable contributes 0 — it
+    will fail planning and return an error entry instead of an image, and one
+    malformed polyline must not decide whether the other 59 are accepted.
+    """
+    total = 0
+    for item in items:
+        if not item.frames:
+            continue
+        seed = min(item.frames, key=lambda f: f.frame)
+        seeded = _seed_columns(seed.polyline_rc)
+        if seeded is None:
+            continue
+        total += len(item.frames) * seeded[0]
+    return total
 
 
 @router.post("/kymograph/batch", response_model=KymographBatchResponse)
@@ -1906,7 +2037,21 @@ async def kymograph_batch(req: KymographBatchRequest) -> KymographBatchResponse:
     Same thin async wrapper as ``/kymograph``, onto the same one-slot executor:
     a batch and a single kymograph never run concurrently, so the peak memory
     stays what it was (one decoded frame per decode-pool thread).
+
+    The size bound is checked HERE rather than in the executor body so an
+    oversized batch is refused immediately instead of queueing behind a render
+    that is already in flight.
     """
+    pixels = _batch_output_pixels(req.items)
+    if len(req.items) > 1 and pixels > _BATCH_MAX_OUTPUT_PIXELS:
+        raise HTTPException(
+            status_code=413,
+            detail=(
+                f"Batch would render {pixels} kymograph pixels "
+                f"(frames x columns, summed over {len(req.items)} items); "
+                f"the limit is {_BATCH_MAX_OUTPUT_PIXELS}. Split it."
+            ),
+        )
     return await asyncio.get_running_loop().run_in_executor(
         _KYMOGRAPH_EXECUTOR, _kymograph_batch_sync, req
     )

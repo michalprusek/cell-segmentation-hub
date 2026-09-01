@@ -30,9 +30,6 @@ from PIL import Image as PILImage
 from scipy.ndimage import map_coordinates
 
 
-TARGET_WIDTH = 200
-
-
 def login(base_url: str, email: str, password: str) -> str:
     r = requests.post(
         f"{base_url}/api/auth/login",
@@ -76,7 +73,7 @@ def fetch_app_kymograph(
 def decode_csv(csv_b64: str) -> Tuple[List[int], np.ndarray]:
     """Decode the CSV payload returned by the API.
 
-    Returns ``(frames, kymo)`` where ``kymo`` has shape ``(F, target_width)``
+    Returns ``(frames, kymo)`` where ``kymo`` has shape ``(F, n_samples)``
     of raw float intensities (pre-normalisation).
     """
     raw = base64.b64decode(csv_b64).decode("utf-8")
@@ -128,9 +125,7 @@ def _arc_length_resample_polyline(
     return out.astype(np.float32)
 
 
-def compute_kymograph_independent(
-    frames: List[Dict[str, Any]], target_width_cap: int = TARGET_WIDTH
-) -> np.ndarray:
+def compute_kymograph_independent(frames: List[Dict[str, Any]]) -> np.ndarray:
     """Recompute the kymograph row-by-row from frame paths + polyline geometry.
 
     ``frames`` is a list of dicts with keys ``frame: int``, ``image_path: str``,
@@ -142,7 +137,9 @@ def compute_kymograph_independent(
     if seed_pts.shape[0] < 2:
         raise ValueError("seed-frame polyline has fewer than 2 vertices")
     seed_arc = float(np.sum(np.linalg.norm(np.diff(seed_pts, axis=0), axis=1)))
-    n_samples = max(2, min(int(round(seed_arc)) + 1, target_width_cap))
+    # One column per pixel of arc length, uncapped (2026-09-01) — see
+    # ``_seed_columns`` in tracker_kymograph.py.
+    n_samples = max(2, int(round(seed_arc)) + 1)
     rows: List[np.ndarray] = []
     for f in frames_sorted:
         path = Path(f["image_path"])
@@ -326,7 +323,7 @@ def main() -> int:
         return 2
 
     print("[4/4] recomputing kymograph independently…")
-    kymo_local = compute_kymograph_independent(bundle, target_width_cap=TARGET_WIDTH)
+    kymo_local = compute_kymograph_independent(bundle)
     print(f"      local : {kymo_local.shape[0]} frames × {kymo_local.shape[1]} px")
 
     if kymo_app.shape != kymo_local.shape:

@@ -664,16 +664,21 @@ def test_kymograph_measures_every_trajectory_against_a_neighbour_free_ring(
     each ring would then exclude nothing but its own band.
 
     The fixture is three parallel streaks 6 columns apart on a flat field, i.e.
-    ordinary traffic. The middle one's ring reaches both neighbours. Measured
-    together its background is the field (40); measured alone its ring is half
-    neighbour, the ImageJ tie-rule median lands on the neighbour (200), and a
-    streak 5x brighter than the field reports ZERO contrast. So the assertion
-    below fails loudly on a per-track regression rather than drifting a few
-    percent.
+    ordinary traffic, each exactly as wide as the default ``intensity_width``
+    (5) so the band is pure signal. The default ``intensity_bg_margin`` of 2.0
+    puts the ring 10 columns out, which reaches both neighbours. Measured
+    together the middle one's background is the field (40): the ring is 14-38
+    minus the union {18-22, 24-28, 30-34}, i.e. ten columns of empty field.
+    Measured alone the ring is 14-38 minus only its own band — ten field
+    columns and ten neighbour columns, so the ImageJ tie-rule median (the UPPER
+    of the two central values) lands on the neighbour (200) and a streak 5x
+    brighter than the field reports ZERO contrast. So the assertion below fails
+    loudly on a per-track regression rather than drifting a few percent.
     """
     from PIL import Image as PILImage
 
     cols, field, bright, width, T = (20, 26, 32), 40, 200, 60, 20
+    half = 2  # streaks 2*half+1 = 5 columns wide, matching intensity_width
 
     def _stub_detect(kymo, **kwargs):
         return [
@@ -694,7 +699,7 @@ def test_kymograph_measures_every_trajectory_against_a_neighbour_free_ring(
         monkeypatch.setattr(tracker_kymograph, "_UPLOAD_ROOT", td_path)
         row = np.full(width, field, dtype=np.uint8)
         for c in cols:
-            row[c - 1:c + 2] = bright
+            row[c - half:c + half + 1] = bright
         png = td_path / "frame.png"
         PILImage.fromarray(np.tile(row, (16, 1)), mode="L").save(png)
 
@@ -886,6 +891,10 @@ def _write_2d_ramp_png(path: Path, height: int = 16, width: int = 64) -> None:
 
 
 def _kymo_payload(pngs, polyline_rc, **overrides):
+    # ``target_width`` is deliberately still sent: it has been accepted-and-
+    # ignored since 2026-09-01 (Node no longer sends it, older Node containers
+    # still do), and every test that posts this body is a regression guard that
+    # the field has not been deleted from the ``extra="forbid"`` model.
     payload = {
         "frames": [
             {"frame": i, "polyline_rc": polyline_rc, "image_path": str(p)}
@@ -1029,39 +1038,94 @@ def test_kymograph_cache_misses_on_a_different_polyline(
 def test_kymograph_cache_misses_when_n_samples_changes(
     client, monkeypatch, tmp_path
 ):
-    """``target_width`` reaches a row only through ``n_samples``, so that is
-    what the key carries. Two target_widths that clamp to the same n_samples
-    SHOULD hit (the rows are genuinely identical); one that changes it must
-    not."""
+    """``n_samples`` earns its place in the row-cache key even though it is a
+    pure function of geometry — because it is a function of the SEED frame's
+    geometry, not of the row's own.
+
+    Frame 1 carries a byte-identical polyline in both requests, so its file
+    identity and its geometry digest are identical. Only frame 0 differs, and
+    only in length. The row for frame 1 must still be re-sampled: the two
+    requests want it at 64 and at 32 columns.
+
+    Mutation check: drop ``n_samples`` from ``cache_key`` in ``_plan_rows`` and
+    the second request either serves a 64-wide row into a 32-wide kymograph or
+    re-decodes nothing — either way ``decodes["n"]`` stays 1 and this fails."""
+    td_path = tmp_path.resolve()
+    monkeypatch.setattr(tracker_kymograph, "_UPLOAD_ROOT", td_path)
+    f0 = td_path / "f0.png"
+    f1 = td_path / "f1.png"
+    _write_gradient_png(f0)
+    _write_gradient_png(f1)
+    shared = [[8.0, float(x)] for x in range(64)]
+
+    def payload(seed_len):
+        return {
+            "frames": [
+                {
+                    "frame": 0,
+                    "polyline_rc": [[4.0, float(x)] for x in range(seed_len)],
+                    "image_path": str(f0),
+                },
+                {"frame": 1, "polyline_rc": shared, "image_path": str(f1)},
+            ],
+            "tracked": False,
+        }
+
+    decodes = _count_decodes(monkeypatch)
+    wide = client.post("/api/v1/kymograph", json=payload(64))
+    assert wide.status_code == 200, wide.text
+    assert wide.json()["length_px"] == 64
+    assert decodes["n"] == 2
+
+    # Same request again: both rows are cache hits, nothing re-decodes.
+    again = client.post("/api/v1/kymograph", json=payload(64))
+    assert again.status_code == 200, again.text
+    assert again.json()["length_px"] == 64
+    assert decodes["n"] == 2, "re-decoded for an identical request"
+
+    # Shorter SEED polyline -> 32 columns. Frame 1's own geometry has not
+    # changed, so only ``n_samples`` can keep its row out of the cache.
+    narrow = client.post("/api/v1/kymograph", json=payload(32))
+    assert narrow.status_code == 200, narrow.text
+    assert narrow.json()["length_px"] == 32
+    assert decodes["n"] == 4, "served 64-sample rows into a 32-sample kymograph"
+
+
+def test_kymograph_column_count_is_one_per_pixel_of_arc_and_uncapped(
+    client, monkeypatch, tmp_path
+):
+    """THE rule, and the change of 2026-09-01: one column per pixel of the seed
+    polyline's arc length, with no ceiling.
+
+    600 px is past the old default cap of 200 and past the 33 % of real
+    microtubules that used to be squeezed by it. ``target_width`` is sent (an
+    un-recreated Node still sends it) and must be ignored: 20 would once have
+    clamped this to 20 columns.
+
+    Mutation check: restore ``min(..., req.target_width)`` in ``_seed_columns``
+    / ``_plan_kymograph`` and ``length_px`` drops to 20."""
     td_path = tmp_path.resolve()
     monkeypatch.setattr(tracker_kymograph, "_UPLOAD_ROOT", td_path)
     png = td_path / "f0.png"
-    _write_gradient_png(png)
-    polyline_rc = [[8.0, float(x)] for x in range(64)]
+    _write_gradient_png(png, height=16, width=700)
 
-    decodes = _count_decodes(monkeypatch)
-    wide = client.post(
-        "/api/v1/kymograph", json=_kymo_payload([png], polyline_rc, target_width=64)
+    long_line = [[8.0, 0.0], [8.0, 600.0]]
+    r = client.post(
+        "/api/v1/kymograph",
+        json={
+            "frames": [
+                {"frame": 0, "polyline_rc": long_line, "image_path": str(png)}
+            ],
+            "tracked": False,
+            "target_width": 20,
+        },
     )
-    assert wide.status_code == 200, wide.text
-    assert wide.json()["length_px"] == 64
-    assert decodes["n"] == 1
-
-    # 200 clamps back to the same 64 samples (the arc length is the binding
-    # constraint), so this is a legitimate hit and must not re-decode.
-    same = client.post(
-        "/api/v1/kymograph", json=_kymo_payload([png], polyline_rc, target_width=200)
-    )
-    assert same.status_code == 200, same.text
-    assert same.json()["length_px"] == 64
-    assert decodes["n"] == 1, "re-decoded for an identical n_samples"
-
-    narrow = client.post(
-        "/api/v1/kymograph", json=_kymo_payload([png], polyline_rc, target_width=20)
-    )
-    assert narrow.status_code == 200, narrow.text
-    assert narrow.json()["length_px"] == 20
-    assert decodes["n"] == 2, "served a 20-sample row from the 64-sample entry"
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["length_px"] == 601, "the column cap is back"
+    # One column per image pixel, so the axis is an identity to within the
+    # rounding of round(arc)+1.
+    assert body["px_per_column"] == pytest.approx(1.0, abs=1e-6)
 
 
 def test_kymograph_rows_stay_aligned_with_frames(client, monkeypatch, tmp_path):
@@ -1147,6 +1211,57 @@ def test_kymograph_include_csv_false_omits_only_the_csv(
     assert lean.json()["length_px"] == full.json()["length_px"]
 
 
+def test_kymograph_intensity_width_defaults_to_five(client, monkeypatch, tmp_path):
+    """The band width the caller does not send is the one every export uses, so
+    the default is what actually decides ``intensity_signal`` /
+    ``intensity_background`` / ``intensity_minus_background`` in
+    ``velocity_metrics.xlsx``. Raised 3 -> 5 on 2026-09-01.
+
+    Tests the WIRING — the value that reaches ``tracks_intensity`` — not the
+    field's declared default, because the field is only correct if it is the
+    argument that is passed. The ring margin rides along on the same call for
+    the same reason: ``intensity_bg_margin`` is a MULTIPLE of this width, so a
+    default that never arrives would resize the background too.
+
+    Mutation check: set either field back and the recorded pair changes."""
+    td_path = tmp_path.resolve()
+    monkeypatch.setattr(tracker_kymograph, "_UPLOAD_ROOT", td_path)
+    png = td_path / "f0.png"
+    _write_gradient_png(png)
+
+    monkeypatch.setattr(
+        tracker_kymograph,
+        "detect_tracks",
+        lambda kymo, **kw: [
+            {"points": [[0.0, 30.0], [1.0, 31.0]], "net_pxframe": 1.0, "snr": 3.0}
+        ],
+    )
+    seen: list = []
+    real_tracks_intensity = tracker_kymograph.tracks_intensity
+
+    def recording(kymo, point_lists, width, **kw):
+        seen.append((width, kw.get("margin_multiplier")))
+        return real_tracks_intensity(kymo, point_lists, width, **kw)
+
+    monkeypatch.setattr(tracker_kymograph, "tracks_intensity", recording)
+
+    polyline_rc = [[8.0, float(x)] for x in range(64)]
+    r = client.post(
+        "/api/v1/kymograph",
+        json={
+            "frames": [
+                {"frame": i, "polyline_rc": polyline_rc, "image_path": str(png)}
+                for i in range(2)
+            ],
+            "tracked": False,
+            "detect_velocity": True,
+        },
+    )
+    assert r.status_code == 200, r.text
+    # ONE call for all trajectories, carrying both defaults.
+    assert seen == [(5, 2.0)], f"(width, margin) reaching tracks_intensity: {seen}"
+
+
 async def test_kymograph_leaves_the_event_loop_free(monkeypatch, tmp_path):
     """The handler used to run its whole blocking body on the event loop. On a
     real 299-frame container that held GET /health for 10.24 s, against the
@@ -1192,7 +1307,7 @@ async def test_kymograph_leaves_the_event_loop_free(monkeypatch, tmp_path):
 def test_sampled_row_cache_evicts_least_recently_used_within_its_budget():
     """An unbounded cache on the container that also runs seven segmentation
     models is a production incident. The budget is in BYTES, and the
-    bookkeeping counts too: at the default target_width a row is 800 B and its
+    bookkeeping counts too: a 200-column row is 800 B and its
     OrderedDict/key/ndarray overhead is a measured 392 B, so an entry-count
     budget would under-report the cache by a third."""
     entry = 200 * 4 + tracker_kymograph._ENTRY_OVERHEAD_BYTES
@@ -1454,8 +1569,9 @@ def test_batch_rejects_an_extra_field(client, monkeypatch, tmp_path):
 def test_batch_rejects_an_empty_or_oversized_item_list(
     client, monkeypatch, tmp_path
 ):
-    """The response is O(items) even though the decode is not, so the item
-    count is bounded (see ``_BATCH_MAX_ITEMS``)."""
+    """The decode does not scale with items but the response does, so the item
+    count is bounded (see ``_BATCH_MAX_ITEMS``). It is no longer the bound that
+    holds the response down — see the output-pixel tests below."""
     td_path = tmp_path.resolve()
     monkeypatch.setattr(tracker_kymograph, "_UPLOAD_ROOT", td_path)
     png = td_path / "f0.png"
@@ -1465,6 +1581,90 @@ def test_batch_rejects_an_empty_or_oversized_item_list(
     assert client.post("/api/v1/kymograph/batch", json={"items": []}).status_code == 422
     over = {"items": [one] * (tracker_kymograph._BATCH_MAX_ITEMS + 1)}
     assert client.post("/api/v1/kymograph/batch", json=over).status_code == 422
+
+
+def test_batch_output_pixel_budget_is_the_old_response_envelope():
+    """The number itself, because it is the one thing here that is a judgement
+    rather than a mechanism. 64 items x 300 frames x 200 columns is exactly the
+    response size ``_BATCH_MAX_ITEMS`` used to imply when every kymograph was
+    200 columns wide; keeping it means nothing that fits in one request today
+    starts splitting (the largest real export batch measures 3 596 700 px)."""
+    assert tracker_kymograph._BATCH_MAX_OUTPUT_PIXELS == 64 * 300 * 200
+
+
+def test_batch_rejects_more_output_than_the_pixel_budget(
+    client, monkeypatch, tmp_path
+):
+    """Since the column cap was removed a kymograph is as wide as its
+    microtubule is long, so the item count bounds nothing: the response is
+    O(frames x columns), not O(items). The budget is patched down here so the
+    test exercises the RULE rather than rendering 20 MB of PNG; the constant's
+    value is pinned by the test above.
+
+    Mutation check: delete the check in ``kymograph_batch`` and this 200s."""
+    td_path = tmp_path.resolve()
+    monkeypatch.setattr(tracker_kymograph, "_UPLOAD_ROOT", td_path)
+    png = td_path / "f0.png"
+    _write_gradient_png(png)
+    # 2 frames x 64 columns = 128 output pixels per item.
+    item = _kymo_payload([png, png], [[8.0, float(x)] for x in range(64)])
+
+    monkeypatch.setattr(tracker_kymograph, "_BATCH_MAX_OUTPUT_PIXELS", 255)
+    r = client.post("/api/v1/kymograph/batch", json={"items": [item, item]})
+    assert r.status_code == 413, r.text
+    assert "256" in r.text and "255" in r.text
+
+    # One more pixel of budget and the same batch is fine.
+    monkeypatch.setattr(tracker_kymograph, "_BATCH_MAX_OUTPUT_PIXELS", 256)
+    ok = client.post("/api/v1/kymograph/batch", json={"items": [item, item]})
+    assert ok.status_code == 200, ok.text
+    assert all(e["kymograph"] is not None for e in ok.json()["results"])
+
+
+def test_batch_of_one_is_exempt_from_the_pixel_budget(
+    client, monkeypatch, tmp_path
+):
+    """``/kymograph`` renders any single kymograph without a size bound, so a
+    one-item batch must too. Refusing it would cost that microtubule its
+    kymograph outright — there is no way to split a batch of one, so the export
+    could not recover.
+
+    Mutation check: drop the ``len(req.items) > 1`` guard and this 413s."""
+    td_path = tmp_path.resolve()
+    monkeypatch.setattr(tracker_kymograph, "_UPLOAD_ROOT", td_path)
+    png = td_path / "f0.png"
+    _write_gradient_png(png)
+
+    monkeypatch.setattr(tracker_kymograph, "_BATCH_MAX_OUTPUT_PIXELS", 1)
+    item = _kymo_payload([png, png], [[8.0, float(x)] for x in range(64)])
+    r = client.post("/api/v1/kymograph/batch", json={"items": [item]})
+    assert r.status_code == 200, r.text
+    assert r.json()["results"][0]["kymograph"] is not None
+
+
+def test_batch_pixel_budget_ignores_an_unusable_seed_polyline(
+    client, monkeypatch, tmp_path
+):
+    """A malformed item cannot decide whether the other 59 are accepted: it
+    renders nothing, so it contributes nothing to the budget and comes back as
+    a per-item error the way every other bad item does."""
+    td_path = tmp_path.resolve()
+    monkeypatch.setattr(tracker_kymograph, "_UPLOAD_ROOT", td_path)
+    png = td_path / "f0.png"
+    _write_gradient_png(png)
+
+    bad = {
+        "frames": [
+            {"frame": 0, "polyline_rc": [[8.0, 0.0]], "image_path": str(png)}
+        ],
+        "tracked": False,
+    }
+    good = _kymo_payload([png], [[8.0, float(x)] for x in range(64)])
+    r = client.post("/api/v1/kymograph/batch", json={"items": [bad, good]})
+    assert r.status_code == 200, r.text
+    results = r.json()["results"]
+    assert results[0]["kymograph"] is None and "vertex" in results[0]["error"]
+    assert results[1]["kymograph"] is not None
 
 
 def test_batch_does_not_decode_a_frame_twice_across_two_channels(

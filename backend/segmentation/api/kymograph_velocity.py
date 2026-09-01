@@ -147,9 +147,10 @@ def net_velocity_threshold(
     """Convert a µm/s net-velocity cut-off to a kymograph-column/frame cut-off.
 
     Track velocities are measured in kymograph **columns** per frame, and one
-    column spans ``px_per_column`` image pixels (≈1 for short MTs, >1 once the
-    arc length exceeds ``target_width`` and the column axis is compressed). The
-    exact inverse of the display conversion (column/frame → µm/s) is::
+    column spans ``px_per_column`` image pixels — 1.0 to within rounding since
+    the column cap was removed on 2026-09-01, and previously up to 10x that on a
+    long microtubule whose axis had been compressed. The exact inverse of the
+    display conversion (column/frame → µm/s) is::
 
         v_um_s = v_colframe · px_per_column · pixel_size_um / (frame_interval_ms/1000)
 
@@ -301,6 +302,19 @@ def tracks_intensity(
     the function — so do not buy the 70x back with an approximate band. If this
     ever has to be faster, make ``mt_measure.rasterize_band`` vectorise over
     segments, where the fix helps all three callers.
+
+    **The cost does not scale with the column axis**, which is what makes this
+    safe next to the removal of the 200-column cap on the same day. Re-measured
+    on the real 299-frame container 4972cad8 (channel 488_nm, microtubule
+    polyline_39, seed arc 1249.9 px): 0.171 s at its true 1251 columns with the
+    13 trajectories that width reveals, 0.165 s for the same 13 on a matrix
+    widened to the 2077 columns of the longest microtubule in production, and
+    0.603 s for 47 trajectories at that width — a flat 12.7-13.1 ms per
+    trajectory in all three. Both halves are width-independent by construction:
+    ``rasterize_band`` costs one convex fill per SEGMENT (one per frame), and
+    ``vicinity_mask`` dilates only the band's bounding box, which is as narrow
+    as the trajectory. Only the ``(T, X)`` mask allocations grow, and 47 of them
+    at 299x2077 is 59 MB.
 
     Returns one ``{intensity_signal, intensity_background, intensity_minus_bg}``
     dict per entry of ``point_lists``, in the same order. ``intensity_signal`` is
