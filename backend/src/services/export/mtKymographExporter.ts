@@ -63,6 +63,7 @@ import {
   loadKymographContainerContext,
   type KymographBatchOutcome,
   type KymographContainerContext,
+  type KymographLineReduce,
   type KymographServiceInput,
 } from '../kymographService';
 import { resolveSegmentationSource } from '../video/types';
@@ -134,6 +135,29 @@ export interface MTKymographOptions {
   mode: MTKymographMode;
   includeVelocityMetrics: boolean;
   includeSegmentedImages: boolean;
+  /** Width (image px) of the line sampled along each microtubule, measured
+   *  PERPENDICULAR to it, with the samples across it reduced by `lineReduce`.
+   *
+   *  Optional, and absent means 1 — a single-pixel line profile, which is what
+   *  this exporter has always asked for. Absent is not the same as `1` only in
+   *  that it is what an older frontend bundle (or any API caller that predates
+   *  this field) sends; both render the identical kymograph, because
+   *  `kymographService` omits the ML field at the default either way.
+   *
+   *  Deliberately NOT coupled to the editor modal's line-width control: the two
+   *  are separate surfaces with separate persistence, exactly like `mode` and
+   *  `includeVelocityMetrics`. Range (1…51) is validated at the route and
+   *  clamped again in `kymographService`.
+   *
+   *  It applies to BOTH modes. The ML service renders the profile plots of
+   *  `profiles` mode from the same sampled matrix the kymograph is a heatmap of
+   *  (`_render_profiles(kymo, …)` in `api/tracker_kymograph.py`), so a profile
+   *  is one row of the very picture this widens. */
+  lineWidth?: number;
+  /** How the `lineWidth` samples of one column collapse to one value: `mean`
+   *  (default, ImageJ's convention) or `max` (KymoResliceWide's). Ignored at
+   *  width 1, where there is a single sample. */
+  lineReduce?: KymographLineReduce;
 }
 
 interface PolylineRecord {
@@ -597,6 +621,12 @@ export async function exportMicrotubuleKymographs(
           renderProfiles: true,
           frameFilter: job.frameFilter,
           containerContext,
+          // A profile IS a row of the kymograph this widens (the ML service
+          // renders both from the same sampled matrix), so the band applies
+          // here too. Undefined at the default, which posts the body this
+          // exporter posted before the option existed.
+          lineWidth: options.lineWidth,
+          lineReduce: options.lineReduce,
         }),
         // One matplotlib PNG per rendered frame per item, so the batch is
         // bounded by images rather than by items. See PROFILE_BATCH_MAX_IMAGES.
@@ -685,6 +715,10 @@ export async function exportMicrotubuleKymographs(
         renderOverlay: options.includeSegmentedImages,
         frameFilter: job.frameFilter,
         containerContext,
+        // Undefined at the default, so an export that does not ask for a band
+        // posts the body it posted before this option existed.
+        lineWidth: options.lineWidth,
+        lineReduce: options.lineReduce,
         // This mode writes the overlay PNG and the velocity workbook and never
         // reads the intensity matrix, so asking for it would be 483 KB of
         // base64 per microtubule built, shipped and thrown away.

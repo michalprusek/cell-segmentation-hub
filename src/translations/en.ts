@@ -1315,6 +1315,14 @@ export default {
         'Single frame — a kymograph needs a time series, so only the intensity profile is exported.',
       profilesHint:
         'Exports one matplotlib plot of intensity vs. position per frame, plus the intensity CSV.',
+      lineWidthLabel: 'Line width (px)',
+      lineWidthHelp:
+        'Width of the line sampled along each microtubule, measured across it. 1 samples a single pixel. Applies to kymographs and intensity profiles alike.',
+      lineReduceLabel: 'Across width',
+      lineReduceHelp:
+        'How the pixels across the width become one value. Mean matches ImageJ; max is brighter but biased by single hot pixels.',
+      lineReduceMean: 'Mean',
+      lineReduceMax: 'Max',
     },
     mt: {
       sectionTitle: 'Microtubule metrics',

@@ -157,6 +157,65 @@ describe('Export Routes', () => {
       expect(response.body.jobId).toBe(validJobId);
     });
 
+    // The MT kymograph line width is the one export option with a numeric
+    // range, and the controller casts req.body straight to the options object
+    // — so this validator is the only thing between the wire and the ML
+    // request, whose model is `extra="forbid"` and 422s outside 1…51.
+    it('forwards the kymograph line width, coercing a numeric string', async () => {
+      mockServiceInstance.startExportJob.mockResolvedValueOnce(validJobId);
+
+      await request(app)
+        .post(`/api/projects/${validProjectId}/export`)
+        .send({
+          options: {
+            mtKymographs: {
+              enabled: true,
+              mode: 'kymograph',
+              lineWidth: '5',
+              lineReduce: 'max',
+            },
+          },
+        })
+        .expect(200);
+
+      // `.toInt()`: a string here would be dropped as "not a finite number"
+      // downstream, i.e. the user would ask for a band and silently get 1.
+      expect(mockServiceInstance.startExportJob).toHaveBeenCalledWith(
+        validProjectId,
+        mockUser.id,
+        expect.objectContaining({
+          mtKymographs: expect.objectContaining({
+            lineWidth: 5,
+            lineReduce: 'max',
+          }),
+        }),
+        undefined
+      );
+    });
+
+    it.each([0, 52, 2.5])(
+      'rejects an out-of-range kymograph line width (%s)',
+      async (lineWidth: number) => {
+        const response = await request(app)
+          .post(`/api/projects/${validProjectId}/export`)
+          .send({ options: { mtKymographs: { lineWidth } } })
+          .expect(400);
+
+        expect(response.body).toHaveProperty('errors');
+        expect(mockServiceInstance.startExportJob).not.toHaveBeenCalled();
+      }
+    );
+
+    it('rejects an unknown line reduction', async () => {
+      const response = await request(app)
+        .post(`/api/projects/${validProjectId}/export`)
+        .send({ options: { mtKymographs: { lineReduce: 'median' } } })
+        .expect(400);
+
+      expect(response.body).toHaveProperty('errors');
+      expect(mockServiceInstance.startExportJob).not.toHaveBeenCalled();
+    });
+
     it('should return 500 when service throws', async () => {
       mockServiceInstance.startExportJob.mockRejectedValueOnce(
         new Error('Export service down')

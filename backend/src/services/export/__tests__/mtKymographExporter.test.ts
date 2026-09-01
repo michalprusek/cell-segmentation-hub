@@ -56,6 +56,8 @@ interface FakeInput {
   containerContext: unknown;
   includeCsv?: boolean;
   renderProfiles?: boolean;
+  lineWidth?: number;
+  lineReduce?: string;
 }
 
 /** Every (microtubule x channel) input the exporter dispatched, flattened back
@@ -570,6 +572,79 @@ describe('exportMicrotubuleKymographs fan-out', () => {
       'A__p3__g.csv',
       'A__p3__g__f0000.png',
     ]);
+  });
+
+  // -------------------------------------------------------------------------
+  // Line width: the export's own control, forwarded to every kymograph it
+  // builds. The editor modal has the same setting on a separate surface; these
+  // assert the EXPORT's value travels, not that the two are coupled.
+  // -------------------------------------------------------------------------
+
+  const oneChannelDb = (): void =>
+    mockDb([
+      {
+        id: 'vidA',
+        name: 'A',
+        channels: [{ name: 'g', type: 'fluorescent' }],
+        frameCount: 2,
+        polylineIds: ['p1', 'p2'],
+      },
+    ]);
+
+  it('forwards lineWidth / lineReduce to every kymograph of the batch', async () => {
+    oneChannelDb();
+
+    await exportMicrotubuleKymographs('proj', outDir, {
+      ...OPTS,
+      lineWidth: 5,
+      lineReduce: 'max',
+    });
+
+    expect(dispatchedInputs().map(i => [i.lineWidth, i.lineReduce])).toEqual([
+      [5, 'max'],
+      [5, 'max'],
+    ]);
+  });
+
+  it('forwards them in profiles mode too — a profile is a row of that picture', async () => {
+    oneChannelDb();
+    mockBatch.mockImplementation(async (inputs: FakeInput[]) =>
+      inputs.map(() => ({
+        result: {
+          ...(kymoResult(0, 0) as Record<string, unknown>),
+          profiles: [{ frame: 0, pngBase64: 'cA==' }],
+        },
+      }))
+    );
+
+    await exportMicrotubuleKymographs('proj', outDir, {
+      ...OPTS,
+      mode: 'profiles',
+      lineWidth: 9,
+      lineReduce: 'max',
+    });
+
+    // The ML service renders the profile plots from the same sampled matrix as
+    // the kymograph, so a width that changed one and not the other would make
+    // the two exports of the same data disagree.
+    expect(dispatchedInputs().map(i => [i.lineWidth, i.lineReduce])).toEqual([
+      [9, 'max'],
+      [9, 'max'],
+    ]);
+  });
+
+  it('sends neither when the export did not ask for a band', async () => {
+    oneChannelDb();
+
+    await exportMicrotubuleKymographs('proj', outDir, OPTS);
+
+    // Absent, not 1: the service omits the ML fields at the default, so an
+    // export run without the option posts byte-for-byte the body it posted
+    // before the option existed.
+    for (const input of dispatchedInputs()) {
+      expect(input.lineWidth).toBeUndefined();
+      expect(input.lineReduce).toBeUndefined();
+    }
   });
 
   it('reports progress once per job against the whole-project total', async () => {

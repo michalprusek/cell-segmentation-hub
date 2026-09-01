@@ -1330,6 +1330,14 @@ export default {
         'Image unique — un kymographe nécessite une série temporelle, seul le profil d’intensité est donc exporté.',
       profilesHint:
         'Exporte un tracé matplotlib de l’intensité en fonction de la position par image, ainsi que le CSV d’intensité.',
+      lineWidthLabel: 'Largeur de ligne (px)',
+      lineWidthHelp:
+        'Largeur de la ligne échantillonnée le long de chaque microtubule, mesurée en travers. 1 échantillonne un seul pixel. S’applique aussi bien aux kymographes qu’aux profils d’intensité.',
+      lineReduceLabel: 'Sur la largeur',
+      lineReduceHelp:
+        'Comment les pixels sur la largeur deviennent une seule valeur. La moyenne correspond à ImageJ ; le maximum est plus lumineux mais biaisé par des pixels chauds isolés.',
+      lineReduceMean: 'Moyenne',
+      lineReduceMax: 'Maximum',
     },
     mt: {
       sectionTitle: 'Métriques des microtubules',

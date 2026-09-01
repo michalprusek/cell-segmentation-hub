@@ -41,7 +41,10 @@ import { ProjectImage, isMicrotubuleProject } from '@/types';
 import { EXPORT_DEFAULTS } from '@/lib/export-config';
 import { ImageSelectionGrid } from './components/ImageSelectionGrid';
 import { MicrotubuleMetricsSection } from './components/MicrotubuleMetricsSection';
-import { MicrotubuleKymographsSection } from './components/MicrotubuleKymographsSection';
+import {
+  MicrotubuleKymographsSection,
+  DEFAULT_MT_KYMOGRAPH_LINE_WIDTH,
+} from './components/MicrotubuleKymographsSection';
 import { projectCanBuildKymograph } from './utils/kymographGating';
 import { UniversalCancelButton } from '@/components/ui/universal-cancel-button';
 
@@ -86,6 +89,11 @@ const MT_KYMOGRAPHS_DEFAULTS = {
   mode: 'kymograph' as const,
   includeVelocityMetrics: true,
   includeSegmentedImages: true,
+  // 1 = the single-pixel line profile every export built before the width was
+  // exposed, so an untouched dialog produces the identical archive. Not seeded
+  // from the editor modal's control: separate surface, separate persistence.
+  lineWidth: DEFAULT_MT_KYMOGRAPH_LINE_WIDTH,
+  lineReduce: 'mean' as const,
 };
 
 export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =

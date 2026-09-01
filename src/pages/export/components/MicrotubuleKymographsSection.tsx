@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { LineChart } from 'lucide-react';
 import {
   Card,
@@ -8,11 +8,29 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { useLanguage } from '@/contexts/useLanguage';
 
 export type MtKymographMode = 'kymograph' | 'profiles';
+
+/** How the samples across the line width collapse to one value. Mirrors the
+ *  backend ``KymographLineReduce`` and the ML ``line_reduce``. */
+export type MtKymographLineReduce = 'mean' | 'max';
+
+/** Single-pixel line profile — what this export has always built, and what the
+ *  backend and the ML service both assume when the field is absent. */
+export const DEFAULT_MT_KYMOGRAPH_LINE_WIDTH = 1;
+/** Mirrors the ML ``_LINE_WIDTH_MAX`` and the export route's validator. */
+export const MAX_MT_KYMOGRAPH_LINE_WIDTH = 51;
 
 export interface MicrotubuleKymographsOptions {
   enabled: boolean;
@@ -21,6 +39,16 @@ export interface MicrotubuleKymographsOptions {
   mode: MtKymographMode;
   includeVelocityMetrics: boolean;
   includeSegmentedImages: boolean;
+  /** Width (image px) of the line sampled along each microtubule, measured
+   *  ACROSS it. 1 = a single pixel. Applies to both modes: a profile plot is
+   *  one row of the same sampled matrix the kymograph is a heatmap of.
+   *
+   *  Independent of the editor modal's identically-named control — the two are
+   *  separate surfaces with separate persistence, like ``mode`` here. */
+  lineWidth: number;
+  /** How the ``lineWidth`` samples of one column become one value. Ignored at
+   *  width 1, where there is a single sample. */
+  lineReduce: MtKymographLineReduce;
 }
 
 export interface MicrotubuleKymographsSectionProps {
@@ -45,11 +73,53 @@ export interface MicrotubuleKymographsSectionProps {
  *
  * When the project is single-frame (``!canBuildKymograph``) only profiles are
  * offered, since a kymograph has no time axis to build.
+ *
+ * The line width applies to BOTH outputs, so it sits outside the per-mode
+ * blocks: the ML service renders the profile plots from the same sampled matrix
+ * the kymograph is a heatmap of, i.e. a profile is one row of this picture.
  */
 export const MicrotubuleKymographsSection: React.FC<
   MicrotubuleKymographsSectionProps
 > = ({ value, canBuildKymograph, onChange }) => {
   const { t } = useLanguage();
+
+  // Local text mirror of the width input, for the same reason
+  // `MicrotubuleMetricsSection` keeps one: propagating only valid values would
+  // make a backspace (`''` -> NaN -> skip) snap the field back to the old
+  // number, so a digit could not be erased. The parent is updated only for a
+  // valid integer in range; an invalid field snaps back on blur.
+  const [widthText, setWidthText] = useState(String(value.lineWidth));
+  useEffect(() => {
+    setWidthText(prev =>
+      prev !== '' && Number.parseInt(prev, 10) === value.lineWidth
+        ? prev
+        : String(value.lineWidth)
+    );
+  }, [value.lineWidth]);
+
+  const onWidthChange = (raw: string) => {
+    setWidthText(raw);
+    if (raw === '') return; // allow the empty intermediate state while editing
+    const n = Number.parseInt(raw, 10);
+    if (
+      Number.isFinite(n) &&
+      n >= DEFAULT_MT_KYMOGRAPH_LINE_WIDTH &&
+      n <= MAX_MT_KYMOGRAPH_LINE_WIDTH &&
+      String(n) === raw // reject decimal / leading-zero / sign noise
+    ) {
+      onChange({ ...value, lineWidth: n });
+    }
+  };
+  const onWidthBlur = () => {
+    const n = Number.parseInt(widthText, 10);
+    if (
+      !Number.isFinite(n) ||
+      n < DEFAULT_MT_KYMOGRAPH_LINE_WIDTH ||
+      n > MAX_MT_KYMOGRAPH_LINE_WIDTH
+    ) {
+      setWidthText(String(value.lineWidth));
+    }
+  };
 
   // Force profile mode when a kymograph can't be built (single-frame project).
   // Persists the corrected mode so the exact value POSTed to the backend is the
@@ -145,6 +215,77 @@ export const MicrotubuleKymographsSection: React.FC<
                 })}
               </p>
             )}
+
+            {/* Line width. Deliberately OUTSIDE the per-mode blocks: the ML
+                service renders the profile plots from the same sampled matrix
+                the kymograph is a heatmap of, so the band changes both. */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <Label htmlFor="mt-kymo-line-width" className="text-sm">
+                  {t('export.mtKymographs.lineWidthLabel', {
+                    defaultValue: 'Line width (px)',
+                  })}
+                </Label>
+                <Input
+                  id="mt-kymo-line-width"
+                  type="number"
+                  inputMode="numeric"
+                  min={DEFAULT_MT_KYMOGRAPH_LINE_WIDTH}
+                  max={MAX_MT_KYMOGRAPH_LINE_WIDTH}
+                  step={1}
+                  value={widthText}
+                  onChange={e => onWidthChange(e.target.value)}
+                  onBlur={onWidthBlur}
+                  className="mt-1 text-sm"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  {t('export.mtKymographs.lineWidthHelp', {
+                    defaultValue:
+                      'Width of the line sampled along each microtubule, measured across it. 1 samples a single pixel.',
+                  })}
+                </p>
+              </div>
+              {value.lineWidth > DEFAULT_MT_KYMOGRAPH_LINE_WIDTH && (
+                <div>
+                  <Label htmlFor="mt-kymo-line-reduce" className="text-sm">
+                    {t('export.mtKymographs.lineReduceLabel', {
+                      defaultValue: 'Across width',
+                    })}
+                  </Label>
+                  <Select
+                    value={value.lineReduce}
+                    onValueChange={v =>
+                      onChange({
+                        ...value,
+                        lineReduce: v as MtKymographLineReduce,
+                      })
+                    }
+                  >
+                    <SelectTrigger id="mt-kymo-line-reduce" className="mt-1">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="mean">
+                        {t('export.mtKymographs.lineReduceMean', {
+                          defaultValue: 'Mean',
+                        })}
+                      </SelectItem>
+                      <SelectItem value="max">
+                        {t('export.mtKymographs.lineReduceMax', {
+                          defaultValue: 'Max',
+                        })}
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {t('export.mtKymographs.lineReduceHelp', {
+                      defaultValue:
+                        'How the pixels across the width become one value. Mean matches ImageJ; max is brighter but biased by single hot pixels.',
+                    })}
+                  </p>
+                </div>
+              )}
+            </div>
 
             {/* Kymograph sub-options. */}
             {effectiveMode === 'kymograph' && (

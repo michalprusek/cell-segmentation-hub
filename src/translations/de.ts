@@ -1337,6 +1337,14 @@ export default {
         'Einzelbild — ein Kymograph benötigt eine Zeitreihe, daher wird nur das Intensitätsprofil exportiert.',
       profilesHint:
         'Exportiert pro Bild ein matplotlib-Diagramm der Intensität gegen die Position sowie die Intensitäts-CSV.',
+      lineWidthLabel: 'Linienbreite (px)',
+      lineWidthHelp:
+        'Breite der entlang jedes Mikrotubulus abgetasteten Linie, quer dazu gemessen. 1 tastet ein einzelnes Pixel ab. Gilt für Kymographen und Intensitätsprofile gleichermaßen.',
+      lineReduceLabel: 'Über die Breite',
+      lineReduceHelp:
+        'Wie die Pixel über die Breite zu einem Wert werden. Mittelwert entspricht ImageJ; Maximum ist heller, wird aber von einzelnen heißen Pixeln verzerrt.',
+      lineReduceMean: 'Mittelwert',
+      lineReduceMax: 'Maximum',
     },
     mt: {
       sectionTitle: 'Mikrotubuli-Metriken',

@@ -8,6 +8,7 @@ import path from 'path';
 import { promises as fs } from 'fs';
 import archiver from 'archiver';
 import { logger } from '../../utils/logger';
+import type { MTKymographOptions } from './mtKymographExporter';
 
 const RESERVED_WINDOWS_NAMES = [
   'CON',
@@ -102,7 +103,13 @@ export function countExportSteps(
     annotationFormats?: unknown[] | null;
     metricsFormats?: unknown[] | null;
     includeDocumentation?: boolean;
-    mtKymographs?: { enabled?: boolean } | null;
+    /** The real wire shape, not just the flag this function reads: the request
+     *  carries `mode`, `includeVelocityMetrics`, `includeSegmentedImages` and
+     *  `lineWidth` / `lineReduce` too, and declaring only `enabled` here made
+     *  the wider object silently structurally compatible with a narrower
+     *  contract. `Partial` because the options are deserialised straight off
+     *  the wire — an older frontend bundle sends a subset. */
+    mtKymographs?: Partial<MTKymographOptions> | null;
   },
   isMicrotubuleProject: boolean,
   hasImages: boolean
