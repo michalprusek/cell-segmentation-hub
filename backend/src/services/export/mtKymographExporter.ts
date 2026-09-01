@@ -12,9 +12,9 @@
  *     channel (channel = motor/protein, e.g. one sheet for kinesin), one row
  *     per detected trajectory (when ``includeVelocityMetrics``).
  *
- * Reuses ``buildKymograph`` so the export and the editor modal share the exact
- * same sampling, detection and calibration path — no drift between what the
- * user sees and what ships in the bundle.
+ * Reuses the same ``kymographService`` sampling, detection and calibration path
+ * as the editor modal — no drift between what the user sees and what ships in
+ * the bundle.
  *
  * SHAPE OF THE WORK. This stage is quadratic in a way that is easy to miss:
  * every one of the (microtubule × channel) kymographs of a container reads the
@@ -35,11 +35,19 @@
  * per job. Phase 1 keeps its own read because the whole job list — and with it
  * the progress total — has to be known before the first container's rows are
  * held, and holding every container's rows at once is what the grouping exists
- * to avoid. Ordering is not cosmetic either: consecutive jobs then share their
- * entire decode set, which keeps the page-cache working set to one channel's
- * frames instead of rotating over all of them, and is the precondition for any
- * frame cache in the ML service to score a hit at all (an LRU that rotates
- * over N channels needs N x the frames resident before it hits once).
+ * to avoid.
+ *
+ * That fixed the Node half. The 54 000 image reads were still there, because
+ * one ML request per job means one full decode of the container per job — and
+ * the ML service's row cache cannot help, since every job has a different
+ * polyline and so a different key (a real production export, 2026-09-01:
+ * 61 requests, 0 frames from cache, 69 decoded). The jobs of ONE CHANNEL now go
+ * to ``/kymograph/batch`` in a single request instead, which decodes each frame
+ * once and samples every polyline from it. Same bodies, same output, 900 decodes
+ * where there were 54 000. Batches never span channels: two channels share no
+ * frame images, so a chunk straddling the boundary would decode one channel's
+ * frames twice — which is also why the channel-major ordering is load-bearing
+ * rather than cosmetic.
  *
  * This is an OPTIONAL add-on: any failure (DB, disk, ML) degrades to "no
  * kymograph output" and must never abort the surrounding export job.
@@ -49,11 +57,13 @@ import * as path from 'path';
 import { promises as fs } from 'fs';
 import { prisma } from '../../db/prismaClient';
 import { logger } from '../../utils/logger';
-import { mapWithConcurrency, runGated, type Semaphore } from '../../utils/concurrency';
+import { runGated, type Semaphore } from '../../utils/concurrency';
 import {
-  buildKymograph,
+  buildKymographBatch,
   loadKymographContainerContext,
+  type KymographBatchOutcome,
   type KymographContainerContext,
+  type KymographServiceInput,
 } from '../kymographService';
 import { resolveSegmentationSource } from '../video/types';
 
@@ -63,12 +73,31 @@ const CTX = 'MTKymographExporter';
  *  Anything dropped is logged (never silently truncated). */
 const MAX_MT_PER_CONTAINER = 60;
 
-/** Parallel kymograph JOB ORCHESTRATION (DB-free local prep + file writes
- *  around each ML call) — NOT the ML request concurrency itself, which is
- *  bounded separately by the shared `mlGate` (see `exportMicrotubuleKymographs`
- *  below) across the whole export, not just this stage. Kept > 1 so local
- *  I/O for one job can overlap the (gated) network call for another. */
-const KYMOGRAPH_CONCURRENCY = 3;
+/** How many (microtubule × channel) kymographs go into ONE batched ML request.
+ *
+ *  The batch is what makes the ML service decode each frame once for all of
+ *  them instead of once per job, so the useful value is "the whole channel in
+ *  one request" — hence the per-container microtubule cap. Batches never span
+ *  channels: two channels share no frame images, so a chunk that straddled the
+ *  boundary would decode one channel's frames in two requests.
+ *
+ *  Measured 2026-09-01 on container 4972cad8 (300 frames, 60 microtubules, one
+ *  channel, velocity detection + overlay): 60 separate requests took 186.2 s
+ *  and decoded 18 000 frames; one batch of 60 took 13.2 s and decoded 300. The
+ *  request is the same 29.2 MB either way (it is the same bodies), and the
+ *  response is 14.4 MB with `includeCsv: false` below. */
+const KYMOGRAPH_BATCH_MAX_ITEMS = MAX_MT_PER_CONTAINER;
+
+/** profiles mode only: also bound how many matplotlib PNGs one response
+ *  carries, because there the response is O(items × frames) rather than
+ *  O(items). A profile PNG measured 39 KB (52 KB base64) on real frames, so
+ *  300 of them is ~15.6 MB — the same envelope as a full 60-item kymograph
+ *  batch. The consequence is deliberate: a short stack (the case profiles mode
+ *  exists for — a single-frame project forces it) batches all 60 microtubules
+ *  and gets the full win, while a 300-frame profiles export falls back to one
+ *  item per request and gains nothing. Its response IS its product; there is
+ *  no version of it that both batches and stays small. */
+const PROFILE_BATCH_MAX_IMAGES = 300;
 
 /** Per (microtubule × channel) cap on the number of frame profiles written in
  *  ``profiles`` mode. Profiles are intended for small stacks (the single-frame
@@ -123,11 +152,16 @@ interface KymographJob {
 /** All jobs of one video container, in the order they are dispatched. Grouping
  *  is what lets the per-container database rows be loaded ONCE (see
  *  ``loadKymographContainerContext``) and reused by every job in the group,
- *  while never holding more than one container's rows in memory. */
+ *  while never holding more than one container's rows in memory.
+ *
+ *  ``channelRuns`` is the same jobs split per source channel — the unit a
+ *  batched ML request is carved out of, because only jobs of one channel share
+ *  their frame images. */
 interface ContainerJobGroup {
   containerId: string;
   videoName: string;
-  jobs: KymographJob[];
+  jobCount: number;
+  channelRuns: KymographJob[][];
 }
 
 function parsePolylines(
@@ -249,15 +283,17 @@ export async function exportMicrotubuleKymographs(
    *
    * This is the export's longest stage by far — one real 300-frame project
    * spent ~20 min here — so it is the one place where per-item reporting is
-   * worth the plumbing rather than a single bump on completion.
+   * worth the plumbing rather than a single bump on completion. Since the jobs
+   * of one channel travel in one batched request, a whole batch's items are
+   * reported together when it returns.
    */
   onProgress?: (done: number, total: number) => void,
   /**
    * Shared semaphore bounding how many ML-bound requests this export job has
    * in flight at once, across ALL of its ML-bound stages (mt-metrics,
-   * mt-background-rois, kymograph) — not just this one. Every `buildKymograph`
-   * call below (the actual ML request) is routed through it. Omitted in unit
-   * tests, which mock `buildKymograph` directly.
+   * mt-background-rois, kymograph) — not just this one. Every
+   * `buildKymographBatch` call below (the actual ML request) is routed through
+   * it. Omitted in unit tests, which mock `buildKymographBatch` directly.
    */
   mlGate?: Semaphore
 ): Promise<void> {
@@ -388,25 +424,25 @@ export async function exportMicrotubuleKymographs(
       // change the output: files are named per (video, polyline, channel) and
       // the velocity sheets are assembled by job index below, so within each
       // channel the rows stay in polyline order either way.
-      const containerJobs: KymographJob[] = [];
+      const channelRuns: KymographJob[][] = [];
       for (const sourceChannel of sourceChannels) {
-        for (const poly of selected) {
-          containerJobs.push({
-            containerId: container.id,
-            videoName: container.name,
-            safeVideo,
-            polylineId: poly.id,
-            frameIndex: seedFrameIndex,
-            sourceChannel,
-            frameFilter,
-          });
-        }
+        const run = selected.map(poly => ({
+          containerId: container.id,
+          videoName: container.name,
+          safeVideo,
+          polylineId: poly.id,
+          frameIndex: seedFrameIndex,
+          sourceChannel,
+          frameFilter,
+        }));
+        channelRuns.push(run);
+        jobs.push(...run);
       }
-      jobs.push(...containerJobs);
       groups.push({
         containerId: container.id,
         videoName: container.name,
-        jobs: containerJobs,
+        jobCount: channelRuns.reduce((n, run) => n + run.length, 0),
+        channelRuns,
       });
     }
 
@@ -417,8 +453,14 @@ export async function exportMicrotubuleKymographs(
     };
 
     /**
-     * Run `runJob` over every job, one container group at a time, with that
-     * container's database rows loaded ONCE and handed to each of its jobs.
+     * Run every job, one container group at a time, with that container's
+     * database rows loaded ONCE and its jobs dispatched to the ML service in
+     * per-channel BATCHES rather than one request each.
+     *
+     * `toInput` turns a job into the service input (the two modes differ only
+     * there); `onOutcome` handles one finished job — success or failure — and
+     * is called in job order, so the velocity worksheets stay independent of
+     * which request finished first.
      *
      * Groups are processed one after another rather than interleaved so at most
      * one container's rows (tens of MB of polygon JSON) are resident. Nothing
@@ -428,55 +470,100 @@ export async function exportMicrotubuleKymographs(
      * A container whose rows fail to load is skipped with a warning and its
      * jobs still count as done — same treatment as an individual job failure,
      * so the progress bar still reaches 100 % and the export still completes.
+     * So is a batch that fails outright (a network error, or an ml container
+     * old enough not to have `/kymograph/batch`): every job in it is reported
+     * as failed and the export carries on with the next batch, exactly as one
+     * failed request used to cost exactly one microtubule.
      *
-     * `runJob` catches its own errors, so `mapWithConcurrency` (which
-     * short-circuits the remaining work on the first throw) should never see
-     * one. The belt-and-braces catch below keeps an unexpected escape — a
-     * throwing `onProgress`, say — contained to the one container group,
-     * instead of abandoning every later container AND the velocity workbook.
+     * Progress is still counted per microtubule, but a whole batch's jobs are
+     * reported together when it returns, so the bar advances once per
+     * (container × channel) instead of once per microtubule. That is a coarser
+     * bar over a much shorter stage: the same 60-microtubule channel that took
+     * 186 s in 60 steps now takes 13 s in one.
      */
-    const forEachJobWithContext = async (
-      runJob: (
+    const forEachJobOutcome = async (
+      toInput: (
         job: KymographJob,
-        context: KymographContainerContext,
-        jobIndex: number
+        context: KymographContainerContext
+      ) => KymographServiceInput,
+      /** Items per ML request, given how many frames each item renders. */
+      batchLimit: (framesPerJob: number) => number,
+      onOutcome: (
+        job: KymographJob,
+        jobIndex: number,
+        outcome: KymographBatchOutcome
       ) => Promise<void>
     ): Promise<void> => {
       let base = 0;
       for (const group of groups) {
         const groupBase = base;
-        base += group.jobs.length;
+        base += group.jobCount;
 
         let context: KymographContainerContext | null = null;
         try {
           context = await loadKymographContainerContext(group.containerId);
         } catch (err) {
           logger.warn(
-            `Kymograph export skipped ${group.jobs.length} job(s) for ` +
+            `Kymograph export skipped ${group.jobCount} job(s) for ` +
               `${group.videoName}: ${(err as Error).message}`,
             CTX
           );
         }
         if (!context) {
-          for (let i = 0; i < group.jobs.length; i++) {
+          for (let i = 0; i < group.jobCount; i++) {
             reportDone();
           }
           continue;
         }
 
         const loaded = context;
-        try {
-          await mapWithConcurrency(
-            group.jobs,
-            KYMOGRAPH_CONCURRENCY,
-            (job, i) => runJob(job, loaded, groupBase + i)
-          );
-        } catch (err) {
-          logger.warn(
-            `Kymograph export aborted for ${group.videoName}: ` +
-              `${(err as Error).message}`,
-            CTX
-          );
+        // Every job of a container renders the same frames (the export image
+        // selection, or the whole video), so one number covers the group.
+        const framesPerJob =
+          group.channelRuns[0]?.[0]?.frameFilter?.length ?? loaded.frames.length;
+        const limit = Math.max(1, batchLimit(framesPerJob));
+        let runBase = groupBase;
+        for (const run of group.channelRuns) {
+          for (let start = 0; start < run.length; start += limit) {
+            const chunk = run.slice(start, start + limit);
+            let outcomes: KymographBatchOutcome[];
+            try {
+              outcomes = await runGated(mlGate, () =>
+                buildKymographBatch(chunk.map(job => toInput(job, loaded)))
+              );
+            } catch (err) {
+              logger.warn(
+                `Kymograph batch failed for ${group.videoName}/` +
+                  `${chunk[0].sourceChannel} (${chunk.length} microtubule(s)): ` +
+                  `${(err as Error).message}`,
+                CTX
+              );
+              const error = err as Error;
+              outcomes = chunk.map(() => ({ error }));
+            }
+            for (let i = 0; i < chunk.length; i++) {
+              try {
+                await onOutcome(chunk[i], runBase + start + i, outcomes[i]);
+              } catch (err) {
+                // `onOutcome` catches its own errors; this keeps an unexpected
+                // escape — a throwing `onProgress`, a disk write failure —
+                // contained to one microtubule instead of abandoning every
+                // later container AND the velocity workbook.
+                logger.warn(
+                  `Kymograph export failed for ${chunk[i].videoName}/` +
+                    `${chunk[i].polylineId}/${chunk[i].sourceChannel}: ` +
+                    `${(err as Error).message}`,
+                  CTX
+                );
+              } finally {
+                // `finally`, not the end of `try`: a microtubule whose export
+                // failed is still one job the user is no longer waiting on.
+                // Counting only successes would stall the bar short of 100 %.
+                reportDone();
+              }
+            }
+          }
+          runBase += run.length;
         }
       }
     };
@@ -486,65 +573,74 @@ export async function exportMicrotubuleKymographs(
     // Capped per MT so a long time-lapse can't emit thousands of PNGs. --------
     if (mode === 'profiles') {
       let profileCount = 0;
-      await forEachJobWithContext(async (job, containerContext) => {
-        try {
-          const result = await runGated(mlGate, () =>
-            buildKymograph({
-              videoContainerId: job.containerId,
-              polylineId: job.polylineId,
-              frameIndex: job.frameIndex,
-              sourceChannel: job.sourceChannel,
-              detectVelocity: false,
-              renderProfiles: true,
-              frameFilter: job.frameFilter,
-              containerContext,
-            })
-          );
+      await forEachJobOutcome(
+        (job, containerContext) => ({
+          videoContainerId: job.containerId,
+          polylineId: job.polylineId,
+          frameIndex: job.frameIndex,
+          sourceChannel: job.sourceChannel,
+          detectVelocity: false,
+          renderProfiles: true,
+          frameFilter: job.frameFilter,
+          containerContext,
+        }),
+        // One matplotlib PNG per rendered frame per item, so the batch is
+        // bounded by images rather than by items. See PROFILE_BATCH_MAX_IMAGES.
+        framesPerJob =>
+          Math.min(
+            KYMOGRAPH_BATCH_MAX_ITEMS,
+            Math.floor(PROFILE_BATCH_MAX_IMAGES / Math.max(1, framesPerJob))
+          ),
+        async (job, _jobIndex, outcome) => {
+          try {
+            if (!outcome.result) {
+              throw (
+                outcome.error ?? new Error('ML kymograph batch returned no item')
+              );
+            }
+            const result = outcome.result;
 
-          const stem = `${job.safeVideo}__${safeSegment(job.polylineId)}__${safeSegment(job.sourceChannel)}`;
+            const stem = `${job.safeVideo}__${safeSegment(job.polylineId)}__${safeSegment(job.sourceChannel)}`;
 
-          // Intensity matrix CSV (rows = frames, cols = position) — the raw
-          // numbers behind the plots. ML returns it on every kymograph build.
-          if (result.csvBase64) {
-            await fs.writeFile(
-              path.join(outDir, `${stem}.csv`),
-              Buffer.from(result.csvBase64, 'base64')
-            );
-          }
+            // Intensity matrix CSV (rows = frames, cols = position) — the raw
+            // numbers behind the plots. ML returns it on every kymograph build
+            // unless the caller opts out, which this mode does not.
+            if (result.csvBase64) {
+              await fs.writeFile(
+                path.join(outDir, `${stem}.csv`),
+                Buffer.from(result.csvBase64, 'base64')
+              );
+            }
 
-          const profiles = result.profiles ?? [];
-          const toWrite = Math.min(profiles.length, MAX_PROFILE_FRAMES_PER_MT);
-          if (profiles.length > toWrite) {
+            const profiles = result.profiles ?? [];
+            const toWrite = Math.min(profiles.length, MAX_PROFILE_FRAMES_PER_MT);
+            if (profiles.length > toWrite) {
+              logger.warn(
+                `${job.videoName}/${job.polylineId}/${job.sourceChannel}: ` +
+                  `${profiles.length} frame profiles, capping at ${MAX_PROFILE_FRAMES_PER_MT}`,
+                CTX
+              );
+            }
+            for (let i = 0; i < toWrite; i++) {
+              const p = profiles[i];
+              await fs.writeFile(
+                path.join(
+                  outDir,
+                  `${stem}__f${String(p.frame).padStart(4, '0')}.png`
+                ),
+                Buffer.from(p.pngBase64, 'base64')
+              );
+              profileCount++;
+            }
+          } catch (err) {
+            // One bad microtubule/channel must not abort the whole export.
             logger.warn(
-              `${job.videoName}/${job.polylineId}/${job.sourceChannel}: ` +
-                `${profiles.length} frame profiles, capping at ${MAX_PROFILE_FRAMES_PER_MT}`,
+              `Profile export failed for ${job.videoName}/${job.polylineId}/${job.sourceChannel}: ${(err as Error).message}`,
               CTX
             );
           }
-          for (let i = 0; i < toWrite; i++) {
-            const p = profiles[i];
-            await fs.writeFile(
-              path.join(
-                outDir,
-                `${stem}__f${String(p.frame).padStart(4, '0')}.png`
-              ),
-              Buffer.from(p.pngBase64, 'base64')
-            );
-            profileCount++;
-          }
-        } catch (err) {
-          // One bad microtubule/channel must not abort the whole export.
-          logger.warn(
-            `Profile export failed for ${job.videoName}/${job.polylineId}/${job.sourceChannel}: ${(err as Error).message}`,
-            CTX
-          );
-        } finally {
-          // `finally`, not the end of `try`: a microtubule whose profile export
-          // failed is still one job the user is no longer waiting on. Counting
-          // only successes would stall the bar short of 100% on any failure.
-          reportDone();
         }
-      });
+      );
 
       logger.info('Microtubule intensity profiles exported', CTX, {
         projectId,
@@ -555,84 +651,92 @@ export async function exportMicrotubuleKymographs(
       return;
     }
 
-    // --- Phase 2: build kymographs with bounded concurrency. -------------
+    // --- Phase 2: build kymographs, one batched ML request per channel. ---
     // Velocity rows, one slot per job, filled in place. Assembling the
     // worksheets from these slots in JOB order (below) rather than in
-    // completion order makes the sheet contents independent of which worker
+    // completion order makes the sheet contents independent of which request
     // finished first — the same rows, in the same order, on every run.
     // `undefined` = the job failed or returned no `tracks` array at all; an
     // EMPTY array = the job ran and detected nothing, which still gives the
     // channel a (header-only) worksheet.
     const rowSlots: Array<VelocityRow[] | undefined> = new Array(jobs.length);
 
-    await forEachJobWithContext(async (job, containerContext, jobIndex) => {
-      try {
-        const result = await runGated(mlGate, () =>
-          buildKymograph({
-            videoContainerId: job.containerId,
-            polylineId: job.polylineId,
-            frameIndex: job.frameIndex,
-            sourceChannel: job.sourceChannel,
-            detectVelocity: true,
-            renderOverlay: options.includeSegmentedImages,
-            frameFilter: job.frameFilter,
-            containerContext,
-          })
-        );
+    await forEachJobOutcome(
+      (job, containerContext) => ({
+        videoContainerId: job.containerId,
+        polylineId: job.polylineId,
+        frameIndex: job.frameIndex,
+        sourceChannel: job.sourceChannel,
+        detectVelocity: true,
+        renderOverlay: options.includeSegmentedImages,
+        frameFilter: job.frameFilter,
+        containerContext,
+        // This mode writes the overlay PNG and the velocity workbook and never
+        // reads the intensity matrix, so asking for it would be 483 KB of
+        // base64 per microtubule built, shipped and thrown away.
+        includeCsv: false,
+      }),
+      () => KYMOGRAPH_BATCH_MAX_ITEMS,
+      async (job, jobIndex, outcome) => {
+        try {
+          if (!outcome.result) {
+            throw (
+              outcome.error ?? new Error('ML kymograph batch returned no item')
+            );
+          }
+          const result = outcome.result;
 
-        // buildKymograph degrades a velocity-detection crash to empty tracks
-        // (it does NOT throw), so the per-job catch below would never see it.
-        // Surface it explicitly so a missing/short velocity_metrics.xlsx isn't
-        // mistaken for "no motility".
-        if (result.velocityError) {
+          // A velocity-detection crash degrades to empty tracks in the ML
+          // service (it does NOT fail the item), so the catch below would never
+          // see it. Surface it explicitly so a missing/short
+          // velocity_metrics.xlsx isn't mistaken for "no motility".
+          if (result.velocityError) {
+            logger.warn(
+              `Velocity detection failed for ${job.videoName}/${job.polylineId}/${job.sourceChannel}: ${result.velocityError}`,
+              CTX
+            );
+          }
+
+          if (options.includeSegmentedImages && result.overlayPngBase64) {
+            await fs.writeFile(
+              path.join(
+                outDir,
+                `${job.safeVideo}__${safeSegment(job.polylineId)}__${safeSegment(job.sourceChannel)}.png`
+              ),
+              Buffer.from(result.overlayPngBase64, 'base64')
+            );
+          }
+
+          if (options.includeVelocityMetrics && result.tracks) {
+            // One row per trajectory (no per-run breakdown), parked in this
+            // job's slot so the worksheet order follows the job list.
+            rowSlots[jobIndex] = result.tracks.map((tr, ti) => [
+              job.videoName,
+              job.polylineId,
+              ti + 1,
+              tr.netVelocityUmPerSec,
+              tr.netVelocityPxPerFrame,
+              tr.snr,
+              tr.totalRunLengthUm,
+              tr.totalRunTimeS,
+              tr.intensitySignal,
+              tr.intensityBackground,
+              tr.intensityMinusBackground,
+              tr.bright,
+              tr.edge,
+              result.pixelSizeUm,
+              result.frameIntervalMs,
+            ]);
+          }
+        } catch (err) {
+          // One bad microtubule/channel must not abort the whole export.
           logger.warn(
-            `Velocity detection failed for ${job.videoName}/${job.polylineId}/${job.sourceChannel}: ${result.velocityError}`,
+            `Kymograph failed for ${job.videoName}/${job.polylineId}/${job.sourceChannel}: ${(err as Error).message}`,
             CTX
           );
         }
-
-        if (options.includeSegmentedImages && result.overlayPngBase64) {
-          await fs.writeFile(
-            path.join(
-              outDir,
-              `${job.safeVideo}__${safeSegment(job.polylineId)}__${safeSegment(job.sourceChannel)}.png`
-            ),
-            Buffer.from(result.overlayPngBase64, 'base64')
-          );
-        }
-
-        if (options.includeVelocityMetrics && result.tracks) {
-          // One row per trajectory (no per-run breakdown), parked in this job's
-          // slot so the worksheet order follows the job list, not the order the
-          // concurrent workers happened to finish in.
-          rowSlots[jobIndex] = result.tracks.map((tr, ti) => [
-            job.videoName,
-            job.polylineId,
-            ti + 1,
-            tr.netVelocityUmPerSec,
-            tr.netVelocityPxPerFrame,
-            tr.snr,
-            tr.totalRunLengthUm,
-            tr.totalRunTimeS,
-            tr.intensitySignal,
-            tr.intensityBackground,
-            tr.intensityMinusBackground,
-            tr.bright,
-            tr.edge,
-            result.pixelSizeUm,
-            result.frameIntervalMs,
-          ]);
-        }
-      } catch (err) {
-        // One bad microtubule/channel must not abort the whole export.
-        logger.warn(
-          `Kymograph failed for ${job.videoName}/${job.polylineId}/${job.sourceChannel}: ${(err as Error).message}`,
-          CTX
-        );
-      } finally {
-        reportDone();
       }
-    });
+    );
 
     // Group the per-job rows by source channel — each channel becomes one
     // worksheet (channel = motor/protein) in velocity_metrics.xlsx. Walking the

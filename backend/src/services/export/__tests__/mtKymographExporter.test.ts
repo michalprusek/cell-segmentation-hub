@@ -6,10 +6,11 @@
  *    fluorescent channel and silently missed motion in the others.
  * 2. The fan-out itself: every (microtubule x channel) kymograph of a container
  *    reads the same rows and the same frame images, so the container's rows are
- *    loaded ONCE and the jobs are dispatched channel-major (consecutive jobs
- *    share their whole decode set). Neither may change what is exported, so the
- *    velocity sheets are asserted to follow job order rather than the order the
- *    concurrent workers happened to finish in.
+ *    loaded ONCE and the jobs of one channel go to the ML service as ONE
+ *    batched request (which is what lets it decode each frame once for all of
+ *    them). Neither may change what is exported, so the velocity sheets are
+ *    asserted to follow job order, and each batch result is asserted to land
+ *    under its own microtubule.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { promises as fs } from 'fs';
@@ -22,11 +23,11 @@ vi.mock('../../../db/prismaClient', () => ({
 vi.mock('../../../utils/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
-// `buildKymograph` + `loadKymographContainerContext` are the two boundaries the
-// exporter drives; `utils/concurrency` is deliberately NOT mocked — the
-// dispatch order and the completion race are exactly what is under test.
+// `buildKymographBatch` + `loadKymographContainerContext` are the two
+// boundaries the exporter drives; `utils/concurrency` is deliberately NOT
+// mocked — the dispatch order and the batching are exactly what is under test.
 vi.mock('../../kymographService', () => ({
-  buildKymograph: vi.fn(),
+  buildKymographBatch: vi.fn(),
   loadKymographContainerContext: vi.fn(),
 }));
 
@@ -36,17 +37,32 @@ import {
 } from '../mtKymographExporter';
 import { prisma } from '../../../db/prismaClient';
 import {
-  buildKymograph,
+  buildKymographBatch,
   loadKymographContainerContext,
 } from '../../kymographService';
 
 const mockFindMany = prisma.image.findMany as unknown as ReturnType<
   typeof vi.fn
 >;
-const mockBuild = buildKymograph as unknown as ReturnType<typeof vi.fn>;
+const mockBatch = buildKymographBatch as unknown as ReturnType<typeof vi.fn>;
 const mockLoadContext = loadKymographContainerContext as unknown as ReturnType<
   typeof vi.fn
 >;
+
+interface FakeInput {
+  videoContainerId: string;
+  polylineId: string;
+  sourceChannel: string;
+  containerContext: unknown;
+  includeCsv?: boolean;
+  renderProfiles?: boolean;
+}
+
+/** Every (microtubule x channel) input the exporter dispatched, flattened back
+ *  into dispatch order — the batching must not change WHICH kymographs are
+ *  built, only how many requests carry them. */
+const dispatchedInputs = (): FakeInput[] =>
+  mockBatch.mock.calls.flatMap(c => c[0] as FakeInput[]);
 
 describe('pickSourceChannels', () => {
   it('returns ALL fluorescent channels (not just the first)', () => {
@@ -125,10 +141,16 @@ function mockDb(containers: FakeContainer[]): void {
   );
 }
 
-/** A minimal stand-in for the object `loadKymographContainerContext` returns —
- *  the exporter only ever passes it straight through to `buildKymograph`. */
-const fakeContext = (containerId: string): { marker: string } => ({
+/** A minimal stand-in for the object `loadKymographContainerContext` returns.
+ *  The exporter passes it straight through to the service, and reads only
+ *  `frames.length` — to size a profiles-mode batch by how many matplotlib PNGs
+ *  it would carry back. */
+const fakeContext = (
+  containerId: string,
+  frameCount = 3
+): { marker: string; frames: unknown[] } => ({
   marker: `ctx:${containerId}`,
+  frames: Array.from({ length: frameCount }, (_, i) => ({ frameIndex: i })),
 });
 
 function kymoResult(tracks: number, seed: number): unknown {
@@ -166,7 +188,10 @@ describe('exportMicrotubuleKymographs fan-out', () => {
     vi.clearAllMocks();
     outDir = await fs.mkdtemp(path.join(os.tmpdir(), 'mtkymo-test-'));
     mockLoadContext.mockImplementation(async (id: string) => fakeContext(id));
-    mockBuild.mockResolvedValue(kymoResult(0, 0));
+    // Default: every item of every batch succeeds with no detected tracks.
+    mockBatch.mockImplementation(async (inputs: FakeInput[]) =>
+      inputs.map(() => ({ result: kymoResult(0, 0) }))
+    );
   });
 
   afterEach(async () => {
@@ -196,16 +221,65 @@ describe('exportMicrotubuleKymographs fan-out', () => {
 
     await exportMicrotubuleKymographs('proj', outDir, OPTS);
 
-    // 3 microtubules x 2 channels = 6 kymographs from ONE context load.
-    expect(mockBuild).toHaveBeenCalledTimes(6);
+    // 3 microtubules x 2 channels = 6 kymographs, from ONE context load and --
+    // the point of the batching -- only TWO ML requests, one per channel.
+    expect(dispatchedInputs()).toHaveLength(6);
+    expect(mockBatch).toHaveBeenCalledTimes(2);
     expect(mockLoadContext).toHaveBeenCalledTimes(1);
     expect(mockLoadContext).toHaveBeenCalledWith('vidA');
-    // ...and every job must actually receive it: the whole point is that
-    // buildKymograph does not go back to the database per call.
+    // ...and every job must actually receive the context: the whole point is
+    // that the service does not go back to the database per kymograph.
     const ctx = await mockLoadContext.mock.results[0].value;
-    for (const call of mockBuild.mock.calls) {
-      expect(call[0].containerContext).toBe(ctx);
+    for (const input of dispatchedInputs()) {
+      expect(input.containerContext).toBe(ctx);
     }
+  });
+
+  it('sends one request per channel, never mixing channels', async () => {
+    mockDb([
+      {
+        id: 'vidA',
+        name: 'A',
+        channels: [
+          { name: 'g', type: 'fluorescent' },
+          { name: 'r', type: 'fluorescent' },
+        ],
+        frameCount: 2,
+        polylineIds: ['p1', 'p2', 'p3'],
+      },
+    ]);
+
+    await exportMicrotubuleKymographs('proj', outDir, OPTS);
+
+    // A batch that straddled the channel boundary would make the ML service
+    // decode one channel's frames in two requests -- the exact waste batching
+    // exists to remove.
+    expect(
+      mockBatch.mock.calls.map(c =>
+        (c[0] as FakeInput[]).map(i => `${i.sourceChannel}/${i.polylineId}`)
+      )
+    ).toEqual([
+      ['g/p1', 'g/p2', 'g/p3'],
+      ['r/p1', 'r/p2', 'r/p3'],
+    ]);
+  });
+
+  it('does not ask for the intensity CSV it never writes in kymograph mode', async () => {
+    mockDb([
+      {
+        id: 'vidA',
+        name: 'A',
+        channels: [{ name: 'g', type: 'fluorescent' }],
+        frameCount: 2,
+        polylineIds: ['p1'],
+      },
+    ]);
+
+    await exportMicrotubuleKymographs('proj', outDir, OPTS);
+
+    // 483 KB of base64 per microtubule on a real 300-frame container, built,
+    // shipped and dropped on the floor.
+    expect(dispatchedInputs().map(i => i.includeCsv)).toEqual([false]);
   });
 
   it('loads rows once PER CONTAINER, never shared across containers', async () => {
@@ -231,39 +305,16 @@ describe('exportMicrotubuleKymographs fan-out', () => {
     expect(mockLoadContext).toHaveBeenCalledTimes(2);
     expect(mockLoadContext.mock.calls.map(c => c[0])).toEqual(['vidA', 'vidB']);
     const byContainer = new Map(
-      mockBuild.mock.calls.map(c => [
-        c[0].videoContainerId,
-        c[0].containerContext,
+      dispatchedInputs().map(i => [
+        i.videoContainerId,
+        (i.containerContext as { marker: string }).marker,
       ])
     );
-    expect(byContainer.get('vidA')).toEqual({ marker: 'ctx:vidA' });
-    expect(byContainer.get('vidB')).toEqual({ marker: 'ctx:vidB' });
+    expect(byContainer.get('vidA')).toBe('ctx:vidA');
+    expect(byContainer.get('vidB')).toBe('ctx:vidB');
   });
 
-  it('dispatches CHANNEL-major so consecutive jobs share their decode set', async () => {
-    mockDb([
-      {
-        id: 'vidA',
-        name: 'A',
-        channels: [
-          { name: 'g', type: 'fluorescent' },
-          { name: 'r', type: 'fluorescent' },
-        ],
-        frameCount: 2,
-        polylineIds: ['p1', 'p2', 'p3'],
-      },
-    ]);
-
-    await exportMicrotubuleKymographs('proj', outDir, OPTS);
-
-    // All of channel g, then all of channel r — NOT g,r,g,r,g,r (which would
-    // rotate the frame set on every microtubule and defeat any frame cache).
-    expect(
-      mockBuild.mock.calls.map(c => `${c[0].sourceChannel}/${c[0].polylineId}`)
-    ).toEqual(['g/p1', 'g/p2', 'g/p3', 'r/p1', 'r/p2', 'r/p3']);
-  });
-
-  it('keeps velocity rows in job order even when jobs finish out of order', async () => {
+  it('lands each batch result under its own microtubule', async () => {
     mockDb([
       {
         id: 'vidA',
@@ -273,13 +324,16 @@ describe('exportMicrotubuleKymographs fan-out', () => {
         polylineIds: ['p1', 'p2', 'p3'],
       },
     ]);
-    // Reverse the completion order inside the concurrency window: p3 resolves
-    // first, p1 last. Appending on completion would write the sheet as p3,p2,p1.
-    const delayFor: Record<string, number> = { p1: 40, p2: 20, p3: 0 };
-    mockBuild.mockImplementation(async (input: { polylineId: string }) => {
-      await new Promise(r => setTimeout(r, delayFor[input.polylineId] ?? 0));
-      return kymoResult(1, Number(input.polylineId.slice(1)));
-    });
+    // One batch now carries every microtubule of the channel, so the ONLY
+    // thing tying a velocity row to a polyline is the position of the result
+    // in the returned array. Give each item a distinguishable velocity and
+    // check it comes back under the right name — an off-by-one here would
+    // silently publish p2's motility as p1's.
+    mockBatch.mockImplementation(async (inputs: FakeInput[]) =>
+      inputs.map(i => ({
+        result: kymoResult(1, Number(i.polylineId.slice(1)) * 10),
+      }))
+    );
 
     await exportMicrotubuleKymographs('proj', outDir, OPTS);
 
@@ -289,14 +343,108 @@ describe('exportMicrotubuleKymographs fan-out', () => {
     ).default;
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.readFile(path.join(outDir, 'kymographs/velocity_metrics.xlsx'));
-    const sheet = wb.getWorksheet('g');
-    const microtubuleColumn: string[] = [];
-    sheet?.eachRow((row, i) => {
+    const rows: Array<[string, number]> = [];
+    wb.getWorksheet('g')?.eachRow((row, i) => {
       if (i > 1) {
-        microtubuleColumn.push(String((row.values as unknown[])[2]));
+        const values = row.values as unknown[];
+        rows.push([String(values[2]), Number(values[5])]);
       }
     });
-    expect(microtubuleColumn).toEqual(['p1', 'p2', 'p3']);
+    // Column 5 is net_velocity_px_frame = the seed, i.e. 10x the MT number.
+    expect(rows).toEqual([
+      ['p1', 10],
+      ['p2', 20],
+      ['p3', 30],
+    ]);
+  });
+
+  it('costs one microtubule, not the batch, when a single item fails', async () => {
+    mockDb([
+      {
+        id: 'vidA',
+        name: 'A',
+        channels: [{ name: 'g', type: 'fluorescent' }],
+        frameCount: 2,
+        polylineIds: ['p1', 'p2', 'p3'],
+      },
+    ]);
+    // The un-batched export ran one request per microtubule with its own
+    // try/catch, so one unusable polyline cost exactly one kymograph. Batching
+    // must not turn that into "the whole channel exported nothing".
+    mockBatch.mockImplementation(async (inputs: FakeInput[]) =>
+      inputs.map(i =>
+        i.polylineId === 'p2'
+          ? { error: new Error('Seed-frame polyline has 1 vertex(es)') }
+          : { result: kymoResult(1, Number(i.polylineId.slice(1)) * 10) }
+      )
+    );
+
+    await exportMicrotubuleKymographs('proj', outDir, OPTS);
+
+    type ExcelJsDefault = typeof import('exceljs');
+    const ExcelJS = (
+      (await import('exceljs')) as unknown as { default: ExcelJsDefault }
+    ).default;
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.readFile(path.join(outDir, 'kymographs/velocity_metrics.xlsx'));
+    const names: string[] = [];
+    wb.getWorksheet('g')?.eachRow((row, i) => {
+      if (i > 1) {
+        names.push(String((row.values as unknown[])[2]));
+      }
+    });
+    expect(names).toEqual(['p1', 'p3']);
+    // The two survivors still got their overlay PNGs written.
+    expect((await fs.readdir(path.join(outDir, 'kymographs'))).sort()).toEqual([
+      'A__p1__g.png',
+      'A__p3__g.png',
+      'velocity_metrics.xlsx',
+    ]);
+  });
+
+  it('loses only its own jobs when a whole batch request fails', async () => {
+    mockDb([
+      {
+        id: 'vidA',
+        name: 'A',
+        channels: [
+          { name: 'g', type: 'fluorescent' },
+          { name: 'r', type: 'fluorescent' },
+        ],
+        frameCount: 2,
+        polylineIds: ['p1', 'p2'],
+      },
+    ]);
+    // e.g. an ml container old enough not to have /kymograph/batch, or a
+    // network drop. The other channel — and the workbook — must survive.
+    mockBatch.mockImplementation(async (inputs: FakeInput[]) => {
+      if (inputs[0].sourceChannel === 'g') {
+        throw new Error('Request failed with status code 404');
+      }
+      return inputs.map(i => ({
+        result: kymoResult(1, Number(i.polylineId.slice(1))),
+      }));
+    });
+    const progress: Array<[number, number]> = [];
+
+    await exportMicrotubuleKymographs('proj', outDir, OPTS, null, (d, t) =>
+      progress.push([d, t])
+    );
+
+    type ExcelJsDefault = typeof import('exceljs');
+    const ExcelJS = (
+      (await import('exceljs')) as unknown as { default: ExcelJsDefault }
+    ).default;
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.readFile(path.join(outDir, 'kymographs/velocity_metrics.xlsx'));
+    expect(wb.worksheets.map(w => w.name)).toEqual(['r']);
+    // All four jobs still count as done, so the bar reaches 100 %.
+    expect(progress).toEqual([
+      [1, 4],
+      [2, 4],
+      [3, 4],
+      [4, 4],
+    ]);
   });
 
   it('gives a channel a header-only sheet when every job detected nothing', async () => {
@@ -316,8 +464,10 @@ describe('exportMicrotubuleKymographs fan-out', () => {
         polylineIds: ['q1'],
       },
     ]);
-    mockBuild.mockImplementation(async (input: { sourceChannel: string }) =>
-      kymoResult(input.sourceChannel === 'g' ? 2 : 0, 1)
+    mockBatch.mockImplementation(async (inputs: FakeInput[]) =>
+      inputs.map(i => ({
+        result: kymoResult(i.sourceChannel === 'g' ? 2 : 0, 1),
+      }))
     );
 
     await exportMicrotubuleKymographs('proj', outDir, OPTS);
@@ -364,12 +514,61 @@ describe('exportMicrotubuleKymographs fan-out', () => {
     );
 
     // vidA contributed no ML calls...
-    expect(mockBuild.mock.calls.map(c => c[0].polylineId)).toEqual(['q1']);
+    expect(dispatchedInputs().map(i => i.polylineId)).toEqual(['q1']);
     // ...but its 2 jobs still count as done, so the bar reaches 100 %.
     expect(progress).toEqual([
       [1, 3],
       [2, 3],
       [3, 3],
+    ]);
+  });
+
+  it('keeps the CSV in profiles mode and bounds a batch by rendered images', async () => {
+    // A profiles response is O(items x frames) — one matplotlib PNG per frame
+    // per microtubule — so unlike kymograph mode it cannot put the whole
+    // channel in one request. 4 frames x 60 microtubules would be 240 images;
+    // the exporter's own bound (PROFILE_BATCH_MAX_IMAGES / frames) is what
+    // decides. With 4 frames that is 75, clamped to the 60-microtubule cap, so
+    // these 3 still travel together.
+    mockDb([
+      {
+        id: 'vidA',
+        name: 'A',
+        channels: [{ name: 'g', type: 'fluorescent' }],
+        frameCount: 4,
+        polylineIds: ['p1', 'p2', 'p3'],
+      },
+    ]);
+    mockLoadContext.mockImplementation(async (id: string) => fakeContext(id, 4));
+    mockBatch.mockImplementation(async (inputs: FakeInput[]) =>
+      inputs.map(() => ({
+        result: {
+          ...(kymoResult(0, 0) as Record<string, unknown>),
+          profiles: [{ frame: 0, pngBase64: 'cA==' }],
+        },
+      }))
+    );
+
+    await exportMicrotubuleKymographs('proj', outDir, {
+      ...OPTS,
+      mode: 'profiles',
+    });
+
+    expect(mockBatch).toHaveBeenCalledTimes(1);
+    // profiles mode DOES write the intensity CSV, so it must not opt out of it.
+    expect(dispatchedInputs().map(i => i.includeCsv)).toEqual([
+      undefined,
+      undefined,
+      undefined,
+    ]);
+    expect(dispatchedInputs().every(i => i.renderProfiles === true)).toBe(true);
+    expect((await fs.readdir(path.join(outDir, 'profiles'))).sort()).toEqual([
+      'A__p1__g.csv',
+      'A__p1__g__f0000.png',
+      'A__p2__g.csv',
+      'A__p2__g__f0000.png',
+      'A__p3__g.csv',
+      'A__p3__g__f0000.png',
     ]);
   });
 

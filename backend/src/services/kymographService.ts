@@ -25,7 +25,10 @@
  * microtubule x every channel) load its rows once with
  * ``loadKymographContainerContext`` and hand the result to every call as
  * ``containerContext``, instead of repeating the same queries — and the same
- * multi-MB polygon decode — per kymograph.
+ * multi-MB polygon decode — per kymograph. They should also send them through
+ * ``buildKymographBatch`` rather than one ``buildKymograph`` at a time: same
+ * bodies, one HTTP call, and the ML service then decodes each frame ONCE for
+ * every polyline instead of once per polyline.
  */
 
 import * as path from 'path';
@@ -147,6 +150,19 @@ export interface KymographServiceInput {
    *  the sampled matrix, so both the ML render cost and the output scope shrink
    *  to the selection. */
   frameFilter?: number[];
+  /** Build the intensity-matrix CSV. Defaults TRUE, so every existing caller
+   *  gets exactly today's result.
+   *
+   *  Worth turning off when the caller does not read `csvBase64`: it is by far
+   *  the largest part of the response — 483 KB of the editor modal's 611 KB on
+   *  a 300-frame container — and the kymograph-mode export never touches it
+   *  (it writes the overlay PNG and the velocity workbook). Batched, that is
+   *  the difference between a 35.9 MB and a 14.4 MB response for 60
+   *  microtubules; measured 2026-09-01 on container 4972cad8.
+   *
+   *  Setting it false makes `KymographServiceResult.csvBase64` null, so only
+   *  set it from a caller that has checked. */
+  includeCsv?: boolean;
   /** Opt in to the Redis response cache. Opt-IN, not opt-out, on purpose.
    *
    *  Only the interactive modal sets it: it asks for the same (container,
@@ -203,7 +219,11 @@ export interface KymographTrack {
 
 export interface KymographServiceResult {
   pngBase64: string;
-  csvBase64: string;
+  /** The sampled intensity matrix as base64 CSV. `null` ONLY when the caller
+   *  passed `includeCsv: false`; never as a degraded fallback, so a caller that
+   *  asked for it and got null has hit a bug. The editor modal never opts out,
+   *  so the route that serves it always answers with a string. */
+  csvBase64: string | null;
   frameCount: number;
   lengthPx: number;
   tracked: boolean;
@@ -588,19 +608,27 @@ async function polylinesForFrames(
   return byFrame;
 }
 
-export async function buildKymograph(
+/** Everything one kymograph needs from the database, resolved BEFORE any
+ *  polygon JSON is read. Split out of `buildKymograph` so the batch entry
+ *  point can do this per input, and so the Redis cache lookup still happens
+ *  between this step and the expensive one (see `buildKymograph`). */
+interface KymographPlan {
+  container: KymographContainerContext['container'];
+  seedMeta: KymographFrameMeta;
+  /** Frames that will actually be sampled, in frameIndex order. */
+  selectedFrames: Array<KymographFrameMeta & { frameIndex: number }>;
+  /** null = "all frames" (editor modal / unfiltered export). */
+  frameFilterSet: Set<number> | null;
+}
+
+async function planKymograph(
   input: KymographServiceInput
-): Promise<KymographServiceResult> {
+): Promise<KymographPlan> {
   const {
     videoContainerId,
-    polylineId,
     frameIndex,
     sourceChannel,
     channelColor,
-    detectVelocity,
-    renderOverlay,
-    intensityWidth,
-    renderProfiles,
     frameFilter,
     containerContext,
   } = input;
@@ -661,38 +689,52 @@ export async function buildKymograph(
       (!frameFilterSet || frameFilterSet.has(f.frameIndex))
   );
 
-  let cacheKey: string | null = null;
-  if (input.useCache) {
-    const stamp = (f: KymographFrameMeta, index: number): FrameStamp => ({
-      f: index,
-      img: f.updatedAt.getTime(),
-      seg: f.segmentationUpdatedAt?.getTime() ?? null,
-    });
-    const frameStamps = selectedFrames.map(f => stamp(f, f.frameIndex));
-    // The seed polyline is the geometry every frame falls back to, and it is
-    // what decides tracked-vs-static — so its staleness token belongs in the
-    // key even when a frameFilter leaves its own frame out of the render.
-    if (frameFilterSet && !frameFilterSet.has(frameIndex)) {
-      frameStamps.unshift(stamp(seedMeta, frameIndex));
-    }
-    cacheKey = kymographCacheKey(input, container, frameStamps);
+  return { container, seedMeta, selectedFrames, frameFilterSet };
+}
 
-    const cached = await cacheService.get<KymographServiceResult>(cacheKey, {
-      namespace: CACHE_NAMESPACE,
-    });
-    if (cached) {
-      logger.info('Kymograph served from cache', 'KymographService', {
-        videoContainerId,
-        polylineId,
-        frames: selectedFrames.length,
-      });
-      return cached;
-    }
-  }
+/** The ML `/kymograph` request body — one item of a `/kymograph/batch` too. */
+interface MlKymographBody {
+  frames: Array<{
+    frame: number;
+    polyline_rc: number[][];
+    image_path: string;
+  }>;
+  target_width: number;
+  tracked: boolean;
+  intensity_width: number;
+  min_net_velocity_um_s: number;
+  pixel_size_um?: number;
+  frame_interval_ms?: number;
+  channel_color?: string;
+  detect_velocity?: true;
+  render_overlay?: true;
+  render_profiles?: true;
+  include_csv?: false;
+}
 
-  // Cache miss: only now is any polygon JSON worth reading. The seed frame
-  // comes first because it is what decides whether ANY other frame's polygons
-  // are needed at all.
+/** Read the geometry this kymograph samples and build the ML request body.
+ *  This is the expensive half (it is what parses the container's polygon
+ *  JSON), which is why `buildKymograph` checks the response cache first. */
+async function buildMlBody(
+  input: KymographServiceInput,
+  plan: KymographPlan
+): Promise<{ body: MlKymographBody; trackedMode: boolean }> {
+  const {
+    videoContainerId,
+    polylineId,
+    frameIndex,
+    sourceChannel,
+    channelColor,
+    detectVelocity,
+    renderOverlay,
+    intensityWidth,
+    renderProfiles,
+    containerContext,
+  } = input;
+  const { container, selectedFrames } = plan;
+
+  // The seed frame comes first because it is what decides whether ANY other
+  // frame's polygons are needed at all.
   const seedPolygons =
     (
       await polylinesForFrames(containerContext, videoContainerId, [frameIndex])
@@ -759,41 +801,77 @@ export async function buildKymograph(
   const pixelSizeUm = container.pixelSizeUm ?? null;
   const frameIntervalMs = container.frameIntervalMs ?? null;
 
-  const mlUrl = `${config.SEGMENTATION_SERVICE_URL}/api/v1/kymograph`;
-  const res = await axios.post(
-    mlUrl,
-    {
-      frames: framesPayload,
-      target_width: KYMOGRAPH_TARGET_WIDTH,
-      tracked: trackedMode,
-      intensity_width: intensityWidth ?? DEFAULT_INTENSITY_WIDTH,
-      min_net_velocity_um_s: MIN_NET_VELOCITY_UM_S,
-      // Forward calibration only when usable (> 0). The ML field is gt=0, and
-      // 0 means "uncalibrated" here — sending it would 422 the whole request.
-      ...(pixelSizeUm != null && pixelSizeUm > 0
-        ? { pixel_size_um: pixelSizeUm }
-        : {}),
-      ...(frameIntervalMs != null && frameIntervalMs > 0
-        ? { frame_interval_ms: frameIntervalMs }
-        : {}),
-      ...(channelColor ? { channel_color: channelColor } : {}),
-      ...(detectVelocity ? { detect_velocity: true } : {}),
-      ...(detectVelocity && renderOverlay ? { render_overlay: true } : {}),
-      ...(renderProfiles ? { render_profiles: true } : {}),
-    },
-    // 120 s was right when trajectory detection was 0.03-0.2 s of numpy. It is
-    // not right for KymoButler: measured 2.6-131.7 s per kymograph on CPU on
-    // 2026-08-31 (the spread is box load and torch thread count; the GPU path
-    // could not be measured, the host driver was mismatched). At 120 s a single
-    // slow kymograph aborts here while the ML service keeps working on it, so
-    // the editor modal shows a timeout and a batch export — one job per
-    // polyline x channel — dies partway through. Detection is also serialised
-    // one-at-a-time on the ML side, so a queued request waits for the one ahead
-    // of it as well. 10 minutes covers the measured worst case with room for
-    // both, and still fails rather than hanging forever.
-    { timeout: 600_000 }
-  );
-  const payload = res.data?.data ?? res.data ?? {};
+  const body: MlKymographBody = {
+    frames: framesPayload,
+    target_width: KYMOGRAPH_TARGET_WIDTH,
+    tracked: trackedMode,
+    intensity_width: intensityWidth ?? DEFAULT_INTENSITY_WIDTH,
+    min_net_velocity_um_s: MIN_NET_VELOCITY_UM_S,
+    // Forward calibration only when usable (> 0). The ML field is gt=0, and
+    // 0 means "uncalibrated" here — sending it would 422 the whole request.
+    ...(pixelSizeUm != null && pixelSizeUm > 0
+      ? { pixel_size_um: pixelSizeUm }
+      : {}),
+    ...(frameIntervalMs != null && frameIntervalMs > 0
+      ? { frame_interval_ms: frameIntervalMs }
+      : {}),
+    ...(channelColor ? { channel_color: channelColor } : {}),
+    ...(detectVelocity ? { detect_velocity: true as const } : {}),
+    ...(detectVelocity && renderOverlay ? { render_overlay: true as const } : {}),
+    ...(renderProfiles ? { render_profiles: true as const } : {}),
+    // Omitted (not `true`) when the CSV is wanted, so a caller that does not
+    // touch `includeCsv` posts byte-for-byte the body it posted before this
+    // field existed.
+    ...(input.includeCsv === false ? { include_csv: false as const } : {}),
+  };
+  return { body, trackedMode };
+}
+
+/** How long to wait for an ML kymograph call.
+ *
+ *  120 s was right when trajectory detection was 0.03-0.2 s of numpy. It is
+ *  not right for KymoButler: measured 2.6-131.7 s per kymograph on CPU on
+ *  2026-08-31 (the spread is box load and torch thread count; the GPU path
+ *  could not be measured, the host driver was mismatched). At 120 s a single
+ *  slow kymograph aborts here while the ML service keeps working on it, so
+ *  the editor modal shows a timeout and a batch export — one job per
+ *  polyline x channel — dies partway through. Detection is also serialised
+ *  one-at-a-time on the ML side, so a queued request waits for the one ahead
+ *  of it as well. 10 minutes covers the measured worst case with room for
+ *  both, and still fails rather than hanging forever.
+ *
+ *  It applies UNCHANGED to a batch, which is deliberate: batching does not
+ *  make one kymograph slower, and the whole 60-microtubule batch measured
+ *  13.2 s against 186.2 s for the same work one request at a time. */
+const ML_KYMOGRAPH_TIMEOUT_MS = 600_000;
+
+/** The ML `/kymograph` response, as this service reads it. Every optional
+ *  field is still re-checked at runtime below: the mapping has to degrade on a
+ *  malformed response rather than throw halfway through it. */
+interface MlKymographPayload {
+  png_base64: string;
+  /** null only when the request set `include_csv: false`. */
+  csv_base64: string | null;
+  frame_count: number;
+  length_px: number;
+  px_per_column?: number;
+  filtered_track_count?: number;
+  tracks?: MlTrack[];
+  overlay_png_base64?: string;
+  velocity_error?: string;
+  profiles?: Array<{ frame: number; png_base64: string }>;
+}
+
+/** Turn one ML response into the service's calibrated, camelCase result. */
+function mapMlPayload(
+  input: KymographServiceInput,
+  plan: KymographPlan,
+  trackedMode: boolean,
+  payload: MlKymographPayload
+): KymographServiceResult {
+  const { videoContainerId, polylineId, sourceChannel, detectVelocity } = input;
+  const pixelSizeUm = plan.container.pixelSizeUm ?? null;
+  const frameIntervalMs = plan.container.frameIntervalMs ?? null;
 
   // ML velocities + run displacements are in kymograph COLUMNS; one column spans
   // `pxPerColumn` image pixels (>1 once a long MT's column axis is compressed at
@@ -846,7 +924,7 @@ export async function buildKymograph(
     );
   }
   const tracks: KymographTrack[] | undefined = Array.isArray(payload.tracks)
-    ? (payload.tracks as MlTrack[]).map(tr => ({
+    ? payload.tracks.map(tr => ({
         points: tr.points,
         netVelocityPxPerFrame: tr.net_pxframe,
         netVelocityUmPerSec: toUms(tr.net_pxframe),
@@ -867,7 +945,7 @@ export async function buildKymograph(
   const profiles: KymographProfile[] | undefined = Array.isArray(
     payload.profiles
   )
-    ? (payload.profiles as Array<{ frame: number; png_base64: string }>)
+    ? payload.profiles
         .filter(p => typeof p?.png_base64 === 'string')
         .map(p => ({ frame: Number(p.frame), pngBase64: p.png_base64 }))
     : undefined;
@@ -876,14 +954,17 @@ export async function buildKymograph(
     videoContainerId,
     polylineId,
     tracked: trackedMode,
-    frames: framesPayload.length,
+    frames: plan.selectedFrames.length,
     velocityTracks: tracks?.length,
     profiles: profiles?.length,
   });
 
-  const result: KymographServiceResult = {
+  return {
     pngBase64: payload.png_base64,
-    csvBase64: payload.csv_base64,
+    // `?? null` rather than a bare read: `include_csv: false` makes the ML
+    // service answer `csv_base64: null`, and that is the ONE case where a null
+    // is legitimate here (see `KymographServiceInput.includeCsv`).
+    csvBase64: payload.csv_base64 ?? null,
     frameCount: payload.frame_count,
     lengthPx: payload.length_px,
     tracked: trackedMode,
@@ -901,6 +982,60 @@ export async function buildKymograph(
       : {}),
     ...(profiles ? { profiles } : {}),
   };
+}
+
+export async function buildKymograph(
+  input: KymographServiceInput
+): Promise<KymographServiceResult> {
+  const { videoContainerId, polylineId, frameIndex } = input;
+  const plan = await planKymograph(input);
+
+  // The response-cache lookup sits BETWEEN the plan and the body build,
+  // because the plan needs only frame metadata (~8 ms) while building the body
+  // parses the container's polygon JSON (~745 ms on a real 300-frame
+  // container). Moving the lookup after it would give the modal's warm path
+  // back the cost the cache exists to remove.
+  let cacheKey: string | null = null;
+  if (input.useCache) {
+    const stamp = (f: KymographFrameMeta, index: number): FrameStamp => ({
+      f: index,
+      img: f.updatedAt.getTime(),
+      seg: f.segmentationUpdatedAt?.getTime() ?? null,
+    });
+    const frameStamps = plan.selectedFrames.map(f => stamp(f, f.frameIndex));
+    // The seed polyline is the geometry every frame falls back to, and it is
+    // what decides tracked-vs-static — so its staleness token belongs in the
+    // key even when a frameFilter leaves its own frame out of the render.
+    if (plan.frameFilterSet && !plan.frameFilterSet.has(frameIndex)) {
+      frameStamps.unshift(stamp(plan.seedMeta, frameIndex));
+    }
+    cacheKey = kymographCacheKey(input, plan.container, frameStamps);
+
+    const cached = await cacheService.get<KymographServiceResult>(cacheKey, {
+      namespace: CACHE_NAMESPACE,
+    });
+    if (cached) {
+      logger.info('Kymograph served from cache', 'KymographService', {
+        videoContainerId,
+        polylineId,
+        frames: plan.selectedFrames.length,
+      });
+      return cached;
+    }
+  }
+
+  const { body, trackedMode } = await buildMlBody(input, plan);
+  const res = await axios.post(
+    `${config.SEGMENTATION_SERVICE_URL}/api/v1/kymograph`,
+    body,
+    { timeout: ML_KYMOGRAPH_TIMEOUT_MS }
+  );
+  const result = mapMlPayload(
+    input,
+    plan,
+    trackedMode,
+    res.data?.data ?? res.data ?? {}
+  );
 
   if (cacheKey) {
     await cacheKymographResult(cacheKey, result, {
@@ -910,4 +1045,104 @@ export async function buildKymograph(
   }
 
   return result;
+}
+
+/** One item's outcome from `buildKymographBatch`: EXACTLY one of `result` and
+ *  `error` is set.
+ *
+ *  Per item, because that is what the un-batched export had: one HTTP request
+ *  per microtubule, each with its own try/catch, so a polyline the seed frame
+ *  no longer carries cost that microtubule its kymograph and nothing else.
+ *
+ *  A discriminated union would state the invariant better, but this package
+ *  compiles with `strict: false` (see backend/tsconfig.json) and TypeScript
+ *  does not narrow one without `strictNullChecks` — `if (!outcome.ok)` leaves
+ *  `outcome.error` a type error. Two optional fields is the shape that
+ *  survives that; check `result` first. */
+export interface KymographBatchOutcome {
+  result?: KymographServiceResult;
+  error?: Error;
+}
+
+/**
+ * Build MANY kymographs in ONE ML call, so each frame is decoded once for all
+ * of them instead of once per (microtubule x channel).
+ *
+ * The bodies are the SAME bodies `buildKymograph` posts — this only changes
+ * how many travel per request, and therefore the ML service's loop order
+ * (frame-major instead of polyline-major). Measured 2026-09-01 on container
+ * 4972cad8, 60 microtubules x 300 frames of one channel: 60 requests /
+ * 18 000 frame decodes / 186.2 s became 1 request / 300 decodes / 13.2 s.
+ *
+ * Requires the ML service to have been deployed FIRST: `/api/v1/kymograph/batch`
+ * does not exist on an older ml container, and a 404 here would cost the export
+ * its whole kymograph stage.
+ *
+ * Deliberately NOT wired to the Redis response cache. Same reason
+ * `KymographServiceInput.useCache` is opt-in: the export renders every polyline
+ * exactly once and would fill a `noeviction` Redis with entries nothing reads.
+ * A caller that wants caching should use `buildKymograph` per item.
+ */
+export async function buildKymographBatch(
+  inputs: KymographServiceInput[]
+): Promise<KymographBatchOutcome[]> {
+  const outcomes: KymographBatchOutcome[] = new Array(inputs.length);
+  // Index into `inputs` for each item we actually send, so a body that failed
+  // to build does not shift the mapping of the response back onto its input.
+  const sent: Array<{
+    index: number;
+    plan: KymographPlan;
+    trackedMode: boolean;
+    body: MlKymographBody;
+  }> = [];
+
+  for (let i = 0; i < inputs.length; i++) {
+    try {
+      const plan = await planKymograph(inputs[i]);
+      const { body, trackedMode } = await buildMlBody(inputs[i], plan);
+      sent.push({ index: i, plan, trackedMode, body });
+    } catch (err) {
+      outcomes[i] = { error: err as Error };
+    }
+  }
+
+  if (sent.length === 0) {
+    return outcomes;
+  }
+
+  const res = await axios.post(
+    `${config.SEGMENTATION_SERVICE_URL}/api/v1/kymograph/batch`,
+    { items: sent.map(s => s.body) },
+    { timeout: ML_KYMOGRAPH_TIMEOUT_MS }
+  );
+  const payload = res.data?.data ?? res.data ?? {};
+  const results = Array.isArray(payload.results) ? payload.results : [];
+  if (results.length !== sent.length) {
+    // The contract is one result per item, in order. Anything else and we
+    // cannot say which kymograph is which — fail every item of the batch
+    // rather than write one microtubule's velocities under another's name.
+    throw new Error(
+      `ML kymograph batch returned ${results.length} result(s) for ` +
+        `${sent.length} item(s)`
+    );
+  }
+
+  for (let k = 0; k < sent.length; k++) {
+    const { index, plan, trackedMode } = sent[k];
+    const entry = results[k] as {
+      kymograph?: MlKymographPayload;
+      error?: string;
+    };
+    if (!entry?.kymograph) {
+      outcomes[index] = {
+        error: new Error(entry?.error ?? 'ML kymograph batch returned no item'),
+      };
+      continue;
+    }
+    outcomes[index] = {
+      result: mapMlPayload(inputs[index], plan, trackedMode, entry.kymograph),
+    };
+  }
+
+  return outcomes;
 }

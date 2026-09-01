@@ -829,6 +829,20 @@ def _kymo_payload(pngs, polyline_rc, **overrides):
     return payload
 
 
+def _row_job(path, pts, n_samples: int):
+    """One ``_RowJob`` for a direct ``_sample_frame_rows`` call. The keys are
+    dummies: only the endpoint uses them, and only to group and to cache."""
+    return tracker_kymograph._RowJob(
+        item=0,
+        row=0,
+        path=path,
+        file_key=(0, 0, 0, 0),
+        pts=np.asarray(pts, dtype=np.float32),
+        n_samples=n_samples,
+        cache_key=(0, 0, 0, 0, n_samples, b""),
+    )
+
+
 def _count_decodes(monkeypatch) -> dict:
     """Count frame decodes. ``PIL.Image.open`` is reached ONLY by
     ``_sample_frame_row``; the response PNG is written with ``fromarray``."""
@@ -1077,13 +1091,13 @@ async def test_kymograph_leaves_the_event_loop_free(monkeypatch, tmp_path):
         _write_gradient_png(p)
         pngs.append(p)
 
-    real_sample = tracker_kymograph._sample_frame_row
+    real_sample = tracker_kymograph._sample_frame_rows
 
-    def slow_sample(path, pts, n_samples):
+    def slow_sample(path, jobs):
         time.sleep(0.05)
-        return real_sample(path, pts, n_samples)
+        return real_sample(path, jobs)
 
-    monkeypatch.setattr(tracker_kymograph, "_sample_frame_row", slow_sample)
+    monkeypatch.setattr(tracker_kymograph, "_sample_frame_rows", slow_sample)
 
     ticks = 0
 
@@ -1153,8 +1167,8 @@ def test_sampled_rows_are_frozen_against_accidental_writes(tmp_path):
     back read-only, which turns that into an exception at the write."""
     png = tmp_path / "f0.png"
     _write_gradient_png(png)
-    row = tracker_kymograph._sample_frame_row(
-        png, np.array([[8.0, 0.0], [8.0, 63.0]], dtype=np.float32), 64
+    (row,) = tracker_kymograph._sample_frame_rows(
+        png, [_row_job(png, [[8.0, 0.0], [8.0, 63.0]], 64)]
     )
     assert row.flags.writeable is False
     with pytest.raises(ValueError):
@@ -1177,8 +1191,8 @@ def test_decode_keeps_the_previous_frame_alive_per_thread(tmp_path):
     if hasattr(tracker_kymograph._DECODE_SCRATCH, "previous_frame"):
         del tracker_kymograph._DECODE_SCRATCH.previous_frame
 
-    tracker_kymograph._sample_frame_row(
-        png, np.array([[8.0, 0.0], [8.0, 63.0]], dtype=np.float32), 64
+    tracker_kymograph._sample_frame_rows(
+        png, [_row_job(png, [[8.0, 0.0], [8.0, 63.0]], 64)]
     )
 
     held = getattr(tracker_kymograph._DECODE_SCRATCH, "previous_frame", None)
@@ -1202,3 +1216,213 @@ def test_decode_worker_count_is_capped(monkeypatch):
     assert tracker_kymograph._decode_workers() == tracker_kymograph._DECODE_WORKERS_CAP
     monkeypatch.setenv("KYMOGRAPH_DECODE_WORKERS", "nonsense")
     assert tracker_kymograph._decode_workers() == tracker_kymograph._DECODE_WORKERS_CAP
+
+
+# ---------------------------------------------------------------------------
+#  /kymograph/batch
+# ---------------------------------------------------------------------------
+#
+# The export builds one kymograph per (microtubule x channel) over ONE
+# container's frames. One request each meant one full decode of the container
+# each — 54 000 decodes of 900 distinct files for a real 300-frame, 3-channel,
+# 60-microtubule container — and the row cache above cannot help, because every
+# job carries a different polyline and so hashes to a different key. Measured on
+# a real production export, 2026-09-01: 61 requests, 0 frames from cache, 69
+# decoded.
+#
+# The batch endpoint inverts the loop: decode a frame once, sample every
+# polyline that wants a row from it, move on. Everything below is about the two
+# properties that makes that safe — one decode per frame, and per-item results
+# that are identical to what the single endpoint would have returned.
+
+
+def _batch_payload(pngs, polylines, **overrides):
+    """N single-kymograph bodies over the SAME frames, wrapped as a batch."""
+    return {
+        "items": [_kymo_payload(pngs, rc, **overrides) for rc in polylines]
+    }
+
+
+def _three_polylines():
+    """Three DISTINCT horizontal polylines: distinct geometry is what makes
+    every row-cache lookup miss, which is the situation the export is in."""
+    return [
+        [[float(row), float(x)] for x in range(64)] for row in (4.0, 8.0, 12.0)
+    ]
+
+
+def test_batch_decodes_each_frame_once_for_every_polyline(
+    client, monkeypatch, tmp_path
+):
+    """THE test. Three polylines over three frames is three decodes, not nine.
+
+    Mutation check: make ``_run_row_jobs`` group by ``id(job)`` (i.e. stop
+    deduplicating) and this asserts 9.
+    """
+    td_path = tmp_path.resolve()
+    monkeypatch.setattr(tracker_kymograph, "_UPLOAD_ROOT", td_path)
+    pngs = [td_path / f"f{i}.png" for i in range(3)]
+    for png in pngs:
+        _write_2d_ramp_png(png)
+
+    decodes = _count_decodes(monkeypatch)
+    resp = client.post(
+        "/api/v1/kymograph/batch",
+        json=_batch_payload(pngs, _three_polylines()),
+    )
+
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert len(body["results"]) == 3
+    assert all(r["kymograph"] is not None for r in body["results"])
+    assert decodes["n"] == 3, "each frame must be decoded once, for all 3 items"
+
+
+def test_batch_item_is_byte_identical_to_the_single_endpoint(
+    client, monkeypatch, tmp_path
+):
+    """A batch is a transport, not a second renderer: item i must equal what
+    ``POST /kymograph`` returns for the same body, field for field. If this
+    ever fails, exported kymographs and velocities have moved."""
+    td_path = tmp_path.resolve()
+    monkeypatch.setattr(tracker_kymograph, "_UPLOAD_ROOT", td_path)
+    pngs = [td_path / f"f{i}.png" for i in range(3)]
+    for png in pngs:
+        _write_2d_ramp_png(png)
+    polylines = _three_polylines()
+
+    singles = [
+        client.post("/api/v1/kymograph", json=_kymo_payload(pngs, rc)).json()
+        for rc in polylines
+    ]
+    tracker_kymograph._SAMPLE_CACHE.clear()
+    batched = client.post(
+        "/api/v1/kymograph/batch", json=_batch_payload(pngs, polylines)
+    ).json()["results"]
+
+    assert [r["kymograph"] for r in batched] == singles
+
+
+def test_batch_serves_a_warm_row_cache_without_decoding(
+    client, monkeypatch, tmp_path
+):
+    """The row cache still applies inside a batch — a repeat costs no decode.
+    It just cannot be what makes the export fast, because the export never
+    repeats a polyline."""
+    td_path = tmp_path.resolve()
+    monkeypatch.setattr(tracker_kymograph, "_UPLOAD_ROOT", td_path)
+    pngs = [td_path / f"f{i}.png" for i in range(3)]
+    for png in pngs:
+        _write_2d_ramp_png(png)
+    payload = _batch_payload(pngs, _three_polylines())
+
+    first = client.post("/api/v1/kymograph/batch", json=payload).json()
+    decodes = _count_decodes(monkeypatch)
+    second = client.post("/api/v1/kymograph/batch", json=payload).json()
+
+    assert decodes["n"] == 0
+    assert second == first
+
+
+def test_batch_reports_a_bad_item_without_sinking_the_others(
+    client, monkeypatch, tmp_path
+):
+    """One microtubule with an unusable seed polyline used to cost exactly one
+    HTTP request. It must still cost exactly one kymograph."""
+    td_path = tmp_path.resolve()
+    monkeypatch.setattr(tracker_kymograph, "_UPLOAD_ROOT", td_path)
+    pngs = [td_path / f"f{i}.png" for i in range(3)]
+    for png in pngs:
+        _write_2d_ramp_png(png)
+    good = _three_polylines()
+    payload = _batch_payload(pngs, [good[0], [[1.0, 1.0]], good[2]])
+
+    resp = client.post("/api/v1/kymograph/batch", json=payload)
+
+    assert resp.status_code == 200, resp.text
+    results = resp.json()["results"]
+    assert results[0]["kymograph"] is not None
+    assert results[1]["kymograph"] is None
+    assert "vertex" in results[1]["error"]
+    assert results[2]["kymograph"] is not None
+
+
+def test_batch_reports_a_missing_frame_per_item(client, monkeypatch, tmp_path):
+    """A channel missing one frame PNG is real — container 4972cad8's IRM
+    channel has 299 of 300. It must fail that channel's items and nothing
+    else, with the same message the single endpoint 404s with."""
+    td_path = tmp_path.resolve()
+    monkeypatch.setattr(tracker_kymograph, "_UPLOAD_ROOT", td_path)
+    pngs = [td_path / f"f{i}.png" for i in range(3)]
+    for png in pngs:
+        _write_2d_ramp_png(png)
+    polylines = _three_polylines()
+    payload = _batch_payload(pngs, polylines)
+    payload["items"][1]["frames"][2]["image_path"] = str(td_path / "gone.png")
+
+    resp = client.post("/api/v1/kymograph/batch", json=payload)
+
+    assert resp.status_code == 200, resp.text
+    results = resp.json()["results"]
+    assert results[0]["kymograph"] is not None
+    assert "Frame image missing" in results[1]["error"]
+    assert results[2]["kymograph"] is not None
+
+
+def test_batch_rejects_an_extra_field(client, monkeypatch, tmp_path):
+    """extra='forbid', same as every other model here: a typo'd field must
+    400/422 rather than be silently ignored."""
+    td_path = tmp_path.resolve()
+    monkeypatch.setattr(tracker_kymograph, "_UPLOAD_ROOT", td_path)
+    png = td_path / "f0.png"
+    _write_gradient_png(png)
+    payload = _batch_payload([png], [[[8.0, float(x)] for x in range(64)]])
+    payload["parallel"] = True
+
+    assert client.post("/api/v1/kymograph/batch", json=payload).status_code == 422
+
+
+def test_batch_rejects_an_empty_or_oversized_item_list(
+    client, monkeypatch, tmp_path
+):
+    """The response is O(items) even though the decode is not, so the item
+    count is bounded (see ``_BATCH_MAX_ITEMS``)."""
+    td_path = tmp_path.resolve()
+    monkeypatch.setattr(tracker_kymograph, "_UPLOAD_ROOT", td_path)
+    png = td_path / "f0.png"
+    _write_gradient_png(png)
+    one = _kymo_payload([png], [[8.0, float(x)] for x in range(64)])
+
+    assert client.post("/api/v1/kymograph/batch", json={"items": []}).status_code == 422
+    over = {"items": [one] * (tracker_kymograph._BATCH_MAX_ITEMS + 1)}
+    assert client.post("/api/v1/kymograph/batch", json=over).status_code == 422
+
+
+def test_batch_does_not_decode_a_frame_twice_across_two_channels(
+    client, monkeypatch, tmp_path
+):
+    """Items are free to name different files; the dedup is over the file's
+    stat identity, so a batch that mixes channels decodes each channel's frames
+    once rather than once per item. (The export still batches per channel —
+    this is about the endpoint's contract, not its caller's policy.)"""
+    td_path = tmp_path.resolve()
+    monkeypatch.setattr(tracker_kymograph, "_UPLOAD_ROOT", td_path)
+    ch_a = [td_path / f"a{i}.png" for i in range(3)]
+    ch_b = [td_path / f"b{i}.png" for i in range(3)]
+    for png in ch_a + ch_b:
+        _write_2d_ramp_png(png)
+    polylines = _three_polylines()
+    payload = {
+        "items": [
+            _kymo_payload(pngs, rc)
+            for pngs in (ch_a, ch_b)
+            for rc in polylines
+        ]
+    }
+
+    decodes = _count_decodes(monkeypatch)
+    resp = client.post("/api/v1/kymograph/batch", json=payload)
+
+    assert resp.status_code == 200, resp.text
+    assert len(resp.json()["results"]) == 6
+    assert decodes["n"] == 6, "3 frames x 2 channels, once each"
