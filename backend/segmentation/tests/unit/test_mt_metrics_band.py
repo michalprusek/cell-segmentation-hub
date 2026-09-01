@@ -26,6 +26,8 @@ import pytest
 
 # Skips the whole file if the ML web deps (fastapi/pydantic) are unavailable.
 mt = pytest.importorskip("api.mt_metrics")
+# Importable once `api.mt_metrics` has put the models directory on sys.path.
+mt_measure = pytest.importorskip("mt_measure")
 _rasterize_band = mt._rasterize_band
 _imagej_median = mt._imagej_median
 
@@ -78,6 +80,112 @@ def test_diagonal_band_area_matches_length_times_thickness():
     _, area = _mid_width(p, 5, h=200, w=200)
     length = np.hypot(100, 100)  # ~141.4
     assert abs(area - length * 5) < length, f"area {area} vs ~{length*5:.0f}"
+
+
+# --- the vectorised fill (2026-09-01) ----------------------------------------
+#
+# `rasterize_band` builds every segment quadrilateral and joint triangle at once
+# and fills the batch in one flattened pixel pass, because a single convex fill
+# cost ~80 us of numpy CALL overhead whatever its area. The speedup is only
+# allowed to exist because the output did not move, so these pin the two
+# properties that make that true and that a "simplification" would break.
+
+
+def _random_convex_polys(rng, n, k):
+    """N convex k-gons: a jittered regular polygon at a random place/size."""
+    out = []
+    for _ in range(n):
+        cx, cy = rng.uniform(3, 57, 2)
+        r = rng.uniform(0.3, 14.0)
+        a0 = rng.uniform(0, 2 * np.pi)
+        ang = a0 + np.arange(k) * (2 * np.pi / k)
+        rad = r * rng.uniform(0.75, 1.0, k)
+        out.append(np.stack([cx + rad * np.cos(ang),
+                             cy + rad * np.sin(ang)], axis=1))
+    return np.asarray(out)
+
+
+@pytest.mark.parametrize("k", [3, 4])
+def test_batched_fill_equals_filling_one_polygon_at_a_time(k):
+    """The batch must be the union of the single fills, pixel for pixel.
+
+    `fill_convex_polygon` is the documented entry point and `_fill_convex_polygons`
+    is what `rasterize_band` actually calls; if they ever disagree, the band
+    silently depends on which one a caller reached for.
+    """
+    rng = np.random.default_rng(4972)
+    polys = _random_convex_polys(rng, 120, k)
+    one_at_a_time = np.zeros((60, 60), np.uint8)
+    for p in polys:
+        mt_measure.fill_convex_polygon(one_at_a_time, p)
+    batched = np.zeros((60, 60), np.uint8)
+    mt_measure._fill_convex_polygons(batched, polys)
+    assert one_at_a_time.sum() > 0, "fixture filled nothing; the test is vacuous"
+    assert np.array_equal(one_at_a_time, batched)
+
+
+def test_fill_does_not_depend_on_how_the_batch_is_chunked(monkeypatch):
+    """`_FILL_CHUNK_PIXELS` is a memory guard rail, not a parameter of the result.
+
+    It bounds the working set of one vectorised pass; splitting the batch
+    differently must not move a pixel, or the ceiling would be a tuning knob on
+    the exported numbers.
+    """
+    pts = np.asarray([[6, 8], [30, 41], [52, 12], [20, 20], [48, 50]], np.float32)
+    full = _rasterize_band(pts, 60, 60, 7)
+    monkeypatch.setattr(mt_measure, "_FILL_CHUNK_PIXELS", 1)
+    tiny_chunks = _rasterize_band(pts, 60, 60, 7)
+    assert full.sum() > 0
+    assert np.array_equal(full, tiny_chunks)
+
+
+def test_vicinity_bounding_box_is_the_one_np_nonzero_would_give():
+    """`vicinity_mask` finds the band's extent with `any` + `argmax` reductions.
+
+    `np.nonzero` was 1.190 s of that function's 1.220 s for 162 microtubules on
+    a 2048^2 frame — it walks every frame pixel and materialises two index
+    arrays only for four order statistics to be taken off them. The replacement
+    is an identity, not an approximation, and these are the masks where an
+    off-by-one or an empty-mask `argmax` would show: nothing set, one pixel at
+    each edge and corner, everything set, and two far-apart blobs.
+    """
+    h, w = 37, 53
+
+    def reference(band, not_signal, margin_radius):
+        """The pre-2026-09-01 body, verbatim."""
+        ys, xs = np.nonzero(band)
+        vicinity = np.zeros(band.shape, dtype=bool)
+        if ys.size == 0:
+            return vicinity
+        y0 = max(0, int(ys.min()) - margin_radius)
+        y1 = min(h, int(ys.max()) + margin_radius + 1)
+        x0 = max(0, int(xs.min()) - margin_radius)
+        x1 = min(w, int(xs.max()) + margin_radius + 1)
+        capsule = mt_measure.dilate(band[y0:y1, x0:x1], margin_radius)
+        vicinity[y0:y1, x0:x1] = (capsule > 0) & not_signal[y0:y1, x0:x1]
+        return vicinity
+
+    masks = {"empty": np.zeros((h, w), np.uint8), "full": np.ones((h, w), np.uint8)}
+    for y in (0, 1, h // 2, h - 2, h - 1):
+        for x in (0, 1, w // 2, w - 2, w - 1):
+            m = np.zeros((h, w), np.uint8)
+            m[y, x] = 1
+            masks["px_%d_%d" % (y, x)] = m
+    two_blobs = np.zeros((h, w), np.uint8)
+    two_blobs[1, 1] = two_blobs[h - 2, w - 2] = 1
+    masks["two_blobs"] = two_blobs
+
+    rng = np.random.default_rng(301)
+    not_signal = rng.random((h, w)) < 0.7
+    checked = 0
+    for name, band in masks.items():
+        for r in (0, 1, 3, 8):
+            assert np.array_equal(
+                mt_measure.vicinity_mask(band, not_signal, r),
+                reference(band, not_signal, r),
+            ), "%s at margin_radius=%d" % (name, r)
+            checked += 1
+    assert checked == len(masks) * 4
 
 
 def test_imagej_median_is_upper_of_two_middles():

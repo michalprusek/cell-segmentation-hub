@@ -291,30 +291,37 @@ def tracks_intensity(
     trajectories, which the DoG blob detector it replaced structurally could not.
 
     Cost, because the export calls this once per (microtubule x channel)
-    kymograph: measured 2026-09-01 on this box, 0.16 s for a 300x200 kymograph
-    with 5 trajectories, 0.27 s with 16, 1.02 s with 47 — against 2-15 ms for
-    the 1-D estimator it replaces, i.e. ~70x. The whole of it is
-    ``rasterize_band``'s per-segment Python loop, and the factor is simply how
-    many more vertices a trajectory has than a microtubule: one point per FRAME
-    (300) versus an RDP-simplified centerline's 4-20. It is nonetheless the same
-    order as the detection it sits beside (KymoButler is 0.03-0.14 s per
-    kymograph on GPU), and matching the per-microtubule number is the point of
-    the function — so do not buy the 70x back with an approximate band. If this
-    ever has to be faster, make ``mt_measure.rasterize_band`` vectorise over
-    segments, where the fix helps all three callers.
+    kymograph. It used to be the expensive half of the endpoint and no longer
+    is: ``mt_measure.rasterize_band`` and ``vicinity_mask`` were vectorised on
+    2026-09-01 (bit-identically — the ~30 000-case corpus and a byte-diff of a
+    real export and a real essays run), which took this from 12.7 ms per
+    trajectory to 1.3 ms. Measured on the real 299-frame container 4972cad8
+    (channel 488_nm, microtubule polyline_39, seed arc 1249.9 px), old -> new:
 
-    **The cost does not scale with the column axis**, which is what makes this
-    safe next to the removal of the 200-column cap on the same day. Re-measured
-    on the real 299-frame container 4972cad8 (channel 488_nm, microtubule
-    polyline_39, seed arc 1249.9 px): 0.171 s at its true 1251 columns with the
-    13 trajectories that width reveals, 0.165 s for the same 13 on a matrix
-    widened to the 2077 columns of the longest microtubule in production, and
-    0.603 s for 47 trajectories at that width — a flat 12.7-13.1 ms per
-    trajectory in all three. Both halves are width-independent by construction:
-    ``rasterize_band`` costs one convex fill per SEGMENT (one per frame), and
-    ``vicinity_mask`` dilates only the band's bounding box, which is as narrow
-    as the trajectory. Only the ``(T, X)`` mask allocations grow, and 47 of them
-    at 299x2077 is 59 MB.
+      * 0.175 -> 0.017 s at its true 1251 columns with the 15 trajectories that
+        width reveals (11.70 -> 1.15 ms per trajectory). The note this replaces
+        said 13 for the same container: not one of its 17 940 stored polylines
+        carries a ``trackId``, so ``kymographService.ts`` finds no sibling and
+        every frame samples the SEED polyline — its documented fallback, and the
+        matrix re-measured here;
+      * 0.190 -> 0.021 s for the same 15 on a matrix widened to the 2077 columns
+        of the longest microtubule in production (12.68 -> 1.39 ms);
+      * 0.574 -> 0.060 s for 47 trajectories at that width — the worst case
+        production can ask for (12.22 -> 1.27 ms).
+
+    Against 2-15 ms for the 1-D estimator this replaced, that is now roughly
+    par, so the ImageJ-comparable region costs what the crude one did. **Do not
+    buy any of it back with an approximate band**: the point of the function is
+    that a trajectory and a microtubule are measured by the identical geometry.
+
+    **The cost does not scale with the column axis**, which is what made this
+    safe next to the removal of the 200-column cap on the same day — see the
+    2077-column rows above, flat per trajectory. Both halves are
+    width-independent by construction: ``rasterize_band`` costs one convex fill
+    per SEGMENT (one per frame the trajectory lives on — 39 at the median on
+    that container, 252 at most), and ``vicinity_mask`` dilates only the band's
+    bounding box, which is as narrow as the trajectory. Only the ``(T, X)`` mask
+    allocations grow, and 47 of them at 299x2077 is 59 MB.
 
     Returns one ``{intensity_signal, intensity_background, intensity_minus_bg}``
     dict per entry of ``point_lists``, in the same order. ``intensity_signal`` is
