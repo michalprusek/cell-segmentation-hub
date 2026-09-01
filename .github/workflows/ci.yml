@@ -110,6 +110,46 @@ jobs:
             --exclude backend/segmentation/models/microtubule/vendor \
             backend/segmentation backend/essays backend/src
 
+      # A SyntaxError is invisible to every other gate here, and it is NOT
+      # hypothetical: on 2026-08-31 PRs #419 and #420 each passed CI, merged
+      # without a conflict -- they edit different regions of the same file --
+      # and produced `async with` inside a synchronous function. api.main
+      # imports that module, so uvicorn could not start at all: /segment and
+      # /track went down with /kymograph, on a deploy, in production.
+      #
+      # Nothing caught it. `python-tests` cannot import api.main on a GPU-less
+      # runner (mamba_ssm reaches Triton, which raises "0 active drivers"), and
+      # the F821 gate above is measurably blind to it -- `ruff --select F821`
+      # reports "All checks passed!" on a file that will not parse. Ruff's E999
+      # was removed and cannot be selected, and widening the gate to all of
+      # ruff would forfeit exactly the no-judgement property the comment above
+      # relies on.
+      #
+      # compileall keeps that property: a file that does not parse is a crash,
+      # never a style opinion. It needs no torch, no GPU and about a second.
+      - name: Python files parse
+        run: |
+          python - <<'EOF'
+          import pathlib, sys
+
+          ROOTS = ("backend/segmentation", "backend/essays",
+                   "backend/src/services/video/pythonHelpers")
+          SKIP = ("backend/segmentation/models/microtubule/vendor",)
+
+          bad = 0
+          for root in ROOTS:
+              for f in sorted(pathlib.Path(root).rglob("*.py")):
+                  if any(str(f).startswith(s) for s in SKIP):
+                      continue
+                  try:
+                      compile(f.read_text(encoding="utf-8"), str(f), "exec")
+                  except SyntaxError as e:
+                      print(f"{f}:{e.lineno}:{e.offset}: {e.msg}")
+                      bad += 1
+          print(f"{bad} file(s) failed to parse")
+          sys.exit(1 if bad else 0)
+          EOF
+
       - name: ML and essays pins agree
         run: |
           set -euo pipefail
