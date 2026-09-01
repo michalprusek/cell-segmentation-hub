@@ -134,6 +134,36 @@ in focus on both channels, and all three read `out_of_calibration:TIRF 488`
 calibrate` (see `focus_qc/README.md`), after which point the worker at the new
 file with `ESSAYS_FOCUS_CALIBRATION=/path/to/calibration.json`. No rebuild.
 
+**`focus_qc.csv` also reports `irm_sharpness` / `tirf_sharpness`, and nothing
+decides on them.** Sharpness is `focus_qc`'s second descriptor — the mean
+gradient magnitude over the structure pixels of the noise-normalised,
+background-subtracted frame, i.e. in units of the frame's own noise σ per pixel.
+It is there for exactly the situation above: it is the most **acquisition-stable**
+number the detector produces, so a batch that is out of calibration can still be
+thresholded against itself. Measured 2026-09-01 over the shipped calibration
+cache (410 real per-plane measurements, tolerance 0.3 µm / guard 0.1 µm):
+
+| descriptor | IRM separation | IRM threshold spread | TIRF separation | TIRF threshold spread |
+|---|---|---|---|---|
+| score (the verdict) | 1.97× | 2.67× | 5.01× | 23.50× |
+| **sharpness** | 1.07× | **1.46×** | 0.88× | **1.13×** |
+
+*Separation* is p5 of in-focus over p95 of out-of-focus (this project's margin;
+below 1.0 the classes are inverted at the tails). *Spread* is how far the fitted
+threshold moves between stacks. So a sharpness cut transfers where a score cut
+does not — and the same table is why sharpness is **not** the verdict: at 0.88×
+on TIRF no absolute threshold separates the classes at all. Pick your own cut
+per batch, from your own in-focus positions; do not import one.
+
+A **blank** sharpness cell means the descriptor declined: fewer than 50 pixels
+cleared 4σ, so there was nothing to measure the gradient on. That is not zero,
+and it happens on frames that scored perfectly well — 143 of the 144 blanks in
+the calibration cache are defocused TIRF planes. For orientation, on that cache
+in-focus IRM runs 1.50–3.30 (median 2.30) against an out-of-focus 0.85–2.15, and
+in-focus TIRF 1.32–2.37; the 2048×2048 well above reads IRM 2.97–3.25 and TIRF
+3.50–4.15, the latter off the top of the calibrated range in the same way its
+noise σ is.
+
 The published accuracy — 0.959 balanced, IRM 0.953 / TIRF 0.967 — is
 leave-one-**stack**-out inside a *single* acquisition session, and it validates
 the threshold *value* out of fold, not the threshold rule, the descriptor
