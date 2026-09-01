@@ -124,7 +124,9 @@ interface KymographResponse {
  *  older shape returned the payload flat. Accept both, as the effect did. */
 type KymographEnvelope = KymographResponse & { data?: KymographResponse };
 
-/** Request body. `intensityWidth` is only meaningful with `detectVelocity`. */
+/** Request body. `intensityWidth` is only meaningful with `detectVelocity`;
+ *  `lineWidth` / `lineReduce` change the image itself and so belong to both
+ *  queries. */
 interface KymographRequest {
   videoContainerId: string;
   polylineId: string;
@@ -133,6 +135,8 @@ interface KymographRequest {
   channelColor: string;
   detectVelocity: boolean;
   intensityWidth?: number;
+  lineWidth?: number;
+  lineReduce?: 'mean' | 'max';
 }
 
 async function fetchKymograph(
@@ -184,6 +188,29 @@ const clampWidth = (raw: string | number): number => {
   return Math.min(Math.max(n, 1), 50);
 };
 
+/** How many image pixels wide the sampled line is, PERPENDICULAR to the
+ *  polyline. 1 = a single-pixel line profile — what this modal has always
+ *  shown — so the opening view is unchanged until the user raises it.
+ *
+ *  Not `DEFAULT_INTENSITY_WIDTH`, which is a band in kymograph COLUMN space
+ *  around an already-detected trajectory on the finished image. This one
+ *  decides what the image contains. Must stay in step with `DEFAULT_LINE_WIDTH`
+ *  in `backend/src/services/kymographService.ts` and `line_width` in the ML
+ *  `KymographRequest`. */
+const DEFAULT_LINE_WIDTH = 1;
+
+/** Upper bound mirrors the ML `_LINE_WIDTH_MAX` and the route's validator; a
+ *  larger value 422s. Measured on real IRM frames, a band wider than ~11 px
+ *  carries none of the filament's contrast (the interference halo cancels the
+ *  dark core), so this is a guard rail rather than a useful setting. */
+const MAX_LINE_WIDTH = 51;
+
+const clampLineWidth = (raw: string | number): number => {
+  const n = Math.round(Number(raw));
+  if (!Number.isFinite(n)) return DEFAULT_LINE_WIDTH;
+  return Math.min(Math.max(n, 1), MAX_LINE_WIDTH);
+};
+
 /** Glyph marking which kymograph end(s) the trajectory reaches (position only —
  *  the motor's antero/retro travel direction is shown by track colour). */
 const edgeGlyph = (edge: EdgeFlag): string =>
@@ -231,6 +258,12 @@ export function KymographModal({
   // re-reads every frame PNG + re-runs blob detection, so we coalesce rapid
   // keystrokes instead of firing a full ML round-trip per character.
   const [debouncedWidth, setDebouncedWidth] = useState(DEFAULT_INTENSITY_WIDTH);
+  // Line width + its reduction. Unlike `intensityWidth` these change the
+  // PICTURE, so they are part of `imageKey` below and both queries refetch.
+  const [lineWidth, setLineWidth] = useState(DEFAULT_LINE_WIDTH);
+  const [debouncedLineWidth, setDebouncedLineWidth] =
+    useState(DEFAULT_LINE_WIDTH);
+  const [lineReduce, setLineReduce] = useState<'mean' | 'max'>('mean');
   const [activeTrack, setActiveTrack] = useState<number | null>(null);
 
   // A kymograph is derived from polyline geometry the user can edit between two
@@ -255,7 +288,9 @@ export function KymographModal({
 
   const queryEnabled = open && !!sourceChannel;
 
-  /** Everything that decides the rendered PNG; the shared prefix of both keys. */
+  /** Everything that decides the rendered PNG; the shared prefix of both keys.
+   *  `debouncedLineWidth` and `lineReduce` are here rather than on the velocity
+   *  key alone because they change the sampled matrix, i.e. the image. */
   const imageKey: QueryKey = [
     'kymograph',
     cacheEpoch,
@@ -264,6 +299,8 @@ export function KymographModal({
     frameIndex,
     sourceChannel,
     channelColor,
+    debouncedLineWidth,
+    lineReduce,
   ];
   const request = {
     videoContainerId,
@@ -271,6 +308,12 @@ export function KymographModal({
     frameIndex,
     sourceChannel: sourceChannel as string,
     channelColor,
+    // Omitted at the default so the body stays exactly what it was before the
+    // control existed — the backend and the ML service both treat an absent
+    // field as "single-pixel line profile, mean".
+    ...(debouncedLineWidth > DEFAULT_LINE_WIDTH
+      ? { lineWidth: debouncedLineWidth, lineReduce }
+      : {}),
   };
   /** Deterministic per key, and `cacheEpoch` already scopes every key to one
    *  open of the modal, so there is nothing to revalidate. `retry` is off
@@ -467,6 +510,14 @@ export function KymographModal({
     return () => clearTimeout(id);
   }, [intensityWidth]);
 
+  // Same coalescing for the line width, which is more expensive still: it
+  // re-samples every frame (the sampled-row cache keys on it, so a new width is
+  // always a full re-read) rather than only re-running the metric.
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedLineWidth(lineWidth), 400);
+    return () => clearTimeout(id);
+  }, [lineWidth]);
+
   // Empty unless the box is ticked AND its request has landed — the overlay and
   // the table must never draw trajectories belonging to a superseded request.
   const tracks = velocity?.tracks ?? [];
@@ -538,6 +589,61 @@ export function KymographModal({
                 </SelectContent>
               </Select>
             </>
+          )}
+          <div className="flex items-center gap-2">
+            <Label htmlFor="kymo-line-width" className="text-sm">
+              {t('editor.kymograph.lineWidthLabel', {
+                defaultValue: 'Line width',
+              })}
+            </Label>
+            <Input
+              id="kymo-line-width"
+              type="number"
+              min={1}
+              max={MAX_LINE_WIDTH}
+              value={lineWidth}
+              onChange={e => setLineWidth(clampLineWidth(e.target.value))}
+              className="h-8 w-16"
+              title={String(
+                t('editor.kymograph.lineWidthHint', {
+                  defaultValue:
+                    'Width (px) of the line sampled along the microtubule, measured across it. 1 samples a single pixel.',
+                })
+              )}
+            />
+          </div>
+          {lineWidth > 1 && (
+            <Select
+              value={lineReduce}
+              onValueChange={v => setLineReduce(v as 'mean' | 'max')}
+            >
+              <SelectTrigger
+                className="h-8 w-28"
+                aria-label={String(
+                  t('editor.kymograph.lineReduceLabel', {
+                    defaultValue: 'Across width',
+                  })
+                )}
+                title={String(
+                  t('editor.kymograph.lineReduceHint', {
+                    defaultValue:
+                      'How the pixels across the line width become one value. Mean matches ImageJ; max is brighter but biased by single hot pixels.',
+                  })
+                )}
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="mean">
+                  {t('editor.kymograph.lineReduceMean', {
+                    defaultValue: 'Mean',
+                  })}
+                </SelectItem>
+                <SelectItem value="max">
+                  {t('editor.kymograph.lineReduceMax', { defaultValue: 'Max' })}
+                </SelectItem>
+              </SelectContent>
+            </Select>
           )}
           <div
             className="flex items-center gap-2"

@@ -2593,6 +2593,14 @@ export default {
       velocityComputing: '正在分析速度…',
       widthLabel: '强度宽度',
       widthHint: '围绕每条轨迹采样的条带宽度 (px)，用于信号与背景强度的比较。',
+      lineWidthLabel: '线宽',
+      lineWidthHint:
+        '沿微管采样的线宽 (px)，垂直于微管方向测量。设为 1 时仅采样单个像素。',
+      lineReduceLabel: '沿线宽方向',
+      lineReduceHint:
+        '线宽方向上的像素如何合并为一个值。平均值与 ImageJ 一致；最大值更亮，但会被个别过亮像素影响。',
+      lineReduceMean: '平均值',
+      lineReduceMax: '最大值',
       colVelocity: '净速度',
       colRunLength: '运动长度 (µm)',
       colRunTime: '运动时长 (s)',

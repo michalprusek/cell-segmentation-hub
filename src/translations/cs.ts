@@ -2723,6 +2723,14 @@ export default {
       widthLabel: 'Šířka intenzity',
       widthHint:
         'Šířka (px) pásu vzorkovaného kolem každé trajektorie pro signál vs. intenzitu pozadí.',
+      lineWidthLabel: 'Šířka linie',
+      lineWidthHint:
+        'Šířka (px) linie vzorkované podél mikrotubulu, měřená napříč. Hodnota 1 vzorkuje jediný pixel.',
+      lineReduceLabel: 'Napříč šířkou',
+      lineReduceHint:
+        'Jak se pixely napříč šířkou linie sloučí do jedné hodnoty. Průměr odpovídá ImageJ; maximum je jasnější, ale zkreslené jednotlivými horkými pixely.',
+      lineReduceMean: 'Průměr',
+      lineReduceMax: 'Maximum',
       colVelocity: 'Čistá rychlost',
       colRunLength: 'Délka běhu (µm)',
       colRunTime: 'Čas běhu (s)',

@@ -44,7 +44,7 @@
 
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { act, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {
   onlineManager,
@@ -512,6 +512,75 @@ describe('KymographModal', () => {
   // A 300-frame kymograph cost the user 18.6–29.4 s end to end. Half of that
   // was velocity analysis nobody asked for; the rest was piled-up superseded
   // requests and rebuilds triggered by unrelated editor state.
+
+  // ── Line width ─────────────────────────────────────────────────────────────
+  // How many image pixels wide the sampled line is, PERPENDICULAR to the
+  // polyline. Unlike `intensityWidth` it changes the PICTURE, so it belongs to
+  // the image query key and both queries refetch when it moves.
+
+  describe('Line width', () => {
+    it('asks for a single-pixel line profile until the user says otherwise', () => {
+      render(<KymographModal {...defaultProps} />);
+
+      // Omitted, not sent as 1: the request body must stay byte-for-byte what
+      // it was before the control existed.
+      expect(requestBody()).not.toHaveProperty('lineWidth');
+      expect(requestBody()).not.toHaveProperty('lineReduce');
+      // And the reduction has nothing to choose between at width 1.
+      expect(screen.queryByLabelText(/Across width/i)).not.toBeInTheDocument();
+    });
+
+    it('rebuilds the kymograph with a band once a width is set', async () => {
+      mockApiPost.mockResolvedValue({ data: { data: mockResult } });
+      render(<KymographModal {...defaultProps} />);
+
+      const input = await screen.findByLabelText(/Line width/i);
+      // `fireEvent.change` rather than `userEvent.type`: this is `<input
+      // type="number">`, which jsdom refuses to give a selection range, so
+      // `clear` + `type` leaves the clamped-up "1" in place and types AFTER it
+      // ("19"). The value under test is the clamp, not the keystrokes.
+      fireEvent.change(input, { target: { value: '9' } });
+
+      // Debounced ~400 ms, then the image query key changes and refetches.
+      await waitFor(
+        () =>
+          expect(requestBody()).toMatchObject({
+            lineWidth: 9,
+            lineReduce: 'mean',
+            // Still the plain image request — the band is not a velocity
+            // feature.
+            detectVelocity: false,
+          }),
+        { timeout: 3000 }
+      );
+    });
+
+    it('offers the reduction only once there is a width to reduce over', async () => {
+      mockApiPost.mockResolvedValue({ data: { data: mockResult } });
+      render(<KymographModal {...defaultProps} />);
+
+      const input = await screen.findByLabelText(/Line width/i);
+      fireEvent.change(input, { target: { value: '5' } });
+
+      await waitFor(() =>
+        expect(screen.getByLabelText(/Across width/i)).toBeInTheDocument()
+      );
+    });
+
+    it('clamps a width the ML service would reject', async () => {
+      mockApiPost.mockResolvedValue({ data: { data: mockResult } });
+      render(<KymographModal {...defaultProps} />);
+
+      const input = await screen.findByLabelText(/Line width/i);
+      fireEvent.change(input, { target: { value: '999' } });
+
+      // 51 is the ML `_LINE_WIDTH_MAX`; anything above it 422s.
+      await waitFor(
+        () => expect(requestBody()).toMatchObject({ lineWidth: 51 }),
+        { timeout: 3000 }
+      );
+    });
+  });
 
   describe('Velocity analysis is opt-in', () => {
     it('does not request velocity analysis on open', () => {

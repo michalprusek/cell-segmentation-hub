@@ -67,6 +67,50 @@ const HEX_COLOR_RE = /^#[0-9A-Fa-f]{6}$/;
  *  trajectory and a microtubule are measured by the identical geometry. */
 const DEFAULT_INTENSITY_WIDTH = 5;
 
+/** How the samples across `lineWidth` collapse to one column value. Mirrors the
+ *  ML `KymographRequest.line_reduce`. */
+export type KymographLineReduce = 'mean' | 'max';
+
+/** Line width (px) of the sampled line, PERPENDICULAR to the polyline.
+ *
+ *  1 = a single-pixel line profile, which is what this service has always
+ *  asked for, so an omitted `lineWidth` renders the identical kymograph and
+ *  nothing that exists today changes.
+ *
+ *  NOT `DEFAULT_INTENSITY_WIDTH`: that one is a band in kymograph COLUMN space
+ *  around an already-detected trajectory on the finished image. This one
+ *  decides what the image contains in the first place. */
+const DEFAULT_LINE_WIDTH = 1;
+const DEFAULT_LINE_REDUCE: KymographLineReduce = 'mean';
+
+/** Matches the ML `line_width` bound (`_LINE_WIDTH_MAX`). Defence in depth —
+ *  the route validates too, and the ML model would 422. */
+const MAX_LINE_WIDTH = 51;
+
+/** The line width actually posted to the ML service. Used by BOTH the cache key
+ *  and the ML request body, on purpose: two inputs that clamp to the same width
+ *  render the same pixels and so must share a cache entry, and one that clamps
+ *  must never key on the unclamped value it did not get. */
+function resolveLineWidth(raw: number | undefined): number {
+  if (raw == null || !Number.isFinite(raw)) {
+    return DEFAULT_LINE_WIDTH;
+  }
+  return Math.min(Math.max(Math.round(raw), 1), MAX_LINE_WIDTH);
+}
+
+/** As `resolveLineWidth`, for the reduction. At width 1 there is one sample, so
+ *  the choice cannot change a pixel — it is normalised to the default there so
+ *  a caller that flips it never invalidates a cache entry for nothing. */
+function resolveLineReduce(
+  raw: KymographLineReduce | undefined,
+  width: number
+): KymographLineReduce {
+  if (width <= 1 || raw !== 'max') {
+    return DEFAULT_LINE_REDUCE;
+  }
+  return 'max';
+}
+
 // ---------------------------------------------------------------------------
 // Response cache
 // ---------------------------------------------------------------------------
@@ -164,6 +208,16 @@ export interface KymographServiceInput {
    *  trajectory for the background-subtracted intensity metric. Defaults to
    *  `DEFAULT_INTENSITY_WIDTH` (5 since 2026-09-01). */
   intensityWidth?: number;
+  /** Width (image px) of the line sampled along the polyline, measured
+   *  perpendicular to it, with the samples reduced by `lineReduce`. Defaults to
+   *  `DEFAULT_LINE_WIDTH` (1 = a single-pixel line profile, i.e. exactly what
+   *  every caller got before this field existed). Clamped to 1…51 here as well
+   *  as at the route, because the ML model 422s outside that. */
+  lineWidth?: number;
+  /** How the `lineWidth` samples of one column collapse to one value. `mean`
+   *  (default) is ImageJ's convention and the one the user asked for; `max` is
+   *  KymoResliceWide's. Ignored at `lineWidth` 1, where there is one sample. */
+  lineReduce?: KymographLineReduce;
   /** When true, the ML service also renders one matplotlib line plot per frame
    *  (intensity vs. position along the microtubule) and the result carries
    *  ``profiles``. Used by the "intensity profiles" export mode. */
@@ -367,10 +421,13 @@ interface FrameStamp {
  *  greppable in ``redis-cli --scan`` and leaves a per-container
  *  ``invalidatePattern`` open should one ever be needed.
  *
- *  The kymograph's WIDTH is not listed because it is no longer an input: since
- *  2026-09-01 it is one column per pixel of the seed polyline's arc length, and
- *  editing that polyline bumps its frame's ``Segmentation.updatedAt`` — i.e.
- *  ``frames[].seg`` already covers it. */
+ *  The kymograph's COLUMN COUNT is not listed because it is no longer an input:
+ *  since 2026-09-01 it is one column per pixel of the seed polyline's arc
+ *  length, and editing that polyline bumps its frame's
+ *  ``Segmentation.updatedAt`` — i.e. ``frames[].seg`` already covers it.
+ *  ``lineWidth`` IS listed and is a different quantity entirely: it is how many
+ *  pixels wide the sampled line is across the polyline, and it changes every
+ *  pixel of the render. */
 function kymographCacheKey(
   input: KymographServiceInput,
   container: {
@@ -391,6 +448,17 @@ function kymographCacheKey(
       input.detectVelocity === true && input.renderOverlay === true,
     renderProfiles: input.renderProfiles === true,
     intensityWidth: input.intensityWidth ?? DEFAULT_INTENSITY_WIDTH,
+    // The RESOLVED values, not the raw input — see `resolveLineWidth`. At the
+    // default (width 1) these two add a constant to every descriptor, so
+    // entries written before this field existed hash differently and are
+    // simply unreachable. That is a one-off cold cache, not a correctness
+    // problem: the render at width 1 is unchanged, so nothing stale can be
+    // served, and the entries expire on their own 30-minute TTL.
+    lineWidth: resolveLineWidth(input.lineWidth),
+    lineReduce: resolveLineReduce(
+      input.lineReduce,
+      resolveLineWidth(input.lineWidth)
+    ),
     minNetVelocityUmS: MIN_NET_VELOCITY_UM_S,
     // Container calibration scales every velocity/length in the result. Held
     // explicitly as well as via `containerUpdatedAt` so the key stays correct
@@ -735,6 +803,14 @@ interface MlKymographBody {
   tracked: boolean;
   intensity_width: number;
   min_net_velocity_um_s: number;
+  /** Both omitted at the defaults (width 1, mean), so a caller that does not
+   *  touch the line width posts byte-for-byte the body it posted before these
+   *  existed. That covers old-Node-against-new-ml. The other direction is not
+   *  covered and cannot be — the ML model is `extra="forbid"`, so a Node that
+   *  sends `line_width` to an un-recreated ml container 422s every kymograph.
+   *  **Deploy ml before this service.** */
+  line_width?: number;
+  line_reduce?: KymographLineReduce;
   pixel_size_um?: number;
   frame_interval_ms?: number;
   channel_color?: string;
@@ -764,6 +840,8 @@ async function buildMlBody(
     containerContext,
   } = input;
   const { container, selectedFrames } = plan;
+  const lineWidth = resolveLineWidth(input.lineWidth);
+  const lineReduce = resolveLineReduce(input.lineReduce, lineWidth);
 
   // The seed frame comes first because it is what decides whether ANY other
   // frame's polygons are needed at all.
@@ -854,6 +932,12 @@ async function buildMlBody(
     // touch `includeCsv` posts byte-for-byte the body it posted before this
     // field existed.
     ...(input.includeCsv === false ? { include_csv: false as const } : {}),
+    // Same discipline: omitted at the defaults, so the body is unchanged for
+    // every caller that does not ask for a wide line.
+    ...(lineWidth > DEFAULT_LINE_WIDTH ? { line_width: lineWidth } : {}),
+    ...(lineReduce !== DEFAULT_LINE_REDUCE
+      ? { line_reduce: lineReduce }
+      : {}),
   };
   return { body, trackedMode };
 }
