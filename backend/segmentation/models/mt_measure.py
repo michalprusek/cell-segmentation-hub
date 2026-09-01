@@ -48,6 +48,24 @@ from typing import List, Sequence
 import numpy as np
 
 
+# Tie-breaker for a pixel that falls exactly on a polygon edge; see the top-left
+# rule on ``fill_convex_polygon``. It is compared against a cross product of
+# pixel-scale coordinates, so it is a sign nudge, not a distance.
+_EPS = 1e-9
+
+# Ceiling on the pixels one vectorised fill pass materialises. The pass holds
+# about a dozen 8-byte temporaries over its flattened bounding-box grid, so
+# 1 << 18 is a ~25 MB transient working set. It is a guard rail and nothing
+# more: measured over all 53 713 convex fills of 4 023 real production
+# centerlines, ONE fill's bounding box is 77 px at the median, 1 590 at p99 and
+# 19 040 at its worst, and a whole centerline's fills total 25 065 px at their
+# worst — so real work is one chunk and the loop below runs once. A single
+# polygon larger than the ceiling is never split (the fill rule needs the whole
+# polygon); it becomes its own chunk, which is exactly the peak the per-polygon
+# loop this replaced already had.
+_FILL_CHUNK_PIXELS = 1 << 18
+
+
 # --------------------------------------------------------------------------- #
 #  Geometry
 # --------------------------------------------------------------------------- #
@@ -74,32 +92,139 @@ def fill_convex_polygon(band: np.ndarray, poly: np.ndarray) -> None:
     IoU >= 0.998 for stroke widths 5 and 8 on real microtubule frames.
 
     Windowed to the polygon's bounding box, so cost is O(bbox), not O(H*W).
+
+    One polygon at a time. ``rasterize_band`` needs a few hundred of them per
+    polyline and hands the whole batch to ``_fill_convex_polygons`` instead; this
+    entry point exists because a single fill reads better than a batch of one,
+    and because the ImageJ rule above is documented once, here.
+    """
+    _fill_convex_polygons(band, np.asarray(poly)[None])
+
+
+def _fill_convex_polygons(band: np.ndarray, polys: np.ndarray) -> None:
+    """Fill every polygon of ``polys`` — :func:`fill_convex_polygon`, batched.
+
+    ``polys`` is ``(P, K, 2)``: P convex polygons that all carry K vertices, in
+    ``[x, y]`` order. Nothing is ever cleared, so the result is the union of the
+    P fills and the order they are visited in cannot matter.
+
+    **This is deliberately harder to read than the per-polygon loop it replaced
+    (2026-09-01). Do not simplify it back.** The fills a band needs are tiny —
+    over all 53 713 of them on 4 023 real production centerlines, one fill's
+    bounding box is 77 px at the median and 19 040 px at its very worst — so the
+    cost was never the pixel arithmetic. It was the ~40 numpy calls each fill
+    made: measured on this box, 79-83 us per fill *whether the polygon covered 30
+    pixels or 3 000*, i.e. essentially all call overhead. Flattening every
+    polygon's bounding box into ONE pixel vector makes that O(K) numpy calls for
+    the entire batch instead of O(P x K) — the per-pixel work is unchanged, and
+    so is every number it produces. Measured, ``rasterize_band``: 0.339 s ->
+    0.027 s for 60 real centerlines on a 1476x1924 export frame (12.4x), 0.649 s
+    -> 0.070 s for 162 on a 2048^2 essays position (9.2x), and 49.1 ms -> 2.2 ms
+    for one 299-point kymograph trajectory (22.6x). The spread IS the vertex
+    count; see ``rasterize_band``.
+
+    Bit-identity is the whole point of the exercise, so the arithmetic below is
+    the scalar version's operation for operation and in its groupings, not an
+    algebraically equal rearrangement:
+
+    * ``cross`` keeps the ``dx * (gy - ay) - dy * (gx - ax)`` grouping. The
+      obvious hoist — ``dx*gy - dy*gx - (dx*ay - dy*ax)``, which would lift two
+      products clean out of the pixel loop — is NOT safe, and the margin is
+      thinner than it looks: measured over 31 380 real fills on a 2048^2 frame it
+      disagrees with this form by up to 9.8e-11 against a ``_EPS`` tie-breaker of
+      1e-9, so **10x of headroom**, shrinking as coordinates grow, with 5 424 of
+      those pixels already sitting at ``|cross| < 1e-6``. It moved no pixel on
+      the 8 820-case equivalence corpus — which is the reason this is written
+      down rather than left to the next reader's judgement;
+    * ``dx``, ``dy`` and therefore the top-left threshold are properties of the
+      EDGE, not of the pixel, so they are resolved once per polygon and only
+      gathered. Their values are the scalars the loop computed;
+    * the shoelace is accumulated left to right in K explicit adds. ``np.sum``
+      agrees here and only here: numpy's pairwise summation degenerates to a
+      running total below 8 terms (checked on numpy 1.26 — equal at K = 3, 4, 5,
+      different at K = 8, 9) and these polygons are triangles and quadrilaterals.
+      Writing it out is what keeps that true should a K ever grow. The winding
+      tie is live on real data — the shoelace is exactly 0 for 34 of those 31 380
+      fills, a zero-area quadrilateral from a repeated vertex — so ``>= 0`` is
+      kept exactly as the scalar form had it, and reversing a winding reverses
+      every edge and so re-decides which boundary pixels the top-left rule takes.
     """
     h, w = band.shape
-    xs = poly[:, 0]
-    ys = poly[:, 1]
-    x0 = max(int(np.floor(xs.min())), 0)
-    x1 = min(int(np.ceil(xs.max())), w - 1)
-    y0 = max(int(np.floor(ys.min())), 0)
-    y1 = min(int(np.ceil(ys.max())), h - 1)
-    if x1 < x0 or y1 < y0:
+    p = np.asarray(polys)
+    if p.ndim != 3 or p.shape[0] == 0 or p.shape[1] == 0:
         return
-    gx, gy = np.meshgrid(np.arange(x0, x1 + 1), np.arange(y0, y1 + 1))
+    xs = p[:, :, 0]
+    ys = p[:, :, 1]
+    k = p.shape[1]
+
+    # Per-polygon bounding box, clipped to the frame. A box that ends up empty
+    # (the polygon is entirely off-frame) gets area 0 and contributes no pixels,
+    # which is the scalar form's early ``return``.
+    x0 = np.maximum(np.floor(xs.min(axis=1)).astype(np.int64), 0)
+    x1 = np.minimum(np.ceil(xs.max(axis=1)).astype(np.int64), w - 1)
+    y0 = np.maximum(np.floor(ys.min(axis=1)).astype(np.int64), 0)
+    y1 = np.minimum(np.ceil(ys.max(axis=1)).astype(np.int64), h - 1)
+    box_w = np.where(x1 >= x0, x1 - x0 + 1, 0)
+    areas = np.where(y1 >= y0, y1 - y0 + 1, 0) * box_w
+    if not areas.any():
+        return
+
     # Orient CCW so the interior is the positive (left) side of every edge.
-    shoelace = float(np.sum(xs * np.roll(ys, -1) - np.roll(xs, -1) * ys))
-    p = poly if shoelace >= 0 else poly[::-1]
-    inside = np.ones(gx.shape, dtype=bool)
-    eps = 1e-9
-    k = len(p)
-    for e in range(k):
-        ax, ay = p[e]
-        bx, by = p[(e + 1) % k]
-        cross = (bx - ax) * (gy - ay) - (by - ay) * (gx - ax)
-        dx = bx - ax
-        dy = by - ay
-        top_left = (dy > 0) or (dy == 0 and dx < 0)
-        inside &= cross > (-eps if top_left else eps)
-    band[y0:y1 + 1, x0:x1 + 1][inside] = 1
+    terms = xs * np.roll(ys, -1, axis=1) - np.roll(xs, -1, axis=1) * ys
+    shoelace = terms[:, 0]
+    for j in range(1, k):
+        shoelace = shoelace + terms[:, j]
+    ccw = (shoelace >= 0)[:, None]
+    # (K, P) and C-contiguous: the pixel loop gathers one whole row per edge.
+    vx = np.ascontiguousarray(np.where(ccw, xs, xs[:, ::-1]).T)
+    vy = np.ascontiguousarray(np.where(ccw, ys, ys[:, ::-1]).T)
+
+    nxt = np.roll(np.arange(k), -1)
+    edge_dx = vx[nxt] - vx
+    edge_dy = vy[nxt] - vy
+    top_left = (edge_dy > 0) | ((edge_dy == 0) & (edge_dx < 0))
+    thr = np.where(top_left, -_EPS, _EPS)
+
+    csum = np.cumsum(areas)
+    lo = 0
+    while lo < areas.size:
+        base = int(csum[lo - 1]) if lo else 0
+        hi = int(np.searchsorted(csum, base + _FILL_CHUNK_PIXELS, side="right"))
+        hi = max(hi, lo + 1)  # one oversized polygon is its own chunk
+        _fill_chunk(
+            band, x0[lo:hi], y0[lo:hi], box_w[lo:hi], areas[lo:hi],
+            vx[:, lo:hi], vy[:, lo:hi],
+            edge_dx[:, lo:hi], edge_dy[:, lo:hi], thr[:, lo:hi],
+        )
+        lo = hi
+
+
+def _fill_chunk(
+    band: np.ndarray,
+    x0: np.ndarray, y0: np.ndarray, box_w: np.ndarray, areas: np.ndarray,
+    vx: np.ndarray, vy: np.ndarray,
+    edge_dx: np.ndarray, edge_dy: np.ndarray, thr: np.ndarray,
+) -> None:
+    """One vectorised pass of :func:`_fill_convex_polygons` over a slice of it."""
+    total = int(areas.sum())
+    if total == 0:
+        return
+    # Every polygon's bounding box, concatenated into one flat pixel vector:
+    # ``owner`` says which polygon a pixel belongs to, and (gx, gy) is its
+    # INTEGER coordinate — the point the scalar form tested via meshgrid.
+    owner = np.repeat(np.arange(areas.size), areas)
+    offset = np.arange(total) - (np.cumsum(areas) - areas)[owner]
+    row_w = box_w[owner]
+    gy = y0[owner] + offset // row_w
+    gx = x0[owner] + offset % row_w
+
+    inside = np.ones(total, dtype=bool)
+    for e in range(vx.shape[0]):
+        ax = vx[e][owner]
+        ay = vy[e][owner]
+        cross = edge_dx[e][owner] * (gy - ay) - edge_dy[e][owner] * (gx - ax)
+        inside &= cross > thr[e][owner]
+    band[gy[inside], gx[inside]] = 1
 
 
 def rasterize_band(points: np.ndarray, h: int, w: int, thickness: int) -> np.ndarray:
@@ -128,6 +253,21 @@ def rasterize_band(points: np.ndarray, h: int, w: int, thickness: int) -> np.nda
 
     ``points`` is ``(M, 2)`` in ``[x, y]`` order — note that the segmentation
     model emits ``(row, col)``, so that caller must swap before calling.
+
+    Every quadrilateral and every joint filler is built for the whole polyline at
+    once and handed to ``_fill_convex_polygons`` in two batches, rather than
+    walked segment by segment (2026-09-01). That is not a change of geometry: the
+    expressions below are the ones the loop evaluated, in the same groupings, so
+    the band is bit-identical — only the number of numpy calls falls, from
+    O(segments) to O(1). It matters because vertex count is what this costs, and
+    the callers disagree about it by an order of magnitude: an RDP-simplified
+    microtubule centerline has 4-20 points, while a kymograph trajectory
+    (``api/kymograph_velocity.tracks_intensity``) has one point per FRAME it
+    lives on — 39 at the median and up to 252 on the real 299-frame kymograph of
+    container 4972cad8. Which is why the kymograph caller is what exposed this:
+    the export had been paying the same per-fill overhead since this band
+    replaced the distance-transform one in 2026-07, just at a tenth of the
+    vertex count, so it read as "an export is slow" rather than as a hot loop.
     """
     band = np.zeros((h, w), dtype=np.uint8)
     n = int(points.shape[0])
@@ -136,47 +276,63 @@ def rasterize_band(points: np.ndarray, h: int, w: int, thickness: int) -> np.nda
     pts = np.asarray(points, dtype=np.float64)
     radius = max(int(thickness), 1) / 2.0
 
-    def _unit(dx: float, dy: float) -> tuple:
-        length = float(np.hypot(dx, dy))
-        return (dx / length, dy / length) if length > 0 else (0.0, 0.0)
+    # Unit tangent of every segment. Zero-length segments (a repeated vertex is a
+    # real input) take the loop's ``(0.0, 0.0)``; dividing by 1.0 instead of
+    # masking keeps that lane free of a spurious divide-by-zero, and ``~(> 0)``
+    # rather than ``== 0`` also catches a NaN length, which the loop's
+    # ``if length > 0`` sent down the same branch.
+    delta = pts[1:] - pts[:-1]
+    seg_len = np.hypot(delta[:, 0], delta[:, 1])
+    tangent = delta / np.where(seg_len > 0, seg_len, 1.0)[:, None]
+    tangent[~(seg_len > 0)] = 0.0
+    tx = tangent[:, 0]
+    ty = tangent[:, 1]
 
-    dx1, dy1 = _unit(pts[1, 0] - pts[0, 0], pts[1, 1] - pts[0, 1])
-    dx0, dy0 = dx1, dy1
-    xfrom = pts[0, 0] - 0.5 * dx1
-    yfrom = pts[0, 1] - 0.5 * dy1
-    for i in range(1, n):
-        xto = pts[i, 0]
-        yto = pts[i, 1]
-        if i == n - 1:  # extend the far end by 0.5 px along the last segment
-            xto += 0.5 * dx1
-            yto += 0.5 * dy1
-        fill_convex_polygon(band, np.array([
-            [xfrom + radius * dy1, yfrom - radius * dx1],
-            [xfrom - radius * dy1, yfrom + radius * dx1],
-            [xto - radius * dy1, yto + radius * dx1],
-            [xto + radius * dy1, yto - radius * dx1],
-        ]))
-        if i > 1:  # fill the outer wedge at the joint between two segments
-            right_turn = (dx1 * dy0) > (dx0 * dy1)
-            if right_turn:
-                tri = np.array([
-                    [xfrom + 0.5 * (radius * dy0 + radius * dy1),
-                     yfrom - 0.5 * (radius * dx0 + radius * dx1)],
-                    [xfrom - radius * dy0, yfrom + radius * dx0],
-                    [xfrom - radius * dy1, yfrom + radius * dx1],
-                ])
-            else:
-                tri = np.array([
-                    [xfrom - 0.5 * (radius * dy0 + radius * dy1),
-                     yfrom + 0.5 * (radius * dx0 + radius * dx1)],
-                    [xfrom + radius * dy0, yfrom - radius * dx0],
-                    [xfrom + radius * dy1, yfrom - radius * dx1],
-                ])
-            fill_convex_polygon(band, tri)
-        dx0, dy0 = dx1, dy1
-        xfrom, yfrom = xto, yto
-        if i < n - 1:
-            dx1, dy1 = _unit(pts[i + 1, 0] - pts[i, 0], pts[i + 1, 1] - pts[i, 1])
+    # Butt caps: the first segment starts 0.5 px before the first point and the
+    # last ends 0.5 px past the last, each along its own tangent (ImageJ's
+    # line<->area convention). Interior joints are the raw vertices.
+    ax = pts[:-1, 0].copy()
+    ay = pts[:-1, 1].copy()
+    bx = pts[1:, 0].copy()
+    by = pts[1:, 1].copy()
+    ax[0] = pts[0, 0] - 0.5 * tx[0]
+    ay[0] = pts[0, 1] - 0.5 * ty[0]
+    bx[-1] = pts[-1, 0] + 0.5 * tx[-1]
+    by[-1] = pts[-1, 1] + 0.5 * ty[-1]
+
+    # One offset quadrilateral per segment; perpendicular of (tx, ty) is (ty, -tx).
+    rx = radius * tx
+    ry = radius * ty
+    quads = np.empty((n - 1, 4, 2), dtype=np.float64)
+    quads[:, 0, 0] = ax + ry
+    quads[:, 0, 1] = ay - rx
+    quads[:, 1, 0] = ax - ry
+    quads[:, 1, 1] = ay + rx
+    quads[:, 2, 0] = bx - ry
+    quads[:, 2, 1] = by + rx
+    quads[:, 3, 0] = bx + ry
+    quads[:, 3, 1] = by - rx
+    _fill_convex_polygons(band, quads)
+
+    if n > 2:
+        # The outer wedge at each interior joint (ImageJ's ``rightTurn`` logic).
+        # A left turn is the same triangle mirrored through the vertex, so the
+        # two branches differ only by a sign — and ``a + (-b)`` is exactly
+        # ``a - b`` in IEEE arithmetic, which is what keeps the merged form
+        # bit-identical to the loop's if/else.
+        jx = pts[1:-1, 0]
+        jy = pts[1:-1, 1]
+        r0x, r0y = rx[:-1], ry[:-1]   # radius * tangent of the incoming segment
+        r1x, r1y = rx[1:], ry[1:]     # radius * tangent of the outgoing segment
+        turn = np.where((tx[1:] * ty[:-1]) > (tx[:-1] * ty[1:]), 1.0, -1.0)
+        tris = np.empty((n - 2, 3, 2), dtype=np.float64)
+        tris[:, 0, 0] = jx + turn * (0.5 * (r0y + r1y))
+        tris[:, 0, 1] = jy - turn * (0.5 * (r0x + r1x))
+        tris[:, 1, 0] = jx - turn * r0y
+        tris[:, 1, 1] = jy + turn * r0x
+        tris[:, 2, 0] = jx - turn * r1y
+        tris[:, 2, 1] = jy + turn * r1x
+        _fill_convex_polygons(band, tris)
     return band
 
 
@@ -204,16 +360,32 @@ def vicinity_mask(
     instead of O(H*W). Since the band's pixels sit at least ``margin_radius``
     inside the sub-window (or at a real frame edge), the windowed dilation is
     bit-identical to a full-frame dilate. Empty band -> empty ring.
+
+    Finding that bounding box is the expensive part, which is not obvious:
+    measured on 162 real microtubules of one 2048^2 essays position, the
+    ``np.nonzero(band)`` this used to open with was **1.190 s of the function's
+    1.220 s** — the dilation it exists to make cheap costs 0.008 s, on a window
+    of 6 137 px at the median against a 4 194 304 px frame. ``nonzero`` walks
+    every frame pixel twice and materialises two int64 index arrays per
+    microtubule only for four order statistics to be taken off them; two boolean
+    ``any`` reductions plus ``argmax`` give the identical four numbers for
+    0.058 s (a 20x cut of the whole function, and the bounds agree exactly on all
+    162 bands). It is an identity, not an approximation: the first True row of
+    ``band.any(axis=1)`` IS ``ys.min()``, and no pixel lies outside the row span,
+    so the column reduction can be restricted to it.
     """
-    ys, xs = np.nonzero(band)
-    vicinity = np.zeros(band.shape, dtype=bool)
-    if ys.size == 0:
-        return vicinity
     h, w = band.shape
-    y0 = max(0, int(ys.min()) - margin_radius)
-    y1 = min(h, int(ys.max()) + margin_radius + 1)
-    x0 = max(0, int(xs.min()) - margin_radius)
-    x1 = min(w, int(xs.max()) + margin_radius + 1)
+    vicinity = np.zeros(band.shape, dtype=bool)
+    rows = band.any(axis=1)
+    ry0 = int(rows.argmax())
+    if not rows[ry0]:  # argmax on an all-False row mask means "empty band"
+        return vicinity
+    ry1 = rows.size - 1 - int(rows[::-1].argmax())
+    cols = band[ry0:ry1 + 1].any(axis=0)
+    y0 = max(0, ry0 - margin_radius)
+    y1 = min(h, ry1 + margin_radius + 1)
+    x0 = max(0, int(cols.argmax()) - margin_radius)
+    x1 = min(w, cols.size - 1 - int(cols[::-1].argmax()) + margin_radius + 1)
     capsule = dilate(band[y0:y1, x0:x1], margin_radius)
     vicinity[y0:y1, x0:x1] = (capsule > 0) & not_signal[y0:y1, x0:x1]
     return vicinity
