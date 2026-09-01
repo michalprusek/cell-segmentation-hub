@@ -130,9 +130,10 @@ def net_velocity_threshold(
     """Convert a µm/s net-velocity cut-off to a kymograph-column/frame cut-off.
 
     Track velocities are measured in kymograph **columns** per frame, and one
-    column spans ``px_per_column`` image pixels (≈1 for short MTs, >1 once the
-    arc length exceeds ``target_width`` and the column axis is compressed). The
-    exact inverse of the display conversion (column/frame → µm/s) is::
+    column spans ``px_per_column`` image pixels — 1.0 to within rounding since
+    the column cap was removed on 2026-09-01, and previously up to 10x that on a
+    long microtubule whose axis had been compressed. The exact inverse of the
+    display conversion (column/frame → µm/s) is::
 
         v_um_s = v_colframe · px_per_column · pixel_size_um / (frame_interval_ms/1000)
 

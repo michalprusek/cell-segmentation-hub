@@ -73,7 +73,8 @@ const CTX = 'MTKymographExporter';
  *  Anything dropped is logged (never silently truncated). */
 const MAX_MT_PER_CONTAINER = 60;
 
-/** How many (microtubule × channel) kymographs go into ONE batched ML request.
+/** How many (microtubule × channel) kymographs this file hands to ONE
+ *  `buildKymographBatch` call.
  *
  *  The batch is what makes the ML service decode each frame once for all of
  *  them instead of once per job, so the useful value is "the whole channel in
@@ -81,11 +82,17 @@ const MAX_MT_PER_CONTAINER = 60;
  *  channels: two channels share no frame images, so a chunk that straddled the
  *  boundary would decode one channel's frames in two requests.
  *
+ *  This is an ITEM count and no longer bounds the response, because a kymograph
+ *  is now as wide as its microtubule is long (up to 2077 columns) rather than a
+ *  fixed 200. The response bound lives in `kymographService`, which is the layer
+ *  that knows each item's column count: it splits what it is given into as many
+ *  ML requests as `ML_BATCH_MAX_OUTPUT_PIXELS` allows. So this number is a
+ *  ceiling on how much the service gets to pack, not on what it sends.
+ *
  *  Measured 2026-09-01 on container 4972cad8 (300 frames, 60 microtubules, one
  *  channel, velocity detection + overlay): 60 separate requests took 186.2 s
  *  and decoded 18 000 frames; one batch of 60 took 13.2 s and decoded 300. The
- *  request is the same 29.2 MB either way (it is the same bodies), and the
- *  response is 14.4 MB with `includeCsv: false` below. */
+ *  request is the same 29.2 MB either way (it is the same bodies). */
 const KYMOGRAPH_BATCH_MAX_ITEMS = MAX_MT_PER_CONTAINER;
 
 /** profiles mode only: also bound how many matplotlib PNGs one response
@@ -96,7 +103,11 @@ const KYMOGRAPH_BATCH_MAX_ITEMS = MAX_MT_PER_CONTAINER;
  *  exists for — a single-frame project forces it) batches all 60 microtubules
  *  and gets the full win, while a 300-frame profiles export falls back to one
  *  item per request and gains nothing. Its response IS its product; there is
- *  no version of it that both batches and stays small. */
+ *  no version of it that both batches and stays small.
+ *
+ *  A profile PNG is a fixed-size matplotlib figure and does NOT grow with the
+ *  uncapped column axis; the intensity CSV this mode also carries does, and
+ *  that is covered by the service's output-pixel budget. */
 const PROFILE_BATCH_MAX_IMAGES = 300;
 
 /** Per (microtubule × channel) cap on the number of frame profiles written in
@@ -470,10 +481,13 @@ export async function exportMicrotubuleKymographs(
      * A container whose rows fail to load is skipped with a warning and its
      * jobs still count as done — same treatment as an individual job failure,
      * so the progress bar still reaches 100 % and the export still completes.
-     * So is a batch that fails outright (a network error, or an ml container
-     * old enough not to have `/kymograph/batch`): every job in it is reported
-     * as failed and the export carries on with the next batch, exactly as one
-     * failed request used to cost exactly one microtubule.
+     * So is a batch that fails outright: every job in it is reported as failed
+     * and the export carries on with the next batch, exactly as one failed
+     * request used to cost exactly one microtubule. `buildKymographBatch`
+     * reports an ML failure (a network drop, or an ml container old enough not
+     * to have `/kymograph/batch`) per item rather than throwing, so it can keep
+     * the results of any request that already succeeded; the catch here is the
+     * guard against anything that escapes it anyway.
      *
      * Progress is still counted per microtubule, but a whole batch's jobs are
      * reported together when it returns, so the bar advances once per
