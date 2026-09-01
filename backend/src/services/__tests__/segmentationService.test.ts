@@ -57,6 +57,12 @@ vi.mock('../thumbnailManager', () => ({
 }));
 vi.mock('../imageService');
 
+// The cross-frame tracker is fire-and-forget and talks to the ML service;
+// stub it so batchProcess's dispatch can be asserted without a network call.
+vi.mock('../tracking/trackerService', () => ({
+  scheduleTrackingForContainer: vi.fn(),
+}));
+
 // Single hoisted axios client for the HTTP-touching paths (requestSegmentation,
 // requestBatchSegmentation, batchProcess, checkServiceHealth).
 const { mockHttpClientPost, mockHttpClientGet } = vi.hoisted(() => ({
@@ -78,6 +84,7 @@ vi.mock('axios', () => ({
 }));
 
 import { SegmentationService } from '../segmentationService';
+import { scheduleTrackingForContainer } from '../tracking/trackerService';
 import type { SegmentationPolygon } from '../segmentationService';
 import { ImageService } from '../imageService';
 import { logger } from '../../utils/logger';
@@ -2058,6 +2065,10 @@ describe('SegmentationService — batchProcess', () => {
     prisma.project.findUnique.mockResolvedValue({ type: 'spheroid' });
     mockHttpClientPost.mockResolvedValue({ data: makeSegResult() });
     prisma.segmentation.upsert.mockResolvedValue(upsertRow);
+    installImageTable(prisma, [
+      { id: 'img-1', parentVideoId: null },
+      { id: 'img-2', parentVideoId: null },
+    ]);
 
     const result = await svc.batchProcess(['img-1', 'img-2'], 'hrnet', 0.5, 'user-1');
     expect(result.successful).toBe(2);
@@ -2074,12 +2085,214 @@ describe('SegmentationService — batchProcess', () => {
     prisma.project.findUnique.mockResolvedValue({ type: 'spheroid' });
     mockHttpClientPost.mockResolvedValue({ data: makeSegResult() });
     prisma.segmentation.upsert.mockResolvedValue(upsertRow);
+    installImageTable(prisma, [
+      { id: 'img-1', parentVideoId: null },
+      { id: 'img-2', parentVideoId: null },
+    ]);
 
     const result = await svc.batchProcess(['img-1', 'img-2'], 'hrnet', 0.5, 'user-1');
     expect(result.successful).toBe(1);
     expect(result.failed).toBe(1);
     expect(result.results[1].success).toBe(false);
     expect(result.results[1].error).toMatch(/Image not found/);
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Cross-frame tracking dispatch (regression: editor Resegment lost trackIds)
+  //
+  // `POST /api/segmentation/batch` — the editor's Resegment button — reaches
+  // the model through batchProcess and NOT through the queue, so it never hit
+  // queueService's `scheduleTrackingForContainer` call. Measured on production
+  // 2026-09-01: the container below came back with 4 polylines per frame and
+  // ZERO trackIds through this endpoint, and with 4 stable trackIds through
+  // `POST /api/queue/batch`. Without a trackId the editor's "delete whole
+  // track" / "propagate forward" / per-track colour all silently degrade to
+  // single-frame behaviour.
+  //
+  // Ids and row shapes below are the real production rows (project
+  // 3bcbfdec-606e-4a02-a373-6a023560fa57, type `microtubules`), not invented
+  // ones, so the fixture cannot quietly disagree with the table it stands in
+  // for.
+  // ─────────────────────────────────────────────────────────────────────────
+  const MT_CONTAINER_A = '3b032806-bdf0-4d85-997f-8c7212e4c3f8';
+  const MT_A_FRAMES = [
+    'e4d0cfc1-4baf-4a76-acc9-f06061962138', // frameIndex 0
+    '8b6edf6f-cb08-45df-a89a-161a98d13347', // frameIndex 1
+    'eb503df0-46df-4ae2-be2b-344afd1e4a49', // frameIndex 2
+  ];
+  const MT_CONTAINER_B = '0969e275-3b2a-4b07-8943-1bb44c6ad6e4';
+  const MT_B_FRAME = '83b15b61-036e-4a23-8531-1fa04a29230a';
+  const STANDALONE_IMAGE = '014f1495-2d9e-40db-b7e2-b3bd4e51b55b';
+
+  /**
+   * Stand-in for the `images` table that honours BOTH halves of the where
+   * clause batchProcess builds. Filtering inside the fake rather than
+   * hand-picking the rows is deliberate: if the `parentVideoId: { not: null }`
+   * predicate were dropped from the query, a standalone image would leak into
+   * the container set here instead of being hidden by a convenient fixture.
+   */
+  function installImageTable(
+    prisma: ReturnType<typeof makePrisma>,
+    rows: Array<{ id: string; parentVideoId: string | null }>
+  ) {
+    prisma.image.findMany.mockImplementation(((args: {
+      where?: { id?: { in?: string[] }; parentVideoId?: { not?: unknown } };
+    }) => {
+      const ids = args?.where?.id?.in;
+      const framesOnly = args?.where?.parentVideoId?.not === null;
+      return Promise.resolve(
+        rows
+          .filter(r => (ids ? ids.includes(r.id) : true))
+          .filter(r => (framesOnly ? r.parentVideoId !== null : true))
+          .map(r => ({ parentVideoId: r.parentVideoId }))
+      );
+    }) as never);
+  }
+
+  /** Every image resolves, segments and saves. */
+  function installHappyPath(
+    prisma: ReturnType<typeof makePrisma>,
+    imageService: ReturnType<typeof makeImageService>
+  ) {
+    imageService.getImageById.mockImplementation(((id: string) =>
+      Promise.resolve(makeImage({ id, name: 'twochan.tif (frame 1)' }))) as never);
+    prisma.project.findUnique.mockResolvedValue({ type: 'microtubules' });
+    mockHttpClientPost.mockResolvedValue({
+      data: makeSegResult({ model_used: 'microtubule' }),
+    });
+    prisma.segmentation.upsert.mockResolvedValue(upsertRow);
+  }
+
+  it('schedules tracking once per container, not once per frame', async () => {
+    const { svc, imageService, prisma } = makeService();
+    installHappyPath(prisma, imageService);
+    installImageTable(prisma, [
+      ...MT_A_FRAMES.map(id => ({ id, parentVideoId: MT_CONTAINER_A })),
+      { id: MT_B_FRAME, parentVideoId: MT_CONTAINER_B },
+    ]);
+
+    await svc.batchProcess(
+      [...MT_A_FRAMES, MT_B_FRAME],
+      'microtubule',
+      0.5,
+      'user-1'
+    );
+
+    // 4 frames, 2 containers → 2 calls. One call per frame would re-run a
+    // multi-minute ML pass three times over on container A.
+    expect(vi.mocked(scheduleTrackingForContainer)).toHaveBeenCalledTimes(2);
+    const scheduled = vi
+      .mocked(scheduleTrackingForContainer)
+      .mock.calls.map(c => c[0]);
+    expect(new Set(scheduled)).toEqual(
+      new Set([MT_CONTAINER_A, MT_CONTAINER_B])
+    );
+  });
+
+  it('does not schedule tracking for standalone images', async () => {
+    const { svc, imageService, prisma } = makeService();
+    installHappyPath(prisma, imageService);
+    installImageTable(prisma, [{ id: STANDALONE_IMAGE, parentVideoId: null }]);
+
+    await svc.batchProcess([STANDALONE_IMAGE], 'microtubule', 0.5, 'user-1');
+
+    expect(vi.mocked(scheduleTrackingForContainer)).not.toHaveBeenCalled();
+  });
+
+  it('schedules only the container when a batch mixes frames and standalone images', async () => {
+    const { svc, imageService, prisma } = makeService();
+    installHappyPath(prisma, imageService);
+    installImageTable(prisma, [
+      { id: MT_A_FRAMES[0], parentVideoId: MT_CONTAINER_A },
+      { id: STANDALONE_IMAGE, parentVideoId: null },
+    ]);
+
+    await svc.batchProcess(
+      [MT_A_FRAMES[0], STANDALONE_IMAGE],
+      'microtubule',
+      0.5,
+      'user-1'
+    );
+
+    expect(vi.mocked(scheduleTrackingForContainer)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(scheduleTrackingForContainer)).toHaveBeenCalledWith(
+      MT_CONTAINER_A
+    );
+  });
+
+  it('still schedules when only some frames of the container succeeded', async () => {
+    const { svc, imageService, prisma } = makeService();
+    installHappyPath(prisma, imageService);
+    // Middle frame is gone; requestSegmentation throws and marks it 'failed',
+    // which trackerService counts as a FINAL status on purpose.
+    imageService.getImageById.mockImplementation(((id: string) =>
+      Promise.resolve(
+        id === MT_A_FRAMES[1] ? null : makeImage({ id })
+      )) as never);
+    installImageTable(
+      prisma,
+      MT_A_FRAMES.map(id => ({ id, parentVideoId: MT_CONTAINER_A }))
+    );
+
+    const result = await svc.batchProcess(
+      MT_A_FRAMES,
+      'microtubule',
+      0.5,
+      'user-1'
+    );
+
+    expect(result.successful).toBe(2);
+    expect(result.failed).toBe(1);
+    expect(vi.mocked(scheduleTrackingForContainer)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(scheduleTrackingForContainer)).toHaveBeenCalledWith(
+      MT_CONTAINER_A
+    );
+  });
+
+  it('does not schedule when every frame of the container failed', async () => {
+    const { svc, imageService, prisma } = makeService();
+    installHappyPath(prisma, imageService);
+    imageService.getImageById.mockResolvedValue(null);
+    installImageTable(
+      prisma,
+      MT_A_FRAMES.map(id => ({ id, parentVideoId: MT_CONTAINER_A }))
+    );
+
+    const result = await svc.batchProcess(
+      MT_A_FRAMES,
+      'microtubule',
+      0.5,
+      'user-1'
+    );
+
+    // No Segmentation row changed, so the previous pass's trackIds are still
+    // the answer — re-running would cost an ML call to re-derive them.
+    expect(result.successful).toBe(0);
+    expect(vi.mocked(scheduleTrackingForContainer)).not.toHaveBeenCalled();
+  });
+
+  it('returns the batch result even when the container lookup fails', async () => {
+    const { svc, imageService, prisma } = makeService();
+    installHappyPath(prisma, imageService);
+    prisma.image.findMany.mockRejectedValue(new Error('connection reset'));
+
+    // The segmentations are already committed; a tracking-dispatch failure
+    // must not turn a successful batch into an HTTP 500.
+    const result = await svc.batchProcess(
+      [MT_A_FRAMES[0]],
+      'microtubule',
+      0.5,
+      'user-1'
+    );
+
+    expect(result.successful).toBe(1);
+    expect(vi.mocked(scheduleTrackingForContainer)).not.toHaveBeenCalled();
+    expect(vi.mocked(logger.error)).toHaveBeenCalledWith(
+      expect.stringContaining('cross-frame tracking'),
+      expect.any(Error),
+      'SegmentationService',
+      expect.anything()
+    );
   });
 });
 

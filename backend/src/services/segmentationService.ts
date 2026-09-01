@@ -2066,11 +2066,123 @@ export class SegmentationService {
       userId,
     });
 
+    await this.scheduleTrackingForBatch(
+      results.filter(r => r.success).map(r => r.imageId)
+    );
+
     return {
       successful,
       failed,
       results,
     };
+  }
+
+  /**
+   * Re-derive cross-frame identity for every video container this batch just
+   * re-segmented.
+   *
+   * Why it is here at all: the model emits no `trackId`, so a freshly
+   * segmented frame has none until the tracker writes one. The QUEUE path
+   * schedules the tracker as each item completes (`queueService`), but this
+   * synchronous path — `POST /api/segmentation/batch`, i.e. the editor's
+   * Resegment button — called it from nowhere, so every editor resegment
+   * silently dropped cross-frame identity for the whole container. "Delete
+   * whole track", "Propagate to following frames" and per-track colouring
+   * then degrade to single-frame behaviour, because the editor gates them on
+   * `trackId`. Measured on production 2026-09-01: the same 3-frame container
+   * came back with 4 polylines per frame and 0 trackIds through this endpoint,
+   * and with 4 stable trackIds through `POST /api/queue/batch`.
+   *
+   * Coalescing. `imageIds` can hold up to 50 rows spanning several containers,
+   * and the tracker's own in-flight guard only collapses passes that OVERLAP
+   * IN TIME — fifty sequential calls would each start a full pass. So dedupe
+   * by container id here: one call per container per batch, never one per
+   * frame. (The editor sends a single frame, but the endpoint accepts 50.)
+   *
+   * What is gated, and what deliberately is not:
+   *   - Standalone images have no `parentVideoId` and no cross-frame identity
+   *     to derive; the SQL filter drops them, and video CONTAINER rows too
+   *     (their own `parentVideoId` is null).
+   *   - Readiness of the REST of the container is not decided here.
+   *     `runTrackingForContainer` already refuses until every frame has
+   *     reached a final status, and that is the same gate the queue path
+   *     leans on. Duplicating it would only add a second, drift-prone copy.
+   *   - A container whose frames PARTLY failed is still scheduled. 'failed'
+   *     is a final status by design (see FINAL_SEGMENTATION_STATUSES): making
+   *     one bad frame block the tracker is precisely the bug that left
+   *     600-frame videos with random per-frame colours. The frames that did
+   *     succeed have new geometry and need new ids.
+   *   - A container whose frames ALL failed is skipped, because no
+   *     Segmentation row changed: the previous pass's trackIds are still the
+   *     right answer, and a re-run would re-derive them at the cost of an ML
+   *     call that takes minutes on a long video.
+   *
+   * A container that holds no polylines at all (a closed-polygon video, if one
+   * is ever made) costs one database read: `runTrackingForContainer` returns
+   * before it POSTs anything to the ML service.
+   *
+   * Unlike the queue path there is no static-channel suppression, and that is
+   * correct rather than an omission: this endpoint does not perform the
+   * static-channel collapse at all (each frame is segmented on its own stamped
+   * PNG, and the other frames keep their previous polylines), so no frame here
+   * inherits an identity from an anchor and the tracker is the only thing that
+   * can supply one.
+   *
+   * The HTTP response never waits on tracking: `scheduleTrackingForContainer`
+   * returns immediately and the pass runs detached. The one awaited step is a
+   * single lookup over `images.id`, which is the primary key.
+   */
+  private async scheduleTrackingForBatch(
+    segmentedImageIds: string[]
+  ): Promise<void> {
+    if (segmentedImageIds.length === 0) {
+      return;
+    }
+    try {
+      const frames = await this.prisma.image.findMany({
+        where: { id: { in: segmentedImageIds }, parentVideoId: { not: null } },
+        select: { parentVideoId: true },
+      });
+      // The SQL predicate above already excludes null parents; this narrows
+      // Prisma's `string | null` for the compiler and is the gate that a
+      // dropped predicate would fall back on, so both stay.
+      const containerIds = new Set(
+        frames
+          .map(f => f.parentVideoId)
+          .filter((id): id is string => typeof id === 'string' && id.length > 0)
+      );
+      if (containerIds.size === 0) {
+        return;
+      }
+      // Imported lazily, the way `../types/validation` is above. A static import
+      // would pull `tracking/trackerService` — and through it the
+      // `db/prismaClient` singleton, which builds a PrismaClient at module
+      // load — into the module graph of everything that imports this service,
+      // including the controller suites that only auto-mock it. Nothing needs
+      // that client until a video frame is actually re-segmented.
+      const { scheduleTrackingForContainer } = await import(
+        './tracking/trackerService'
+      );
+      for (const containerId of containerIds) {
+        scheduleTrackingForContainer(containerId);
+      }
+      logger.info(
+        'Scheduled cross-frame tracking after synchronous batch',
+        'SegmentationService',
+        { containers: containerIds.size, frames: frames.length }
+      );
+    } catch (error) {
+      // The segmentations are already committed; a failure to look up the
+      // parent container must not turn a successful batch into an HTTP 500.
+      // Log loudly — the visible symptom would be "resegment lost the track
+      // colours", which is hard to attribute without this line.
+      logger.error(
+        'Failed to dispatch cross-frame tracking after synchronous batch',
+        error instanceof Error ? error : undefined,
+        'SegmentationService',
+        { imageCount: segmentedImageIds.length }
+      );
+    }
   }
 
   /**

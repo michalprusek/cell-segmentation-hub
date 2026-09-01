@@ -364,7 +364,9 @@ describe('SegmentationController', () => {
   describe('batchSegment (processImage)', () => {
     it('should initiate batch processing successfully', async () => {
       const batchResult = { processed: 2, failed: 0, results: [] };
-      mockMethod('batchProcess').mockResolvedValueOnce(batchResult);
+      const batchProcess = mockMethod('batchProcess').mockResolvedValueOnce(
+        batchResult
+      );
       installResponseMocks();
 
       const response = await request(app)
@@ -380,6 +382,23 @@ describe('SegmentationController', () => {
         .expect(200);
 
       expect(response.body.success).toBe(true);
+      // batchProcess is the ONLY thing this handler delegates to, and it is
+      // where cross-frame tracking is scheduled for video containers (see
+      // segmentationService.test.ts, "Cross-frame tracking dispatch"). Assert
+      // the exact arguments so the chain batchSegment -> batchProcess ->
+      // scheduleTrackingForContainer is pinned at both links: an editor
+      // Resegment that never reached batchProcess would lose trackIds again.
+      expect(batchProcess).toHaveBeenCalledWith(
+        [
+          'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+          'b2c3d4e5-f6a7-8901-bcde-f12345678901',
+        ],
+        'hrnet',
+        0.5,
+        'user-id',
+        true,
+        undefined
+      );
     });
 
     it('should return 400 when imageIds is empty', async () => {
