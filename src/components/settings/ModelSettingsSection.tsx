@@ -119,11 +119,15 @@ const ModelSettingsSection = () => {
       <RadioGroupItem value={model.id} id={model.id} />
       <Label htmlFor={model.id} className="flex-1 cursor-pointer">
         {/* Hovering a model shows three real frames it segmented, so the
-            choice can be made on the output rather than on the name. */}
+            choice can be made on the output rather than on the name.
+            ABOVE the row, not beside it: these cards span the settings
+            column, so a side-placed preview has no room on either edge and
+            Radix keeps it attached to the anchor rather than pulling it back
+            on screen — it rendered half off the viewport. */}
         <SpecimenHoverCard
           kind="model"
           value={model.id as ModelType}
-          side="right"
+          side="top"
           align="start"
         >
           <Card className="transition-colors hover:bg-gray-50 dark:hover:bg-gray-800/50 dark:bg-gray-900">
