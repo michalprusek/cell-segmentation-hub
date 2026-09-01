@@ -1229,6 +1229,14 @@ export default {
       singleFrameHint: '单帧图像 — 微管图需要时间序列，因此仅导出强度剖面。',
       profilesHint:
         '为每一帧导出一张强度随位置变化的 matplotlib 图，并附带强度 CSV。',
+      lineWidthLabel: '线宽 (px)',
+      lineWidthHelp:
+        '沿每条微管采样的线宽，垂直于微管方向测量。设为 1 时仅采样单个像素。对微管图和强度剖面同样生效。',
+      lineReduceLabel: '沿线宽方向',
+      lineReduceHelp:
+        '线宽方向上的像素如何合并为一个值。平均值与 ImageJ 一致；最大值更亮，但会被个别过亮像素影响。',
+      lineReduceMean: '平均值',
+      lineReduceMax: '最大值',
     },
     mt: {
       sectionTitle: '微管指标',

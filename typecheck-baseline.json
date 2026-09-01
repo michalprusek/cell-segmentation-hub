@@ -1252,8 +1252,7 @@
         "TS2345: Argument of type 'string | string[]' is not assignable to parameter of type 'SetStateAction<null | string>'.": 3
       },
       "src/pages/SignIn.tsx": {
-        "TS2322: Type 'string | string[]' is not assignable to type 'string | undefined'.": 2,
-        "TS6307: File 'src/components/ui/input.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
+        "TS2322: Type 'string | string[]' is not assignable to type 'string | undefined'.": 2
       },
       "src/pages/SignUp.tsx": {
         "TS2322: Type 'string | string[]' is not assignable to type 'string | undefined'.": 3,
@@ -1288,14 +1287,15 @@
       "src/pages/export/components/ImageSelectionGrid.tsx": {
         "TS2322: Type 'string | string[]' is not assignable to type 'string | undefined'.": 1,
         "TS6307: File 'src/components/ui/pagination.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
-        "TS6307: File 'src/components/ui/select.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
         "TS6307: File 'src/pages/export/components/ExportImageCard.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
       },
       "src/pages/export/components/MicrotubuleKymographsSection.tsx": {
         "TS6307: File 'src/components/ui/card.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
         "TS6307: File 'src/components/ui/checkbox.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
+        "TS6307: File 'src/components/ui/input.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
         "TS6307: File 'src/components/ui/label.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
-        "TS6307: File 'src/components/ui/radio-group.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
+        "TS6307: File 'src/components/ui/radio-group.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
+        "TS6307: File 'src/components/ui/select.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
       },
       "src/pages/export/hooks/__tests__/useImageSelection.test.ts": {
         "TS6307: File 'src/pages/export/hooks/useImageSelection.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
@@ -1353,7 +1353,7 @@
         "TS6307: File 'src/test-utils/segmentationTestUtils.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
       },
       "src/pages/segmentation/__tests__/PolygonDataEdgeCases.test.tsx": {
-        "TS2339: Property 'container' does not exist on type 'RenderResult<typeof import(\"/home/cvat/cell-segmentation-hub/node_modules/@testing-library/dom/types/queries\"), HTMLElement, HTMLElement> | {...; }'.": 21,
+        "TS2339: Property 'container' does not exist on type 'RenderResult<typeof import(\"node_modules/@testing-library/dom/types/queries\"), HTMLElement, HTMLElement> | {...; }'.": 21,
         "TS2353: Object literal may only specify known properties, and 'metadata' does not exist in type 'Polygon'.": 1
       },
       "src/pages/segmentation/__tests__/PolygonPerformanceRegression.test.tsx": {

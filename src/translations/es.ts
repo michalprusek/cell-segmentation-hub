@@ -1323,6 +1323,14 @@ export default {
         'Un solo fotograma: un kimograma necesita una serie temporal, por lo que solo se exporta el perfil de intensidad.',
       profilesHint:
         'Exporta un gráfico de matplotlib de intensidad frente a posición por fotograma, además del CSV de intensidad.',
+      lineWidthLabel: 'Ancho de línea (px)',
+      lineWidthHelp:
+        'Ancho de la línea muestreada a lo largo de cada microtúbulo, medido transversalmente. 1 muestrea un solo píxel. Se aplica igual a los kimogramas y a los perfiles de intensidad.',
+      lineReduceLabel: 'A lo ancho',
+      lineReduceHelp:
+        'Cómo los píxeles a lo ancho se convierten en un solo valor. La media coincide con ImageJ; el máximo es más brillante pero se sesga por píxeles calientes aislados.',
+      lineReduceMean: 'Media',
+      lineReduceMax: 'Máximo',
     },
     mt: {
       sectionTitle: 'Métricas de microtúbulos',

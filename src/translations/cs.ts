@@ -1320,6 +1320,14 @@ export default {
         'Jen jeden snímek — kymograf potřebuje časovou řadu, proto se exportuje pouze profil intenzity.',
       profilesHint:
         'Exportuje jeden matplotlib graf intenzity v závislosti na pozici pro každý snímek a k tomu CSV s intenzitami.',
+      lineWidthLabel: 'Šířka linie (px)',
+      lineWidthHelp:
+        'Šířka linie vzorkované podél každého mikrotubulu, měřená napříč ním. Hodnota 1 odebere jediný pixel. Platí stejně pro kymografy i profily intenzity.',
+      lineReduceLabel: 'Napříč šířkou',
+      lineReduceHelp:
+        'Jak se pixely napříč šířkou sloučí do jedné hodnoty. Průměr odpovídá ImageJ, maximum je jasnější, ale zkreslují ho ojedinělé horké pixely.',
+      lineReduceMean: 'Průměr',
+      lineReduceMax: 'Maximum',
     },
     mt: {
       sectionTitle: 'Metriky mikrotubulů',

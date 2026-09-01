@@ -31,6 +31,20 @@ router.post(
     body('options.includeVisualizations').optional().isBoolean(),
     body('options.annotationFormats').optional().isArray(),
     body('options.metricsFormats').optional().isArray(),
+    // Microtubule kymograph export: how wide a line is sampled along each
+    // microtubule (px, PERPENDICULAR to it) and how the samples across that
+    // width collapse to one value. Absent = 1 / mean, i.e. the single-pixel
+    // line profile this export has always built. Bounds mirror the ML
+    // `KymographRequest.line_width` (1…51) — outside them the model 422s.
+    // `toInt` because the controller casts `req.body` straight to the options
+    // object: a numeric STRING passes `isInt` but would then be dropped as
+    // "not a finite number" by `kymographService`, i.e. the user would ask for
+    // a band and silently get width 1.
+    body('options.mtKymographs.lineWidth')
+      .optional()
+      .isInt({ min: 1, max: 51 })
+      .toInt(),
+    body('options.mtKymographs.lineReduce').optional().isIn(['mean', 'max']),
   ],
   validateRequest,
   exportController.startExport
