@@ -28,6 +28,12 @@ during per-frame segmentation:
   selected frame's geometry as a static fallback otherwise), resamples
   to a uniform width, and renders a viridis heatmap PNG plus the
   underlying CSV.
+
+- ``/kymograph/batch`` renders N of those in one call, decoding each
+  distinct frame ONCE and sampling every polyline from it. Same bodies,
+  same maths, same output — only the loop order differs. It exists for the
+  MT export, which builds one kymograph per (microtubule x channel) over
+  one container's frames and so re-decoded each frame up to 60 times.
 """
 from __future__ import annotations
 
@@ -1130,6 +1136,66 @@ class KymographResponse(BaseModel):
     profiles: Optional[List[ProfilePng]] = None
 
 
+# Upper bound on the items of ONE batch.
+#
+# The export caps a container at 60 microtubules
+# (``MAX_MT_PER_CONTAINER`` in ``mtKymographExporter.ts``) and sends one batch
+# per (container, channel), so 64 covers that with headroom. There has to be a
+# bound at all because the RESPONSE is O(items): a 300-frame kymograph is a
+# 128 KB PNG plus a 128 KB overlay, so 64 items is ~16 MB — and ~45 MB more if
+# the caller leaves ``include_csv`` on. The decode side does NOT scale with
+# items (that is the point of the endpoint); only the response does.
+_BATCH_MAX_ITEMS = 64
+
+
+class KymographBatchRequest(BaseModel):
+    """N kymographs in one request, so each frame is decoded ONCE for all of
+    them instead of once per (microtubule x channel).
+
+    ``items`` are plain ``KymographRequest`` bodies, unchanged and independent
+    — the batch is a transport, not a new rendering mode. That is deliberate:
+    it keeps every render parameter per-item (two microtubules of one container
+    have different ``n_samples``, and a caller may mix channels), and it makes
+    the equivalence with the single endpoint checkable by construction — the
+    bodies a batch carries are byte-for-byte the bodies the un-batched export
+    posted one at a time.
+
+    Nothing requires the items to share frames; the dedup is over the stat
+    identity of each ``image_path``, so items that share none simply decode
+    everything and cost exactly what N separate requests would.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    items: List[KymographRequest] = Field(
+        ..., min_length=1, max_length=_BATCH_MAX_ITEMS
+    )
+
+
+class KymographBatchItem(BaseModel):
+    """One item's outcome. Exactly one of the two fields is set.
+
+    Errors are per item on purpose. The un-batched export ran one HTTP request
+    per microtubule and caught failures individually, so one polyline with a
+    single vertex — or one channel missing a frame PNG, which is real: on
+    container 4972cad8 the IRM channel is missing frame 299 — cost that
+    microtubule its kymograph and nothing else. Failing the whole batch would
+    turn that into "the container exported no kymographs at all".
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    kymograph: Optional[KymographResponse] = None
+    error: Optional[str] = None
+
+
+class KymographBatchResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    # One entry per request item, in request order.
+    results: List[KymographBatchItem]
+
+
 def _arc_length_resample_polyline(
     pts_rc: np.ndarray, n_samples: int
 ) -> np.ndarray:
@@ -1198,7 +1264,7 @@ def _arc_length_resample_polyline(
 #    velocity detection, nudging `intensity_width`, exporting after viewing)
 #    skips the decode entirely. What it does NOT buy: a different microtubule,
 #    or the same one on another channel, is a different key and pays the cold
-#    cost. That is why (2) exists.
+#    cost. That is why (2) and (3) exist.
 #
 # 2. DECODE IN PARALLEL. Pillow releases the GIL inside the PNG decoder, so the
 #    cold path is thread-scalable. Measured on 60 of the frames above, inside
@@ -1210,6 +1276,28 @@ def _arc_length_resample_polyline(
 #    oversubscription costs more than it wins. cv2.imread was measured on the
 #    same frames (2.079 s serial, 0.832 s at x4) and is no faster than Pillow,
 #    so the hot path keeps the decoder it already had.
+#
+# 3. SAMPLE MANY POLYLINES PER DECODE. (1) and (2) make ONE kymograph as cheap
+#    as it can be; they do nothing about the export, which builds one per
+#    (microtubule x channel) over the SAME frames. Every lookup misses, because
+#    every job has a different polyline and the key carries its digest. Real
+#    production export, 2026-09-01: 61 requests, 0 frames from cache, 69
+#    decoded — the cache was doing nothing at all for it.
+#
+#    ``/kymograph/batch`` inverts the loop instead: decode a frame once and
+#    sample every polyline that wants a row from it before moving on. That is
+#    O(1) frames resident in the number of polylines, which no LRU can be —
+#    an LRU has to hold the entire working set to score its first hit, and here
+#    the working set is 3.4 GB. Measured 2026-09-01 on 60 microtubules x 300
+#    frames of container 4972cad8 (channel 488_nm, velocity detection and
+#    overlay on, cold row cache both times):
+#
+#      60 requests   18 000 decodes   186.2 s   peak RSS 1.146 GiB
+#       1 request       300 decodes    13.2 s   peak RSS 1.381 GiB
+#
+#    14.1x, and the +235 MB of peak is the 29 MB request body and 36 MB
+#    response as Python objects — NOT frames. Frames resident stay at one per
+#    decode thread whether the batch carries 1 polyline or 60.
 #
 # The pool is capped rather than sized to the machine because the cap is the
 # container's CPU quota (`cpus: '4.0'` in docker-compose.production.yml), and
@@ -1392,16 +1480,41 @@ _SAMPLE_CACHE = _SampledRowCache(_sample_cache_budget_bytes())
 _DECODE_SCRATCH = threading.local()
 
 
-def _sample_frame_row(
-    path: Path, pts: np.ndarray, n_samples: int
-) -> np.ndarray:
-    """Decode one frame and read the intensity profile along ``pts``.
+class _RowJob(NamedTuple):
+    """One kymograph row that still has to be read off a decoded frame.
+
+    ``item`` indexes the kymograph being built (always 0 outside a batch),
+    ``row`` its frame. ``file_key`` is the stat identity of the PNG — the same
+    identity ``_SampledRowCache`` keys on, so two spellings of one frame (or a
+    hard link) group onto one decode and a rewritten frame does not.
+    """
+
+    item: int
+    row: int
+    path: Path
+    file_key: Tuple[Any, ...]
+    pts: np.ndarray
+    n_samples: int
+    cache_key: Tuple[Any, ...]
+
+
+def _sample_frame_rows(path: Path, jobs: List[_RowJob]) -> List[np.ndarray]:
+    """Decode one frame ONCE and read every job's intensity profile off it.
+
+    This is the whole point of the batch endpoint. The export builds one
+    kymograph per (microtubule x channel) and every one of them reads the same
+    frames, so decoding per row made a 300-frame, 3-channel, 60-microtubule
+    container do 54 000 decodes of 900 distinct files. Decoding per FILE and
+    sampling every polyline that wants a row from it makes that 900 — and the
+    memory stays one frame per decode thread however many polylines are in
+    flight, which is what no LRU of decoded frames can offer (it would need the
+    whole 300-frame, 3.4 GB working set resident before it scored a hit).
 
     Runs on the decode pool, so it must touch no shared state. The returned
-    row is frozen read-only: it is handed straight into the cache, and
-    ``np.stack`` copies it into the kymograph matrix, so nothing downstream has
-    a reason to write through it — an accidental write should raise rather than
-    corrupt every later request that reads the same entry.
+    rows are frozen read-only: they are handed straight into the cache, and
+    ``np.stack`` copies them into the kymograph matrix, so nothing downstream
+    has a reason to write through one — an accidental write should raise rather
+    than corrupt every later request that reads the same entry.
     """
     from PIL import Image as PILImage
     from scipy.ndimage import map_coordinates
@@ -1414,44 +1527,50 @@ def _sample_frame_row(
     else:
         img = np.array(pil_frame.convert("L"), dtype=np.float32)
     _, _ = img.shape
-    # Step 1 (ImageJ-style): resample the polyline geometry to
-    # ``n_samples`` arc-length-uniform points. This is THE change
-    # that makes the kymograph spatially honest — vertex-only
-    # sampling was aliasing punctate signal between vertices.
-    sampled_pts = _arc_length_resample_polyline(pts, n_samples)
-    # Step 2: sample the underlying image at each interpolated point.
-    # order=0 = nearest pixel (no intensity blending). mode='constant',
-    # cval=0 = pixels outside the image read as 0 (matches ImageJ's
-    # getInterpolatedValue zero-fill, instead of edge-clamping which
-    # falsely brightened polylines that crossed the frame border).
-    profile = map_coordinates(
-        img,
-        np.stack([sampled_pts[:, 0], sampled_pts[:, 1]]),
-        order=0,
-        mode="constant",
-        cval=0.0,
-    )
-    row = profile.astype(np.float32)
-    row.setflags(write=False)
+    rows: List[np.ndarray] = []
+    for job in jobs:
+        # Step 1 (ImageJ-style): resample the polyline geometry to
+        # ``n_samples`` arc-length-uniform points. This is THE change
+        # that makes the kymograph spatially honest — vertex-only
+        # sampling was aliasing punctate signal between vertices.
+        sampled_pts = _arc_length_resample_polyline(job.pts, job.n_samples)
+        # Step 2: sample the underlying image at each interpolated point.
+        # order=0 = nearest pixel (no intensity blending). mode='constant',
+        # cval=0 = pixels outside the image read as 0 (matches ImageJ's
+        # getInterpolatedValue zero-fill, instead of edge-clamping which
+        # falsely brightened polylines that crossed the frame border).
+        profile = map_coordinates(
+            img,
+            np.stack([sampled_pts[:, 0], sampled_pts[:, 1]]),
+            order=0,
+            mode="constant",
+            cval=0.0,
+        )
+        row = profile.astype(np.float32)
+        row.setflags(write=False)
+        rows.append(row)
     # See _DECODE_SCRATCH: hold this frame until the next one on this thread
     # has been allocated, so the allocator reuses the block instead of
     # returning it to the kernel and re-faulting every page.
     _DECODE_SCRATCH.previous_frame = img
-    return row
+    return rows
 
 
-def _sample_rows(
-    frames: List[KymographFrameInput], n_samples: int
-) -> Tuple[List[np.ndarray], int, int]:
-    """Build one kymograph row per frame. Returns ``(rows, hits, misses)``.
+def _plan_rows(
+    frames: List[KymographFrameInput], n_samples: int, item: int = 0
+) -> Tuple[List[Optional[np.ndarray]], List[_RowJob], int]:
+    """Resolve every row of ONE kymograph to a finished row or a decode job.
+
+    Returns ``(rows, jobs, hits)``; ``rows[i]`` is None exactly where ``jobs``
+    carries an entry for row ``i``.
 
     Validation (path guard, existence, polyline shape) stays SERIAL and in
     request order, so a bad frame produces the same error, naming the same
-    frame, as it did when the whole loop was serial. Only cache misses reach
-    the decode pool, so a fully warm request never leaves this thread.
+    frame, as it did when the whole loop was serial. Only cache misses become
+    jobs, so a fully warm kymograph never reaches the decode pool.
     """
     rows: List[Optional[np.ndarray]] = [None] * len(frames)
-    misses: List[Tuple[int, Path, np.ndarray, Tuple[Any, ...]]] = []
+    jobs: List[_RowJob] = []
     hits = 0
 
     for i, frame in enumerate(frames):
@@ -1472,49 +1591,94 @@ def _sample_rows(
             )
             rows[i] = np.zeros(n_samples, dtype=np.float32)
             continue
-        key = (
-            st.st_dev,
-            st.st_ino,
-            st.st_mtime_ns,
-            st.st_size,
+        file_key = (st.st_dev, st.st_ino, st.st_mtime_ns, st.st_size)
+        cache_key = (
+            *file_key,
             n_samples,
             hashlib.blake2b(pts.tobytes(), digest_size=16).digest(),
         )
-        cached = _SAMPLE_CACHE.get(key)
+        cached = _SAMPLE_CACHE.get(cache_key)
         if cached is not None:
             rows[i] = cached
             hits += 1
         else:
-            misses.append((i, path, pts, key))
+            jobs.append(
+                _RowJob(item, i, path, file_key, pts, n_samples, cache_key)
+            )
 
-    if misses:
-        # Everything goes through the pool, including a single miss and a pool
-        # of one worker. The obvious optimisation — call inline when there is
-        # nothing to parallelise — measurably backfires: decoding on the
-        # calling thread allocates and frees an 11 MB frame buffer per call, so
-        # glibc munmaps it and the next frame faults its 2775 pages back in one
-        # at a time. Measured over 299 real frames: 1 390 621 minor faults and
-        # 2.33 s of system time inline, against 20 205 faults and 0.37 s
-        # through the pool, whose worker keeps one arena warm across calls.
-        # ``map`` preserves input order, which is what keeps row i == frame i.
-        sampled = _DECODE_POOL.map(
-            lambda job: _sample_frame_row(job[1], job[2], n_samples), misses
-        )
-        for (i, _path, _pts, key), row in zip(misses, sampled):
-            rows[i] = row
-            _SAMPLE_CACHE.put(key, row)
+    return rows, jobs, hits
 
-    # Row i MUST be frame i: the CSV writer labels row i with ``frames[i].frame``
-    # and the tracker reads velocities off the row axis, so dropping an unfilled
-    # row would relabel every later frame instead of failing. Every index is
-    # written above; this is the assertion that keeps it that way.
+
+def _run_row_jobs(
+    jobs: List[_RowJob], rows_by_item: List[List[Optional[np.ndarray]]]
+) -> int:
+    """Decode every distinct frame the jobs name ONCE, fill their rows in
+    place, and return how many frames were decoded.
+
+    Grouping is by ``file_key`` (stat identity) rather than by path string, so
+    the dedup is over the BYTES the rows depend on — the same reasoning as the
+    row cache's key.
+    """
+    if not jobs:
+        return 0
+
+    # Insertion-ordered so the decode order still follows the request. That
+    # keeps the page-cache access pattern sequential across frames, which is
+    # what the export's channel-major dispatch is arranged to exploit.
+    by_file: "OrderedDict[Tuple[Any, ...], Tuple[Path, List[_RowJob]]]" = (
+        OrderedDict()
+    )
+    for job in jobs:
+        entry = by_file.get(job.file_key)
+        if entry is None:
+            by_file[job.file_key] = (job.path, [job])
+        else:
+            entry[1].append(job)
+
+    # Everything goes through the pool, including a single frame and a pool of
+    # one worker. The obvious optimisation — call inline when there is nothing
+    # to parallelise — measurably backfires: decoding on the calling thread
+    # allocates and frees an 11 MB frame buffer per call, so glibc munmaps it
+    # and the next frame faults its 2775 pages back in one at a time. Measured
+    # over 299 real frames: 1 390 621 minor faults and 2.33 s of system time
+    # inline, against 20 205 faults and 0.37 s through the pool, whose worker
+    # keeps one arena warm across calls.
+    #
+    # ``map`` preserves input order, and each call returns its rows in its own
+    # jobs' order — which is what keeps row i of item j the row for frame i.
+    grouped = list(by_file.values())
+    sampled = _DECODE_POOL.map(lambda g: _sample_frame_rows(g[0], g[1]), grouped)
+    for (_path, file_jobs), file_rows in zip(grouped, sampled):
+        for job, row in zip(file_jobs, file_rows):
+            rows_by_item[job.item][job.row] = row
+            _SAMPLE_CACHE.put(job.cache_key, row)
+    return len(grouped)
+
+
+def _assert_rows_complete(
+    frames: List[KymographFrameInput], rows: List[Optional[np.ndarray]]
+) -> List[np.ndarray]:
+    """Row i MUST be frame i: the CSV writer labels row i with
+    ``frames[i].frame`` and the tracker reads velocities off the row axis, so
+    dropping an unfilled row would relabel every later frame instead of
+    failing. Every index is written above; this is the assertion that keeps it
+    that way."""
     unfilled = [frames[i].frame for i, row in enumerate(rows) if row is None]
     if unfilled:
         raise HTTPException(
             status_code=500,
             detail=f"Kymograph sampling produced no row for frame(s) {unfilled[:5]}",
         )
-    return rows, hits, len(misses)
+    return [row for row in rows if row is not None]
+
+
+def _sample_rows(
+    frames: List[KymographFrameInput], n_samples: int
+) -> Tuple[List[np.ndarray], int, int]:
+    """Build one kymograph row per frame. Returns ``(rows, hits, decoded)``."""
+    rows, jobs, hits = _plan_rows(frames, n_samples)
+    decoded = _run_row_jobs(jobs, [rows])
+    return _assert_rows_complete(frames, rows), hits, decoded
 
 
 _VIRIDIS_RGB = np.array(
@@ -1675,10 +1839,21 @@ async def kymograph(req: KymographRequest) -> KymographResponse:
     )
 
 
-def _kymograph_sync(req: KymographRequest) -> KymographResponse:
-    """Blocking body of /kymograph. Runs on the single-slot executor above."""
-    from PIL import Image as PILImage
+class _KymographPlan(NamedTuple):
+    """Everything ``_finish_kymograph`` needs that is decided BEFORE any pixel
+    is read: the frame order, the sample count, and the per-row work."""
 
+    frames: List[KymographFrameInput]
+    n_samples: int
+    px_per_column: float
+    rows: List[Optional[np.ndarray]]
+    jobs: List[_RowJob]
+    hits: int
+
+
+def _plan_kymograph(req: KymographRequest, item: int = 0) -> _KymographPlan:
+    """Validate one kymograph request and resolve its rows to cache hits or
+    pending decode jobs. Raises HTTPException on anything malformed."""
     if not req.frames:
         raise HTTPException(status_code=400, detail="No frames provided")
 
@@ -1705,16 +1880,115 @@ def _kymograph_sync(req: KymographRequest) -> KymographResponse:
     # Node backend multiplies by this before applying the µm calibration.
     px_per_column = seed_arc / (n_samples - 1) if n_samples > 1 else 1.0
 
-    rows, cache_hits, cache_misses = _sample_rows(frames, n_samples)
+    rows, jobs, hits = _plan_rows(frames, n_samples, item)
+    return _KymographPlan(frames, n_samples, px_per_column, rows, jobs, hits)
+
+
+@router.post("/kymograph/batch", response_model=KymographBatchResponse)
+async def kymograph_batch(req: KymographBatchRequest) -> KymographBatchResponse:
+    """Render N kymographs, decoding each distinct frame once for all of them.
+
+    Same thin async wrapper as ``/kymograph``, onto the same one-slot executor:
+    a batch and a single kymograph never run concurrently, so the peak memory
+    stays what it was (one decoded frame per decode-pool thread).
+    """
+    return await asyncio.get_running_loop().run_in_executor(
+        _KYMOGRAPH_EXECUTOR, _kymograph_batch_sync, req
+    )
+
+
+def _kymograph_batch_sync(
+    req: KymographBatchRequest,
+) -> KymographBatchResponse:
+    """Blocking body of /kymograph/batch. Runs on the single-slot executor.
+
+    Three phases, and the middle one is the reason the endpoint exists:
+
+    1. Plan every item (validation + row-cache lookups). An item that fails
+       validation is recorded and dropped; the rest carry on.
+    2. Run ALL the surviving items' row jobs together, so a frame wanted by 60
+       polylines is decoded once and sampled 60 times.
+    3. Finish each item exactly as ``_kymograph_sync`` would — detection,
+       render, CSV — from rows that are bit-identical to the ones it would
+       have sampled on its own.
+    """
+    plans: List[Optional[_KymographPlan]] = []
+    errors: List[Optional[str]] = []
+    for i, item in enumerate(req.items):
+        try:
+            plans.append(_plan_kymograph(item, i))
+            errors.append(None)
+        except HTTPException as exc:
+            plans.append(None)
+            errors.append(str(exc.detail))
+        except Exception as exc:  # noqa: BLE001 - one item must not sink 63
+            logger.exception("kymograph batch: item %d failed to plan", i)
+            plans.append(None)
+            errors.append(str(exc))
+
+    rows_by_item: List[List[Optional[np.ndarray]]] = [
+        plan.rows if plan is not None else [] for plan in plans
+    ]
+    jobs = [job for plan in plans if plan is not None for job in plan.jobs]
+    decoded = _run_row_jobs(jobs, rows_by_item)
     logger.info(
-        "kymograph: %d frame(s), %d cached / %d decoded (%d worker(s))",
-        len(frames),
-        cache_hits,
-        cache_misses,
+        "kymograph batch: %d item(s), %d cached / %d sampled from %d "
+        "frame decode(s) (%d worker(s))",
+        len(req.items),
+        sum(plan.hits for plan in plans if plan is not None),
+        len(jobs),
+        decoded,
         _DECODE_WORKERS,
     )
 
-    kymo = np.stack(rows, axis=0)  # (F, n_samples)
+    results: List[KymographBatchItem] = []
+    for i, plan in enumerate(plans):
+        if plan is None:
+            results.append(KymographBatchItem(error=errors[i]))
+            continue
+        try:
+            results.append(
+                KymographBatchItem(kymograph=_finish_kymograph(req.items[i], plan))
+            )
+        except HTTPException as exc:
+            results.append(KymographBatchItem(error=str(exc.detail)))
+        except Exception as exc:  # noqa: BLE001 - as above
+            logger.exception("kymograph batch: item %d failed to render", i)
+            results.append(KymographBatchItem(error=str(exc)))
+    return KymographBatchResponse(results=results)
+
+
+def _kymograph_sync(req: KymographRequest) -> KymographResponse:
+    """Blocking body of /kymograph. Runs on the single-slot executor above."""
+    plan = _plan_kymograph(req)
+    decoded = _run_row_jobs(plan.jobs, [plan.rows])
+    logger.info(
+        "kymograph: %d frame(s), %d cached / %d decoded (%d worker(s))",
+        len(plan.frames),
+        plan.hits,
+        decoded,
+        _DECODE_WORKERS,
+    )
+    return _finish_kymograph(req, plan)
+
+
+def _finish_kymograph(
+    req: KymographRequest, plan: _KymographPlan
+) -> KymographResponse:
+    """Turn sampled rows into the response: detection, render, CSV.
+
+    Split out of ``_kymograph_sync`` so the batch endpoint can run the sampling
+    of every item together (one decode per frame) and only then come back here,
+    once per item, with exactly the same arguments a single request would have
+    produced.
+    """
+    from PIL import Image as PILImage
+
+    frames = plan.frames
+    n_samples = plan.n_samples
+    px_per_column = plan.px_per_column
+
+    kymo = np.stack(_assert_rows_complete(frames, plan.rows), axis=0)
     if kymo.size == 0:
         raise HTTPException(status_code=500, detail="Empty kymograph result")
 

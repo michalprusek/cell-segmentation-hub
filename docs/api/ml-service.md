@@ -116,6 +116,36 @@ which the Node backend scales by px-per-column before applying the µm
 calibration). Detection failure — including weights that were never staged —
 degrades to `tracks: []` plus `velocity_error`, never a 500.
 
+### `POST /api/v1/kymograph/batch`
+
+`{ "items": [ <KymographRequest>, ... ] }` → `{ "results": [ { "kymograph": … }
+| { "error": … }, ... ] }`, one result per item, in request order, up to 64
+items.
+
+A **transport, not a second renderer**: the items are ordinary
+`/api/v1/kymograph` bodies and each result is byte-identical to what that
+endpoint returns for the same body. What changes is the loop order — the
+endpoint decodes each distinct frame ONCE (keyed on its stat identity) and
+samples every polyline that wants a row from it, instead of decoding the whole
+stack per polyline.
+
+That is what the MT export needs. It builds one kymograph per (microtubule ×
+channel) over one container's frames, so a 300-frame, 3-channel, 60-microtubule
+container did 54 000 decodes of 900 distinct files; the sampled-row cache cannot
+help, because every job carries a different polyline and so a different key (a
+real production export, 2026-09-01: 61 requests, **0** frames from cache, 69
+decoded). Measured on 60 microtubules × 300 frames of container 4972cad8:
+186.2 s and 18 000 decodes → **13.2 s and 300**.
+
+Memory does not scale with the item count — the frames resident stay one per
+decode thread — so the bound on `items` exists only because the **response** is
+O(items). Errors are per item: one polyline with a single vertex, or a channel
+missing one frame PNG, costs that microtubule its kymograph and nothing else.
+
+**Deploy the ML service before any backend that calls this.** The route does not
+exist on an older `ml` container, and the export's kymograph stage degrades to
+"no kymograph output" on a 404.
+
 ---
 
 ## Microtubule measurement

@@ -14,6 +14,11 @@
  *  - Polygon fetch cost: which frames' `polygons` the service reads at all
  *  - Prefetched per-container rows (`containerContext`): no queries, no
  *    behaviour change, one parse per frame however many builds
+ *
+ * ...and for buildKymographBatch(): that the bodies it carries are the SAME
+ * bodies the single path posts (that equivalence is the whole reason the batch
+ * is a transport rather than a second renderer), and that one item's failure
+ * costs one item.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -66,7 +71,7 @@ vi.mock('../cacheService', () => ({
   CacheService: { TTL_PRESETS: { MEDIUM: 1800 } },
 }));
 
-import { buildKymograph } from '../kymographService';
+import { buildKymograph, buildKymographBatch } from '../kymographService';
 import { prisma } from '../../db/prismaClient';
 import axios from 'axios';
 
@@ -1396,5 +1401,169 @@ describe('buildKymograph', () => {
       await buildKymograph({ ...cached, containerContext: edited });
       expect(mockAxios.post).toHaveBeenCalledTimes(2);
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildKymographBatch
+// ---------------------------------------------------------------------------
+
+describe('buildKymographBatch', () => {
+  const POLY_A = {
+    id: 'poly-a',
+    points: [
+      { x: 1, y: 2 },
+      { x: 3, y: 4 },
+    ],
+    geometry: 'polyline',
+  };
+  const POLY_B = {
+    id: 'poly-b',
+    points: [
+      { x: 5, y: 6 },
+      { x: 7, y: 8 },
+    ],
+    geometry: 'polyline',
+  };
+
+  const inputFor = (polylineId: string, overrides?: object) => ({
+    videoContainerId: 'container-1',
+    polylineId,
+    frameIndex: 0,
+    sourceChannel: 'IRM',
+    ...overrides,
+  });
+
+  const item = (overrides?: object) => ({
+    kymograph: {
+      png_base64: 'iVBOR',
+      csv_base64: 'ZnJhbW',
+      frame_count: 2,
+      length_px: 55,
+      ...overrides,
+    },
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    cacheMocks.store.clear();
+    mockPrisma.image.findUnique.mockResolvedValue(
+      makeContainer({ projectId: 'proj-42' })
+    );
+    mockPrisma.image.findMany.mockResolvedValue([
+      makeFrame(0, [POLY_A, POLY_B]),
+      makeFrame(1, [POLY_A, POLY_B]),
+    ]);
+  });
+
+  it('carries exactly the bodies the single endpoint would have posted', async () => {
+    // The claim the whole change rests on. If these ever diverge, the batch is
+    // no longer a transport for the same render and the exported numbers are
+    // free to move — so compare the bodies, not the results.
+    mockAxios.post = vi.fn().mockResolvedValue({ data: ML_RESPONSE.data });
+    await buildKymograph(inputFor('poly-a'));
+    await buildKymograph(inputFor('poly-b'));
+    const single = mockAxios.post.mock.calls.map(c => c[1]);
+
+    mockAxios.post = vi.fn().mockResolvedValue({
+      data: { results: [item(), item()] },
+    });
+    await buildKymographBatch([inputFor('poly-a'), inputFor('poly-b')]);
+
+    expect(mockAxios.post).toHaveBeenCalledTimes(1);
+    expect(mockAxios.post.mock.calls[0][0]).toBe(
+      'http://ml:8000/api/v1/kymograph/batch'
+    );
+    expect(mockAxios.post.mock.calls[0][1]).toEqual({ items: single });
+  });
+
+  it('returns one outcome per input, in input order', async () => {
+    mockAxios.post = vi.fn().mockResolvedValue({
+      data: {
+        results: [item({ length_px: 11 }), item({ length_px: 22 })],
+      },
+    });
+    const out = await buildKymographBatch([
+      inputFor('poly-a'),
+      inputFor('poly-b'),
+    ]);
+    expect(out.map(o => o.result?.lengthPx)).toEqual([11, 22]);
+  });
+
+  it('turns a per-item ML error into that item only', async () => {
+    mockAxios.post = vi.fn().mockResolvedValue({
+      data: {
+        results: [{ error: 'Seed-frame polyline has 1 vertex(es)' }, item()],
+      },
+    });
+    const out = await buildKymographBatch([
+      inputFor('poly-a'),
+      inputFor('poly-b'),
+    ]);
+    expect(out[0].result).toBeUndefined();
+    expect(out[0].error?.message).toContain('1 vertex(es)');
+    expect(out[1].result?.pngBase64).toBe('iVBOR');
+  });
+
+  it('does not send an input whose body could not be built, and keeps the rest aligned', async () => {
+    // A missing polyline throws in Node, before the request. The surviving
+    // items must still map back to THEIR inputs — an off-by-one here would
+    // publish one microtubule's velocities under another's name.
+    mockAxios.post = vi.fn().mockResolvedValue({
+      data: { results: [item({ length_px: 99 })] },
+    });
+    const out = await buildKymographBatch([
+      inputFor('poly-missing'),
+      inputFor('poly-b'),
+    ]);
+    expect(mockAxios.post.mock.calls[0][1].items).toHaveLength(1);
+    expect(out[0].error?.message).toContain('poly-missing');
+    expect(out[1].result?.lengthPx).toBe(99);
+  });
+
+  it('never posts at all when every input failed to build', async () => {
+    mockAxios.post = vi.fn();
+    const out = await buildKymographBatch([inputFor('poly-missing')]);
+    expect(mockAxios.post).not.toHaveBeenCalled();
+    expect(out[0].error).toBeInstanceOf(Error);
+  });
+
+  it('throws when the result count does not match the item count', async () => {
+    // Without this the k-th result would be read as the k-th item's kymograph
+    // and one microtubule's numbers would ship under another's name.
+    mockAxios.post = vi.fn().mockResolvedValue({ data: { results: [item()] } });
+    await expect(
+      buildKymographBatch([inputFor('poly-a'), inputFor('poly-b')])
+    ).rejects.toThrow('1 result(s) for 2 item(s)');
+  });
+
+  it('forwards include_csv:false and maps the null back', async () => {
+    mockAxios.post = vi.fn().mockResolvedValue({
+      data: { results: [item({ csv_base64: null })] },
+    });
+    const out = await buildKymographBatch([
+      inputFor('poly-a', { includeCsv: false }),
+    ]);
+    expect(mockAxios.post.mock.calls[0][1].items[0].include_csv).toBe(false);
+    expect(out[0].result?.csvBase64).toBeNull();
+  });
+
+  it('omits include_csv entirely when the caller did not opt out', async () => {
+    // So a caller that never heard of the field posts byte-for-byte the body
+    // it posted before the field existed.
+    mockAxios.post = vi.fn().mockResolvedValue({ data: { results: [item()] } });
+    await buildKymographBatch([inputFor('poly-a')]);
+    expect(mockAxios.post.mock.calls[0][1].items[0]).not.toHaveProperty(
+      'include_csv'
+    );
+  });
+
+  it('never touches the response cache', async () => {
+    // The export renders every polyline exactly once; caching them would fill
+    // a `noeviction` Redis with entries nothing will read.
+    mockAxios.post = vi.fn().mockResolvedValue({ data: { results: [item()] } });
+    await buildKymographBatch([inputFor('poly-a', { useCache: true })]);
+    expect(cacheMocks.get).not.toHaveBeenCalled();
+    expect(cacheMocks.set).not.toHaveBeenCalled();
   });
 });

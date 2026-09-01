@@ -12,7 +12,7 @@ the Node backend.
 | --------------------------- | ------------------------------------------------------------------------------------ |
 | `api/main.py`               | The FastAPI app: middleware, exception handlers, router mounting, Prometheus metrics |
 | `api/routes.py`             | `/segment`, `/batch-segment`, `/models`, `/status`, `/health`                        |
-| `api/tracker_kymograph.py`  | `/track` and `/kymograph`                                                            |
+| `api/tracker_kymograph.py`  | `/track`, `/kymograph` and `/kymograph/batch`                                        |
 | `api/kymograph_velocity.py` | Kymograph trajectory detection (KymoButler) + the per-track metrics                  |
 | `api/mt_geometry_cost.py`   | The geometric matching cost used by the tracker                                      |
 | `api/mt_metrics.py`         | `/mt-metrics` and `/mt-background-rois`                                              |
