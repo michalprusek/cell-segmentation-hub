@@ -56,13 +56,14 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
 from api.kymograph_velocity import (
+    EMPTY_INTENSITY,
     detect_tracks,
     edge_touch,
     flag_bright_outliers,
     kymograph_polarity,
     net_velocity_threshold,
     render_overlay,
-    track_intensity,
+    tracks_intensity,
 )
 from api.mt_geometry_cost import (
     CURVE_SCALE_PX,
@@ -1037,15 +1038,32 @@ class KymographRequest(BaseModel):
     # Width (in kymograph position columns) of the signal band sampled around
     # each detected trajectory for the background-subtracted intensity metric.
     # NOT the kymograph's line width and not a rendering parameter at all: it is
-    # read off the FINISHED kymograph by ``track_intensity``, which takes this
-    # many columns centred on the trajectory as signal and two bands of the same
-    # width, offset by a 2-column guard on either side, as background.
+    # read off the FINISHED kymograph by ``tracks_intensity``, as the thickness
+    # of the ImageJ ``Roi.convertLineToArea`` band rasterised PERPENDICULAR to
+    # each trajectory, and it also sets the reach of the background ring around
+    # that band (see ``intensity_bg_margin``, which is a multiple of it).
     #
-    # Default raised 3 -> 5 on 2026-09-01 at the user's request. Both bands
+    # Default raised 3 -> 5 on 2026-09-01 at the user's request. Band and ring
     # widen together, so every ``intensity_signal`` / ``intensity_background`` /
     # ``intensity_minus_background`` in an export changes: numbers from before
-    # that date are NOT comparable with later ones.
+    # that date are NOT comparable with later ones. 5 is also ``mt_measure``'s
+    # own ``thickness_px`` default, so a trajectory and a microtubule are now
+    # measured with the identical geometry in the identical numbers.
     intensity_width: int = Field(5, ge=1, le=50)
+    # Half-width of the background ring drawn around that band, as a MULTIPLE of
+    # it — the ring reaches ``round(intensity_width * intensity_bg_margin)``
+    # pixels from the trajectory and excludes every OTHER trajectory's band, so a
+    # neighbouring streak is never counted as background. Same name, same range
+    # and same default as ``MTMetricsRequest.margin_multiplier``, because it is
+    # the same measurement: the two must not drift into two answers to "how
+    # bright is this, above what". 0 collapses the ring onto the band and so
+    # reports a null background.
+    #
+    # Nothing sets it yet — ``backend/src/services/kymographService.ts`` builds
+    # the ML request and is where a user-facing control would plumb through, the
+    # same shape ``include_csv`` is in. Present here so the geometry is tunable
+    # from the API without a redeploy of this service.
+    intensity_bg_margin: float = Field(2.0, ge=0.0, le=10.0)
     # Container calibration. When both are present the endpoint drops tracks
     # whose |net velocity| is below ``min_net_velocity_um_s`` (non-processive /
     # oscillatory blobs) BEFORE rendering the overlay, so overlay = tracks table =
@@ -2170,28 +2188,37 @@ def _finish_kymograph(
             # aggregates.
             polarity = kymograph_polarity(kymo)
             # Enrich each track with the edge-touch flag + background-subtracted
-            # intensity along its trajectory (both read off the same kymo). A
-            # failure on ONE track must not discard the whole batch, so isolate
-            # the enrichment per track and default its fields on error.
-            for tr in raw_tracks:
-                try:
-                    tr["edge"] = edge_touch(tr["points"], n_samples)
-                    tr.update(
-                        track_intensity(
-                            kymo,
-                            tr["points"],
-                            req.intensity_width,
-                            polarity=polarity,
-                        )
-                    )
-                except Exception:
-                    logger.exception(
-                        "kymograph track enrichment failed; defaulting fields"
-                    )
-                    tr.setdefault("edge", "none")
-                    tr.setdefault("intensity_signal", None)
-                    tr.setdefault("intensity_background", None)
-                    tr.setdefault("intensity_minus_bg", None)
+            # intensity along its trajectory, both read off the same kymo.
+            #
+            # The intensity is measured for ALL trajectories in ONE call, never
+            # one at a time: each background ring is that trajectory's band
+            # dilated by ``intensity_width * intensity_bg_margin`` MINUS the
+            # union of every trajectory's band, so a neighbouring streak a few
+            # columns away can never be averaged in as background. That is the
+            # per-microtubule geometry (``mt_measure``), and it is not separable
+            # per track.
+            #
+            # It is therefore also not isolable per track: a failure nulls the
+            # three intensity fields for the whole kymograph rather than for one
+            # trajectory. Those nulls are the fields' documented "not available",
+            # and everything else about the response — the matrix, the
+            # trajectories, their velocities — still comes back.
+            try:
+                intensities = tracks_intensity(
+                    kymo,
+                    [tr["points"] for tr in raw_tracks],
+                    req.intensity_width,
+                    margin_multiplier=req.intensity_bg_margin,
+                    polarity=polarity,
+                )
+            except Exception:
+                logger.exception(
+                    "kymograph intensity measurement failed; nulling fields"
+                )
+                intensities = [dict(EMPTY_INTENSITY) for _ in raw_tracks]
+            for tr, vals in zip(raw_tracks, intensities):
+                tr["edge"] = edge_touch(tr["points"], n_samples)
+                tr.update(vals)
             # Drop non-processive tracks: |net velocity| below the µm/s cut-off
             # (oscillatory / static blobs are not directed transport). Needs the
             # calibration to convert the µm/s threshold to a column/frame cut-off;

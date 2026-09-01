@@ -651,6 +651,80 @@ async def test_kymograph_detection_does_not_block_the_event_loop(monkeypatch):
     )
 
 
+def test_kymograph_measures_every_trajectory_against_a_neighbour_free_ring(
+    client, monkeypatch
+):
+    """The route must hand ALL trajectories to the intensity measurement at once.
+
+    A trajectory's background ring is its band dilated by
+    ``intensity_width * intensity_bg_margin`` MINUS the union of every
+    trajectory's band, exactly as a microtubule's is. That union is only
+    available if the route measures the whole kymograph in one call — measuring
+    one track at a time silently reintroduces the bug this replaced, because
+    each ring would then exclude nothing but its own band.
+
+    The fixture is three parallel streaks 6 columns apart on a flat field, i.e.
+    ordinary traffic, each exactly as wide as the default ``intensity_width``
+    (5) so the band is pure signal. The default ``intensity_bg_margin`` of 2.0
+    puts the ring 10 columns out, which reaches both neighbours. Measured
+    together the middle one's background is the field (40): the ring is 14-38
+    minus the union {18-22, 24-28, 30-34}, i.e. ten columns of empty field.
+    Measured alone the ring is 14-38 minus only its own band — ten field
+    columns and ten neighbour columns, so the ImageJ tie-rule median (the UPPER
+    of the two central values) lands on the neighbour (200) and a streak 5x
+    brighter than the field reports ZERO contrast. So the assertion below fails
+    loudly on a per-track regression rather than drifting a few percent.
+    """
+    from PIL import Image as PILImage
+
+    cols, field, bright, width, T = (20, 26, 32), 40, 200, 60, 20
+    half = 2  # streaks 2*half+1 = 5 columns wide, matching intensity_width
+
+    def _stub_detect(kymo, **kwargs):
+        return [
+            {
+                "points": [[t, float(c)] for t in range(T)],
+                "net_pxframe": 0.0,
+                "snr": 5.0,
+                "total_run_time_frames": 0.0,
+                "total_run_displacement_px": 0.0,
+            }
+            for c in cols
+        ]
+
+    monkeypatch.setattr(tracker_kymograph, "detect_tracks", _stub_detect)
+
+    with tempfile.TemporaryDirectory() as td:
+        td_path = Path(td).resolve()
+        monkeypatch.setattr(tracker_kymograph, "_UPLOAD_ROOT", td_path)
+        row = np.full(width, field, dtype=np.uint8)
+        for c in cols:
+            row[c - half:c + half + 1] = bright
+        png = td_path / "frame.png"
+        PILImage.fromarray(np.tile(row, (16, 1)), mode="L").save(png)
+
+        polyline_rc = [[8.0, float(x)] for x in range(width)]
+        r = client.post(
+            "/api/v1/kymograph",
+            json={
+                "frames": [
+                    {"frame": t, "polyline_rc": polyline_rc,
+                     "image_path": str(png)}
+                    for t in range(T)
+                ],
+                "target_width": width,
+                "detect_velocity": True,
+            },
+        )
+    assert r.status_code == 200, r.text
+    tracks = r.json()["tracks"]
+    assert len(tracks) == 3
+    for tr in tracks:
+        assert tr["intensity_signal"] == float(bright)
+        assert tr["intensity_background"] == float(field)
+        assert tr["intensity_minus_bg"] == float(bright - field)
+
+
 # ---------------------------------------------------------------------------
 #  viridis LUT
 # ---------------------------------------------------------------------------
@@ -1143,11 +1217,13 @@ def test_kymograph_intensity_width_defaults_to_five(client, monkeypatch, tmp_pat
     ``intensity_background`` / ``intensity_minus_background`` in
     ``velocity_metrics.xlsx``. Raised 3 -> 5 on 2026-09-01.
 
-    Tests the WIRING — the value that reaches ``track_intensity`` — not the
+    Tests the WIRING — the value that reaches ``tracks_intensity`` — not the
     field's declared default, because the field is only correct if it is the
-    argument that is passed.
+    argument that is passed. The ring margin rides along on the same call for
+    the same reason: ``intensity_bg_margin`` is a MULTIPLE of this width, so a
+    default that never arrives would resize the background too.
 
-    Mutation check: set the field back to 3 and the recorded width is 3."""
+    Mutation check: set either field back and the recorded pair changes."""
     td_path = tmp_path.resolve()
     monkeypatch.setattr(tracker_kymograph, "_UPLOAD_ROOT", td_path)
     png = td_path / "f0.png"
@@ -1160,14 +1236,14 @@ def test_kymograph_intensity_width_defaults_to_five(client, monkeypatch, tmp_pat
             {"points": [[0.0, 30.0], [1.0, 31.0]], "net_pxframe": 1.0, "snr": 3.0}
         ],
     )
-    widths: list = []
-    real_track_intensity = tracker_kymograph.track_intensity
+    seen: list = []
+    real_tracks_intensity = tracker_kymograph.tracks_intensity
 
-    def recording(kymo, points, width, **kw):
-        widths.append(width)
-        return real_track_intensity(kymo, points, width, **kw)
+    def recording(kymo, point_lists, width, **kw):
+        seen.append((width, kw.get("margin_multiplier")))
+        return real_tracks_intensity(kymo, point_lists, width, **kw)
 
-    monkeypatch.setattr(tracker_kymograph, "track_intensity", recording)
+    monkeypatch.setattr(tracker_kymograph, "tracks_intensity", recording)
 
     polyline_rc = [[8.0, float(x)] for x in range(64)]
     r = client.post(
@@ -1182,7 +1258,8 @@ def test_kymograph_intensity_width_defaults_to_five(client, monkeypatch, tmp_pat
         },
     )
     assert r.status_code == 200, r.text
-    assert widths == [5], f"intensity_width reaching track_intensity: {widths}"
+    # ONE call for all trajectories, carrying both defaults.
+    assert seen == [(5, 2.0)], f"(width, margin) reaching tracks_intensity: {seen}"
 
 
 async def test_kymograph_leaves_the_event_loop_free(monkeypatch, tmp_path):

@@ -52,15 +52,19 @@ const HEX_COLOR_RE = /^#[0-9A-Fa-f]{6}$/;
 
 /** Signal-band width used when the caller passes no `intensityWidth`.
  *
- *  NOT the kymograph's line width: it is the number of columns
- *  `track_intensity` reads off the FINISHED kymograph, centred on a detected
- *  trajectory, with two background bands of the same width a 2-column guard to
- *  either side.
+ *  NOT the kymograph's line width: it is the thickness, in kymograph columns,
+ *  of the ImageJ `Roi.convertLineToArea` band `tracks_intensity` rasterises
+ *  PERPENDICULAR to a detected trajectory on the FINISHED kymograph — the same
+ *  band a microtubule gets from `models/mt_measure.py`. It also scales the
+ *  background ring around it (the ML request's `intensity_bg_margin`, a
+ *  multiple of this width, default 2.0).
  *
- *  Raised 3 -> 5 on 2026-09-01 at the user's request. Signal and background
- *  bands widen together, so every `intensitySignal` / `intensityBackground` /
+ *  Raised 3 -> 5 on 2026-09-01 at the user's request. Band and ring widen
+ *  together, so every `intensitySignal` / `intensityBackground` /
  *  `intensityMinusBackground` in `velocity_metrics.xlsx` changes: sheets from
- *  before that date are not comparable with later ones. */
+ *  before that date are not comparable with later ones. 5 is also
+ *  `mt_measure`'s own `thickness_px` default, so at these settings a
+ *  trajectory and a microtubule are measured by the identical geometry. */
 const DEFAULT_INTENSITY_WIDTH = 5;
 
 // ---------------------------------------------------------------------------
@@ -76,12 +80,15 @@ const CACHE_NAMESPACE = 'kymograph';
  *  instead of being served.
  *
  *  2 (2026-09-01): the column cap was removed, so every kymograph of a
- *  microtubule longer than 200 px is now a different image, and the
- *  intensity-band default went 3 -> 5, so every velocity row's intensity
- *  columns moved. Both are visible in the descriptor below anyway — the
- *  `targetWidth` field left it and `intensityWidth` changed value — but a
- *  reader should not have to derive that from a hash to know old entries are
- *  unreachable. */
+ *  microtubule longer than 200 px is now a different image; the
+ *  intensity-band default went 3 -> 5; and the intensity metric itself moved
+ *  onto the shared per-microtubule geometry (a perpendicular band plus a
+ *  background ring that excludes every OTHER trajectory's band, replacing two
+ *  1-D background blocks), so every velocity row's intensity columns moved.
+ *  The first two are visible in the descriptor below anyway — the
+ *  `targetWidth` field left it and `intensityWidth` changed value — but the
+ *  third is not, and a reader should not have to derive any of it from a hash
+ *  to know old entries are unreachable. */
 const CACHE_SCHEMA_VERSION = 2;
 
 /** 30 minutes.

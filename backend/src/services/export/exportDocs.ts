@@ -415,10 +415,18 @@ separate sheet for kinesin) with **one row per detected moving particle**
   frames); \`total_run_time_s\` — total time in those runs (pauses excluded).
   Both blank when the container is uncalibrated.
 - \`intensity_signal\` / \`intensity_background\` / \`intensity_minus_background\`
-  — mean signal along the trajectory minus the median of a band beside it (raw
-  pixel units). An empty \`intensity_*\` cell means no background band fit
-  (kymograph narrower than the sampling band), distinct from an uncalibrated
-  blank.
+  — mean signal along the trajectory minus the **median** of its local
+  background (raw pixel units), measured with exactly the geometry the
+  per-microtubule intensity metrics use: an ImageJ wide-line band along the
+  trajectory, and a background ring reaching twice the band's width around it
+  which **excludes every other trajectory's band** — so a second particle a few
+  columns away is never counted as background. An empty \`intensity_*\` cell
+  means no background pixel was left at all (a kymograph narrower than
+  band + ring, or one covered edge to edge by trajectories), distinct from an
+  uncalibrated blank. **Changed 2026-09-01**: before that date the background
+  was two 1-D blocks of columns beside the trajectory, which a neighbouring
+  streak could fall inside, and the median was numpy's rather than ImageJ's —
+  so these three columns are not comparable across that date.
 - \`bright\` — \`TRUE\` when the trajectory's signal is an intensity outlier
   (\`> median + 3.5·MAD\` of the other trajectories on the same kymograph),
   typically a multi-motor aggregate rather than a single motor.

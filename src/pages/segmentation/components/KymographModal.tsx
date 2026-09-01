@@ -166,9 +166,9 @@ function trackColor(netPxFrame: number): string {
 const clampScale = (s: number) => Math.min(Math.max(s, 0.05), 20);
 
 /** Intensity-band width, clamped to the ML/route bounds (1…50 columns). Not the
- *  kymograph's line width: it is how many columns are read off the finished
- *  kymograph around a detected trajectory as signal, with two background bands
- *  of the same width a 2-column guard to either side.
+ *  kymograph's line width: it is the thickness of the band rasterised
+ *  perpendicular to a detected trajectory on the finished kymograph, and it
+ *  also scales the background ring drawn around that band.
  *
  *  Raised 3 → 5 on 2026-09-01 at the user's request; must stay in step with
  *  `DEFAULT_INTENSITY_WIDTH` in `backend/src/services/kymographService.ts` and
