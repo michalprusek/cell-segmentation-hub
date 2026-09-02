@@ -344,6 +344,10 @@ export interface KymographServiceResult {
   /** Tracks hidden by `minIntensityMinusBg`. Counted separately from the
    *  velocity cut-off so the UI can name the reason a trajectory vanished. */
   filteredDimTrackCount: number;
+  /** Trajectories whose intensity could not be measured, so the floor could
+   *  not judge them and kept them. Non-zero means the filter silently did
+   *  less than the user asked for. */
+  unmeasuredTrackCount: number;
   /** Set when ML velocity detection crashed (vs. legitimately finding no
    *  particles). Lets callers surface a failure instead of a silent empty table. */
   velocityError?: string;
@@ -1017,6 +1021,7 @@ interface MlKymographPayload {
   px_per_column?: number;
   filtered_track_count?: number;
   filtered_dim_track_count?: number;
+  unmeasured_track_count?: number;
   tracks?: MlTrack[];
   overlay_png_base64?: string;
   velocity_error?: string;
@@ -1138,6 +1143,10 @@ function mapMlPayload(
     filteredDimTrackCount:
       typeof payload.filtered_dim_track_count === 'number'
         ? payload.filtered_dim_track_count
+        : 0,
+    unmeasuredTrackCount:
+      typeof payload.unmeasured_track_count === 'number'
+        ? payload.unmeasured_track_count
         : 0,
     filteredTrackCount:
       typeof payload.filtered_track_count === 'number'

@@ -119,6 +119,10 @@ interface KymographResponse {
   /** Tracks hidden by the absolute intensity floor the user typed. Separate
    *  from the velocity count so the message can name the actual reason. */
   filteredDimTrackCount?: number;
+  /** Trajectories whose intensity could not be measured. The floor keeps them
+   *  — a failed measurement is not evidence of a dim trajectory — so without a
+   *  message the filter would look like it simply found nothing to hide. */
+  unmeasuredTrackCount?: number;
   /** Set when ML velocity detection crashed (vs. found no particles). */
   velocityError?: string;
 }
@@ -1108,6 +1112,20 @@ export function KymographModal({
                     count: velocity.filteredTrackCount ?? 0,
                     defaultValue:
                       '{{count}} non-processive trajectory(ies) below 0.01 µm/s hidden.',
+                  })}
+                </div>
+              )}
+            {/* The floor could not judge these, so it kept them. Shown only
+                with a floor set: without one there is nothing for an
+                unmeasured trajectory to escape. */}
+            {!velocity.velocityError &&
+              debouncedMinIntensity > 0 &&
+              (velocity.unmeasuredTrackCount ?? 0) > 0 && (
+                <div className="px-2 py-1 text-[10px] text-amber-600 border-t dark:text-amber-500">
+                  {t('editor.kymograph.unmeasuredKept', {
+                    count: velocity.unmeasuredTrackCount ?? 0,
+                    defaultValue:
+                      '{{count}} trajectory(ies) could not be measured — the intensity floor was not applied to them.',
                   })}
                 </div>
               )}

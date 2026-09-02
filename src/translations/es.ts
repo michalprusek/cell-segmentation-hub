@@ -2805,6 +2805,8 @@ export default {
         '{{count}} trayectoria(s) no procesiva(s) por debajo de 0.01 µm/s oculta(s).',
       dimHidden:
         '{{count}} trayectoria(s) por debajo de {{threshold}} unidades sobre el fondo ocultas.',
+      unmeasuredKept:
+        '{{count}} trayectoria(s) no se pudieron medir; el umbral de intensidad no se les aplicó.',
       downloadTracks: 'CSV de velocidad',
       uncalibrated:
         'Sin calibración de tamaño de píxel / intervalo de fotogramas — velocidades en px/fotograma.',

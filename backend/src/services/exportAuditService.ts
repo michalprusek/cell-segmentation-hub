@@ -33,13 +33,20 @@ export type ExportEvent =
   | 'completed'
   | 'failed'
   | 'cancelled'
-  | 'downloaded';
+  | 'downloaded'
+  /** A download that was REFUSED. The most interesting rows in a log whose
+   *  purpose is attribution: a forwarded signed-token URL retried after it
+   *  expired, or someone walking job ids, otherwise leaves no trace at all. */
+  | 'denied';
 
 export interface ExportEventRecord {
   kind: ExportKind;
   event: ExportEvent;
-  /** Who did THIS event — for a download, whoever pulled the file. */
-  userId: string;
+  /** Who did THIS event — for a download, whoever pulled the file.
+   *
+   *  Null only where there genuinely is no actor: a `denied` row for a request
+   *  that carried no usable credential at all. Every other event knows one. */
+  userId: string | null;
   jobId: string;
   /** Absent for essays jobs, which are not project-scoped. */
   projectId?: string | null;
@@ -62,12 +69,30 @@ export interface ExportEventRecord {
 export async function recordExportEvent(
   record: ExportEventRecord
 ): Promise<void> {
+  // Denormalised so the row still says WHO after the account is gone: the FK
+  // is `SetNull`, which keeps the row but not the join. Looked up rather than
+  // passed in because every call site has an id and none has an e-mail, and a
+  // failed lookup must cost the e-mail, not the row.
+  let userEmail: string | null = null;
+  if (record.userId) {
+    try {
+      const user = await prisma.user.findUnique({
+        where: { id: record.userId },
+        select: { email: true },
+      });
+      userEmail = user?.email ?? null;
+    } catch {
+      userEmail = null;
+    }
+  }
+
   try {
     await prisma.exportLog.create({
       data: {
         kind: record.kind,
         event: record.event,
         userId: record.userId,
+        userEmail,
         jobId: record.jobId,
         projectId: record.projectId ?? null,
         // Prisma rejects `undefined` differently from `null` on a Json column;

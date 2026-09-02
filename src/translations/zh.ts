@@ -2643,6 +2643,7 @@ export default {
       velocityFailed: '速度检测失败。',
       filteredHidden: '已隐藏 {{count}} 条低于 0.01 µm/s 的非进行性轨迹。',
       dimHidden: '已隐藏 {{count}} 条低于背景之上 {{threshold}} 个单位的轨迹。',
+      unmeasuredKept: '有 {{count}} 条轨迹无法测量，强度阈值未对其生效。',
       downloadTracks: '速度 CSV',
       uncalibrated: '无像素尺寸/帧间隔校准——速度以 px/帧 显示。',
     },

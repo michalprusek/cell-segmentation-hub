@@ -685,9 +685,10 @@ describe('buildKymograph', () => {
         pixelSizeUm: null,
         frameIntervalMs: null,
         filteredTrackCount: 0,
-        // Defaults to 0 when the ML service does not report it — an ml
-        // container that predates the intensity floor omits the field.
+        // Both default to 0 when the ML service does not report them — an ml
+        // container that predates the intensity floor omits the fields.
         filteredDimTrackCount: 0,
+        unmeasuredTrackCount: 0,
       });
     });
 

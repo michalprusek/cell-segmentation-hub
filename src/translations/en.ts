@@ -2830,6 +2830,8 @@ export default {
         '{{count}} non-processive trajectory(ies) below 0.01 µm/s hidden.',
       dimHidden:
         '{{count}} trajectory(ies) below {{threshold}} counts above background hidden.',
+      unmeasuredKept:
+        '{{count}} trajectory(ies) could not be measured — the intensity floor was not applied to them.',
       downloadTracks: 'Velocity CSV',
       uncalibrated:
         'No pixel-size / frame-interval calibration — velocities shown in px/frame.',

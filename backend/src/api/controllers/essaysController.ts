@@ -218,12 +218,28 @@ export class EssaysController {
         try {
           const payload = verifyDownloadToken(tokenParam);
           if (payload.jobId !== jobId || payload.projectId !== PROJECT_SENTINEL) {
+            // Valid signature, wrong resource — an edited or cross-purpose
+            // token. The subject is verified, so name them.
+            void recordExportEvent({
+              kind: 'essays',
+              event: 'denied',
+              userId: payload.userId,
+              jobId,
+              detail: 'token-resource-mismatch',
+            });
             ResponseHelper.unauthorized(res, 'Invalid download token', CTX);
             return;
           }
           userId = payload.userId;
         } catch (e) {
           if (e instanceof InvalidDownloadTokenError) {
+            void recordExportEvent({
+              kind: 'essays',
+              event: 'denied',
+              userId: req.user?.id ?? null,
+              jobId,
+              detail: `invalid-token: ${e.message}`,
+            });
             ResponseHelper.unauthorized(res, 'Invalid download token', CTX);
             return;
           }
@@ -233,6 +249,13 @@ export class EssaysController {
         userId = req.user?.id;
       }
       if (!userId) {
+        void recordExportEvent({
+          kind: 'essays',
+          event: 'denied',
+          userId: null,
+          jobId,
+          detail: 'no-credential',
+        });
         ResponseHelper.unauthorized(res, 'Unauthorized', CTX);
         return;
       }

@@ -1242,6 +1242,15 @@ class KymographResponse(BaseModel):
     # velocity count on purpose: the UI names the reason, and one number for
     # two different cut-offs would make it name the wrong one.
     filtered_dim_track_count: int = 0
+    # How many trajectories carry no measured intensity, so the floor could not
+    # judge them and kept them.
+    #
+    # Without this the floor fails SILENTLY: the measurement raises, every
+    # field is nulled, `filter_dim_tracks` keeps a null by design (a failed
+    # measurement is not evidence of a dim trajectory), and the user gets a
+    # full table having explicitly asked for a filter — with
+    # `filtered_dim_track_count: 0` and no error to show it.
+    unmeasured_track_count: int = 0
     # Populated only when the request set ``detect_velocity``; otherwise None.
     tracks: Optional[List[KymographTrack]] = None
     # Populated only when ``render_overlay`` was set; base64 PNG of the
@@ -2405,6 +2414,7 @@ def _finish_kymograph(
     velocity_error: Optional[str] = None
     filtered_track_count = 0
     filtered_dim_track_count = 0
+    unmeasured_track_count = 0
     if req.detect_velocity:
         try:
             # Already OFF the event loop: `kymograph` hands this whole body
@@ -2460,6 +2470,14 @@ def _finish_kymograph(
             for tr, vals in zip(raw_tracks, intensities):
                 tr["edge"] = edge_touch(tr["points"], n_samples)
                 tr.update(vals)
+            # Counted BEFORE the filters, so it describes what the measurement
+            # managed rather than what survived the cut-offs. A degenerate
+            # polyline yields EMPTY_INTENSITY on its own, so this is non-zero
+            # for a per-track failure too, not only for the whole-kymograph
+            # except above.
+            unmeasured_track_count = sum(
+                1 for tr in raw_tracks if tr.get("intensity_minus_bg") is None
+            )
             # Drop non-processive tracks: |net velocity| below the µm/s cut-off
             # (oscillatory / static blobs are not directed transport). Needs the
             # calibration to convert the µm/s threshold to a column/frame cut-off;
@@ -2516,6 +2534,7 @@ def _finish_kymograph(
             tracks = []
             filtered_track_count = 0
             filtered_dim_track_count = 0
+            unmeasured_track_count = 0
 
     # Per-frame normalisation could obscure intensity changes — instead we
     # normalise globally to expose dynamics. Add 1e-9 to avoid /0.
@@ -2576,6 +2595,7 @@ def _finish_kymograph(
         px_per_column=float(px_per_column),
         filtered_track_count=int(filtered_track_count),
         filtered_dim_track_count=int(filtered_dim_track_count),
+        unmeasured_track_count=int(unmeasured_track_count),
         tracks=tracks,
         overlay_png_base64=overlay_b64,
         velocity_error=velocity_error,
