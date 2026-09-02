@@ -94,6 +94,9 @@ const MT_KYMOGRAPHS_DEFAULTS = {
   // from the editor modal's control: separate surface, separate persistence.
   lineWidth: DEFAULT_MT_KYMOGRAPH_LINE_WIDTH,
   lineReduce: 'mean' as const,
+  // 0 = no intensity floor, i.e. every trajectory the detector found — what
+  // every export produced before this control existed.
+  minIntensityMinusBg: 0,
 };
 
 export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =

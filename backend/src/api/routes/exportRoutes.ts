@@ -45,6 +45,14 @@ router.post(
       .isInt({ min: 1, max: 51 })
       .toInt(),
     body('options.mtKymographs.lineReduce').optional().isIn(['mean', 'max']),
+    // Absolute intensity floor for detected trajectories, in raw sample units.
+    // Float and unbounded above for the same reasons as the modal's copy: the
+    // measurement is a band mean, and a 16-bit frame can need a floor in the
+    // thousands.
+    body('options.mtKymographs.minIntensityMinusBg')
+      .optional()
+      .isFloat({ min: 0 })
+      .toFloat(),
   ],
   validateRequest,
   exportController.startExport

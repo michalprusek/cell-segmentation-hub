@@ -49,6 +49,18 @@ export interface MicrotubuleKymographsOptions {
   /** How the ``lineWidth`` samples of one column become one value. Ignored at
    *  width 1, where there is a single sample. */
   lineReduce: MtKymographLineReduce;
+  /** Absolute intensity floor for detected trajectories, in RAW SAMPLE UNITS:
+   *  counts above each trajectory's own local background. Trajectories below it
+   *  are dropped before the segmented kymograph is rendered, so the images and
+   *  the velocity workbook agree. 0 = off, the default.
+   *
+   *  Absolute rather than a fraction, because the value is measured on the
+   *  frame's native-bit-depth samples and the display scaling is applied
+   *  afterwards. It does NOT transfer between channels: measured on a
+   *  production container, 488 nm trajectories sit 9-51 counts above background
+   *  where 640 nm sits at 228. Kymograph mode only — profiles have no
+   *  trajectories to filter. */
+  minIntensityMinusBg: number;
 }
 
 export interface MicrotubuleKymographsSectionProps {
@@ -89,6 +101,11 @@ export const MicrotubuleKymographsSection: React.FC<
   // number, so a digit could not be erased. The parent is updated only for a
   // valid integer in range; an invalid field snaps back on blur.
   const [widthText, setWidthText] = useState(String(value.lineWidth));
+  // Same local-text mirror, same reason: the floor must be erasable to empty
+  // (which means "off") without the field snapping back mid-edit.
+  const [minIntensityText, setMinIntensityText] = useState(
+    value.minIntensityMinusBg > 0 ? String(value.minIntensityMinusBg) : ''
+  );
   useEffect(() => {
     setWidthText(prev =>
       prev !== '' && Number.parseInt(prev, 10) === value.lineWidth
@@ -110,6 +127,26 @@ export const MicrotubuleKymographsSection: React.FC<
       onChange({ ...value, lineWidth: n });
     }
   };
+  const onMinIntensityChange = (raw: string) => {
+    setMinIntensityText(raw);
+    if (raw === '') {
+      onChange({ ...value, minIntensityMinusBg: 0 });
+      return;
+    }
+    const n = Number(raw);
+    if (Number.isFinite(n) && n >= 0) {
+      onChange({ ...value, minIntensityMinusBg: n });
+    }
+  };
+  const onMinIntensityBlur = () => {
+    const n = Number(minIntensityText);
+    if (minIntensityText !== '' && (!Number.isFinite(n) || n < 0)) {
+      setMinIntensityText(
+        value.minIntensityMinusBg > 0 ? String(value.minIntensityMinusBg) : ''
+      );
+    }
+  };
+
   const onWidthBlur = () => {
     const n = Number.parseInt(widthText, 10);
     if (
@@ -245,6 +282,35 @@ export const MicrotubuleKymographsSection: React.FC<
                   })}
                 </p>
               </div>
+              {/* Kymograph mode only: profiles carry no trajectories, so
+                  there is nothing for a trajectory floor to filter. */}
+              {value.mode === 'kymograph' && (
+                <div>
+                  <Label htmlFor="mt-kymo-min-intensity" className="text-sm">
+                    {t('export.mtKymographs.minIntensityLabel', {
+                      defaultValue: 'Min. trajectory intensity',
+                    })}
+                  </Label>
+                  <Input
+                    id="mt-kymo-min-intensity"
+                    type="number"
+                    inputMode="decimal"
+                    min={0}
+                    step={1}
+                    placeholder="0"
+                    value={minIntensityText}
+                    onChange={e => onMinIntensityChange(e.target.value)}
+                    onBlur={onMinIntensityBlur}
+                    className="mt-1 text-sm"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {t('export.mtKymographs.minIntensityHelp', {
+                      defaultValue:
+                        'Drop trajectories dimmer than this many raw intensity counts above their own background. Absolute, so it does not depend on image scaling — but it is not comparable between channels. Empty keeps all.',
+                    })}
+                  </p>
+                </div>
+              )}
               {value.lineWidth > DEFAULT_MT_KYMOGRAPH_LINE_WIDTH && (
                 <div>
                   <Label htmlFor="mt-kymo-line-reduce" className="text-sm">

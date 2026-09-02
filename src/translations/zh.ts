@@ -1244,6 +1244,9 @@ export default {
         '线宽方向上的像素如何合并为一个值。平均值与 ImageJ 一致；最大值更亮，但会被个别过亮像素影响。',
       lineReduceMean: '平均值',
       lineReduceMax: '最大值',
+      minIntensityLabel: '轨迹最低强度',
+      minIntensityHelp:
+        '丢弃高出自身背景不足该原始强度单位数的轨迹。绝对值，不受图像缩放影响，但不可跨通道比较。留空则保留全部。',
     },
     mt: {
       sectionTitle: '微管指标',
@@ -2608,6 +2611,9 @@ export default {
       velocityComputing: '正在分析速度…',
       widthLabel: '强度宽度',
       widthHint: '围绕每条轨迹采样的条带宽度 (px)，用于信号与背景强度的比较。',
+      minIntensityLabel: '最低强度',
+      minIntensityHint:
+        '隐藏高出自身局部背景不足该原始强度单位数的轨迹。绝对值——与显示缩放无关——但不可跨通道比较。留空或 0 显示全部。',
       lineWidthLabel: '线宽',
       lineWidthHint:
         '沿微管采样的线宽 (px)，垂直于微管方向测量。设为 1 时仅采样单个像素。',
@@ -2633,6 +2639,7 @@ export default {
       noBlobs: '未检测到移动粒子',
       velocityFailed: '速度检测失败。',
       filteredHidden: '已隐藏 {{count}} 条低于 0.01 µm/s 的非进行性轨迹。',
+      dimHidden: '已隐藏 {{count}} 条低于背景之上 {{threshold}} 个单位的轨迹。',
       downloadTracks: '速度 CSV',
       uncalibrated: '无像素尺寸/帧间隔校准——速度以 px/帧 显示。',
     },

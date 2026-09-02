@@ -158,6 +158,18 @@ export interface MTKymographOptions {
    *  (default, ImageJ's convention) or `max` (KymoResliceWide's). Ignored at
    *  width 1, where there is a single sample. */
   lineReduce?: KymographLineReduce;
+  /** Absolute intensity floor for detected trajectories, in RAW SAMPLE UNITS
+   *  (counts above each trajectory's own local background). Trajectories below
+   *  it are dropped before the overlay is rendered, so the segmented-kymograph
+   *  images, the velocity workbook and the modal all show one set.
+   *
+   *  Absent / 0 = off, which is what every export did before this field, and
+   *  the ML request then omits the field entirely.
+   *
+   *  Per CHANNEL by nature: on one production container 488 nm trajectories sit
+   *  at 9-51 counts above background where 640 nm sits at 228, so a number
+   *  chosen while looking at one channel does not transfer to another. */
+  minIntensityMinusBg?: number;
 }
 
 interface PolylineRecord {
@@ -627,6 +639,7 @@ export async function exportMicrotubuleKymographs(
           // exporter posted before the option existed.
           lineWidth: options.lineWidth,
           lineReduce: options.lineReduce,
+          minIntensityMinusBg: options.minIntensityMinusBg,
         }),
         // One matplotlib PNG per rendered frame per item, so the batch is
         // bounded by images rather than by items. See PROFILE_BATCH_MAX_IMAGES.
@@ -727,6 +740,7 @@ export async function exportMicrotubuleKymographs(
         // posts the body it posted before this option existed.
         lineWidth: options.lineWidth,
         lineReduce: options.lineReduce,
+        minIntensityMinusBg: options.minIntensityMinusBg,
         // This mode writes the overlay PNG and the velocity workbook and never
         // reads the intensity matrix, so asking for it would be 483 KB of
         // base64 per microtubule built, shipped and thrown away.

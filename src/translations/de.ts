@@ -1354,6 +1354,9 @@ export default {
         'Wie die Pixel über die Breite zu einem Wert werden. Mittelwert entspricht ImageJ; Maximum ist heller, wird aber von einzelnen heißen Pixeln verzerrt.',
       lineReduceMean: 'Mittelwert',
       lineReduceMax: 'Maximum',
+      minIntensityLabel: 'Min. Trajektorienintensität',
+      minIntensityHelp:
+        'Trajektorien verwerfen, die schwächer sind als so viele rohe Intensitätseinheiten über ihrem eigenen Hintergrund. Absolut, also unabhängig von der Bildskalierung — aber nicht zwischen Kanälen vergleichbar. Leer behält alle.',
     },
     mt: {
       sectionTitle: 'Mikrotubuli-Metriken',
@@ -2792,6 +2795,9 @@ export default {
       widthLabel: 'Intensitätsbreite',
       widthHint:
         'Breite (px) des um jede Trajektorie abgetasteten Bandes für Signal vs. Hintergrundintensität.',
+      minIntensityLabel: 'Min. Intensität',
+      minIntensityHint:
+        'Trajektorien ausblenden, die schwächer sind als so viele rohe Intensitätseinheiten über ihrem eigenen lokalen Hintergrund. Absolut — unabhängig von der Anzeigeskalierung — aber nicht zwischen Kanälen vergleichbar. Leer oder 0 zeigt alle.',
       lineWidthLabel: 'Linienbreite',
       lineWidthHint:
         'Breite (px) der entlang des Mikrotubulus abgetasteten Linie, quer dazu gemessen. 1 tastet ein einzelnes Pixel ab.',
@@ -2819,6 +2825,8 @@ export default {
       velocityFailed: 'Geschwindigkeitserkennung fehlgeschlagen.',
       filteredHidden:
         '{{count}} nicht-prozessive Trajektorie(n) unter 0.01 µm/s ausgeblendet.',
+      dimHidden:
+        '{{count}} Trajektorie(n) unter {{threshold}} Einheiten über dem Hintergrund ausgeblendet.',
       downloadTracks: 'Geschwindigkeits-CSV',
       uncalibrated:
         'Keine Pixelgröße-/Bildintervall-Kalibrierung — Geschwindigkeiten in px/Frame.',

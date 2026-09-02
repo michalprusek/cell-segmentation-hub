@@ -452,6 +452,65 @@ describe('buildKymograph', () => {
       expect(body).not.toHaveProperty('line_reduce');
     });
 
+    it('omits the intensity floor when the caller sets none', async () => {
+      // Same backward-compatibility story as line_width above, and it matters
+      // more here: the ML model is `extra="forbid"`, so posting the field to an
+      // ml container that has not been recreated yet 422s every kymograph.
+      mockPrisma.image.findMany.mockResolvedValue([
+        makeFrame(0, [POLYLINE_STATIC]),
+      ]);
+      await buildKymograph({
+        videoContainerId: 'container-1',
+        polylineId: 'poly-1',
+        frameIndex: 0,
+        sourceChannel: 'IRM',
+      });
+
+      expect(mockAxios.post.mock.calls[0][1]).not.toHaveProperty(
+        'min_intensity_minus_bg'
+      );
+    });
+
+    it('forwards the intensity floor when the caller sets one', async () => {
+      mockPrisma.image.findMany.mockResolvedValue([
+        makeFrame(0, [POLYLINE_STATIC]),
+      ]);
+      await buildKymograph({
+        videoContainerId: 'container-1',
+        polylineId: 'poly-1',
+        frameIndex: 0,
+        sourceChannel: 'IRM',
+        detectVelocity: true,
+        minIntensityMinusBg: 18.5,
+      });
+
+      // Not rounded: real values sit in the tens (9-51 counts above background
+      // on a 488 nm production container), where a whole count is a coarse step.
+      expect(mockAxios.post.mock.calls[0][1].min_intensity_minus_bg).toBe(18.5);
+    });
+
+    it('treats a zero or negative floor as off rather than as an error', async () => {
+      // It arrives from a number input the user can empty; a blank field has to
+      // restore the unfiltered view, not fail the request.
+      for (const value of [0, -5]) {
+        mockAxios.post.mockClear();
+        mockPrisma.image.findMany.mockResolvedValue([
+          makeFrame(0, [POLYLINE_STATIC]),
+        ]);
+        await buildKymograph({
+          videoContainerId: 'container-1',
+          polylineId: 'poly-1',
+          frameIndex: 0,
+          sourceChannel: 'IRM',
+          minIntensityMinusBg: value,
+          useCache: false,
+        });
+        expect(mockAxios.post.mock.calls[0][1]).not.toHaveProperty(
+          'min_intensity_minus_bg'
+        );
+      }
+    });
+
     it('forwards line_width and line_reduce when the caller asks for a band', async () => {
       mockPrisma.image.findMany.mockResolvedValue([
         makeFrame(0, [POLYLINE_STATIC]),
@@ -626,6 +685,9 @@ describe('buildKymograph', () => {
         pixelSizeUm: null,
         frameIntervalMs: null,
         filteredTrackCount: 0,
+        // Defaults to 0 when the ML service does not report it — an ml
+        // container that predates the intensity floor omits the field.
+        filteredDimTrackCount: 0,
       });
     });
 
@@ -1014,6 +1076,33 @@ describe('buildKymograph', () => {
         [41, 31],
       ]);
       expect(warm.pngBase64).toBe('AFTER_EDIT');
+    });
+
+    it('MISSES the cache when the intensity floor changes', async () => {
+      // The floor is applied by the ML service (so the overlay stays in step
+      // with the table), which means a different floor is a different response
+      // and has to be a different key. Without it the modal would serve the
+      // previous threshold's tracks and the control would look inert — the
+      // failure mode is silent, which is why it is pinned here.
+      // The two calls differ in the floor and NOTHING else — including
+      // `detectVelocity`, which would otherwise change the key on its own and
+      // let this test pass with the floor missing from it.
+      const withVelocity = { ...INPUT, detectVelocity: true };
+      const cold = await buildKymograph(withVelocity);
+      expect(cold.pngBase64).toBe('iVBOR');
+
+      mockAxios.post = vi.fn().mockResolvedValue({
+        data: { ...ML_RESPONSE.data, png_base64: 'FILTERED' },
+      });
+      const warm = await buildKymograph({
+        ...withVelocity,
+        minIntensityMinusBg: 20,
+      });
+
+      expect(lookupKey(1)).not.toBe(lookupKey(0));
+      expect(mockAxios.post).toHaveBeenCalledTimes(1);
+      expect(mockAxios.post.mock.calls[0][1].min_intensity_minus_bg).toBe(20);
+      expect(warm.pngBase64).toBe('FILTERED');
     });
 
     it('MISSES the cache when a frame image row is rewritten', async () => {

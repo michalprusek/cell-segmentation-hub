@@ -36,7 +36,7 @@ from __future__ import annotations
 import logging
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Tuple, Any, Dict, List, Optional, Sequence
 
 import numpy as np
 
@@ -162,6 +162,49 @@ def net_velocity_threshold(
         * (frame_interval_ms / 1000.0)
         / (pixel_size_um * px_per_column)
     )
+
+
+def filter_dim_tracks(
+    tracks: List[Dict[str, Any]],
+    threshold: float,
+    polarity: float = 1.0,
+) -> Tuple[List[Dict[str, Any]], int]:
+    """Drop trajectories dimmer than an ABSOLUTE intensity floor.
+
+    ``threshold`` is in raw sample units — the same units as
+    ``intensity_minus_bg``, i.e. camera counts above the local background. It is
+    meaningful as an absolute number because the kymograph matrix is sampled at
+    the frame's native bit depth and ``tracks_intensity`` measures on it
+    directly; the min/max normalisation applied later exists only to paint the
+    PNG. A threshold on the DETECTOR could not work this way, because
+    KymoButler consumes a row-normalised copy whose units are arbitrary.
+
+    It is NOT comparable between channels: measured on two production
+    containers, ``intensity_minus_bg`` runs 9-51 counts on 488 nm and 228 on
+    640 nm of the same movie. Subtracting the background removes the offset,
+    not the scale.
+
+    ``polarity`` for the same reason ``flag_bright_outliers`` needs it: on a
+    dark-on-bright kymograph (``-1``) the signal sits BELOW the background, so
+    ``intensity_minus_bg`` is negative and "brighter" means more negative.
+    Comparing the raw value there would drop every trajectory on the movie.
+
+    A track whose intensity is ``None`` is KEPT. A failed measurement is not
+    evidence that a trajectory is dim, and dropping it would turn a nulled
+    column into a vanished particle.
+
+    Returns ``(kept, dropped_count)``. ``threshold <= 0`` disables the filter
+    and returns the input list unchanged.
+    """
+    if threshold <= 0:
+        return tracks, 0
+    kept = [
+        tr
+        for tr in tracks
+        if tr.get("intensity_minus_bg") is None
+        or polarity * tr["intensity_minus_bg"] >= threshold
+    ]
+    return kept, len(tracks) - len(kept)
 
 
 def edge_touch(

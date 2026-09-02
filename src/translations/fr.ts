@@ -1347,6 +1347,9 @@ export default {
         'Comment les pixels sur la largeur deviennent une seule valeur. La moyenne correspond à ImageJ ; le maximum est plus lumineux mais biaisé par des pixels chauds isolés.',
       lineReduceMean: 'Moyenne',
       lineReduceMax: 'Maximum',
+      minIntensityLabel: 'Intensité minimale de trajectoire',
+      minIntensityHelp:
+        "Écarter les trajectoires plus faibles que ce nombre d'unités d'intensité brutes au-dessus de leur propre fond. Absolu, donc indépendant de la mise à l'échelle de l'image — mais non comparable entre canaux. Vide conserve tout.",
     },
     mt: {
       sectionTitle: 'Métriques des microtubules',
@@ -2785,6 +2788,9 @@ export default {
       widthLabel: "Largeur d'intensité",
       widthHint:
         "Largeur (px) de la bande échantillonnée autour de chaque trajectoire pour le signal vs. l'intensité de fond.",
+      minIntensityLabel: 'Intensité min.',
+      minIntensityHint:
+        "Masquer les trajectoires plus faibles que ce nombre d'unités d'intensité brutes au-dessus de leur propre fond local. Absolu — indépendant de la mise à l'échelle d'affichage — mais non comparable entre canaux. Vide ou 0 affiche tout.",
       lineWidthLabel: 'Largeur de ligne',
       lineWidthHint:
         'Largeur (px) de la ligne échantillonnée le long du microtubule, mesurée en travers. 1 échantillonne un seul pixel.',
@@ -2812,6 +2818,8 @@ export default {
       velocityFailed: 'La détection de vitesse a échoué.',
       filteredHidden:
         '{{count}} trajectoire(s) non processive(s) en dessous de 0.01 µm/s masquée(s).',
+      dimHidden:
+        '{{count}} trajectoire(s) sous {{threshold}} unités au-dessus du fond masquée(s).',
       downloadTracks: 'CSV de vitesse',
       uncalibrated:
         "Pas de calibration taille de pixel / intervalle d'images — vitesses en px/image.",

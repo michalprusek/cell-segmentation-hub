@@ -46,6 +46,18 @@ import { CHANNEL_NAME_RE } from './video/types';
  *  this µm/s threshold into px/frame. */
 const MIN_NET_VELOCITY_UM_S = 0.01;
 
+/** Clamp the absolute intensity floor to what the ML model accepts (`ge=0`).
+ *
+ *  Anything non-finite or negative means "off" rather than an error: this
+ *  arrives from a number input the user can empty, and a blank field must
+ *  restore the unfiltered view, not fail the request. */
+function resolveMinIntensity(value: number | undefined): number {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+    return 0;
+  }
+  return value;
+}
+
 /** Mirrors the pattern accepted by the ML KymographRequest. Defence in
  *  depth — the controller layer also validates. */
 const HEX_COLOR_RE = /^#[0-9A-Fa-f]{6}$/;
@@ -208,6 +220,21 @@ export interface KymographServiceInput {
    *  trajectory for the background-subtracted intensity metric. Defaults to
    *  `DEFAULT_INTENSITY_WIDTH` (5 since 2026-09-01). */
   intensityWidth?: number;
+  /** Absolute intensity floor, in RAW SAMPLE UNITS: trajectories whose
+   *  `intensityMinusBackground` (band mean minus the ring's median background)
+   *  falls below it are dropped by the ML service before it renders the
+   *  overlay, so overlay, table and exported CSV keep showing one set.
+   *
+   *  0 / undefined disables it, and the field is then omitted from the ML body
+   *  entirely — the request stays byte-identical to what this service posted
+   *  before the field existed.
+   *
+   *  Absolute is meaningful because the kymograph is sampled at the frame's
+   *  native bit depth and the intensity is measured on that raw matrix; the
+   *  PNG's normalisation happens afterwards and touches nothing measured. It is
+   *  NOT comparable ACROSS channels: on one production container 488 nm
+   *  trajectories sit at 9-51 counts above background and 640 nm at 228. */
+  minIntensityMinusBg?: number;
   /** Width (image px) of the line sampled along the polyline, measured
    *  perpendicular to it, with the samples reduced by `lineReduce`. Defaults to
    *  `DEFAULT_LINE_WIDTH` (1 = a single-pixel line profile, i.e. exactly what
@@ -314,6 +341,9 @@ export interface KymographServiceResult {
   /** How many tracks the net-velocity cut-off hid as non-processive. Lets the UI
    *  distinguish "hidden below 0.01 µm/s" from "nothing detected". 0 otherwise. */
   filteredTrackCount: number;
+  /** Tracks hidden by `minIntensityMinusBg`. Counted separately from the
+   *  velocity cut-off so the UI can name the reason a trajectory vanished. */
+  filteredDimTrackCount: number;
   /** Set when ML velocity detection crashed (vs. legitimately finding no
    *  particles). Lets callers surface a failure instead of a silent empty table. */
   velocityError?: string;
@@ -460,6 +490,10 @@ function kymographCacheKey(
       resolveLineWidth(input.lineWidth)
     ),
     minNetVelocityUmS: MIN_NET_VELOCITY_UM_S,
+    // In the key because it changes WHICH tracks come back. Without it,
+    // nudging the threshold in the modal would be served the previous
+    // threshold's result from cache and look like the control does nothing.
+    minIntensityMinusBg: resolveMinIntensity(input.minIntensityMinusBg),
     // Container calibration scales every velocity/length in the result. Held
     // explicitly as well as via `containerUpdatedAt` so the key stays correct
     // even for a backfill written with raw SQL, which does not bump the row's
@@ -811,6 +845,9 @@ interface MlKymographBody {
    *  **Deploy ml before this service.** */
   line_width?: number;
   line_reduce?: KymographLineReduce;
+  /** Omitted at the default (0 = off) for the same reason `line_width` is:
+   *  the body then matches, byte for byte, what an older Node posted. */
+  min_intensity_minus_bg?: number;
   pixel_size_um?: number;
   frame_interval_ms?: number;
   channel_color?: string;
@@ -842,6 +879,7 @@ async function buildMlBody(
   const { container, selectedFrames } = plan;
   const lineWidth = resolveLineWidth(input.lineWidth);
   const lineReduce = resolveLineReduce(input.lineReduce, lineWidth);
+  const minIntensityMinusBg = resolveMinIntensity(input.minIntensityMinusBg);
 
   // The seed frame comes first because it is what decides whether ANY other
   // frame's polygons are needed at all.
@@ -938,6 +976,13 @@ async function buildMlBody(
     ...(lineReduce !== DEFAULT_LINE_REDUCE
       ? { line_reduce: lineReduce }
       : {}),
+    // Same discipline again: omitted when the floor is off, so a caller that
+    // never touches it posts the body it always did — which is also what keeps
+    // an un-recreated ml container (whose model is `extra="forbid"`) from
+    // 422-ing every kymograph while a deploy is half done.
+    ...(minIntensityMinusBg > 0
+      ? { min_intensity_minus_bg: minIntensityMinusBg }
+      : {}),
   };
   return { body, trackedMode };
 }
@@ -971,6 +1016,7 @@ interface MlKymographPayload {
   length_px: number;
   px_per_column?: number;
   filtered_track_count?: number;
+  filtered_dim_track_count?: number;
   tracks?: MlTrack[];
   overlay_png_base64?: string;
   velocity_error?: string;
@@ -1089,6 +1135,10 @@ function mapMlPayload(
     sourceChannel,
     pixelSizeUm,
     frameIntervalMs,
+    filteredDimTrackCount:
+      typeof payload.filtered_dim_track_count === 'number'
+        ? payload.filtered_dim_track_count
+        : 0,
     filteredTrackCount:
       typeof payload.filtered_track_count === 'number'
         ? payload.filtered_track_count
