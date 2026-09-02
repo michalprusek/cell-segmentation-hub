@@ -34,6 +34,19 @@ vi.mock('@/components/ui/context-menu', () => ({
   ContextMenu: ({ children }: { children: React.ReactNode }) => (
     <div data-testid="ctx-menu-root">{children}</div>
   ),
+  // The submenu wrappers render their children inline, so a `Set type` trigger
+  // and its label items are findable the same way every other item is.
+  ContextMenuSub: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="ctx-menu-sub">{children}</div>
+  ),
+  // Same testid as a plain item, because `getMenuItems` finds items by testid
+  // and a submenu trigger IS an item as far as these tests are concerned.
+  ContextMenuSubTrigger: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="ctx-menu-item">{children}</div>
+  ),
+  ContextMenuSubContent: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="ctx-menu-subcontent">{children}</div>
+  ),
   ContextMenuTrigger: ({
     children,
     asChild,
@@ -181,6 +194,31 @@ describe('PolygonContextMenu', () => {
       render(<PolygonContextMenu {...DEFAULT_PROPS} isPolyline={false} />);
       const slice = getMenuItemByText(/contextMenu.splitPolygon/i);
       expect(slice).toBeTruthy();
+    });
+
+    it('offers Set type on a CLOSED polygon when the caller gives a handler', () => {
+      // Microcapsules. The submenu used to live inside the
+      // `isPolyline && isMicrotubules` branch, so a capsule — a closed polygon
+      // on a project with no polylines at all — could never be typed, and its
+      // label is what decides whether the capsule is measured.
+      render(
+        <PolygonContextMenu
+          {...DEFAULT_PROPS}
+          isPolyline={false}
+          projectType="microcapsule"
+          onChangeMtType={vi.fn()}
+          mtTypeLabels={[
+            { id: 'relevant', name: 'Relevant', color: '#ef4444' },
+            { id: 'non_relevant', name: 'Non relevant', color: '#969696' },
+          ]}
+        />
+      );
+      expect(getMenuItemByText(/microtubule.type.set/i)).toBeTruthy();
+    });
+
+    it('offers no Set type when the caller gives no handler', () => {
+      render(<PolygonContextMenu {...DEFAULT_PROPS} isPolyline={false} />);
+      expect(getMenuItemByText(/microtubule.type.set/i)).toBeUndefined();
     });
 
     it('does NOT render Slice item for polyline', () => {

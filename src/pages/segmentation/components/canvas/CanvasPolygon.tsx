@@ -411,11 +411,14 @@ const CanvasPolygon = React.memo(
         multiSelectCount={multiSelectCount}
         trackId={polygon.trackId}
         videoFrameCount={videoFrameCount}
-        mtTypeLabels={isPolyline ? mtTypeLabels : undefined}
-        currentMtType={isPolyline ? currentMtType : undefined}
-        onChangeMtType={
-          isPolyline && onChangeMtType ? handleChangeMtType : undefined
-        }
+        // The three type props are NOT gated on `isPolyline`: a microcapsule
+        // is a closed polygon and its type decides whether it is measured.
+        // The caller already withholds them unless the polygon is somewhere a
+        // type means something, so re-deciding it here only cost the
+        // microcapsule case — its menu offered Edit, Split and Delete alone.
+        mtTypeLabels={mtTypeLabels}
+        currentMtType={currentMtType}
+        onChangeMtType={onChangeMtType ? handleChangeMtType : undefined}
         onCreateMtLabel={isPolyline ? onCreateMtLabel : undefined}
       >
         <g

@@ -206,77 +206,78 @@ const PolygonContextMenu = ({
                   </span>
                 </ContextMenuItem>
               )}
-              {onChangeMtType && (
-                <ContextMenuSub>
-                  <ContextMenuSubTrigger className="cursor-pointer">
-                    <Tag className="mr-2 h-4 w-4" />
-                    <span>
-                      {multiSelectCount >= 2
-                        ? t('microtubule.type.setForSelected', {
-                            count: multiSelectCount,
-                          })
-                        : t('microtubule.type.set')}
+            </>
+          )}
+          {/* Type labels. NOT inside the microtubule branch above: a
+              microcapsule is a closed polygon on a project that has no
+              polylines at all, and its label decides whether the capsule is
+              measured. The caller passes `onChangeMtType` only where a type
+              means something, so this gate is just "did anyone give me one". */}
+          {onChangeMtType && (
+            <ContextMenuSub>
+              <ContextMenuSubTrigger className="cursor-pointer">
+                <Tag className="mr-2 h-4 w-4" />
+                <span>
+                  {multiSelectCount >= 2
+                    ? t('microtubule.type.setForSelected', {
+                        count: multiSelectCount,
+                      })
+                    : t('microtubule.type.set')}
+                </span>
+              </ContextMenuSubTrigger>
+              <ContextMenuSubContent className="w-56">
+                <ContextMenuItem
+                  onClick={() => onChangeMtType(null)}
+                  className="cursor-pointer"
+                >
+                  <span
+                    className="mr-2 inline-block rounded-full border border-gray-400"
+                    style={{ width: 12, height: 12 }}
+                  />
+                  <span>{t('microtubule.type.none')}</span>
+                  {!currentMtType && (
+                    <span className="ml-auto text-xs text-violet-500">✓</span>
+                  )}
+                </ContextMenuItem>
+                {(mtTypeLabels ?? []).length > 0 && <ContextMenuSeparator />}
+                {(mtTypeLabels ?? []).map(label => (
+                  <ContextMenuItem
+                    key={label.id}
+                    onClick={() => onChangeMtType(label.id)}
+                    className="cursor-pointer"
+                  >
+                    <span
+                      className="mr-2 inline-block flex-shrink-0 rounded-full"
+                      style={{
+                        width: 12,
+                        height: 12,
+                        backgroundColor: label.color,
+                      }}
+                    />
+                    <span className="min-w-0 truncate" title={label.name}>
+                      {label.name}
                     </span>
-                  </ContextMenuSubTrigger>
-                  <ContextMenuSubContent className="w-56">
+                    {currentMtType === label.id && (
+                      <span className="ml-auto flex-shrink-0 text-xs text-violet-500">
+                        ✓
+                      </span>
+                    )}
+                  </ContextMenuItem>
+                ))}
+                {onCreateMtLabel && (
+                  <>
+                    <ContextMenuSeparator />
                     <ContextMenuItem
-                      onClick={() => onChangeMtType(null)}
+                      onClick={() => setShowNewLabelDialog(true)}
                       className="cursor-pointer"
                     >
-                      <span
-                        className="mr-2 inline-block rounded-full border border-gray-400"
-                        style={{ width: 12, height: 12 }}
-                      />
-                      <span>{t('microtubule.type.none')}</span>
-                      {!currentMtType && (
-                        <span className="ml-auto text-xs text-violet-500">
-                          ✓
-                        </span>
-                      )}
+                      <Plus className="mr-2 h-4 w-4" />
+                      <span>{t('microtubule.type.newLabel')}</span>
                     </ContextMenuItem>
-                    {(mtTypeLabels ?? []).length > 0 && (
-                      <ContextMenuSeparator />
-                    )}
-                    {(mtTypeLabels ?? []).map(label => (
-                      <ContextMenuItem
-                        key={label.id}
-                        onClick={() => onChangeMtType(label.id)}
-                        className="cursor-pointer"
-                      >
-                        <span
-                          className="mr-2 inline-block flex-shrink-0 rounded-full"
-                          style={{
-                            width: 12,
-                            height: 12,
-                            backgroundColor: label.color,
-                          }}
-                        />
-                        <span className="min-w-0 truncate" title={label.name}>
-                          {label.name}
-                        </span>
-                        {currentMtType === label.id && (
-                          <span className="ml-auto flex-shrink-0 text-xs text-violet-500">
-                            ✓
-                          </span>
-                        )}
-                      </ContextMenuItem>
-                    ))}
-                    {onCreateMtLabel && (
-                      <>
-                        <ContextMenuSeparator />
-                        <ContextMenuItem
-                          onClick={() => setShowNewLabelDialog(true)}
-                          className="cursor-pointer"
-                        >
-                          <Plus className="mr-2 h-4 w-4" />
-                          <span>{t('microtubule.type.newLabel')}</span>
-                        </ContextMenuItem>
-                      </>
-                    )}
-                  </ContextMenuSubContent>
-                </ContextMenuSub>
-              )}
-            </>
+                  </>
+                )}
+              </ContextMenuSubContent>
+            </ContextMenuSub>
           )}
           {isPolyline && isSperm && onChangePartClass && (
             <>
