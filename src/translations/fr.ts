@@ -2823,6 +2823,8 @@ export default {
         '{{count}} trajectoire(s) non processive(s) en dessous de 0.01 µm/s masquée(s).',
       dimHidden:
         '{{count}} trajectoire(s) sous {{threshold}} unités au-dessus du fond masquée(s).',
+      unmeasuredKept:
+        '{{count}} trajectoire(s) n’ont pas pu être mesurées — le seuil d’intensité ne leur a pas été appliqué.',
       downloadTracks: 'CSV de vitesse',
       uncalibrated:
         "Pas de calibration taille de pixel / intervalle d'images — vitesses en px/image.",

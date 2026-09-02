@@ -369,7 +369,17 @@ model ExportLog {
   event     String
   /// Who did THIS event — the creator for "created", the person who actually
   /// pulled the file for "downloaded" (they can differ on a shared project).
-  userId    String
+  ///
+  /// NULLABLE, and the FK is `SetNull`, so deleting an account does not delete
+  /// the record of what that account took. A cascade here would let the
+  /// subject of the audit erase their own trail in one click — the offboarding
+  /// case this table exists for. `userEmail` below is what keeps the row
+  /// readable afterwards.
+  userId    String?
+  /// The actor's e-mail, denormalised at write time. The FK above survives an
+  /// account deletion but the join does not, so without this a deleted user's
+  /// rows would say only "someone".
+  userEmail String?
   /// Null for essays jobs, which are not project-scoped.
   projectId String?
   /// The export job this row belongs to; correlates the rows of one job.
@@ -388,7 +398,7 @@ model ExportLog {
 
   createdAt DateTime @default(now())
 
-  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user    User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
   project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
 
   @@index([createdAt], map: "idx_exportlog_created")

@@ -198,6 +198,17 @@ export class ExportController {
         try {
           const payload = verifyDownloadToken(queryToken);
           if (payload.jobId !== jobId || payload.projectId !== projectId) {
+            // A valid signature over the WRONG resource — someone editing a
+            // forwarded URL. The token still names its subject, so this row
+            // has an actor.
+            void recordExportEvent({
+              kind: 'project',
+              event: 'denied',
+              userId: payload.userId,
+              jobId,
+              projectId,
+              detail: 'token-resource-mismatch',
+            });
             ResponseHelper.forbidden(
               res,
               'Token does not match resource',
@@ -208,6 +219,17 @@ export class ExportController {
           userId = payload.userId;
         } catch (err) {
           if (err instanceof InvalidDownloadTokenError) {
+            // Expired or tampered. No verified subject to name — a forwarded
+            // link retried after it lapsed lands here, which is exactly the
+            // event worth having a row for.
+            void recordExportEvent({
+              kind: 'project',
+              event: 'denied',
+              userId: req.user?.id ?? null,
+              jobId,
+              projectId,
+              detail: `invalid-token: ${err.message}`,
+            });
             ResponseHelper.unauthorized(
               res,
               `Invalid download token: ${err.message}`,
@@ -219,6 +241,12 @@ export class ExportController {
         }
       }
 
+      // No audit row here, and the guard is a backstop rather than a path: a
+      // request with no `?token=` never reaches this controller, because
+      // `optionalJwtAuth` hands it to the standard `authenticate` middleware,
+      // which 401s first. An anonymous hit on a download URL is therefore an
+      // ordinary unauthenticated API call, not an export event — the denials
+      // worth a row are the two above, where the caller HAD a link.
       if (!userId) {
         ResponseHelper.unauthorized(res, 'Unauthorized', CTX);
         return;

@@ -158,6 +158,18 @@ and every `downloaded` are separate rows correlated by `jobId`.
 | `imageCount`, `fileSizeBytes` | filled in on `completed`; the size is **BIGINT**, since an archive passes 2³¹ bytes before it passes any other limit |
 | `detail`                      | the failure message, or how a download was authorised (`jwt` / `token`)                                              |
 
+`denied` rows are the ones an audit is really for: a forwarded signed-token URL
+retried after it expired, a token edited to point at another job, or a request
+with no credential at all. Recorded for both the project and the essays
+download.
+
+Two refusals are deliberately NOT recorded. A plain 404, because the service
+returns null for "no access" and "no file" alike and the code cannot tell them
+apart. And a request with **no credential at all**: `optionalJwtAuth` only
+defers to the controller when a `?token=` is present, so an anonymous hit on a
+download URL is stopped by the standard `authenticate` middleware and is an
+ordinary unauthenticated API call rather than an export event.
+
 Why an event log rather than a mutable job row: a row per event carries its own
 actor, so a download of a **shared** project's export is attributed to the
 person who took it rather than to whoever created the job — and two concurrent
@@ -181,11 +193,19 @@ SELECT l."createdAt", l.kind, l.event, u.email, p.title AS project,
  ORDER BY l."createdAt" DESC
  LIMIT 100;
 
+-- Refused attempts, newest first. The actor may be null.
+SELECT l."createdAt", COALESCE(u.email, l."userEmail", '(no actor)') AS who,
+       l.kind, l.detail
+  FROM export_logs l
+  LEFT JOIN users u ON u.id = l."userId"
+ WHERE l.event = 'denied'
+ ORDER BY l."createdAt" DESC;
+
 -- Downloads only — the moment data actually left.
-SELECT l."createdAt", u.email, p.title AS project,
+SELECT l."createdAt", COALESCE(u.email, l."userEmail") AS who, p.title AS project,
        pg_size_pretty(l."fileSizeBytes") AS size, l.detail AS authorised_by
   FROM export_logs l
-  JOIN users u ON u.id = l."userId"
+  LEFT JOIN users u ON u.id = l."userId"
   LEFT JOIN projects p ON p.id = l."projectId"
  WHERE l.event = 'downloaded'
  ORDER BY l."createdAt" DESC;

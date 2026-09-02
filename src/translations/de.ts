@@ -2830,6 +2830,8 @@ export default {
         '{{count}} nicht-prozessive Trajektorie(n) unter 0.01 µm/s ausgeblendet.',
       dimHidden:
         '{{count}} Trajektorie(n) unter {{threshold}} Einheiten über dem Hintergrund ausgeblendet.',
+      unmeasuredKept:
+        '{{count}} Trajektorie(n) konnten nicht gemessen werden — die Intensitätsschwelle wurde auf sie nicht angewendet.',
       downloadTracks: 'Geschwindigkeits-CSV',
       uncalibrated:
         'Keine Pixelgröße-/Bildintervall-Kalibrierung — Geschwindigkeiten in px/Frame.',

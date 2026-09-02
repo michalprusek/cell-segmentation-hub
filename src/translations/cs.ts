@@ -2778,6 +2778,8 @@ export default {
         'Skryto {{count}} neprocesivních trajektorií pod 0.01 µm/s.',
       dimHidden:
         'Skrytých trajektorií pod prahem {{threshold}} jednotek nad pozadím: {{count}}.',
+      unmeasuredKept:
+        'Trajektorií, které se nepodařilo změřit: {{count}} — práh intenzity se na ně neuplatnil.',
       downloadTracks: 'CSV rychlostí',
       uncalibrated:
         'Bez kalibrace velikosti pixelu / intervalu snímků — rychlosti v px/snímek.',

@@ -10,13 +10,17 @@
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-const { createMock, warnMock } = vi.hoisted(() => ({
+const { createMock, warnMock, findUserMock } = vi.hoisted(() => ({
   createMock: vi.fn(),
   warnMock: vi.fn(),
+  findUserMock: vi.fn(),
 }));
 
 vi.mock('../../db', () => ({
-  prisma: { exportLog: { create: createMock } },
+  prisma: {
+    exportLog: { create: createMock },
+    user: { findUnique: findUserMock },
+  },
 }));
 vi.mock('../../utils/logger', () => ({
   logger: { warn: warnMock, info: vi.fn(), error: vi.fn(), debug: vi.fn() },
@@ -28,6 +32,7 @@ describe('recordExportEvent', () => {
   beforeEach(() => {
     createMock.mockReset().mockResolvedValue({});
     warnMock.mockReset();
+    findUserMock.mockReset().mockResolvedValue({ email: 'who@example.com' });
   });
 
   it('records who took what, when', async () => {
@@ -121,6 +126,52 @@ describe('recordExportEvent', () => {
       expect(createMock.mock.calls[0][0].data.fileSizeBytes).toBeNull();
     }
     expect(warnMock).not.toHaveBeenCalled();
+  });
+
+  it('denormalises the actor e-mail so the row outlives the account', async () => {
+    // The FK is SET NULL, which keeps the row but not the join. Without the
+    // e-mail a deleted user's rows would say only "someone" — and the person
+    // who deletes their account is exactly the one an audit needs to name.
+    await recordExportEvent({
+      kind: 'project',
+      event: 'downloaded',
+      userId: 'user-1',
+      jobId: 'job-1',
+    });
+    expect(createMock.mock.calls[0][0].data.userEmail).toBe('who@example.com');
+  });
+
+  it('still writes the row when the e-mail lookup fails', async () => {
+    findUserMock.mockRejectedValue(new Error('db down'));
+    await recordExportEvent({
+      kind: 'project',
+      event: 'downloaded',
+      userId: 'user-1',
+      jobId: 'job-1',
+    });
+    expect(createMock).toHaveBeenCalledTimes(1);
+    expect(createMock.mock.calls[0][0].data.userEmail).toBeNull();
+  });
+
+  it('records a denial that carried no credential at all', async () => {
+    // The most interesting row in an attribution log: a forwarded link retried
+    // after it expired. There is no actor to name, and that must not stop it
+    // being written.
+    await recordExportEvent({
+      kind: 'project',
+      event: 'denied',
+      userId: null,
+      jobId: 'job-1',
+      detail: 'no-credential',
+    });
+    expect(createMock).toHaveBeenCalledTimes(1);
+    expect(createMock.mock.calls[0][0].data).toMatchObject({
+      event: 'denied',
+      userId: null,
+      userEmail: null,
+    });
+    // No pointless lookup for an actor that does not exist.
+    expect(findUserMock).not.toHaveBeenCalled();
   });
 
   it('never lets a failed write escape to the caller', async () => {

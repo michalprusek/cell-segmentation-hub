@@ -806,6 +806,69 @@ def test_the_intensity_floor_reaches_the_filter_through_the_endpoint(
     assert survivor["intensity_background"] == before["intensity_background"]
 
 
+def test_an_unmeasurable_trajectory_is_reported_not_silently_kept(
+    client, monkeypatch
+):
+    """A floor that could not judge a trajectory must say so.
+
+    The intensity measurement nulls every field when it raises, and
+    `filter_dim_tracks` keeps a null by design — a failed measurement is not
+    evidence that a trajectory is dim. Without this count the user sets a floor,
+    gets a full table back with `filtered_dim_track_count: 0` and no error, and
+    concludes every trajectory cleared it.
+
+    Mutation check: return 0 instead of counting, and this goes red.
+    """
+    from PIL import Image as PILImage
+
+    monkeypatch.setattr(
+        tracker_kymograph,
+        "detect_tracks",
+        lambda kymo, **kwargs: [
+            {
+                "points": [[t, 20.0] for t in range(8)],
+                "net_pxframe": 0.0,
+                "snr": 5.0,
+                "total_run_time_frames": 0.0,
+                "total_run_displacement_px": 0.0,
+            }
+        ],
+    )
+    # The measurement itself fails, exactly as the endpoint's own except
+    # branch handles it.
+    def _boom(*_args, **_kwargs):
+        raise RuntimeError("measurement exploded")
+
+    monkeypatch.setattr(tracker_kymograph, "tracks_intensity", _boom)
+
+    with tempfile.TemporaryDirectory() as td:
+        td_path = Path(td).resolve()
+        monkeypatch.setattr(tracker_kymograph, "_UPLOAD_ROOT", td_path)
+        row = np.full(40, 200, dtype=np.uint8)
+        row[18:23] = 60
+        png = td_path / "frame.png"
+        PILImage.fromarray(np.tile(row, (16, 1)), mode="L").save(png)
+        polyline_rc = [[8.0, float(x)] for x in range(40)]
+        r = client.post(
+            "/api/v1/kymograph",
+            json={
+                "frames": [
+                    {"frame": t, "polyline_rc": polyline_rc, "image_path": str(png)}
+                    for t in range(8)
+                ],
+                "detect_velocity": True,
+                "min_intensity_minus_bg": 50.0,
+            },
+        )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    # Kept, because a null is not evidence of dimness...
+    assert len(body["tracks"]) == 1
+    assert body["filtered_dim_track_count"] == 0
+    # ...but the response says the floor could not judge it.
+    assert body["unmeasured_track_count"] == 1
+
+
 def test_the_intensity_floor_is_off_by_default(client, monkeypatch):
     """An omitted floor must leave the response exactly as it was."""
     from PIL import Image as PILImage

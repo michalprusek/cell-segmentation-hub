@@ -140,19 +140,13 @@ describe('export download auditing', () => {
     });
   });
 
-  it('records nothing when the download is refused', async () => {
-    // A 404 is not an export. Logging it would put files that never left the
-    // platform into the record of files that did.
-    service.getExportFilePath.mockResolvedValue(null);
-
-    await request(buildApp())
-      .get(`/projects/${projectId}/export/${jobId}/download`)
-      .expect(404);
-
-    expect(recordMock).not.toHaveBeenCalled();
-  });
-
-  it('records nothing for an unauthenticated request', async () => {
+  it('records nothing for a request with no credential at all', async () => {
+    // NOT a gap. `optionalJwtAuth` only defers to this controller when a
+    // `?token=` is present; without one the standard `authenticate` middleware
+    // 401s first, so an anonymous hit on a download URL never gets here. This
+    // harness mounts its own auth, so the guard below is reachable in the test
+    // and not in production — which is exactly why it must not write a row
+    // that production would never write.
     authUser = undefined;
 
     await request(buildApp())
@@ -161,4 +155,41 @@ describe('export download auditing', () => {
 
     expect(recordMock).not.toHaveBeenCalled();
   });
+
+  it('records a DENIED row for a token pointed at another resource', async () => {
+    // A valid signature over the wrong job — an edited forwarded URL. The
+    // token still names its subject, so this row has an actor.
+    vi.mocked(verifyDownloadToken).mockReturnValue({
+      jobId: 'some-other-job',
+      projectId,
+      userId: 'token-user',
+    } as ReturnType<typeof verifyDownloadToken>);
+
+    await request(buildApp())
+      .get(`/projects/${projectId}/export/${jobId}/download?token=signed`)
+      .expect(403);
+
+    expect(recordMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'denied',
+        userId: 'token-user',
+        detail: 'token-resource-mismatch',
+      })
+    );
+  });
+
+  it('records no DOWNLOAD when the file is not found', async () => {
+    // A 404 is not an export. The `denied` rows above are refusals the code
+    // knows about; a missing file is not one of them.
+    service.getExportFilePath.mockResolvedValue(null);
+
+    await request(buildApp())
+      .get(`/projects/${projectId}/export/${jobId}/download`)
+      .expect(404);
+
+    expect(recordMock).not.toHaveBeenCalledWith(
+      expect.objectContaining({ event: 'downloaded' })
+    );
+  });
+
 });
