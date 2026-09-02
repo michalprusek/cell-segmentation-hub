@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, HardDriveDownload } from 'lucide-react';
 import { useLanguage } from '@/contexts/useLanguage';
 import SpecimenShowcase from '@/components/landing/SpecimenShowcase';
 
@@ -42,6 +42,25 @@ function Hero() {
               <a href="#features">{t('landing.hero.learnMore')}</a>
             </Button>
           </div>
+
+          {/* Immediately under the sign-up call to action, because this is the
+              moment someone decides whether to put their microscopy here. The
+              wording is deliberately specific: the DATABASE is backed up daily
+              and restore-verified, the uploaded image FILES are not, and
+              "your data is not backed up" would be wrong in one direction
+              while "everything is safe" would be wrong in the other. */}
+          <p className="mt-6 flex max-w-2xl items-start gap-2 text-sm leading-relaxed text-gray-600 dark:text-gray-400">
+            <HardDriveDownload
+              className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-500"
+              aria-hidden="true"
+            />
+            <span>
+              <strong className="font-medium text-gray-900 dark:text-gray-100">
+                {t('landing.hero.backupNoticeTitle')}
+              </strong>{' '}
+              {t('landing.hero.backupNotice')}
+            </span>
+          </p>
 
           <div className="mt-14">
             <SpecimenShowcase />

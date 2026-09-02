@@ -98,6 +98,9 @@ export default {
         'Sphäroide und ihr Zerfall, Wunden aus dem Scratch-Assay, Spermienmorphologie, Mikrotubuli-Filamente, Mikrokapseln, Neuronen und ihre Fortsätze — für jeden Typ ein trainiertes Modell, für alle ein Editor und ein Export, den ImageJ, COCO und YOLO bereits verstehen.',
       getStarted: 'Loslegen',
       learnMore: 'Was die Plattform kann',
+      backupNoticeTitle: 'Behalten Sie eine eigene Kopie Ihrer Aufnahmen.',
+      backupNotice:
+        'Hochgeladene Bilddateien werden nicht gesichert. Ihr Konto, Ihre Projekte und die Segmentierungsergebnisse werden täglich gesichert.',
     },
     specimens: {
       trayLabel: 'Probe wählen',

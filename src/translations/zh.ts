@@ -97,6 +97,9 @@ export default {
         '球状体及其解体、划痕实验伤口、精子形态、微管纤维、微胶囊、神经元及其突起——每一类都有各自训练的模型，全部共用一个编辑器，导出格式 ImageJ、COCO 和 YOLO 都能直接读取。',
       getStarted: '开始使用',
       learnMore: '看看它支持什么',
+      backupNoticeTitle: '请自行保留图像副本。',
+      backupNotice:
+        '上传的图像文件不做备份。您的账户、项目和分割结果每日备份。',
     },
     specimens: {
       trayLabel: '选择样本',

@@ -98,6 +98,9 @@ export default {
         'Esferoides y su desintegración, heridas de ensayo de rayado, morfología espermática, filamentos de microtúbulos, microcápsulas, neuronas y sus prolongaciones: un modelo entrenado para cada tipo, un único editor para todos y exportaciones que ImageJ, COCO y YOLO ya entienden.',
       getStarted: 'Comenzar',
       learnMore: 'Ver qué admite',
+      backupNoticeTitle: 'Conserve su propia copia de las imágenes.',
+      backupNotice:
+        'Los archivos de imagen subidos no tienen copia de seguridad. Su cuenta, sus proyectos y los resultados de segmentación se respaldan a diario.',
     },
     specimens: {
       trayLabel: 'Elija una muestra',

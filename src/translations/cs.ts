@@ -97,6 +97,9 @@ export default {
         'Sféroidy a jejich rozpad, rány ze scratch assay, morfologie spermií, vlákna mikrotubulů, mikrokapsle, neurony a jejich výběžky — pro každý typ natrénovaný model, pro všechny jeden editor a export, kterému ImageJ, COCO i YOLO rozumí.',
       getStarted: 'Začít',
       learnMore: 'Co všechno zvládne',
+      backupNoticeTitle: 'Nechte si vlastní kopii svých snímků.',
+      backupNotice:
+        'Nahrané obrazové soubory zálohované nejsou. Váš účet, projekty a výsledky segmentace se zálohují denně.',
     },
     specimens: {
       trayLabel: 'Vyberte vzorek',
