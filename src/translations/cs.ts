@@ -2774,7 +2774,7 @@ export default {
       filteredHidden:
         'Skryto {{count}} neprocesivních trajektorií pod 0.01 µm/s.',
       dimHidden:
-        'Skryto {{count}} trajektorií pod {{threshold}} jednotkami nad pozadím.',
+        'Skrytých trajektorií pod prahem {{threshold}} jednotek nad pozadím: {{count}}.',
       downloadTracks: 'CSV rychlostí',
       uncalibrated:
         'Bez kalibrace velikosti pixelu / intervalu snímků — rychlosti v px/snímek.',
