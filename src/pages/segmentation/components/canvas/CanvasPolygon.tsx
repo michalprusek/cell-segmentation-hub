@@ -9,6 +9,7 @@ import { isMicrotubuleProject, type ProjectType } from '@/types';
 import type { MTTypeLabel } from '@/lib/api';
 import {
   colorFromInstanceId,
+  darkenHex,
   isMicrotubuleInstance,
   NEUTRAL_COLOR,
 } from '@/pages/segmentation/utils/instanceColors';
@@ -202,10 +203,19 @@ const CanvasPolygon = React.memo(
 
     // Determine path color based on polygon type, polyline partClass, and selection status
     const pathColor = useMemo(() => {
-      // Microcapsules cut off by the image border (complete === false) render
-      // grey — they're excluded from metrics, and greying keeps them visibly
-      // distinct from the whole capsules that ARE measured (mirrors the model
-      // overlay's grey treatment).
+      // A microcapsule the user has typed takes its label's colour — that is
+      // how "this border-cut one IS relevant" becomes visible, and the label
+      // is also what decides whether it is measured. The `complete` fallback
+      // below keeps every untyped capsule exactly as it looked before the
+      // palette existed: grey when the model found it cut by the border.
+      if (!isPolyline && typeof polygon.mtType === 'string' && polygon.mtType) {
+        const labelColor = mtTypeLabels?.find(
+          l => l.id === polygon.mtType
+        )?.color;
+        if (labelColor) {
+          return isEffectivelySelected ? darkenHex(labelColor) : labelColor;
+        }
+      }
       if (polygon.complete === false) {
         return isEffectivelySelected ? '#737373' : '#969696';
       }
@@ -265,6 +275,8 @@ const CanvasPolygon = React.memo(
       polygon.instanceId,
       polygon.trackId,
       polygon.complete,
+      polygon.mtType,
+      mtTypeLabels,
       isEffectivelySelected,
       isInternal,
       colorMode,

@@ -214,6 +214,70 @@ raw, un-normalised matrix. Velocities depend on `pixel_size_um` and
 
 ---
 
+## Microcapsule diameter
+
+The microcapsule sheet's **`Diameter`** column is the mean of **six chords
+through the area centroid, 30° apart** — a six-spoke star. Chords through a
+point are symmetric (the chord at 200° is the chord at 20°), so six spokes
+cover the whole 180° of distinct orientations exactly.
+
+It replaced `(Feret max + Feret min) / 2` on 2026-09-02. Both Ferets are
+properties of the convex hull and both are extremes, so their mean is decided
+by the two most extreme directions and by nothing between them: one bulge
+raises the number everywhere, and a dent between the extremes is invisible. Six
+chords sample the whole outline instead.
+
+Implementation notes that matter when reading a number:
+
+- The centre is the **area** centroid, not the average of the vertices. A
+  segmentation outline has more vertices where it curves, so a vertex mean
+  drifts toward the dense side — and every chord through an off-centre point of
+  a circle is shorter than its diameter.
+- Each spoke sums **both** directions, so an outline whose centroid is not its
+  centre still reports a width rather than twice one side.
+- Where a ray crosses the outline more than once, the **farthest** crossing is
+  taken, so a concave rim is measured at its outer edge. On any star-shaped
+  outline — which a capsule is — there is only one crossing and the choice
+  never arises.
+- A spoke that finds no boundary on one side (possible only when the centroid
+  falls outside a strongly non-convex outline) is **dropped**, not averaged in
+  as half a chord.
+- It is not rotation-invariant the way a Feret is: rotating a capsule samples
+  different points of the rim. Measured over 52 real production capsules the
+  spread against the old definition was −0.20 % median, −0.75 % worst.
+
+**Border-clipped capsules read much smaller.** Over 72 real clipped capsules
+the star is a median of 20 % below the old Feret mean, worst case 56 %, because
+a clipped disc's Feret max still spans the full cut edge while the chords only
+cross the fragment that is visible. Clipped capsules are excluded from the
+sheet by default, so this does not move any published number — but a capsule
+you deliberately type back in (see below) is measured as the fragment you can
+see, and its diameter, area and perimeter all under-report the whole capsule.
+
+## Which microcapsules are measured
+
+A capsule contributes to every microcapsule metric unless it is marked **non
+relevant**. Two things can mark it:
+
+1. The model sets `complete: false` on a capsule cut off by the image border.
+   That is the **default**, not a verdict.
+2. The user assigns a type from the project's type-label palette — the same
+   mechanism microtubules use — through the canvas context menu. Every
+   microcapsule project is seeded with `Relevant` (red) and `Non relevant`
+   (grey) the first time its palette is read.
+
+A type the user has set **always wins**, in both directions: a border-clipped
+capsule typed as anything other than `Non relevant` is measured, and a whole
+capsule typed `Non relevant` is not. Only the `non_relevant` label excludes, so
+any further label the user creates counts.
+
+The rule lives in one place per side — `src/lib/microcapsuleRelevance.ts` and
+`backend/src/services/microcapsuleRelevance.ts`, kept in step by
+`scripts/verify-shared-types.cjs` — because the editor computes the live
+metrics while the backend computes the exported workbook and the visualisation
+PNGs, and a drift between them is two different answers to "how many capsules
+are in this image".
+
 ## Caveats — read before publishing
 
 These are real properties of the implementation, not hypotheticals.
@@ -242,7 +306,9 @@ These are real properties of the implementation, not hypotheticals.
    simplified in the code.
 8. **The microcapsule sheet's `Compactness` column contains circularity**, and
    `Ovality` is the Feret aspect ratio.
-9. **Border-clipped microcapsules are excluded** from every microcapsule metric.
+9. **Border-clipped microcapsules are excluded** from every microcapsule
+   metric — unless the user types them back in, which is a deliberate act and
+   measures only the visible fragment. See _Which microcapsules are measured_.
 10. **Neurite/soma output carries no per-class metric.** Both classes land in
     the generic `Polygon Metrics` sheet as plain polygons, and the sheet has no
     column saying which is which. To split soma from neurite you need the

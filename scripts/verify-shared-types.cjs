@@ -29,6 +29,21 @@ const SHARED_CONSTS = [
   // tests (FE `src/lib/models/__tests__/modelRegistry.test.ts`, BE
   // `backend/src/constants/__tests__/modelRegistry.test.ts`).
   {
+    // Which microcapsules count. The frontend computes the editor's live
+    // metrics and the backend computes the exported workbook and the
+    // visualisation PNGs, so a drift here is two different answers to "how
+    // many capsules are in this image".
+    name: 'MICROCAPSULE_DEFAULT_TYPE_LABELS',
+    frontend: path.join(ROOT, 'src', 'lib', 'microcapsuleRelevance.ts'),
+    backend: path.join(
+      ROOT,
+      'backend',
+      'src',
+      'services',
+      'microcapsuleRelevance.ts'
+    ),
+  },
+  {
     name: 'PROJECT_TYPES',
     frontend: path.join(ROOT, 'src', 'types', 'index.ts'),
     backend: path.join(ROOT, 'backend', 'src', 'types', 'validation.ts'),

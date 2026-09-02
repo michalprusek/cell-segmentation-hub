@@ -1,3 +1,4 @@
+import { isMeasuredMicrocapsule } from '@/lib/microcapsuleRelevance';
 import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
@@ -62,10 +63,10 @@ export const useExportFunctions = (
   const calculateObjectMetrics = async (polygons: PolygonData[]) => {
     if (!polygons || polygons.length === 0) return null;
 
-    // Get external polygons (excluding border-cut microcapsules, which carry
-    // complete === false and must not contribute to metrics).
+    // Get external polygons, minus the microcapsules that do not count — the
+    // user's type label first, the model's border-cut flag as the default.
     const externalPolygons = polygons.filter(
-      p => p.type === 'external' && p.complete !== false
+      p => p.type === 'external' && isMeasuredMicrocapsule(p)
     );
     if (externalPolygons.length === 0) return null;
 
