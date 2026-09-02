@@ -39,6 +39,56 @@ describe('getLabels', () => {
     ]);
   });
 
+  it('seeds a microcapsule project with relevant / non relevant', async () => {
+    // On a microcapsule project the palette is not decoration: the label
+    // decides what the export measures, so the two labels have to exist before
+    // anyone can assign one.
+    prismaMock.project.findUnique.mockResolvedValue({
+      mtTypeLabels: null,
+      type: 'microcapsule',
+    });
+    const labels = await getLabels('p1');
+    expect(labels.map(l => l.id)).toEqual(['relevant', 'non_relevant']);
+    // Persisted, not just returned: `mtType` is a reference into this list.
+    expect(prismaMock.project.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'p1' } })
+    );
+  });
+
+  it('leaves a microcapsule project that already has a palette alone', async () => {
+    prismaMock.project.findUnique.mockResolvedValue({
+      mtTypeLabels: [{ id: 'mine', name: 'Mine', color: '#123456' }],
+      type: 'microcapsule',
+    });
+    expect(await getLabels('p1')).toEqual([
+      { id: 'mine', name: 'Mine', color: '#123456' },
+    ]);
+    expect(prismaMock.project.update).not.toHaveBeenCalled();
+  });
+
+  it('seeds nothing on a microtubule project', async () => {
+    // Microtubule types are user-invented tubulin classes; there is no
+    // sensible default and inventing one would put labels in every project.
+    prismaMock.project.findUnique.mockResolvedValue({
+      mtTypeLabels: null,
+      type: 'microtubules',
+    });
+    expect(await getLabels('p1')).toEqual([]);
+    expect(prismaMock.project.update).not.toHaveBeenCalled();
+  });
+
+  it('still returns the seeded labels when persisting them fails', async () => {
+    // Losing the write is survivable; failing the request would take the
+    // editor's whole palette down over a default.
+    prismaMock.project.findUnique.mockResolvedValue({
+      mtTypeLabels: [],
+      type: 'microcapsule',
+    });
+    prismaMock.project.update.mockRejectedValueOnce(new Error('read-only'));
+    const labels = await getLabels('p1');
+    expect(labels.map(l => l.id)).toEqual(['relevant', 'non_relevant']);
+  });
+
   it('returns [] when the project is missing or the column is null', async () => {
     prismaMock.project.findUnique.mockResolvedValueOnce(null);
     expect(await getLabels('p1')).toEqual([]);

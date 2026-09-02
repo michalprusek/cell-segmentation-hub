@@ -1,3 +1,4 @@
+import { isMeasuredMicrocapsule } from '../microcapsuleRelevance';
 import { createCanvas, loadImage, CanvasRenderingContext2D } from 'canvas';
 import { writeFile, readFile, mkdir, unlink } from 'fs/promises';
 import sharp from 'sharp';
@@ -324,11 +325,11 @@ export class VisualizationGenerator {
       return;
     }
 
-    // Microcapsules cut off by the image border (complete === false) render
-    // grey, mirroring the model's own overlay. They are also excluded from
-    // metrics elsewhere; greying keeps them visible for QA without implying
-    // they were measured.
-    const isIncomplete = polygon.complete === false;
+    // A microcapsule that does not count renders grey, mirroring the model's
+    // own overlay: visible for QA without implying it was measured. The user's
+    // type label decides, falling back to the model's border-cut flag — so this
+    // stays in step with the metrics rather than describing a different set.
+    const isIncomplete = !isMeasuredMicrocapsule(polygon);
 
     // Polylines use part-class colors; closed polygons use type-based colors
     // except 'core' (green) and the neuron classes, which carry their own —

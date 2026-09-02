@@ -697,10 +697,17 @@ const SegmentationEditor = () => {
     selectAllMultiSelect,
   } = usePolygonHandlers({ editor, imageId });
 
-  // Microtubule type-label palette (SSOT for the tubulin class name + colour)
-  // and the canvas colour mode (instance hash vs semantic/by-label). Both are
-  // gated to microtubule projects; the hook no-ops its fetch otherwise.
+  // Type-label palette (SSOT for the class name + colour) and the canvas
+  // colour mode (instance hash vs semantic/by-label).
+  //
+  // TWO project types use it, for different reasons. Microtubules label a
+  // tubulin class, purely descriptive. Microcapsules label RELEVANCE, and the
+  // label decides what the export measures — see `microcapsuleRelevance.ts`.
+  // The palette machinery is identical, which is why they share it; the
+  // meaning is not, which is why only microcapsules seed defaults.
   const isMicrotubuleProject = projectType === 'microtubules';
+  const isMicrocapsuleProject = projectType === 'microcapsule';
+  const usesTypeLabels = isMicrotubuleProject || isMicrocapsuleProject;
   const {
     labels: mtTypeLabels,
     labelById: mtLabelById,
@@ -708,7 +715,7 @@ const SegmentationEditor = () => {
     createLabel: handleCreateMtLabel,
     renameLabel: handleRenameMtLabel,
     deleteLabel: deleteMtLabelRaw,
-  } = useMtTypeLabels(projectId, isMicrotubuleProject);
+  } = useMtTypeLabels(projectId, usesTypeLabels);
   const [mtColorMode, setMtColorMode] = useState<'instance' | 'semantic'>(
     () => {
       if (typeof localStorage === 'undefined') return 'instance';

@@ -1,3 +1,5 @@
+import { isMeasuredMicrocapsule } from '../microcapsuleRelevance';
+import { radialDiameter } from './radialDiameter';
 import axios, { AxiosInstance } from 'axios';
 import ExcelJS from 'exceljs';
 import { createObjectCsvStringifier } from 'csv-writer';
@@ -41,9 +43,20 @@ export interface PolygonMetrics {
   /** Per-instance detection score (microcapsule YOLO); undefined otherwise. */
   confidence?: number;
   /** Microcapsule completeness flag; undefined for non-microcapsule polygons.
-   *  Cut-off capsules (`false`) are already excluded upstream, so rows here are
-   *  always complete — carried for the focused microcapsule exporter. */
+   *  Rows that reach here are already measured, so this is `true` unless the
+   *  user typed a border-cut capsule back in — carried for the focused
+   *  microcapsule exporter. */
   complete?: boolean;
+  /** Mean of six chords through the centroid, 30 degrees apart — the
+   *  microcapsule "Diameter". Computed from the polygon's own points, so it is
+   *  available on both metric paths (the Python service and the local
+   *  fallback), neither of which returns it. */
+  radialDiameter?: number;
+  /** The user's type label, if they set one. Carried so the later filters ask
+   *  `isMeasuredMicrocapsule` the SAME question the parse filter asked: a
+   *  border-cut capsule re-typed as relevant passes upstream and would be
+   *  dropped again here if the row only knew about `complete`. */
+  mtType?: string;
   feretDiameterMax: number;
   feretDiameterMaxOrthogonalDistance: number;
   feretDiameterMin: number;
@@ -145,8 +158,10 @@ export interface ParsedPolygon {
   /** Per-instance detection score (microcapsule YOLO). */
   confidence?: number;
   /** Microcapsule completeness: `false` when cut off by the image border.
-   *  Such capsules are excluded from metrics (see the parse filter below). */
+   *  A DEFAULT, not a verdict — `mtType` overrides it either way. */
   complete?: boolean;
+  /** User-assigned type label id (the project's type-label palette). */
+  mtType?: string;
 }
 
 export interface SegmentationData {
@@ -167,11 +182,18 @@ export interface ImageWithSegmentation {
 
 export type SummaryStatisticsRow = (string | number)[];
 
-/** Mean of the max and min Feret diameters — the microcapsule export's
- *  "Diameter" column. Rotation-invariant, distinct from the axis-aligned
- *  Width/Height and the area-based Equivalent Diameter. */
-function meanFeretDiameter(m: PolygonMetrics): number {
-  return (m.feretDiameterMax + m.feretDiameterMin) / 2;
+/** The microcapsule export's "Diameter" column: the mean of six chords through
+ *  the centroid, 30 degrees apart (see `radialDiameter.ts` for why, and for
+ *  what it gives up versus the Feret mean it replaced on 2026-09-02).
+ *
+ *  Falls back to `(FeretMax + FeretMin) / 2` — the old definition — only when
+ *  the star could not be measured at all, which needs a polygon of fewer than
+ *  three points or a centroid outside a wildly non-convex outline. Reporting 0
+ *  there would read as a real measurement of zero. */
+function capsuleDiameter(m: PolygonMetrics): number {
+  return m.radialDiameter && m.radialDiameter > 0
+    ? m.radialDiameter
+    : (m.feretDiameterMax + m.feretDiameterMin) / 2;
 }
 
 /** Ovality = Feret Max / Feret Min elongation ratio (≥ 1; 1.0 = round). Shared
@@ -241,13 +263,17 @@ export class MetricsCalculator {
           try {
             const parsed: ParsedPolygon[] = JSON.parse(result.polygons);
             // Filter to closed polygons only (exclude polylines used for sperm
-            // morphology). Also exclude border-cut microcapsules: an instance
-            // explicitly flagged `complete === false` is cropped by the image
-            // edge and must not contribute to metrics. Other project types never
-            // set `complete`, so `!== false` leaves them untouched.
+            // morphology), then drop the microcapsules that do not count.
+            // `isMeasuredMicrocapsule` reads the user's type label first and
+            // falls back to the model's `complete` flag, so a border-cut
+            // capsule the user re-typed IS measured and a whole one they typed
+            // "non relevant" is not. Other project types set neither field, so
+            // it leaves them untouched.
             const polygons = parsed.filter(
               (p): p is ParsedPolygon & { type: 'external' | 'internal' } =>
-                p.geometry !== 'polyline' && !!p.type && p.complete !== false
+                p.geometry !== 'polyline' &&
+                !!p.type &&
+                isMeasuredMicrocapsule(p)
             );
             totalPolygonCount += polygons.length;
 
@@ -386,6 +412,8 @@ export class MetricsCalculator {
           type: 'external',
           confidence: polygon.confidence,
           complete: polygon.complete,
+          mtType: polygon.mtType,
+          radialDiameter: radialDiameter(polygon.points),
           ...polygonMetrics,
         });
       } catch (error) {
@@ -949,8 +977,8 @@ export class MetricsCalculator {
     const safeValue = (value: number, decimals = 2): number =>
       isFinite(value) ? parseFloat(value.toFixed(decimals)) : 0;
 
-    // Only complete capsules reach here (excluded upstream), but guard anyway.
-    const rows = metrics.filter(m => m.complete !== false);
+    // Only measured capsules reach here (excluded upstream), but guard anyway.
+    const rows = metrics.filter(isMeasuredMicrocapsule);
     rows.forEach(m => {
       worksheet.addRow({
         imageName: m.imageName,
@@ -959,7 +987,7 @@ export class MetricsCalculator {
         perimeter: safeValue(m.perimeter, 2),
         width: safeValue(m.boundingBoxWidth, 2),
         height: safeValue(m.boundingBoxHeight, 2),
-        diameter: safeValue(meanFeretDiameter(m), 2),
+        diameter: safeValue(capsuleDiameter(m), 2),
         feretMax: safeValue(m.feretDiameterMax, 2),
         feretMin: safeValue(m.feretDiameterMin, 2),
         equivalentDiameter: safeValue(m.equivalentDiameter, 2),
@@ -1041,7 +1069,7 @@ export class MetricsCalculator {
     });
 
     const records = metrics
-      .filter(m => m.complete !== false)
+      .filter(isMeasuredMicrocapsule)
       .map(m => ({
         imageName: m.imageName,
         polygonId: m.polygonId,
@@ -1051,7 +1079,7 @@ export class MetricsCalculator {
         height: m.boundingBoxHeight,
         // "Diameter" = mean Feret diameter (rotation-invariant), distinct from
         // the axis-aligned Width/Height and the area-based Equivalent Diameter.
-        diameter: meanFeretDiameter(m),
+        diameter: capsuleDiameter(m),
         // Feret Max/Min = longer / shorter side of the min-area bounding rect
         // (the capsule's long axis / narrowest width).
         feretMax: m.feretDiameterMax,
@@ -1116,7 +1144,7 @@ export class MetricsCalculator {
       ],
       [
         `Average Diameter (${lengthUnit})`,
-        this.average(metrics.map(meanFeretDiameter)).toFixed(2),
+        this.average(metrics.map(capsuleDiameter)).toFixed(2),
       ],
       [
         `Average Feret Max (${lengthUnit})`,
@@ -1535,6 +1563,14 @@ export class MetricsCalculator {
       perimeter: metric.perimeter * scale,
       perimeterWithHoles: metric.perimeterWithHoles * scale,
       equivalentDiameter: metric.equivalentDiameter * scale,
+      // A LENGTH like the Ferets beside it. Left unscaled it would stay in
+      // pixels while everything it is compared against became micrometres —
+      // and because `capsuleDiameter` falls back to the Feret mean, the
+      // Diameter column would silently switch units per capsule.
+      radialDiameter:
+        metric.radialDiameter === undefined
+          ? undefined
+          : metric.radialDiameter * scale,
       feretDiameterMax: metric.feretDiameterMax * scale,
       feretDiameterMaxOrthogonalDistance:
         metric.feretDiameterMaxOrthogonalDistance * scale,

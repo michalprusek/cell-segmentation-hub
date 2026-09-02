@@ -9,6 +9,7 @@
  * reference across the project's frames so no dangling ids remain.
  */
 import { prisma } from '../db';
+import { MICROCAPSULE_DEFAULT_TYPE_LABELS } from './microcapsuleRelevance';
 import { Prisma } from '@prisma/client';
 import { logger } from '../utils/logger';
 
@@ -172,9 +173,36 @@ async function clearLabelReferences(
 export async function getLabels(projectId: string): Promise<MTTypeLabel[]> {
   const project = await prisma.project.findUnique({
     where: { id: projectId },
-    select: { mtTypeLabels: true },
+    select: { mtTypeLabels: true, type: true },
   });
-  return sanitizeLabels(project?.mtTypeLabels ?? []);
+  const labels = sanitizeLabels(project?.mtTypeLabels ?? []);
+  if (labels.length > 0 || project?.type !== 'microcapsule') {
+    return labels;
+  }
+  // A microcapsule project gets its two labels the first time the palette is
+  // read, rather than at creation, so the eleven projects that already exist
+  // get them too — and so a user who deletes one can get it back by clearing
+  // the palette. Persisted rather than returned-only: `mtType` on a polygon is
+  // a reference into this list, and a reference to a label that lives nowhere
+  // would be dangling the moment anyone assigns it.
+  const seeded = MICROCAPSULE_DEFAULT_TYPE_LABELS.map(l => ({ ...l }));
+  try {
+    await prisma.project.update({
+      where: { id: projectId },
+      data: { mtTypeLabels: seeded as unknown as Prisma.InputJsonValue },
+    });
+  } catch (error) {
+    // Losing the write is survivable — the caller still gets the labels, and
+    // the next read tries again. Failing the request would take the editor's
+    // whole palette down over a default.
+    logger.warn(
+      `Failed to seed microcapsule type labels for ${projectId}: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+      'MtTypeLabelService'
+    );
+  }
+  return seeded;
 }
 
 /** Replace the whole palette (create / rename / reorder / remove). Ids are

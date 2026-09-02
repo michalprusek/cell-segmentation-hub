@@ -522,22 +522,28 @@ const SegmentationEditorLayout: React.FC<SegmentationEditorLayoutProps> = ({
                                 })
                               : undefined
                           }
-                          mtTypeLabels={
-                            polylineKind === 'microtubule'
-                              ? mtTypeLabels
-                              : undefined
-                          }
+                          {...(() => {
+                            // The type palette serves two project types. On a
+                            // microtubule project it labels a tubulin class,
+                            // and only polylines carry one — hence the
+                            // `polylineKind` gate. On a MICROCAPSULE project it
+                            // labels relevance, the capsules are closed
+                            // polygons, and the label decides what the export
+                            // measures, so the gate is the project itself.
+                            const typed =
+                              polylineKind === 'microtubule' ||
+                              projectType === 'microcapsule';
+                            return {
+                              mtTypeLabels: typed ? mtTypeLabels : undefined,
+                              onChangeMtType: typed
+                                ? onChangeMtType
+                                : undefined,
+                              onCreateMtLabel: typed
+                                ? onCreateMtLabel
+                                : undefined,
+                            };
+                          })()}
                           currentMtType={polygon.mtType}
-                          onChangeMtType={
-                            polylineKind === 'microtubule'
-                              ? onChangeMtType
-                              : undefined
-                          }
-                          onCreateMtLabel={
-                            polylineKind === 'microtubule'
-                              ? onCreateMtLabel
-                              : undefined
-                          }
                           onDeleteVertex={handleDeleteVertexFromContextMenu}
                           onHover={setHoveredPolygonId}
                           // Drives sperm-vs-microtubule context-menu
