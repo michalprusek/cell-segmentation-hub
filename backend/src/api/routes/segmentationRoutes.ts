@@ -355,6 +355,13 @@ router.post(
     // lineReduce: how the lineWidth samples of one column collapse to one
     // value. Closed set — the ML field is a Literal.
     body('lineReduce').optional().isIn(['mean', 'max']),
+    // minIntensityMinusBg: absolute intensity floor in RAW SAMPLE UNITS —
+    // trajectories dimmer than this many counts above their local background
+    // are dropped. Float, because the measurement is a mean of a band and
+    // real values sit in the tens (9-51 counts on a 488 nm production
+    // container). No upper bound: a 16-bit frame can legitimately need one in
+    // the thousands, and the ML field only requires `ge=0`.
+    body('minIntensityMinusBg').optional().isFloat({ min: 0 }),
   ],
   handleValidation,
   async (req: Request, res: Response) => {
@@ -418,6 +425,10 @@ router.post(
         lineWidth:
           req.body.lineWidth != null ? Number(req.body.lineWidth) : undefined,
         lineReduce: req.body.lineReduce as 'mean' | 'max' | undefined,
+        minIntensityMinusBg:
+          req.body.minIntensityMinusBg != null
+            ? Number(req.body.minIntensityMinusBg)
+            : undefined,
         // The modal re-asks for the same kymograph every time the user
         // reopens it, so this is the one caller a cached response pays for.
         useCache: true,

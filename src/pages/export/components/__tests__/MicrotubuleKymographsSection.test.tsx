@@ -34,6 +34,8 @@ function makeValue(
     includeSegmentedImages: true,
     lineWidth: 1,
     lineReduce: 'mean',
+    // 0 = no intensity floor, the default the dialog seeds.
+    minIntensityMinusBg: 0,
     ...overrides,
   };
 }

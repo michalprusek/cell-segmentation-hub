@@ -1340,6 +1340,9 @@ export default {
         'Cómo los píxeles a lo ancho se convierten en un solo valor. La media coincide con ImageJ; el máximo es más brillante pero se sesga por píxeles calientes aislados.',
       lineReduceMean: 'Media',
       lineReduceMax: 'Máximo',
+      minIntensityLabel: 'Intensidad mínima de trayectoria',
+      minIntensityHelp:
+        'Descartar trayectorias más tenues que este número de unidades de intensidad sobre su propio fondo. Absoluto, no depende del escalado de la imagen, pero no es comparable entre canales. Vacío conserva todas.',
     },
     mt: {
       sectionTitle: 'Métricas de microtúbulos',
@@ -2767,6 +2770,9 @@ export default {
       widthLabel: 'Ancho de intensidad',
       widthHint:
         'Ancho (px) de la banda muestreada alrededor de cada trayectoria para señal vs. intensidad de fondo.',
+      minIntensityLabel: 'Intensidad mínima',
+      minIntensityHint:
+        'Ocultar trayectorias más tenues que este número de unidades de intensidad sobre su propio fondo local. Absoluto — independiente del escalado de visualización — pero no comparable entre canales. Vacío o 0 muestra todas.',
       lineWidthLabel: 'Ancho de línea',
       lineWidthHint:
         'Ancho (px) de la línea muestreada a lo largo del microtúbulo, medido transversalmente. 1 muestrea un solo píxel.',
@@ -2794,6 +2800,8 @@ export default {
       velocityFailed: 'Error en la detección de velocidad.',
       filteredHidden:
         '{{count}} trayectoria(s) no procesiva(s) por debajo de 0.01 µm/s oculta(s).',
+      dimHidden:
+        '{{count}} trayectoria(s) por debajo de {{threshold}} unidades sobre el fondo ocultas.',
       downloadTracks: 'CSV de velocidad',
       uncalibrated:
         'Sin calibración de tamaño de píxel / intervalo de fotogramas — velocidades en px/fotograma.',

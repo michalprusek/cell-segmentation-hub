@@ -116,6 +116,9 @@ interface KymographResponse {
   tracks?: KymographTrack[];
   /** Tracks hidden by the < 0.01 µm/s net-velocity cut-off (non-processive). */
   filteredTrackCount?: number;
+  /** Tracks hidden by the absolute intensity floor the user typed. Separate
+   *  from the velocity count so the message can name the actual reason. */
+  filteredDimTrackCount?: number;
   /** Set when ML velocity detection crashed (vs. found no particles). */
   velocityError?: string;
 }
@@ -137,6 +140,7 @@ interface KymographRequest {
   intensityWidth?: number;
   lineWidth?: number;
   lineReduce?: 'mean' | 'max';
+  minIntensityMinusBg?: number;
 }
 
 async function fetchKymograph(
@@ -186,6 +190,19 @@ const clampWidth = (raw: string | number): number => {
   const n = Math.round(Number(raw));
   if (!Number.isFinite(n)) return DEFAULT_INTENSITY_WIDTH;
   return Math.min(Math.max(n, 1), 50);
+};
+
+/** The absolute intensity floor, in raw sample units.
+ *
+ *  An empty field, or anything that is not a number, means OFF rather than an
+ *  error — clearing the box has to restore the unfiltered view. Not rounded:
+ *  the measurement it is compared against is a band mean, and on a dim channel
+ *  the useful range is single digits where 1 count is a real step. No ceiling
+ *  either, because a 16-bit frame can legitimately need one in the thousands. */
+const clampMinIntensity = (raw: string | number): number => {
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return n;
 };
 
 /** How many image pixels wide the sampled line is, PERPENDICULAR to the
@@ -264,6 +281,17 @@ export function KymographModal({
   const [debouncedLineWidth, setDebouncedLineWidth] =
     useState(DEFAULT_LINE_WIDTH);
   const [lineReduce, setLineReduce] = useState<'mean' | 'max'>('mean');
+  // Absolute intensity floor, in RAW SAMPLE UNITS (counts above each
+  // trajectory's own local background) — deliberately NOT a fraction of the
+  // image range, so the number means the same thing however the kymograph is
+  // rendered. 0 = off, which is the default and what every kymograph did
+  // before this control existed.
+  //
+  // It is a per-channel judgement: on a real container 488 nm trajectories sit
+  // at 9-51 counts above background where 640 nm sits at 228. That is why the
+  // control lives here, next to the channel picker, rather than in settings.
+  const [minIntensity, setMinIntensity] = useState(0);
+  const [debouncedMinIntensity, setDebouncedMinIntensity] = useState(0);
   const [activeTrack, setActiveTrack] = useState<number | null>(null);
 
   // A kymograph is derived from polyline geometry the user can edit between two
@@ -343,10 +371,19 @@ export function KymographModal({
   // by an explicit user action, and a failure here costs the user nothing they
   // already had — the image above is a separate query.
   const velocityQuery = useQuery({
-    queryKey: [...imageKey, 'velocity', debouncedWidth],
+    queryKey: [...imageKey, 'velocity', debouncedWidth, debouncedMinIntensity],
     queryFn: ({ signal }) =>
       fetchKymograph(
-        { ...request, detectVelocity: true, intensityWidth: debouncedWidth },
+        {
+          ...request,
+          detectVelocity: true,
+          intensityWidth: debouncedWidth,
+          // Omitted at 0 so the request body stays exactly what it was before
+          // this control existed — the backend then omits the ML field too.
+          ...(debouncedMinIntensity > 0
+            ? { minIntensityMinusBg: debouncedMinIntensity }
+            : {}),
+        },
         signal
       ),
     enabled: queryEnabled && detectVelocity,
@@ -509,6 +546,14 @@ export function KymographModal({
     const id = setTimeout(() => setDebouncedWidth(intensityWidth), 400);
     return () => clearTimeout(id);
   }, [intensityWidth]);
+
+  // Same 400 ms coalescing for the intensity floor. It costs a full ML
+  // round-trip per change (the filter runs there, so the overlay stays in step
+  // with the table), so typing "150" must not fire three of them.
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedMinIntensity(minIntensity), 400);
+    return () => clearTimeout(id);
+  }, [minIntensity]);
 
   // Same coalescing for the line width, which is more expensive still: it
   // re-samples every frame (the sampled-row cache keys on it, so a new width is
@@ -684,6 +729,29 @@ export function KymographModal({
                   defaultValue:
                     'Width (px) of the band sampled around each trajectory for signal vs. background intensity.',
                 })}
+              />
+              <Label htmlFor="kymo-min-intensity" className="text-sm">
+                {t('editor.kymograph.minIntensityLabel', {
+                  defaultValue: 'Min. intensity',
+                })}
+              </Label>
+              <Input
+                id="kymo-min-intensity"
+                type="number"
+                min={0}
+                step={1}
+                value={minIntensity === 0 ? '' : minIntensity}
+                placeholder="0"
+                onChange={e =>
+                  setMinIntensity(clampMinIntensity(e.target.value))
+                }
+                className="h-8 w-20"
+                title={String(
+                  t('editor.kymograph.minIntensityHint', {
+                    defaultValue:
+                      'Hide trajectories dimmer than this many raw intensity counts above their own local background. Absolute — independent of how the kymograph is scaled for display — but not comparable between channels. Empty or 0 shows all.',
+                  })
+                )}
               />
             </div>
           )}
@@ -1040,6 +1108,20 @@ export function KymographModal({
                     count: velocity.filteredTrackCount ?? 0,
                     defaultValue:
                       '{{count}} non-processive trajectory(ies) below 0.01 µm/s hidden.',
+                  })}
+                </div>
+              )}
+            {/* Named separately from the velocity cut-off: a user who just
+                typed a threshold needs to see that THEIR number is what hid
+                the trajectories, and how many. */}
+            {!velocity.velocityError &&
+              (velocity.filteredDimTrackCount ?? 0) > 0 && (
+                <div className="px-2 py-1 text-[10px] text-muted-foreground border-t">
+                  {t('editor.kymograph.dimHidden', {
+                    count: velocity.filteredDimTrackCount ?? 0,
+                    threshold: debouncedMinIntensity,
+                    defaultValue:
+                      '{{count}} trajectory(ies) below {{threshold}} counts above background hidden.',
                   })}
                 </div>
               )}

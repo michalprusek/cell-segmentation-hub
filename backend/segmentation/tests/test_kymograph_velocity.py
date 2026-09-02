@@ -34,6 +34,7 @@ from api.kymograph_velocity import (  # noqa: E402
     _subpixel_peak,
     detect_tracks,
     edge_touch,
+    filter_dim_tracks,
     flag_bright_outliers,
     kymograph_polarity,
     net_velocity_threshold,
@@ -683,3 +684,91 @@ def test_models_are_loaded_once_per_device():
     first = load_models(("binet",), device="cpu")
     second = load_models(("binet",), device="cpu")
     assert first["binet"] is second["binet"]
+
+
+# --- filter_dim_tracks -------------------------------------------------------
+#
+# The absolute intensity floor. Every one of these cases is a way the filter
+# can quietly delete a real particle, which is worse than not having it.
+
+
+def _tr(minus_bg):
+    return {"intensity_minus_bg": minus_bg, "points": [[0, 0], [1, 1]]}
+
+
+def test_zero_threshold_changes_nothing():
+    # The default. It must return the SAME list object semantics — an export
+    # made without setting a threshold has to be byte-identical to before the
+    # feature existed.
+    tracks = [_tr(5.0), _tr(None), _tr(-3.0)]
+    kept, dropped = filter_dim_tracks(tracks, 0.0)
+    assert kept == tracks
+    assert dropped == 0
+
+
+def test_drops_only_what_is_below_the_floor():
+    tracks = [_tr(9.2), _tr(18.5), _tr(50.7)]
+    kept, dropped = filter_dim_tracks(tracks, 15.0)
+    assert [t["intensity_minus_bg"] for t in kept] == [18.5, 50.7]
+    assert dropped == 1
+
+
+def test_the_floor_is_inclusive():
+    # A trajectory exactly at the typed number is kept: the control reads as
+    # "at least this bright".
+    kept, dropped = filter_dim_tracks([_tr(20.0)], 20.0)
+    assert len(kept) == 1 and dropped == 0
+
+
+def test_an_unmeasured_trajectory_survives():
+    # `intensity_minus_bg` is None when the measurement failed. That is not
+    # evidence the trajectory is dim, and dropping it would turn a nulled
+    # column into a vanished particle.
+    kept, dropped = filter_dim_tracks([_tr(None), _tr(1.0)], 10.0)
+    assert [t["intensity_minus_bg"] for t in kept] == [None]
+    assert dropped == 1
+
+
+def test_polarity_inverts_the_comparison_on_a_dark_kymograph():
+    # On a dark-on-bright movie the signal sits BELOW the background, so
+    # `intensity_minus_bg` is negative and "brighter" means more negative.
+    # Without the polarity factor this call would drop both trajectories —
+    # i.e. hide every particle on a whole class of real movies.
+    tracks = [_tr(-40.0), _tr(-5.0)]
+    kept, dropped = filter_dim_tracks(tracks, 20.0, polarity=-1.0)
+    assert [t["intensity_minus_bg"] for t in kept] == [-40.0]
+    assert dropped == 1
+
+
+def test_a_bright_kymograph_is_unaffected_by_the_polarity_argument():
+    tracks = [_tr(40.0), _tr(5.0)]
+    kept, _ = filter_dim_tracks(tracks, 20.0, polarity=1.0)
+    assert [t["intensity_minus_bg"] for t in kept] == [40.0]
+
+
+def test_the_threshold_is_in_the_units_tracks_intensity_reports():
+    """The floor and the measurement must be the same quantity.
+
+    Guards the one mistake that makes the control meaningless: comparing a
+    user's absolute number against something normalised. The kymograph here is
+    raw counts on a ~200-count background, exactly like the production frames
+    (16-bit, 488 nm sits at ~195 counts of background), and the value the
+    filter compares is the one `tracks_intensity` produced.
+    """
+    rng = np.random.default_rng(7)
+    kymo = rng.normal(200.0, 2.0, size=(40, 60))
+    # One bright streak, ~60 counts above background.
+    for f in range(40):
+        col = 10 + f // 2
+        kymo[f, col - 1 : col + 2] += 60.0
+    points = [[float(f), float(10 + f // 2)] for f in range(40)]
+
+    (measured,) = tracks_intensity(kymo, [points], width=5)
+    minus_bg = measured["intensity_minus_bg"]
+    assert minus_bg is not None and minus_bg > 0
+
+    track = {"points": points, **measured}
+    kept, dropped = filter_dim_tracks([dict(track)], minus_bg - 1.0)
+    assert len(kept) == 1 and dropped == 0
+    kept, dropped = filter_dim_tracks([dict(track)], minus_bg + 1.0)
+    assert kept == [] and dropped == 1

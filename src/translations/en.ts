@@ -1332,6 +1332,9 @@ export default {
         'How the pixels across the width become one value. Mean matches ImageJ; max is brighter but biased by single hot pixels.',
       lineReduceMean: 'Mean',
       lineReduceMax: 'Max',
+      minIntensityLabel: 'Min. trajectory intensity',
+      minIntensityHelp:
+        'Drop trajectories dimmer than this many raw intensity counts above their own background. Absolute, so it does not depend on image scaling — but it is not comparable between channels. Empty keeps all.',
     },
     mt: {
       sectionTitle: 'Microtubule metrics',
@@ -2792,6 +2795,9 @@ export default {
       widthLabel: 'Intensity width',
       widthHint:
         'Width (px) of the band sampled around each trajectory for signal vs. background intensity.',
+      minIntensityLabel: 'Min. intensity',
+      minIntensityHint:
+        'Hide trajectories dimmer than this many raw intensity counts above their own local background. Absolute — independent of how the kymograph is scaled for display — but not comparable between channels. Empty or 0 shows all.',
       lineWidthLabel: 'Line width',
       lineWidthHint:
         'Width (px) of the line sampled along the microtubule, measured across it. 1 samples a single pixel.',
@@ -2819,6 +2825,8 @@ export default {
       velocityFailed: 'Velocity detection failed.',
       filteredHidden:
         '{{count}} non-processive trajectory(ies) below 0.01 µm/s hidden.',
+      dimHidden:
+        '{{count}} trajectory(ies) below {{threshold}} counts above background hidden.',
       downloadTracks: 'Velocity CSV',
       uncalibrated:
         'No pixel-size / frame-interval calibration — velocities shown in px/frame.',

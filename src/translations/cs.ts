@@ -1337,6 +1337,9 @@ export default {
         'Jak se pixely napříč šířkou sloučí do jedné hodnoty. Průměr odpovídá ImageJ, maximum je jasnější, ale zkreslují ho ojedinělé horké pixely.',
       lineReduceMean: 'Průměr',
       lineReduceMax: 'Maximum',
+      minIntensityLabel: 'Min. intenzita trajektorie',
+      minIntensityHelp:
+        'Zahodit trajektorie slabší než tolik syrových jednotek intenzity nad vlastním pozadím. Absolutní, takže nezávisí na škálování obrazu — ale není přenosné mezi kanály. Prázdné ponechá vše.',
     },
     mt: {
       sectionTitle: 'Metriky mikrotubulů',
@@ -2740,6 +2743,9 @@ export default {
       widthLabel: 'Šířka intenzity',
       widthHint:
         'Šířka (px) pásu vzorkovaného kolem každé trajektorie pro signál vs. intenzitu pozadí.',
+      minIntensityLabel: 'Min. intenzita',
+      minIntensityHint:
+        'Skrýt trajektorie slabší než tolik syrových jednotek intenzity nad vlastním lokálním pozadím. Absolutní — nezávislé na tom, jak je kymograf škálovaný pro zobrazení — ale nepřenosné mezi kanály. Prázdné nebo 0 zobrazí vše.',
       lineWidthLabel: 'Šířka linie',
       lineWidthHint:
         'Šířka (px) linie vzorkované podél mikrotubulu, měřená napříč. Hodnota 1 vzorkuje jediný pixel.',
@@ -2767,6 +2773,8 @@ export default {
       velocityFailed: 'Detekce rychlosti selhala.',
       filteredHidden:
         'Skryto {{count}} neprocesivních trajektorií pod 0.01 µm/s.',
+      dimHidden:
+        'Skryto {{count}} trajektorií pod {{threshold}} jednotkami nad pozadím.',
       downloadTracks: 'CSV rychlostí',
       uncalibrated:
         'Bez kalibrace velikosti pixelu / intervalu snímků — rychlosti v px/snímek.',

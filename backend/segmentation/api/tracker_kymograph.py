@@ -59,6 +59,7 @@ from api.kymograph_velocity import (
     EMPTY_INTENSITY,
     detect_tracks,
     edge_touch,
+    filter_dim_tracks,
     flag_bright_outliers,
     kymograph_polarity,
     net_velocity_threshold,
@@ -1120,6 +1121,28 @@ class KymographRequest(BaseModel):
     pixel_size_um: Optional[float] = Field(None, gt=0)
     frame_interval_ms: Optional[float] = Field(None, gt=0)
     min_net_velocity_um_s: float = Field(0.01, ge=0.0)
+    # Absolute intensity floor: drop trajectories whose
+    # ``intensity_minus_bg`` (band mean minus the ring's median background) is
+    # below this many RAW SAMPLE UNITS. 0 disables it, which is the default and
+    # reproduces today's response exactly.
+    #
+    # WHY THIS FIELD AND NOT A FRACTION. The kymograph matrix is sampled at the
+    # frame's native bit depth (``_decode_rows`` never converts to 8-bit) and
+    # ``tracks_intensity`` measures on that raw matrix, so these numbers are
+    # camera counts. The min/max normalisation further down this function
+    # exists only to paint the PNG and touches nothing that is measured — which
+    # is what makes an absolute cut-off meaningful here at all. By contrast a
+    # threshold on the DETECTOR could not be absolute: KymoButler consumes
+    # ``preprocess_array``'s row-normalised copy, whose units are arbitrary.
+    #
+    # WHAT IT IS NOT: comparable between channels. Measured on two production
+    # containers, ``intensity_minus_bg`` runs 9-51 counts on 488 nm and 228 on
+    # 640 nm of the SAME movie — subtracting the background removes the offset,
+    # not the scale (dye brightness, exposure, gain). This is a per-channel
+    # judgement, which is why the control sits in the modal where one channel
+    # is on screen. ``snr`` is the dimensionless alternative and is already
+    # reported per track.
+    min_intensity_minus_bg: float = Field(0.0, ge=0.0)
     # When True, also render one matplotlib line plot per frame (intensity vs.
     # position along the microtubule) and return them as ``profiles``. A
     # kymograph IS a stack of these per-frame rows, so this reuses the exact
@@ -1215,6 +1238,10 @@ class KymographResponse(BaseModel):
     # How many detected tracks were dropped by the net-velocity cut-off. Lets the
     # caller distinguish "hidden as non-processive" from "nothing detected".
     filtered_track_count: int = 0
+    # How many were dropped by ``min_intensity_minus_bg``. SEPARATE from the
+    # velocity count on purpose: the UI names the reason, and one number for
+    # two different cut-offs would make it name the wrong one.
+    filtered_dim_track_count: int = 0
     # Populated only when the request set ``detect_velocity``; otherwise None.
     tracks: Optional[List[KymographTrack]] = None
     # Populated only when ``render_overlay`` was set; base64 PNG of the
@@ -2377,6 +2404,7 @@ def _finish_kymograph(
     tracks: Optional[List[KymographTrack]] = None
     velocity_error: Optional[str] = None
     filtered_track_count = 0
+    filtered_dim_track_count = 0
     if req.detect_velocity:
         try:
             # Already OFF the event loop: `kymograph` hands this whole body
@@ -2454,6 +2482,27 @@ def _finish_kymograph(
                         req.min_net_velocity_um_s,
                     )
                 raw_tracks = kept
+            # Drop trajectories dimmer than the absolute intensity floor.
+            #
+            # AFTER tracks_intensity, and it has to be: the background ring is
+            # defined by the union of EVERY trajectory's band, so measuring a
+            # subset would measure each survivor as if its dropped neighbours
+            # were empty field. Before render_overlay and the bright flag, for
+            # the same reason the velocity cut-off is — overlay, returned table
+            # and exported CSV must show one set of trajectories.
+            if req.min_intensity_minus_bg > 0:
+                raw_tracks, filtered_dim_track_count = filter_dim_tracks(
+                    raw_tracks,
+                    req.min_intensity_minus_bg,
+                    polarity=polarity,
+                )
+                if filtered_dim_track_count:
+                    logger.info(
+                        "kymograph: dropped %d track(s) below %.4g counts "
+                        "above background",
+                        filtered_dim_track_count,
+                        req.min_intensity_minus_bg,
+                    )
             # Flag intensity outliers among the FINAL (post-filter) tracks, so
             # the "bright" flag matches the trajectories that actually appear in
             # the table / overlay / exported sheet.
@@ -2468,6 +2517,7 @@ def _finish_kymograph(
             raw_tracks = []
             tracks = []
             filtered_track_count = 0
+            filtered_dim_track_count = 0
 
     # Per-frame normalisation could obscure intensity changes — instead we
     # normalise globally to expose dynamics. Add 1e-9 to avoid /0.
@@ -2527,6 +2577,7 @@ def _finish_kymograph(
         tracked=bool(req.tracked),
         px_per_column=float(px_per_column),
         filtered_track_count=int(filtered_track_count),
+        filtered_dim_track_count=int(filtered_dim_track_count),
         tracks=tracks,
         overlay_png_base64=overlay_b64,
         velocity_error=velocity_error,
