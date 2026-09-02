@@ -1127,7 +1127,7 @@ class KymographRequest(BaseModel):
     # reproduces today's response exactly.
     #
     # WHY THIS FIELD AND NOT A FRACTION. The kymograph matrix is sampled at the
-    # frame's native bit depth (``_decode_rows`` never converts to 8-bit) and
+    # frame's native bit depth (``_sample_frame_rows`` never converts to 8-bit) and
     # ``tracks_intensity`` measures on that raw matrix, so these numbers are
     # camera counts. The min/max normalisation further down this function
     # exists only to paint the PNG and touches nothing that is measured — which
@@ -1136,8 +1136,8 @@ class KymographRequest(BaseModel):
     # ``preprocess_array``'s row-normalised copy, whose units are arbitrary.
     #
     # WHAT IT IS NOT: comparable between channels. Measured on two production
-    # containers, ``intensity_minus_bg`` runs 9-51 counts on 488 nm and 228 on
-    # 640 nm of the SAME movie — subtracting the background removes the offset,
+    # containers, ``intensity_minus_bg`` runs 9-51 counts on 488 nm and 93-228 on
+    # 640 nm of the SAME container — subtracting the background removes the offset,
     # not the scale (dye brightness, exposure, gain). This is a per-channel
     # judgement, which is why the control sits in the modal where one channel
     # is on screen. ``snr`` is the dimensionless alternative and is already
@@ -2492,9 +2492,7 @@ def _finish_kymograph(
             # and exported CSV must show one set of trajectories.
             if req.min_intensity_minus_bg > 0:
                 raw_tracks, filtered_dim_track_count = filter_dim_tracks(
-                    raw_tracks,
-                    req.min_intensity_minus_bg,
-                    polarity=polarity,
+                    raw_tracks, req.min_intensity_minus_bg
                 )
                 if filtered_dim_track_count:
                     logger.info(

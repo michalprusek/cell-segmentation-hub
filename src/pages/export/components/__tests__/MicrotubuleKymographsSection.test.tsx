@@ -129,4 +129,35 @@ describe('MicrotubuleKymographsSection line width', () => {
     setup(makeValue({ lineWidth: 5, lineReduce: 'max' }));
     expect(screen.getByLabelText(/across width/i)).toHaveTextContent('Max');
   });
+
+  describe('Minimum trajectory intensity', () => {
+    it('propagates a typed floor', () => {
+      const { onChange } = setup();
+      fireEvent.change(screen.getByLabelText(/Min\. trajectory intensity/i), {
+        target: { value: '20' },
+      });
+      expect(onChange).toHaveBeenCalledWith(
+        expect.objectContaining({ minIntensityMinusBg: 20 })
+      );
+    });
+
+    it('turns the filter OFF when the field is cleared', () => {
+      // The worst reachable state is an empty box with a filter still active:
+      // the user sees no number and exports a filtered dataset anyway.
+      const { onChange } = setup(makeValue({ minIntensityMinusBg: 20 }));
+      fireEvent.change(screen.getByLabelText(/Min\. trajectory intensity/i), {
+        target: { value: '' },
+      });
+      expect(onChange).toHaveBeenCalledWith(
+        expect.objectContaining({ minIntensityMinusBg: 0 })
+      );
+    });
+
+    it('is not offered in profiles mode — there are no trajectories there', () => {
+      setup(makeValue({ mode: 'profiles' }));
+      expect(
+        screen.queryByLabelText(/Min\. trajectory intensity/i)
+      ).not.toBeInTheDocument();
+    });
+  });
 });

@@ -662,6 +662,26 @@ describe('exportMicrotubuleKymographs fan-out', () => {
     ]);
   });
 
+  it('forwards the intensity floor to every kymograph of the batch', async () => {
+    oneChannelDb();
+
+    await exportMicrotubuleKymographs('proj', outDir, {
+      ...OPTS,
+      minIntensityMinusBg: 20,
+    });
+
+    expect(dispatchedInputs().map(i => i.minIntensityMinusBg)).toEqual([
+      20, 20,
+    ]);
+  });
+
+  it('sends no floor when the user set none', async () => {
+    oneChannelDb();
+    await exportMicrotubuleKymographs('proj', outDir, OPTS);
+    expect(dispatchedInputs().every(i => i.minIntensityMinusBg === undefined))
+      .toBe(true);
+  });
+
   it('forwards them in profiles mode too — a profile is a row of that picture', async () => {
     oneChannelDb();
     mockBatch.mockImplementation(async (inputs: FakeInput[]) =>
@@ -678,6 +698,8 @@ describe('exportMicrotubuleKymographs fan-out', () => {
       mode: 'profiles',
       lineWidth: 9,
       lineReduce: 'max',
+      // Set on purpose: without it the assertion below is vacuous.
+      minIntensityMinusBg: 20,
     });
 
     // The ML service renders the profile plots from the same sampled matrix as
@@ -687,6 +709,12 @@ describe('exportMicrotubuleKymographs fan-out', () => {
       [9, 'max'],
       [9, 'max'],
     ]);
+    // ...but NOT the intensity floor: this branch runs with
+    // `detectVelocity: false`, so there are no trajectories to filter. Sending
+    // it anyway would change the request body and the cache key for nothing,
+    // and 422 an un-recreated ml container mid-deploy.
+    expect(dispatchedInputs().every(i => i.minIntensityMinusBg === undefined))
+      .toBe(true);
   });
 
   it('sends neither when the export did not ask for a band', async () => {

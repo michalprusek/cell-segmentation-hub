@@ -78,6 +78,10 @@ interface TileProps {
 }
 
 function SpecimenTile({ preview, outlines, alt }: TileProps) {
+  // A tile whose frame 404s (a half-deployed build, a pruned asset) would
+  // otherwise sit in the card as an empty dark square with a model name under
+  // it, which reads as "this model produced nothing".
+  const [broken, setBroken] = useState(false);
   const paths = useMemo(
     () =>
       (outlines ?? []).map(outline => ({
@@ -86,6 +90,8 @@ function SpecimenTile({ preview, outlines, alt }: TileProps) {
       })),
     [outlines]
   );
+
+  if (broken) return null;
 
   return (
     <figure className="m-0 min-w-0 flex-1">
@@ -98,6 +104,7 @@ function SpecimenTile({ preview, outlines, alt }: TileProps) {
           className="h-full w-full object-cover"
           loading="lazy"
           decoding="async"
+          onError={() => setBroken(true)}
         />
         {paths.length > 0 && (
           <SpecimenOutlineLayer

@@ -25,7 +25,11 @@ import {
   previewsForModel,
   previewsForProjectType,
 } from '@/lib/specimens/selectPreviews';
-import { specimenStroke } from '@/lib/specimens/specimenStroke';
+import {
+  specimenStroke,
+  type SpecimenOutline,
+} from '@/lib/specimens/specimenStroke';
+import { POLYGON_PART_CLASSES, SPERM_PART_CLASSES } from '@/lib/segmentation';
 import { PROJECT_TYPES } from '@/types';
 
 const PUBLIC_DIR = join(process.cwd(), 'public');
@@ -88,6 +92,11 @@ describe('previewsForProjectType', () => {
     const picked = previewsForProjectType('microtubules');
     expect(picked).toHaveLength(PREVIEWS_PER_CARD);
     expect(new Set(picked.map(p => p.model))).toEqual(new Set(['microtubule']));
+    // DISTINCT tiles, not the same one three times. This is the only case
+    // that exercises rank 1 and 2 of the round-robin — `spheroid` has five
+    // models and a limit of three, so it never leaves rank 0 — and asserting
+    // on `model` alone passes with `group[rank]` mutated to `group[0]`.
+    expect(new Set(picked.map(p => p.id)).size).toBe(PREVIEWS_PER_CARD);
   });
 
   it('honours a smaller limit', () => {
@@ -134,6 +143,40 @@ describe('specimenStroke', () => {
     );
   });
 
+  it('gives every part class the editor knows a colour of its own', () => {
+    // Driven off the editor's SSOT rather than a hand-written list, so a model
+    // that ships a SEVENTH class forces a decision here instead of silently
+    // inheriting external-contour red.
+    const EDITOR_COLOURS = new Set([
+      '#ef4444',
+      '#0ea5e9',
+      '#22c55e',
+      '#f59e0b',
+      '#06b6d4',
+      '#d946ef',
+      '#969696',
+      'hsl(0, 0%, 60%)',
+    ]);
+    for (const partClass of POLYGON_PART_CLASSES) {
+      const asPolyline = SPERM_PART_CLASSES.includes(
+        partClass as (typeof SPERM_PART_CLASSES)[number]
+      );
+      const outline: SpecimenOutline = asPolyline
+        ? { d: 'M0 0', g: 'l', c: partClass }
+        : { d: 'M0 0', c: partClass };
+      const stroke = specimenStroke(outline);
+      expect(
+        EDITOR_COLOURS.has(stroke),
+        `${partClass} produced ${stroke}`
+      ).toBe(true);
+      // ...and not the default red, which is what an unhandled class would give.
+      expect(
+        stroke,
+        `${partClass} fell through to the external contour`
+      ).not.toBe('#ef4444');
+    }
+  });
+
   it('only ever produces colours the editor draws', () => {
     const EDITOR_COLOURS = new Set([
       '#ef4444',
@@ -145,18 +188,18 @@ describe('specimenStroke', () => {
       '#969696',
       'hsl(0, 0%, 60%)',
     ]);
-    const outlines = [
+    const outlines: SpecimenOutline[] = [
       { d: 'M0 0' },
-      { d: 'M0 0', t: 'i' as const },
+      { d: 'M0 0', t: 'i' },
       { d: 'M0 0', c: 'core' },
       { d: 'M0 0', c: 'neurite' },
       { d: 'M0 0', c: 'soma' },
-      { d: 'M0 0', g: 'l' as const, c: 'head' },
-      { d: 'M0 0', g: 'l' as const, c: 'midpiece' },
-      { d: 'M0 0', g: 'l' as const, c: 'tail' },
-      { d: 'M0 0', g: 'l' as const, s: 'mt_dcbb54ef' },
-      { d: 'M0 0', g: 'l' as const },
-      { d: 'M0 0', x: 1 as const },
+      { d: 'M0 0', g: 'l', c: 'head' },
+      { d: 'M0 0', g: 'l', c: 'midpiece' },
+      { d: 'M0 0', g: 'l', c: 'tail' },
+      { d: 'M0 0', g: 'l', s: 'mt_dcbb54ef' },
+      { d: 'M0 0', g: 'l' },
+      { d: 'M0 0', x: 1 },
     ];
     for (const outline of outlines) {
       const stroke = specimenStroke(outline);

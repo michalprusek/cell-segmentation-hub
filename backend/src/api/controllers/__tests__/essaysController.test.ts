@@ -1,5 +1,10 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
+const mockRecordExportEvent = vi.fn().mockResolvedValue(undefined);
+vi.mock('../../../services/exportAuditService', () => ({
+  recordExportEvent: (...args: unknown[]) => mockRecordExportEvent(...args),
+}));
+
 vi.mock('../../../utils/config', () => ({
   config: {
     JWT_ACCESS_SECRET:
@@ -140,6 +145,42 @@ describe('EssaysController.downloadJob (download-token sentinel)', () => {
     expect((res as unknown as { sendFile: ReturnType<typeof vi.fn> }).sendFile)
       .toHaveBeenCalled();
     expect(ResponseHelper.unauthorized).not.toHaveBeenCalled();
+  });
+
+  it('records the download against the token subject, marked as a token pull', async () => {
+    const { token } = issueDownloadToken(JOB, SENTINEL, USER);
+    mockRecordExportEvent.mockClear();
+
+    await controller.downloadJob(reqWithToken(token), mockRes());
+
+    expect(mockRecordExportEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: 'essays',
+        event: 'downloaded',
+        userId: USER,
+        jobId: JOB,
+        detail: 'token',
+      })
+    );
+  });
+
+  it('records an EMPTY ?token= as the session pull it actually is', async () => {
+    // `?token=` authenticates through the session — a stale link or a template
+    // that interpolated `undefined` produces it. Deriving `detail` from a
+    // separate `typeof token === 'string'` test logged it as a token pull, i.e.
+    // claimed the data left through a forwardable URL when it did not.
+    mockRecordExportEvent.mockClear();
+    const req = {
+      params: { jobId: JOB },
+      query: { token: '' },
+      user: { id: USER },
+    } as never;
+
+    await controller.downloadJob(req, mockRes());
+
+    expect(mockRecordExportEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ event: 'downloaded', detail: 'jwt' })
+    );
   });
 
   it('rejects a token minted for a different project (export ↔ essays isolation)', async () => {

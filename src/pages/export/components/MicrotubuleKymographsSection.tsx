@@ -58,7 +58,7 @@ export interface MicrotubuleKymographsOptions {
    *  frame's native-bit-depth samples and the display scaling is applied
    *  afterwards. It does NOT transfer between channels: measured on a
    *  production container, 488 nm trajectories sit 9-51 counts above background
-   *  where 640 nm sits at 228. Kymograph mode only — profiles have no
+   *  where 640 nm sits at 93-228. Kymograph mode only — profiles have no
    *  trajectories to filter. */
   minIntensityMinusBg: number;
 }

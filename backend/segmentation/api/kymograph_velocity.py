@@ -167,7 +167,6 @@ def net_velocity_threshold(
 def filter_dim_tracks(
     tracks: List[Dict[str, Any]],
     threshold: float,
-    polarity: float = 1.0,
 ) -> Tuple[List[Dict[str, Any]], int]:
     """Drop trajectories dimmer than an ABSOLUTE intensity floor.
 
@@ -180,14 +179,19 @@ def filter_dim_tracks(
     KymoButler consumes a row-normalised copy whose units are arbitrary.
 
     It is NOT comparable between channels: measured on two production
-    containers, ``intensity_minus_bg`` runs 9-51 counts on 488 nm and 228 on
-    640 nm of the same movie. Subtracting the background removes the offset,
+    container, ``intensity_minus_bg`` runs 9-51 counts on 488 nm and 93-228
+    on 640 nm of the same movie. Subtracting the background removes the offset,
     not the scale.
 
-    ``polarity`` for the same reason ``flag_bright_outliers`` needs it: on a
-    dark-on-bright kymograph (``-1``) the signal sits BELOW the background, so
-    ``intensity_minus_bg`` is negative and "brighter" means more negative.
-    Comparing the raw value there would drop every trajectory on the movie.
+    NO ``polarity`` argument, and adding one is a bug — this shipped with one
+    and it deleted every trajectory on a dark-on-bright movie. Unlike
+    ``intensity_signal``, which ``flag_bright_outliers`` genuinely has to sign,
+    ``intensity_minus_bg`` is ALREADY signed where it is produced
+    (``tracks_intensity`` returns ``polarity * (signal - background)``), so it
+    always means "contrast above the local background" and is positive for a
+    real trajectory on either polarity. Multiplying again inverts it: measured
+    on a dark streak 60 counts below a 3000-count background, the contrast is
+    +29.8 and a floor of 10 dropped it.
 
     A track whose intensity is ``None`` is KEPT. A failed measurement is not
     evidence that a trajectory is dim, and dropping it would turn a nulled
@@ -202,7 +206,7 @@ def filter_dim_tracks(
         tr
         for tr in tracks
         if tr.get("intensity_minus_bg") is None
-        or polarity * tr["intensity_minus_bg"] >= threshold
+        or tr["intensity_minus_bg"] >= threshold
     ]
     return kept, len(tracks) - len(kept)
 

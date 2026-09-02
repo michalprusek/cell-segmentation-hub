@@ -104,6 +104,25 @@ describe('recordExportEvent', () => {
     expect(createMock.mock.calls[0][0].data.options).toEqual(options);
   });
 
+  it('stores a malformed size as NULL rather than losing the row', async () => {
+    // `BigInt(3.5)` and `BigInt(NaN)` THROW, and this module's catch would
+    // swallow that — taking the actor, the timestamp and the job down with it
+    // over the least important field on the record.
+    for (const bad of [3.5, NaN, Infinity, -1, Number.MAX_SAFE_INTEGER + 2]) {
+      createMock.mockClear();
+      await recordExportEvent({
+        kind: 'project',
+        event: 'completed',
+        userId: 'user-1',
+        jobId: 'job-1',
+        fileSizeBytes: bad,
+      });
+      expect(createMock, `size ${bad} lost the row`).toHaveBeenCalledTimes(1);
+      expect(createMock.mock.calls[0][0].data.fileSizeBytes).toBeNull();
+    }
+    expect(warnMock).not.toHaveBeenCalled();
+  });
+
   it('never lets a failed write escape to the caller', async () => {
     createMock.mockRejectedValue(new Error('deadlock detected'));
 

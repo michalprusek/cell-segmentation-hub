@@ -29,13 +29,19 @@ docker run --rm \
 ```
 
 The renderer runs in the ml image because the repo's own Node cannot do the
-job: `sharp` reads no BMP (three source frames are BMPs) and has no 16-bit
-windowing path, while PIL/numpy have both and the image is already on the host.
+job: `sharp` reads no BMP (four source frames are — `cbam_resunet-2` and all
+three `spheroid_disintegration` tiles) and has no 16-bit windowing path, while
+PIL/numpy have both and the image is already on the host.
 
 ## Choosing new specimens
 
-`select.sql` produces the candidate pool. Two things about it are the whole
-lesson of the first pass:
+`select.sql` produces a candidate pool by the method below. It does **not**
+reproduce the exact 33 rows in `chosen.tsv`: the pool was iterated while the
+query was being written, the ranking is by confidence over a table that keeps
+growing, and `DISTINCT ON (model, basename)` may now prefer a sibling of a
+shipped frame. `chosen.tsv` is the record of what was picked — the query is the
+record of how to pick. Two things about it are the whole lesson of the first
+pass:
 
 - **Rank by the model's own confidence, not by polygon count.** Ranking the
   2191 HRNet rows by object count returns the runs where the model traced
@@ -44,6 +50,10 @@ lesson of the first pass:
   the same table.
 - **Deduplicate by source file name.** The eight "different" wound candidates
   were the same twelve frames uploaded into two projects.
+- **Give each modality its own object-count band.** Sperm counts PARTS (head +
+  midpiece + tail, so seven cells is 21 objects) and a microcapsule field
+  routinely holds ten. Both sat under the spheroid band until 2026-09-02 and so
+  could never appear in the pool at all.
 
 Then **look at every candidate at the size it will be shown**. The contact
 sheet is the only way to catch what SQL cannot see: a figure lifted from a
@@ -64,9 +74,16 @@ Both rules below were wrong on the first attempt and were fixed by measuring;
 the numbers are in `generate.py`'s docstrings.
 
 - The tile is a **crop sized from the objects**, not the whole frame. A 2048-px
-  field of 60-px spheroids renders each object at 4 px in a 150-px tile.
-- The crop must also **contain** the largest objects. Sizing from the median
-  alone zoomed inside a wound frame and left its outline outside the tile.
+  field of 60-px spheroids renders each object at 3.6 px in the card's 123-px
+  tile.
+- The size must also account for the **90th-percentile** object. Sizing from
+  the median alone zoomed inside a wound frame and left its outline outside the
+  tile. It is a floor on the window's size, not a containment guarantee —
+  placement is decided separately, so a single object larger than the window
+  still overflows it.
+- Two rules decide most real tiles and are easy to overlook: the window never
+  exceeds the frame's short side (14 of the 33 clamp there) and never drops
+  below `MIN_CROP_FRAC` of it (3 do).
 
 16-bit frames are stretched min..max over the frame's own samples, which is what
 `applyRanges` in `ImageDisplayContext` does when a channel is first seen — so a
@@ -74,6 +91,8 @@ tile shows the picture the editor would open.
 
 ## Privacy
 
-The tiles are served from `public/`, so they are public. They come from
-production projects on this deployment, the same source as the landing page's
-seven showcase specimens.
+The tiles are served from `public/`, so they are public. The 27 `origin=db`
+tiles come from production projects on this deployment, the same source as the
+landing page's seven showcase specimens. The three `neurite_soma` tiles do not:
+there is no neurite project in the database, so they are crops of the model's
+own bundled sample frame (`neurite-soma-seg/sample/`), which is not user data.

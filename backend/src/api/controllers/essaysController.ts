@@ -206,9 +206,15 @@ export class EssaysController {
     try {
       const { jobId } = req.params;
       const tokenParam = req.query.token;
+      // The SAME predicate the auth below uses. Testing `typeof token ===
+      // 'string'` separately made `?token=` (empty — a stale link, or a
+      // template that interpolated undefined) authenticate as the session user
+      // and be logged as a token pull, which is the exact distinction this
+      // field exists to draw.
+      const viaToken = typeof tokenParam === 'string' && tokenParam.length > 0;
 
       let userId: string | undefined;
-      if (typeof tokenParam === 'string' && tokenParam.length > 0) {
+      if (viaToken) {
         try {
           const payload = verifyDownloadToken(tokenParam);
           if (payload.jobId !== jobId || payload.projectId !== PROJECT_SENTINEL) {
@@ -245,7 +251,7 @@ export class EssaysController {
         event: 'downloaded',
         userId,
         jobId,
-        detail: typeof req.query.token === 'string' ? 'token' : 'jwt',
+        detail: viaToken ? 'token' : 'jwt',
       });
 
       res.setHeader('Content-Type', 'application/zip');

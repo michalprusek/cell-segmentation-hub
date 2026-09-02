@@ -1,5 +1,10 @@
 """Three non-overlapping fields out of the 6657-px neurite sample frame.
 
+PREREQUISITE: `neurite-soma-seg/` is gitignored, so a fresh clone does not have
+`SRC` and this step cannot run until that model checkout is restored. It is the
+only source of neurite frames on this deployment — there is no neurite project
+in the database at all.
+
 Deterministic: windows are ranked by standard deviation, because neurites are
 texture and bare coverslip is flat, then taken greedily with a no-overlap rule.
 Re-running picks the same three.
@@ -36,3 +41,12 @@ for score, x, y in windows:
     taken.append((x, y))
     if len(taken) == 3:
         break
+
+# A partial set would be cached as complete by `infer-missing.sh`'s
+# `ls .../neurite_*.png` guard and then fail one step later naming the wrong
+# cause ("missing frame").
+if len(taken) != 3:
+    raise SystemExit(
+        'only %d non-overlapping %d-px windows fit in this frame; the sample '
+        'is smaller than the crop plan assumes' % (len(taken), SIDE)
+    )

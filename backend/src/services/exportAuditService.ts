@@ -46,8 +46,11 @@ export interface ExportEventRecord {
   /** The requested export options, kept whole. */
   options?: unknown;
   imageCount?: number | null;
-  /** Number, bigint or a stringified size — all end up in a BIGINT column. */
-  fileSizeBytes?: number | bigint | null;
+  /** Byte size of the archive, for a BIGINT column. A non-integral, negative
+   *  or unsafe value is stored as NULL rather than failing: `BigInt(3.5)`
+   *  THROWS, and inside this module's catch that would lose the whole row —
+   *  actor, timestamp and job — over its least important field. */
+  fileSizeBytes?: number | null;
   /** Failure message, or how a download was authorised. */
   detail?: string | null;
 }
@@ -75,9 +78,11 @@ export async function recordExportEvent(
             : (record.options as never),
         imageCount: record.imageCount ?? null,
         fileSizeBytes:
-          record.fileSizeBytes === undefined || record.fileSizeBytes === null
-            ? null
-            : BigInt(record.fileSizeBytes),
+          typeof record.fileSizeBytes === 'number' &&
+          Number.isSafeInteger(record.fileSizeBytes) &&
+          record.fileSizeBytes >= 0
+            ? BigInt(record.fileSizeBytes)
+            : null,
         detail: record.detail ?? null,
       },
     });

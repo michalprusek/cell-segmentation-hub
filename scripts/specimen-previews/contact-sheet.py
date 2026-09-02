@@ -22,7 +22,7 @@ REPO = '/repo'
 WORK = os.environ.get('SPECIMEN_WORK', '/work')
 ASSETS = os.environ.get('SPECIMEN_ASSETS',
                         os.path.join(REPO, 'public', 'specimens', 'previews'))
-TILE = 150   # the card's rendered tile size
+TILE = 123   # the card's rendered tile size — see generate.DISPLAY_PX
 LABEL = 16
 COLS = 6
 
@@ -72,7 +72,10 @@ def stroke(outline):
 
 
 def path_points(d):
-    """The generated paths are only M/L/Z, so a split is enough of a parser."""
+    """The generated paths are only M/L/Z, so a split is enough of a parser.
+
+    1000.0 is `generate.VIEWBOX`; the two must move together.
+    """
     numbers = [float(tok) for tok in
                d.replace('M', ' ').replace('L', ' ').replace('Z', ' ').split()]
     points = [(numbers[i] / 1000.0 * TILE, numbers[i + 1] / 1000.0 * TILE)
@@ -86,6 +89,8 @@ def main():
     rows = math.ceil(len(ids) / COLS)
     sheet = Image.new('RGB', (COLS * (TILE + 8), rows * (TILE + LABEL)), (24, 24, 27))
     label = ImageDraw.Draw(sheet)
+    # The ml image ships no DejaVu, so this normally takes the fallback; the
+    # lookup stays for a host that has one, where the labels read better.
     try:
         font = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', 10)
     except OSError:
