@@ -104,6 +104,9 @@ export default {
         'Spheroids and their disintegration, scratch-assay wounds, sperm morphology, microtubule filaments, microcapsules, neurons and their processes — a trained model for each, one editor for all of them, and exports that ImageJ, COCO and YOLO already understand.',
       getStarted: 'Get started',
       learnMore: 'See what it handles',
+      backupNoticeTitle: 'Keep your own copy of your images.',
+      backupNotice:
+        'Uploaded image files are not backed up. Your account, projects and segmentation results are backed up daily.',
     },
     specimens: {
       trayLabel: 'Pick a specimen',

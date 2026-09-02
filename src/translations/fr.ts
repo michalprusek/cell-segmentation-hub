@@ -98,6 +98,9 @@ export default {
         "Sphéroïdes et leur désintégration, plaies de test de rayure, morphologie des spermatozoïdes, filaments de microtubules, microcapsules, neurones et leurs prolongements : un modèle entraîné pour chaque type, un seul éditeur pour tous, et des exports qu'ImageJ, COCO et YOLO comprennent déjà.",
       getStarted: 'Commencer',
       learnMore: 'Voir ce que la plateforme traite',
+      backupNoticeTitle: 'Conservez votre propre copie de vos images.',
+      backupNotice:
+        'Les fichiers d’images téléversés ne sont pas sauvegardés. Votre compte, vos projets et les résultats de segmentation le sont chaque jour.',
     },
     specimens: {
       trayLabel: 'Choisissez un échantillon',
