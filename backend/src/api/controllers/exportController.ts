@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { ExportService, ExportOptions } from '../../services/exportService';
+import { recordExportEvent } from '../../services/exportAuditService';
 import { ResponseHelper } from '../../utils/response';
 import { logger } from '../../utils/logger';
 import * as path from 'path';
@@ -281,6 +282,22 @@ export class ExportController {
         : `${safeName}.zip`;
 
       // Set headers for a proper attachment download
+      // Audit the download before streaming: this is the moment the data
+      // actually leaves the platform, and `res.sendFile` may take minutes on a
+      // multi-gigabyte archive. Recording the ACTOR, not the job's creator —
+      // on a shared project they are not always the same person — and how the
+      // request was authorised, since the signed-token path travels in a URL
+      // that can be forwarded.
+      void recordExportEvent({
+        kind: 'project',
+        event: 'downloaded',
+        userId,
+        jobId,
+        projectId,
+        fileSizeBytes: fileSize,
+        detail: queryToken ? 'token' : 'jwt',
+      });
+
       res.setHeader('Content-Type', 'application/zip');
       res.setHeader(
         'Content-Disposition',

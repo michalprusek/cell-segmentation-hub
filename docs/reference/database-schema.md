@@ -141,6 +141,74 @@ storage keys; `resultZipKey` is set once the archive exists.
 Note that a **partial** run is stored as `completed` **with** an `error` — which
 is why the retention sweep keys on "did it finish cleanly", not on the status.
 
+### `ExportLog` → `export_logs`
+
+The record of who took data off the platform. Append-only: **one row per
+event**, not one row per job, so `created`, `completed`/`failed`/`cancelled`
+and every `downloaded` are separate rows correlated by `jobId`.
+
+| column                        | meaning                                                                                                              |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `kind`                        | `project` (the project export ZIP) or `essays` (an Automated Essays result)                                          |
+| `event`                       | `created` \| `completed` \| `failed` \| `cancelled` \| `downloaded`                                                  |
+| `userId`                      | who did **this** event — for a download, whoever actually pulled the file                                            |
+| `projectId`                   | null for essays, which are not project-scoped                                                                        |
+| `jobId`                       | correlates the rows of one job                                                                                       |
+| `options`                     | the requested export options, kept whole (so "who exported ImageJ ROIs?" needs no migration)                         |
+| `imageCount`, `fileSizeBytes` | filled in on `completed`; the size is **BIGINT**, since an archive passes 2³¹ bytes before it passes any other limit |
+| `detail`                      | the failure message, or how a download was authorised (`jwt` / `token`)                                              |
+
+Why an event log rather than a mutable job row: a row per event carries its own
+actor, so a download of a **shared** project's export is attributed to the
+person who took it rather than to whoever created the job — and two concurrent
+downloads cannot lose one another to a read-modify-write.
+
+The write is fire-and-forget and swallows its own errors
+(`services/exportAuditService.ts`): an audit row is worth less than the export
+it describes, so a database problem costs a log line, not the user's data.
+The corollary is that **absence of a row is not proof nothing was exported** —
+check `spheroseg-backend` logs for `ExportAuditService` warnings.
+
+#### Who exported what, and when
+
+```sql
+-- Everything that left the platform, newest first.
+SELECT l."createdAt", l.kind, l.event, u.email, p.title AS project,
+       l."fileSizeBytes", l.detail
+  FROM export_logs l
+  JOIN users u ON u.id = l."userId"
+  LEFT JOIN projects p ON p.id = l."projectId"
+ ORDER BY l."createdAt" DESC
+ LIMIT 100;
+
+-- Downloads only — the moment data actually left.
+SELECT l."createdAt", u.email, p.title AS project,
+       pg_size_pretty(l."fileSizeBytes") AS size, l.detail AS authorised_by
+  FROM export_logs l
+  JOIN users u ON u.id = l."userId"
+  LEFT JOIN projects p ON p.id = l."projectId"
+ WHERE l.event = 'downloaded'
+ ORDER BY l."createdAt" DESC;
+
+-- Per user, last 30 days.
+SELECT u.email, COUNT(*) FILTER (WHERE l.event = 'created')    AS exports_started,
+                COUNT(*) FILTER (WHERE l.event = 'downloaded') AS downloads,
+                SUM(l."fileSizeBytes") FILTER (WHERE l.event = 'downloaded') AS bytes_taken
+  FROM export_logs l JOIN users u ON u.id = l."userId"
+ WHERE l."createdAt" > now() - interval '30 days'
+ GROUP BY u.email ORDER BY downloads DESC;
+
+-- One job's whole story.
+SELECT "createdAt", event, "userId", detail FROM export_logs
+ WHERE "jobId" = '<job-uuid>' ORDER BY "createdAt";
+```
+
+Run them with:
+
+```bash
+docker exec spheroseg-postgres psql -U spheroseg -d spheroseg -c "<query>"
+```
+
 ### Segmenter tables
 
 `SegmenterDataset` → `segmenter_datasets`, `SegmenterImage` →

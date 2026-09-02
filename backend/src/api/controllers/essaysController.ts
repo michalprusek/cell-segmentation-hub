@@ -4,6 +4,7 @@ import { ResponseHelper } from '../../utils/response';
 import { logger } from '../../utils/logger';
 import { AuthRequest } from '../../types/auth';
 import { EssaysService, EssayJobOptions } from '../../services/essaysService';
+import { recordExportEvent } from '../../services/exportAuditService';
 import {
   issueDownloadToken,
   verifyDownloadToken,
@@ -235,6 +236,17 @@ export class EssaysController {
         ResponseHelper.notFound(res, 'Result not available for download', CTX);
         return;
       }
+
+      // Audit before streaming — this is where the results leave the
+      // platform. `token` means the request carried a signed download token
+      // in its URL rather than a session.
+      void recordExportEvent({
+        kind: 'essays',
+        event: 'downloaded',
+        userId,
+        jobId,
+        detail: typeof req.query.token === 'string' ? 'token' : 'jwt',
+      });
 
       res.setHeader('Content-Type', 'application/zip');
       res.setHeader(
