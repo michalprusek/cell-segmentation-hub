@@ -4,6 +4,7 @@ import fs from 'fs/promises';
 import sharp from 'sharp';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../db';
+import { recordExportEvent } from './exportAuditService';
 import { getLabels as getMtTypeLabels } from './mtTypeLabelService';
 import { logger } from '../utils/logger';
 import { VisualizationGenerator } from './visualization/visualizationGenerator';
@@ -360,6 +361,17 @@ export class ExportService {
     };
 
     this.exportJobs.set(jobId, job);
+
+    // Audit: not awaited, and it swallows its own errors — an audit row must
+    // never delay or fail the export it describes.
+    void recordExportEvent({
+      kind: 'project',
+      event: 'created',
+      userId,
+      jobId,
+      projectId,
+      options,
+    });
 
     // Process export directly
     this.processExportJob(jobId, projectId, userId, options).catch(err => {
@@ -909,6 +921,34 @@ export class ExportService {
       job.status = 'completed';
       job.completedAt = new Date();
 
+      void fs
+        .stat(zipPath)
+        .then(stats =>
+          recordExportEvent({
+            kind: 'project',
+            event: 'completed',
+            userId,
+            jobId,
+            projectId,
+            options,
+            imageCount: project.images?.length ?? null,
+            fileSizeBytes: stats.size,
+          })
+        )
+        .catch(() =>
+          // The archive is on disk and the user has it; a size we could not
+          // read is not a reason to lose the row.
+          recordExportEvent({
+            kind: 'project',
+            event: 'completed',
+            userId,
+            jobId,
+            projectId,
+            options,
+            imageCount: project.images?.length ?? null,
+          })
+        );
+
       // Notify completion via WebSocket. Include any non-fatal warnings
       // (e.g. MT intensity omitted / could not be computed) so the FE can
       // surface them — a "completed" export that quietly dropped metrics is
@@ -927,6 +967,16 @@ export class ExportService {
       );
       job.status = 'failed';
       job.message = error instanceof Error ? error.message : 'Unknown error';
+
+      void recordExportEvent({
+        kind: 'project',
+        event: 'failed',
+        userId,
+        jobId,
+        projectId,
+        options,
+        detail: job.message,
+      });
 
       // Notify failure via WebSocket
       this.sendToUser(userId, 'export:failed', {
@@ -2142,6 +2192,16 @@ export class ExportService {
       // Mark job as cancelled immediately
       job.status = 'cancelled';
       job.completedAt = new Date();
+
+      void recordExportEvent({
+        kind: 'project',
+        event: 'cancelled',
+        // The canceller, who on a shared project need not be the creator.
+        userId,
+        jobId,
+        projectId,
+        options: job.options,
+      });
 
       // Emit WebSocket cancellation event
       const cancelData = {

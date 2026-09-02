@@ -9,26 +9,27 @@ datasource db {
 }
 
 model User {
-  id                String              @id @default(uuid())
-  email             String              @unique
-  password          String
-  emailVerified     Boolean             @default(false)
-  verificationToken String?
-  resetToken        String?
-  resetTokenExpiry  DateTime?
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
-  profile           Profile?
-  projects          Project[]
-  segmentationQueue SegmentationQueue[]
-  sessions          Session[]
-  sharedProjects    ProjectShare[]      @relation("SharedWith")
-  projectsSharedByMe ProjectShare[]     @relation("SharedBy")
-  feedbacks         Feedback[]
-  folders           ProjectFolder[]
-  folderItems       ProjectFolderItem[]
-  essayJobs         EssayJob[]
-  segmenterDatasets SegmenterDataset[]
+  id                 String              @id @default(uuid())
+  email              String              @unique
+  password           String
+  emailVerified      Boolean             @default(false)
+  verificationToken  String?
+  resetToken         String?
+  resetTokenExpiry   DateTime?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  profile            Profile?
+  projects           Project[]
+  segmentationQueue  SegmentationQueue[]
+  sessions           Session[]
+  sharedProjects     ProjectShare[]      @relation("SharedWith")
+  projectsSharedByMe ProjectShare[]      @relation("SharedBy")
+  feedbacks          Feedback[]
+  folders            ProjectFolder[]
+  folderItems        ProjectFolderItem[]
+  essayJobs          EssayJob[]
+  segmenterDatasets  SegmenterDataset[]
+  exportLogs         ExportLog[]
 
   @@map("users")
 }
@@ -40,9 +41,9 @@ model Profile {
   avatarUrl                     String?
   // Avatar storage model: Files stored in /app/uploads/avatars/
   // Support for JPEG, PNG, GIF formats with automatic Sharp processing
-  avatarPath                    String?   // Storage path for avatar file
-  avatarMimeType                String?   // MIME type of avatar
-  avatarSize                    Int?      // Size of avatar in bytes
+  avatarPath                    String? // Storage path for avatar file
+  avatarMimeType                String? // MIME type of avatar
+  avatarSize                    Int? // Size of avatar in bytes
   bio                           String?
   organization                  String?
   location                      String?
@@ -87,6 +88,7 @@ model Project {
   verifiedAt        DateTime?
   verifiedBy        String?
   images            Image[]
+  exportLogs        ExportLog[]
   user              User                @relation(fields: [userId], references: [id], onDelete: Cascade)
   segmentationQueue SegmentationQueue[]
   shares            ProjectShare[]
@@ -97,44 +99,44 @@ model Project {
 }
 
 model Image {
-  id                     String              @id @default(uuid())
-  name                   String
-  originalPath           String
-  thumbnailPath          String?
-  segmentationThumbnailPath String?          // New field for segmentation thumbnail
-  projectId              String
-  segmentationStatus     String              @default("no_segmentation")
+  id                        String              @id @default(uuid())
+  name                      String
+  originalPath              String
+  thumbnailPath             String?
+  segmentationThumbnailPath String? // New field for segmentation thumbnail
+  projectId                 String
+  segmentationStatus        String              @default("no_segmentation")
   // BigInt because ND2 / TIFF stacks routinely exceed 2 GB (INT4 max);
   // the previous Int caused Prisma "Unable to fit … into INT4" on upload.
   // Frontend receives this as a JS number via the controller mapper —
   // 2^53 covers up to 9 PB which is well beyond any conceivable file size.
-  fileSize               BigInt?
-  width                  Int?
-  height                 Int?
-  mimeType               String?
-  displayOrder           Int?                // Manual ordering for time-series (wound healing etc.); null => fall back to createdAt
+  fileSize                  BigInt?
+  width                     Int?
+  height                    Int?
+  mimeType                  String?
+  displayOrder              Int? // Manual ordering for time-series (wound healing etc.); null => fall back to createdAt
   // --- Video container support (added 2026-05-12 for microtubule + wound video projects) ---
   // A row with isVideoContainer = true represents the original uploaded video
   // (MP4 / multi-page TIFF / ND2). Each extracted frame is a sibling Image row
   // with parentVideoId pointing back at the container. The container itself is
   // never segmented; queue items always reference frame rows.
-  isVideoContainer       Boolean             @default(false)
-  parentVideoId          String?
-  frameIndex             Int?                // 0-based position within parent video; null for standalone images
-  frameCount             Int?                // Total frame count on the container row; null for frame / standalone rows
-  videoDurationMs        Int?                // Source duration in ms; null when unknown or not a video
+  isVideoContainer          Boolean             @default(false)
+  parentVideoId             String?
+  frameIndex                Int? // 0-based position within parent video; null for standalone images
+  frameCount                Int? // Total frame count on the container row; null for frame / standalone rows
+  videoDurationMs           Int? // Source duration in ms; null when unknown or not a video
   // Calibration metadata extracted from the upload (ND2 / OME-TIFF / ImageJ-TIFF).
   // Set on container rows only; frames + standalone images stay null.
-  pixelSizeUm            Float?              // Isotropic XY pixel size in micrometers; null when unknown
-  frameIntervalMs        Float?              // Wall-clock ms between consecutive frames; null when unknown
-  channels               Json?               // [{name, type:'irm'|'fluorescent', wavelengthNm?, displayColor?, isSegmentationSource}] on container rows
-  createdAt              DateTime            @default(now())
-  updatedAt              DateTime            @updatedAt
-  project                Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  parentVideo            Image?              @relation("VideoFrames", fields: [parentVideoId], references: [id], onDelete: Cascade)
-  frames                 Image[]             @relation("VideoFrames")
-  queueEntries           SegmentationQueue[]
-  segmentation           Segmentation?
+  pixelSizeUm               Float? // Isotropic XY pixel size in micrometers; null when unknown
+  frameIntervalMs           Float? // Wall-clock ms between consecutive frames; null when unknown
+  channels                  Json? // [{name, type:'irm'|'fluorescent', wavelengthNm?, displayColor?, isSegmentationSource}] on container rows
+  createdAt                 DateTime            @default(now())
+  updatedAt                 DateTime            @updatedAt
+  project                   Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parentVideo               Image?              @relation("VideoFrames", fields: [parentVideoId], references: [id], onDelete: Cascade)
+  frames                    Image[]             @relation("VideoFrames")
+  queueEntries              SegmentationQueue[]
+  segmentation              Segmentation?
 
   @@index([projectId, segmentationStatus], map: "idx_image_project_status")
   @@index([projectId, displayOrder], map: "idx_image_project_order")
@@ -146,18 +148,18 @@ model Image {
 }
 
 model Segmentation {
-  id                     String                  @id @default(uuid())
-  imageId                String                  @unique
-  polygons               String
-  model                  String
-  threshold              Float
-  confidence             Float?
-  processingTime         Int?
-  createdAt              DateTime                @default(now())
-  updatedAt              DateTime                @updatedAt
-  imageHeight            Int?
-  imageWidth             Int?
-  image                  Image                   @relation(fields: [imageId], references: [id], onDelete: Cascade)
+  id             String   @id @default(uuid())
+  imageId        String   @unique
+  polygons       String
+  model          String
+  threshold      Float
+  confidence     Float?
+  processingTime Int?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  imageHeight    Int?
+  imageWidth     Int?
+  image          Image    @relation(fields: [imageId], references: [id], onDelete: Cascade)
 
   @@map("segmentations")
 }
@@ -215,17 +217,17 @@ model ProjectShare {
   id           String    @id @default(uuid())
   projectId    String
   sharedById   String
-  sharedWithId String?   // null for link-based shares before acceptance
-  email        String?   // for email invitations
+  sharedWithId String? // null for link-based shares before acceptance
+  email        String? // for email invitations
   shareToken   String    @unique // for shareable links
   tokenExpiry  DateTime? // optional expiry for share tokens
   status       String    @default("pending") // pending, accepted, revoked
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
-  
-  project      Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  sharedBy     User      @relation("SharedBy", fields: [sharedById], references: [id], onDelete: Cascade)
-  sharedWith   User?     @relation("SharedWith", fields: [sharedWithId], references: [id], onDelete: Cascade)
+
+  project    Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sharedBy   User    @relation("SharedBy", fields: [sharedById], references: [id], onDelete: Cascade)
+  sharedWith User?   @relation("SharedWith", fields: [sharedWithId], references: [id], onDelete: Cascade)
 
   @@index([projectId, status], map: "idx_share_project_status")
   @@index([shareToken], map: "idx_share_token")
@@ -245,18 +247,18 @@ model ProjectShare {
 // rather than cascading the deletion, preserving the report history
 // for product analytics.
 model Feedback {
-  id             String   @id @default(uuid())
+  id             String    @id @default(uuid())
   userId         String?
-  type           String   // 'bug' | 'feature' — enforced by DB CHECK + Zod
+  type           String // 'bug' | 'feature' — enforced by DB CHECK + Zod
   title          String
   body           String
   attachmentPath String?
   attachmentMime String?
-  status         String   @default("new") // new | triaged | in_progress | resolved
+  status         String    @default("new") // new | triaged | in_progress | resolved
   emailSentAt    DateTime?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  user           User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  user           User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([userId, createdAt], map: "idx_feedback_user_created")
   @@index([status, createdAt], map: "idx_feedback_status_created")
@@ -339,6 +341,61 @@ model EssayJob {
   @@index([userId, createdAt], map: "idx_essayjob_user_created")
   @@index([status], map: "idx_essayjob_status")
   @@map("essay_jobs")
+}
+
+// ---------------------------------------------------------------------------
+// Export audit log.
+//
+// Until this table existed there was NO record of who took data off the
+// platform: export jobs live in a Map inside the backend process, keep only
+// the last ten per project, and vanish on restart — and a download was never
+// recorded at all.
+//
+// It is an append-only EVENT log, one row per thing that happened, rather than
+// one mutable row per job. That is what makes it answer the question it exists
+// for: every row carries its own actor and its own timestamp, so a download of
+// a shared project's export by someone other than its creator is attributed to
+// the person who actually took it. It also means no read-modify-write, so two
+// concurrent downloads cannot lose one another.
+// ---------------------------------------------------------------------------
+
+model ExportLog {
+  id        String  @id @default(uuid())
+  /// What was exported: "project" (the project export ZIP) or "essays"
+  /// (an Automated Essays result ZIP).
+  kind      String
+  /// What happened: "created" | "completed" | "failed" | "cancelled" |
+  /// "downloaded". A single job produces several rows.
+  event     String
+  /// Who did THIS event — the creator for "created", the person who actually
+  /// pulled the file for "downloaded" (they can differ on a shared project).
+  userId    String
+  /// Null for essays jobs, which are not project-scoped.
+  projectId String?
+  /// The export job this row belongs to; correlates the rows of one job.
+  jobId     String
+
+  /// The requested export options, as sent by the client. Kept whole so a
+  /// later question ("who exported ImageJ ROIs?") does not need a migration.
+  options       Json?
+  /// Images in the export, once known.
+  imageCount    Int?
+  /// BigInt, not Int: an export ZIP passes 2^31 bytes long before it passes
+  /// any other limit, and Int4 overflow has bitten this schema before.
+  fileSizeBytes BigInt?
+  /// Failure message, or how a download was authorised ("jwt" / "token").
+  detail        String?
+
+  createdAt DateTime @default(now())
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt], map: "idx_exportlog_created")
+  @@index([userId, createdAt], map: "idx_exportlog_user_created")
+  @@index([projectId, createdAt], map: "idx_exportlog_project_created")
+  @@index([jobId], map: "idx_exportlog_job")
+  @@map("export_logs")
 }
 
 // ---------------------------------------------------------------------------
