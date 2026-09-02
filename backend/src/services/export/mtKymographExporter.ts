@@ -166,8 +166,8 @@ export interface MTKymographOptions {
    *  Absent / 0 = off, which is what every export did before this field, and
    *  the ML request then omits the field entirely.
    *
-   *  Per CHANNEL by nature: on one production container 488 nm trajectories sit
-   *  at 9-51 counts above background where 640 nm sits at 228, so a number
+   *  Per CHANNEL by nature: on one production container 488 nm trajectories
+   *  measured 9-51 counts above background where 640 nm measured 93-228, so a number
    *  chosen while looking at one channel does not transfer to another. */
   minIntensityMinusBg?: number;
 }
@@ -639,7 +639,12 @@ export async function exportMicrotubuleKymographs(
           // exporter posted before the option existed.
           lineWidth: options.lineWidth,
           lineReduce: options.lineReduce,
-          minIntensityMinusBg: options.minIntensityMinusBg,
+          // NOT the intensity floor: this branch sets `detectVelocity: false`,
+          // so there are no trajectories to filter and the ML service ignores
+          // the field — while sending it still changes the request body and
+          // the cache key, and 422s an un-recreated ml container. The line
+          // width above DOES belong here (a profile is one row of the
+          // kymograph it widens); that reasoning does not carry over.
         }),
         // One matplotlib PNG per rendered frame per item, so the batch is
         // bounded by images rather than by items. See PROFILE_BATCH_MAX_IMAGES.

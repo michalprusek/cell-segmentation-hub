@@ -43,6 +43,14 @@ ok AS (
            WHEN model IN ('microtubule', 'spheroid_disintegration')
              THEN objects BETWEEN 20 AND 400
            WHEN model = 'wound' THEN objects BETWEEN 2 AND 8
+           -- Sperm counts PARTS, not spermatozoa: head + midpiece + tail, so
+           -- seven cells is 21 objects. Microcapsule counts capsules and a
+           -- field routinely holds ten. Both sat under the spheroid band
+           -- below until 2026-09-02, which silently excluded every one of the
+           -- six sperm/microcapsule tiles this pool is supposed to have
+           -- produced (they measure 10-21).
+           WHEN model IN ('sperm', 'microcapsule')
+             THEN objects BETWEEN 1 AND 30
            ELSE objects BETWEEN 1 AND 5
          END
 ),

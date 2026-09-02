@@ -40,6 +40,15 @@ vi.mock('../../db/prismaClient', () => ({
   },
 }));
 
+// The audit writer. Mocked rather than left to hit the db mock above, which
+// has no `exportLog` — every call would then throw INSIDE
+// `recordExportEvent`'s own catch, be swallowed, and the suite would stay
+// green with the audit deleted entirely.
+const mockRecordExportEvent = vi.fn().mockResolvedValue(undefined);
+vi.mock('../exportAuditService', () => ({
+  recordExportEvent: (...args: unknown[]) => mockRecordExportEvent(...args),
+}));
+
 const mockHasProjectAccess = vi.fn().mockResolvedValue({ hasAccess: true });
 vi.mock('../sharingService', () => ({
   hasProjectAccess: (...args: unknown[]) => mockHasProjectAccess(...args),
@@ -527,6 +536,34 @@ describe('ExportService — cancelJob', () => {
       progress: 42,
       ...overrides,
     });
+
+  it('records the cancellation against whoever cancelled it', async () => {
+    // The creator and the canceller differ on a shared project, and naming the
+    // right one is the whole reason the audit log stores an actor per EVENT
+    // rather than one row per job.
+    plant({ status: 'processing', userId: 'creator' });
+    await service.cancelJob('c-job', 'proj-c', 'canceller');
+
+    expect(mockRecordExportEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: 'project',
+        event: 'cancelled',
+        userId: 'canceller',
+        jobId: 'c-job',
+        projectId: 'proj-c',
+      })
+    );
+  });
+
+  it('records nothing when a stranger tries to cancel', async () => {
+    // An unauthorised cancel is a no-op, so it must not leave a row claiming
+    // the job was cancelled by them.
+    plant({ status: 'processing' });
+    mockHasProjectAccess.mockResolvedValue({ hasAccess: false });
+    await service.cancelJob('c-job', 'proj-c', 'stranger');
+
+    expect(mockRecordExportEvent).not.toHaveBeenCalled();
+  });
 
   it('transitions a pending job to cancelled and emits export:cancelled', async () => {
     plant({ status: 'pending' });

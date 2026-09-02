@@ -137,7 +137,7 @@ export const SPECIMEN_PREVIEWS: readonly SpecimenPreview[] = [
     projectType: 'spheroid',
     image: '/specimens/previews/mamba_unet-2.webp',
     geometry: '/specimens/previews/mamba_unet-2.geom.json',
-    objects: 5,
+    objects: 4,
   },
   {
     id: 'mamba_unet-3',
@@ -153,7 +153,7 @@ export const SPECIMEN_PREVIEWS: readonly SpecimenPreview[] = [
     projectType: 'spheroid_invasive',
     image: '/specimens/previews/spheroid_disintegration-1.webp',
     geometry: '/specimens/previews/spheroid_disintegration-1.geom.json',
-    objects: 170,
+    objects: 188,
   },
   {
     id: 'spheroid_disintegration-2',
@@ -161,7 +161,7 @@ export const SPECIMEN_PREVIEWS: readonly SpecimenPreview[] = [
     projectType: 'spheroid_invasive',
     image: '/specimens/previews/spheroid_disintegration-2.webp',
     geometry: '/specimens/previews/spheroid_disintegration-2.geom.json',
-    objects: 114,
+    objects: 108,
   },
   {
     id: 'spheroid_disintegration-3',
@@ -169,7 +169,7 @@ export const SPECIMEN_PREVIEWS: readonly SpecimenPreview[] = [
     projectType: 'spheroid_invasive',
     image: '/specimens/previews/spheroid_disintegration-3.webp',
     geometry: '/specimens/previews/spheroid_disintegration-3.geom.json',
-    objects: 123,
+    objects: 119,
   },
   {
     id: 'wound-1',
@@ -209,7 +209,7 @@ export const SPECIMEN_PREVIEWS: readonly SpecimenPreview[] = [
     projectType: 'sperm',
     image: '/specimens/previews/sperm-2.webp',
     geometry: '/specimens/previews/sperm-2.geom.json',
-    objects: 10,
+    objects: 15,
   },
   {
     id: 'sperm-3',
@@ -217,7 +217,7 @@ export const SPECIMEN_PREVIEWS: readonly SpecimenPreview[] = [
     projectType: 'sperm',
     image: '/specimens/previews/sperm-3.webp',
     geometry: '/specimens/previews/sperm-3.geom.json',
-    objects: 11,
+    objects: 12,
   },
   {
     id: 'microtubule-1',
@@ -225,7 +225,7 @@ export const SPECIMEN_PREVIEWS: readonly SpecimenPreview[] = [
     projectType: 'microtubules',
     image: '/specimens/previews/microtubule-1.webp',
     geometry: '/specimens/previews/microtubule-1.geom.json',
-    objects: 54,
+    objects: 57,
   },
   {
     id: 'microtubule-2',
@@ -233,7 +233,7 @@ export const SPECIMEN_PREVIEWS: readonly SpecimenPreview[] = [
     projectType: 'microtubules',
     image: '/specimens/previews/microtubule-2.webp',
     geometry: '/specimens/previews/microtubule-2.geom.json',
-    objects: 82,
+    objects: 89,
   },
   {
     id: 'microtubule-3',
@@ -281,7 +281,7 @@ export const SPECIMEN_PREVIEWS: readonly SpecimenPreview[] = [
     projectType: 'neurite',
     image: '/specimens/previews/neurite_soma-2.webp',
     geometry: '/specimens/previews/neurite_soma-2.geom.json',
-    objects: 19,
+    objects: 22,
   },
   {
     id: 'neurite_soma-3',

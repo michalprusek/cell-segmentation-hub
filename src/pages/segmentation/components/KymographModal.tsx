@@ -287,8 +287,8 @@ export function KymographModal({
   // rendered. 0 = off, which is the default and what every kymograph did
   // before this control existed.
   //
-  // It is a per-channel judgement: on a real container 488 nm trajectories sit
-  // at 9-51 counts above background where 640 nm sits at 228. That is why the
+  // It is a per-channel judgement: on a real container 488 nm trajectories
+  // measured 9-51 counts above background where 640 nm measured 93-228. That is why the
   // control lives here, next to the channel picker, rather than in settings.
   const [minIntensity, setMinIntensity] = useState(0);
   const [debouncedMinIntensity, setDebouncedMinIntensity] = useState(0);

@@ -729,21 +729,41 @@ def test_an_unmeasured_trajectory_survives():
     assert dropped == 1
 
 
-def test_polarity_inverts_the_comparison_on_a_dark_kymograph():
-    # On a dark-on-bright movie the signal sits BELOW the background, so
-    # `intensity_minus_bg` is negative and "brighter" means more negative.
-    # Without the polarity factor this call would drop both trajectories —
-    # i.e. hide every particle on a whole class of real movies.
-    tracks = [_tr(-40.0), _tr(-5.0)]
-    kept, dropped = filter_dim_tracks(tracks, 20.0, polarity=-1.0)
-    assert [t["intensity_minus_bg"] for t in kept] == [-40.0]
-    assert dropped == 1
+def test_a_dark_on_bright_trajectory_survives_a_floor_below_its_contrast():
+    """The floor must not care which way the kymograph points.
 
+    Built through `tracks_intensity` on a REAL dark-on-bright matrix rather
+    than from a hand-written number, because the hand-written version is what
+    shipped the bug: it asserted a NEGATIVE `intensity_minus_bg`, which
+    `tracks_intensity` never produces — the field is signed at the source, so a
+    healthy dark trajectory reads +30-ish, not -30. The filter then signed it a
+    second time and dropped every trajectory on the movie.
 
-def test_a_bright_kymograph_is_unaffected_by_the_polarity_argument():
-    tracks = [_tr(40.0), _tr(5.0)]
-    kept, _ = filter_dim_tracks(tracks, 20.0, polarity=1.0)
-    assert [t["intensity_minus_bg"] for t in kept] == [40.0]
+    Mutation check: restore `polarity * ` in front of `intensity_minus_bg` in
+    `filter_dim_tracks` and this test goes red.
+    """
+    rng = np.random.default_rng(11)
+    # Bright field, DARK streak — the inverted polarity KymoButler can see.
+    kymo = rng.normal(3000.0, 5.0, size=(40, 60))
+    points = [[float(f), float(10 + f // 2)] for f in range(40)]
+    for f in range(40):
+        col = 10 + f // 2
+        kymo[f, col - 1 : col + 2] -= 60.0
+
+    polarity = kymograph_polarity(kymo)
+    assert polarity == -1.0, "fixture is meant to be dark-on-bright"
+
+    (measured,) = tracks_intensity(kymo, [points], width=5, polarity=polarity)
+    contrast = measured["intensity_minus_bg"]
+    # Signed at the source: contrast above the local background, positive on
+    # either polarity. This assertion is the whole point of the test.
+    assert contrast is not None and contrast > 0
+
+    track = {"points": points, **measured}
+    kept, dropped = filter_dim_tracks([dict(track)], contrast - 1.0)
+    assert len(kept) == 1 and dropped == 0
+    kept, dropped = filter_dim_tracks([dict(track)], contrast + 1.0)
+    assert kept == [] and dropped == 1
 
 
 def test_the_threshold_is_in_the_units_tracks_intensity_reports():

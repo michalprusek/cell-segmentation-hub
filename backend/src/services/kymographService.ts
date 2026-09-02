@@ -233,7 +233,7 @@ export interface KymographServiceInput {
    *  native bit depth and the intensity is measured on that raw matrix; the
    *  PNG's normalisation happens afterwards and touches nothing measured. It is
    *  NOT comparable ACROSS channels: on one production container 488 nm
-   *  trajectories sit at 9-51 counts above background and 640 nm at 228. */
+   *  trajectories measured 9-51 counts above background and 640 nm 93-228. */
   minIntensityMinusBg?: number;
   /** Width (image px) of the line sampled along the polyline, measured
    *  perpendicular to it, with the samples reduced by `lineReduce`. Defaults to

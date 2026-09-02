@@ -8,9 +8,10 @@ polygons (see `dump-polygons.sh` and `infer-missing.sh`) and writes, per row:
 
 ...and one generated index, `src/lib/specimens/previewIndex.ts`.
 
-Runs inside the ml image, which already carries PIL / numpy and the upload
-mount; the repo's own node has neither BMP support (sharp cannot read one, and
-three source frames are BMPs) nor a 16-bit path:
+Runs inside the ml image, which carries PIL / numpy; the repo's own node has
+neither BMP support (sharp cannot read one, and four source frames are BMPs:
+`cbam_resunet-2` and all three `spheroid_disintegration` tiles) nor a 16-bit
+path. The uploads are supplied by the `-v` below, not by the image:
 
     docker run --rm \
       -v "$PWD:/repo" -v /tmp/specimen-previews:/work \
@@ -21,11 +22,16 @@ WHAT IS DELIBERATE HERE, because each of these was a wrong first guess that the
 rendered contact sheets corrected:
 
 * The tile is a CROP, sized from the objects rather than the frame. A 2048-px
-  field of 60-px spheroids drawn into a 150-px tile puts each object at 4 px,
+  field of 60-px spheroids drawn into a 123-px tile puts each object at 3.6 px,
   which is noise. The window is sized so the median object spans
-  ZOOM_TARGET_RATIO of it, but must also CONTAIN the 90th-percentile object —
-  without that second constraint a wound frame (two frame-spanning regions plus
-  debris) zoomed inside the wound and left its outline outside the tile.
+  ZOOM_TARGET_RATIO of it, but must also be big enough for the
+  90th-percentile object — without that second term a wound frame (two
+  frame-spanning regions plus debris) zoomed inside the wound and left its
+  outline outside the tile. It is a size floor, not a containment guarantee:
+  placement is chosen separately, so an object larger than the window still
+  overflows it. Two further rules decide most real tiles and are easy to miss:
+  the window never exceeds the frame's short side (14 of the 33 clamp there)
+  and never falls below MIN_CROP_FRAC of it (3 do).
 * 16-bit frames are stretched min..max over the frame's own samples. That is
   what `applyRanges` in ImageDisplayContext does when a channel is first seen,
   so the tile shows the picture the editor would open — not ImageJ's
@@ -57,10 +63,14 @@ CHOSEN = os.environ.get('SPECIMEN_CHOSEN', '')
 INDEX_TS = os.path.join(REPO, 'src', 'lib', 'specimens', 'previewIndex.ts')
 HERE = os.path.dirname(os.path.abspath(__file__))
 
-TILE = 512          # stored webp side; the card renders it at ~150 css px
+TILE = 512          # stored webp side; the card renders it at ~123 css px
 VIEWBOX = 1000.0    # SVG user units the outlines are mapped into
-RDP_EPS = 3.0       # viewBox units: 0.45 px at the rendered tile size
-DISPLAY_PX = 150    # tile size the legibility figures below are quoted at
+RDP_EPS = 3.0       # viewBox units: 0.37 px at the rendered tile size
+# The card is 26rem wide with 1rem of padding and two 0.5rem gaps, so three
+# tiles land at (416 - 32 - 16) / 3 = 123 css px. `contact-sheet.py` draws at
+# the same number — it exists to judge legibility at shipping size, so a
+# generous value there would pass tiles the card cannot show.
+DISPLAY_PX = 123
 ZOOM_TARGET_RATIO = 0.10
 CONTAIN_P90_RATIO = 0.9
 MIN_CROP_FRAC = 0.25
@@ -80,8 +90,9 @@ def load_image(path):
 
 
 def rdp(points, eps):
-    """Ramer-Douglas-Peucker. Iterative: a stored contour can carry 1500
-    vertices, which recursion would not survive."""
+    """Ramer-Douglas-Peucker. Iterative: a stored contour in this very
+    selection carries up to 5786 vertices, which recursion would not
+    survive."""
     n = len(points)
     if n < 3:
         return list(points)
@@ -135,8 +146,9 @@ def outline_flags(poly):
 
 
 def fmt(v):
-    """Integer viewBox units. One unit is 0.15 px at the rendered size, so a
-    decimal place would be invisible and costs ~15 % of the payload."""
+    """Integer viewBox units. One unit is 0.12 px at the rendered size, so a
+    decimal place would be invisible; measured across the 33 shipped files it
+    would add ~44 % to the coordinate text."""
     return str(int(round(float(v))))
 
 
@@ -176,11 +188,18 @@ def choose_crop(polys, w, h):
     steps = 64
     cell = max(1.0, side / 8.0)
     gw, gh = int(math.ceil(w / cell)), int(math.ceil(h / cell))
-    grid = np.zeros((gh + 1, gw + 1), dtype=np.float64)
+    grid = np.zeros((gh, gw), dtype=np.float64)
     gx = np.clip((pts[:, 0] / cell).astype(int), 0, gw - 1)
     gy = np.clip((pts[:, 1] / cell).astype(int), 0, gh - 1)
     np.add.at(grid, (gy, gx), 1.0)
-    integral = grid.cumsum(0).cumsum(1)
+    # ZERO-PADDED first row and column, because `contained` indexes this as a
+    # standard summed-area table (sum of cells strictly before the index).
+    # Without the pad the rectangle sum silently drops the window's own first
+    # row and column of cells — an eighth of the window on each axis — and the
+    # densest-window search then answers a different question than the one
+    # documented above.
+    integral = np.zeros((gh + 1, gw + 1), dtype=np.float64)
+    integral[1:, 1:] = grid.cumsum(0).cumsum(1)
 
     def contained(x0, y0):
         x1 = min(gw, int((x0 + side) / cell))
@@ -209,8 +228,18 @@ def render(row, polys):
     iw, ih = img.size
 
     # Polygon space is the frame the model saw; rescale if the row disagrees.
-    sx = iw / float(row['width']) if row['width'] else 1.0
-    sy = ih / float(row['height']) if row['height'] else 1.0
+    # A ZERO dimension is fatal, not a reason to skip the rescale:
+    # `dump-polygons.sh` manufactures one via `COALESCE(..., 0)` when a row has
+    # no recorded size, and falling back to a scale of 1.0 there would ship a
+    # tile whose outlines sit in the wrong coordinate space over the right
+    # frame — wrong in a way only a human looking at it would catch.
+    if not row['width'] or not row['height']:
+        raise SystemExit(
+            'no image dimensions recorded for %s; refusing to guess the '
+            'polygon scale' % row['id']
+        )
+    sx = iw / float(row['width'])
+    sy = ih / float(row['height'])
     if abs(sx - 1) > 0.01 or abs(sy - 1) > 0.01:
         for poly in polys:
             for p in poly['points']:

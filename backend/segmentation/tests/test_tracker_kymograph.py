@@ -725,6 +725,128 @@ def test_kymograph_measures_every_trajectory_against_a_neighbour_free_ring(
         assert tr["intensity_minus_bg"] == float(bright - field)
 
 
+def test_the_intensity_floor_reaches_the_filter_through_the_endpoint(
+    client, monkeypatch
+):
+    """The floor drops the dim streak, keeps the bright one, counts what it did
+    — and does not disturb what the survivor measured.
+
+    Two mutation checks, both of which the pure-helper tests miss because they
+    call `filter_dim_tracks` directly:
+
+    * Re-add `polarity=polarity` to the call at the filter site. On this
+      DARK-ON-BRIGHT fixture the endpoint then signs an already-signed value
+      and every trajectory disappears — the bug this endpoint shipped with.
+    * Move the filter above `tracks_intensity`. The background ring is the
+      union of every trajectory's band, so the survivor is then measured as if
+      its dropped neighbour were empty field and `intensity_background` moves.
+    """
+    from PIL import Image as PILImage
+
+    field, dim, brightest, width, T = 200, 170, 60, 60, 20
+    cols = (20, 40)
+    half = 2
+
+    def _stub_detect(kymo, **kwargs):
+        return [
+            {
+                "points": [[t, float(c)] for t in range(T)],
+                "net_pxframe": 0.0,
+                "snr": 5.0,
+                "total_run_time_frames": 0.0,
+                "total_run_displacement_px": 0.0,
+            }
+            for c in cols
+        ]
+
+    monkeypatch.setattr(tracker_kymograph, "detect_tracks", _stub_detect)
+
+    with tempfile.TemporaryDirectory() as td:
+        td_path = Path(td).resolve()
+        monkeypatch.setattr(tracker_kymograph, "_UPLOAD_ROOT", td_path)
+        # A bright field with two DARK streaks of different depth, so the
+        # kymograph's polarity is -1 and the floor has to survive that.
+        row = np.full(width, field, dtype=np.uint8)
+        row[cols[0] - half : cols[0] + half + 1] = dim
+        row[cols[1] - half : cols[1] + half + 1] = brightest
+        png = td_path / "frame.png"
+        PILImage.fromarray(np.tile(row, (16, 1)), mode="L").save(png)
+
+        polyline_rc = [[8.0, float(x)] for x in range(width)]
+        frames = [
+            {"frame": t, "polyline_rc": polyline_rc, "image_path": str(png)}
+            for t in range(T)
+        ]
+
+        def post(**extra):
+            r = client.post(
+                "/api/v1/kymograph",
+                json={"frames": frames, "detect_velocity": True, **extra},
+            )
+            assert r.status_code == 200, r.text
+            return r.json()
+
+        unfiltered = post()
+        # Contrast above background, positive on this inverted kymograph.
+        contrasts = sorted(t["intensity_minus_bg"] for t in unfiltered["tracks"])
+        assert len(contrasts) == 2
+        assert all(c > 0 for c in contrasts), contrasts
+        assert unfiltered["filtered_dim_track_count"] == 0
+
+        floor = (contrasts[0] + contrasts[1]) / 2
+        filtered = post(min_intensity_minus_bg=floor)
+
+    assert len(filtered["tracks"]) == 1
+    assert filtered["filtered_dim_track_count"] == 1
+    survivor = filtered["tracks"][0]
+    assert survivor["intensity_minus_bg"] == contrasts[1]
+    # Measured before the filter ran, so dropping its neighbour changed nothing.
+    before = max(unfiltered["tracks"], key=lambda t: t["intensity_minus_bg"])
+    assert survivor["intensity_signal"] == before["intensity_signal"]
+    assert survivor["intensity_background"] == before["intensity_background"]
+
+
+def test_the_intensity_floor_is_off_by_default(client, monkeypatch):
+    """An omitted floor must leave the response exactly as it was."""
+    from PIL import Image as PILImage
+
+    monkeypatch.setattr(
+        tracker_kymograph,
+        "detect_tracks",
+        lambda kymo, **kwargs: [
+            {
+                "points": [[t, 20.0] for t in range(8)],
+                "net_pxframe": 0.0,
+                "snr": 5.0,
+                "total_run_time_frames": 0.0,
+                "total_run_displacement_px": 0.0,
+            }
+        ],
+    )
+    with tempfile.TemporaryDirectory() as td:
+        td_path = Path(td).resolve()
+        monkeypatch.setattr(tracker_kymograph, "_UPLOAD_ROOT", td_path)
+        row = np.full(40, 200, dtype=np.uint8)
+        row[18:23] = 60
+        png = td_path / "frame.png"
+        PILImage.fromarray(np.tile(row, (16, 1)), mode="L").save(png)
+        polyline_rc = [[8.0, float(x)] for x in range(40)]
+        r = client.post(
+            "/api/v1/kymograph",
+            json={
+                "frames": [
+                    {"frame": t, "polyline_rc": polyline_rc, "image_path": str(png)}
+                    for t in range(8)
+                ],
+                "detect_velocity": True,
+            },
+        )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert len(body["tracks"]) == 1
+    assert body["filtered_dim_track_count"] == 0
+
+
 # ---------------------------------------------------------------------------
 #  viridis LUT
 # ---------------------------------------------------------------------------

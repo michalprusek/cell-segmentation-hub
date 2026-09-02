@@ -195,6 +195,16 @@ export interface ExportJob {
   warnings?: string[];
 }
 
+/** Thrown by `processExportJob`'s cancellation check to unwind the pipeline.
+ *  A distinct class, not a message, so the catch can tell a cancellation from
+ *  a genuine failure without matching on English text. */
+class ExportCancelledError extends Error {
+  constructor() {
+    super('Export cancelled by user');
+    this.name = 'ExportCancelledError';
+  }
+}
+
 export class ExportService {
   private static instance: ExportService;
   private wsService: WebSocketService | null = null;
@@ -427,7 +437,7 @@ export class ExportService {
         logger.info('Export cancelled during processing', 'ExportService', {
           jobId,
         });
-        throw new Error('Export cancelled by user');
+        throw new ExportCancelledError();
       }
     };
 
@@ -968,15 +978,23 @@ export class ExportService {
       job.status = 'failed';
       job.message = error instanceof Error ? error.message : 'Unknown error';
 
-      void recordExportEvent({
-        kind: 'project',
-        event: 'failed',
-        userId,
-        jobId,
-        projectId,
-        options,
-        detail: job.message,
-      });
+      // A cancellation reaches this catch too, because `checkCancellation`
+      // unwinds the pipeline by throwing. `cancelJob` has already written the
+      // `cancelled` row — and written it against the person who cancelled, who
+      // on a shared project need not be the creator this scope knows about.
+      // Writing a `failed` row here as well would give one job two terminal
+      // events naming two different people.
+      if (!(error instanceof ExportCancelledError)) {
+        void recordExportEvent({
+          kind: 'project',
+          event: 'failed',
+          userId,
+          jobId,
+          projectId,
+          options,
+          detail: job.message,
+        });
+      }
 
       // Notify failure via WebSocket
       this.sendToUser(userId, 'export:failed', {
