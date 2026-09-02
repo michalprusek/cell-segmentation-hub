@@ -140,27 +140,20 @@ describe('export download auditing', () => {
     });
   });
 
-  it('records a DENIED row when the request carries no credential', async () => {
-    // Denied attempts are the most interesting rows in an attribution log: a
-    // forwarded signed-token URL retried after it expired, or someone walking
-    // job ids, otherwise leaves no trace in the table built to catch exactly
-    // that. There is no actor to name, which must not stop the row.
+  it('records nothing for a request with no credential at all', async () => {
+    // NOT a gap. `optionalJwtAuth` only defers to this controller when a
+    // `?token=` is present; without one the standard `authenticate` middleware
+    // 401s first, so an anonymous hit on a download URL never gets here. This
+    // harness mounts its own auth, so the guard below is reachable in the test
+    // and not in production — which is exactly why it must not write a row
+    // that production would never write.
     authUser = undefined;
 
     await request(buildApp())
       .get(`/projects/${projectId}/export/${jobId}/download`)
       .expect(401);
 
-    expect(recordMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        kind: 'project',
-        event: 'denied',
-        userId: null,
-        jobId,
-        projectId,
-        detail: 'no-credential',
-      })
-    );
+    expect(recordMock).not.toHaveBeenCalled();
   });
 
   it('records a DENIED row for a token pointed at another resource', async () => {

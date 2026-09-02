@@ -248,14 +248,10 @@ export class EssaysController {
       } else {
         userId = req.user?.id;
       }
+      // See the note in `exportController.downloadExport`: an anonymous
+      // request is stopped by `optionalJwtAuth` -> `authenticate` before this
+      // runs, so there is no export event to record here.
       if (!userId) {
-        void recordExportEvent({
-          kind: 'essays',
-          event: 'denied',
-          userId: null,
-          jobId,
-          detail: 'no-credential',
-        });
         ResponseHelper.unauthorized(res, 'Unauthorized', CTX);
         return;
       }

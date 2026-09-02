@@ -161,8 +161,14 @@ and every `downloaded` are separate rows correlated by `jobId`.
 `denied` rows are the ones an audit is really for: a forwarded signed-token URL
 retried after it expired, a token edited to point at another job, or a request
 with no credential at all. Recorded for both the project and the essays
-download; a plain 404 is not one of them, because the code cannot tell a missing
-file from a refusal.
+download.
+
+Two refusals are deliberately NOT recorded. A plain 404, because the service
+returns null for "no access" and "no file" alike and the code cannot tell them
+apart. And a request with **no credential at all**: `optionalJwtAuth` only
+defers to the controller when a `?token=` is present, so an anonymous hit on a
+download URL is stopped by the standard `authenticate` middleware and is an
+ordinary unauthenticated API call rather than an export event.
 
 Why an event log rather than a mutable job row: a row per event carries its own
 actor, so a download of a **shared** project's export is attributed to the

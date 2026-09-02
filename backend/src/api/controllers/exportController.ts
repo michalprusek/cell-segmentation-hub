@@ -241,15 +241,13 @@ export class ExportController {
         }
       }
 
+      // No audit row here, and the guard is a backstop rather than a path: a
+      // request with no `?token=` never reaches this controller, because
+      // `optionalJwtAuth` hands it to the standard `authenticate` middleware,
+      // which 401s first. An anonymous hit on a download URL is therefore an
+      // ordinary unauthenticated API call, not an export event — the denials
+      // worth a row are the two above, where the caller HAD a link.
       if (!userId) {
-        void recordExportEvent({
-          kind: 'project',
-          event: 'denied',
-          userId: null,
-          jobId,
-          projectId,
-          detail: 'no-credential',
-        });
         ResponseHelper.unauthorized(res, 'Unauthorized', CTX);
         return;
       }
