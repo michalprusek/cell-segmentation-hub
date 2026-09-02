@@ -460,6 +460,15 @@ export default {
       chunkProgress: 'Parte {{current}}/{{total}}',
     },
   },
+  specimens: {
+    preview: {
+      byModel:
+        'Imágenes reales que este modelo segmentó, con los contornos que produjo.',
+      byType:
+        'Imágenes reales de proyectos de este tipo, con la segmentación que produjo su modelo.',
+      alt: 'Imagen de ejemplo de tipo {{type}} con la segmentación producida por {{model}}.',
+    },
+  },
   settings: {
     manageSettings: 'Administra las preferencias de tu cuenta',
     appearance: 'Apariencia',

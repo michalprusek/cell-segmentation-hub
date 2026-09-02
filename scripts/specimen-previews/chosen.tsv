@@ -1,0 +1,55 @@
+# Reviewed specimen previews: three per model, shown on hover in the project-type
+# and model pickers. Columns: id, model, projectType, imageId, width, height,
+# source, origin.
+#
+# HOW THESE WERE CHOSEN. `select.sql` ranks production segmentations by the
+# model's OWN mean confidence (>= 0.9) inside a per-model object-count band, and
+# every survivor was rendered at the real 150 px tile size and looked at (see
+# README). Ranking by polygon count — the obvious first idea — selects the
+# WORST rows for the spheroid models: a high count means the model was tracing
+# debris, and the contact sheet was red scribble. Confidence is in the stored
+# polygons; use it.
+#
+# `origin=infer` rows are the three models with no usable production output
+# (neurite_soma has none at all, mamba_unet had 1 row, cbam_resunet 2). Their
+# polygons come from running THAT model on a real frame through the ML service
+# (`infer-missing.sh`) — never from a sibling model, so every tile shows the
+# output of the model it is filed under. mamba_unet's one production row is
+# additionally UNUSABLE as a picture — a lone 205-px spheroid in a 2048-px
+# frame, which the sizing rule can only render at 20 px of a 150-px tile — so
+# all three of its tiles are inferred on real frames instead.
+#
+# id	model	projectType	imageId	width	height	source	origin
+hrnet-1	hrnet	spheroid	98310254-0a26-4b35-abbd-33dc932c9243	0	0	-	db
+hrnet-2	hrnet	spheroid	9ff4816d-9274-43b4-b384-16edaadeca9b	0	0	-	db
+hrnet-3	hrnet	spheroid	0977b522-6267-4969-a4d8-886d58e5df27	0	0	-	db
+cbam_resunet-1	cbam_resunet	spheroid	5a4f288d-bf56-422a-a0fd-aa9d88af7cac	0	0	-	db
+cbam_resunet-2	cbam_resunet	spheroid	8c5a9b44-9048-496e-bbde-912c1cd09a91	0	0	-	db
+cbam_resunet-3	cbam_resunet	spheroid	infer-cbam_resunet-sph_2	1000	1000	357e166e-7693-4012-b811-85a35ca9680e/4c779a18-1b67-43d4-b9bb-22cb868d95c1/originals/1772444107754_F3.png	infer
+unet_spherohq-1	unet_spherohq	spheroid	e17cf687-3b86-4160-b3d4-185a81a153af	0	0	-	db
+unet_spherohq-2	unet_spherohq	spheroid	dc0cfaf2-6257-4c56-b2b9-39bfa1410abc	0	0	-	db
+unet_spherohq-3	unet_spherohq	spheroid	9087bafd-7e98-48ac-ae5c-10505ef51003	0	0	-	db
+segformer-1	segformer	spheroid	6f6993b1-fabe-4d1d-9890-dceb28fbe34d	0	0	-	db
+segformer-2	segformer	spheroid	c07210c5-c8a8-452f-9b48-479d064caef2	0	0	-	db
+segformer-3	segformer	spheroid	85cd2ad5-8763-4f9d-a201-3e375b2ab311	0	0	-	db
+mamba_unet-1	mamba_unet	spheroid	infer-mamba_unet-sph_0	1000	1000	6edd4524-1751-488c-a10e-4325bda6b344/0b9b4be4-2d44-4f83-82c4-38351e65c120/originals/1780493181409_H3.png	infer
+mamba_unet-2	mamba_unet	spheroid	infer-mamba_unet-sph_3	1000	1000	357e166e-7693-4012-b811-85a35ca9680e/4e338b46-80c3-418d-aef5-6ff7e33e5231/originals/1779204440231_B3.png	infer
+mamba_unet-3	mamba_unet	spheroid	infer-mamba_unet-sph_5	1000	1000	357e166e-7693-4012-b811-85a35ca9680e/72ca3bd6-dc34-4c77-93fd-c68192feb972/originals/1772443709962_E4.png	infer
+spheroid_disintegration-1	spheroid_disintegration	spheroid_invasive	f2449684-e399-420b-8a41-0e3b7070b4e5	0	0	-	db
+spheroid_disintegration-2	spheroid_disintegration	spheroid_invasive	6af0da42-56ae-4e25-844f-79d9cac7fd16	0	0	-	db
+spheroid_disintegration-3	spheroid_disintegration	spheroid_invasive	f4aeb143-6964-4c14-9d95-cbeee0ecd5aa	0	0	-	db
+wound-1	wound	wound	a80e8e2d-e2a1-4633-98cf-ce26f56c3b83	0	0	-	db
+wound-2	wound	wound	91c818d4-c3a4-4793-81f1-c0f2b43c3eb1	0	0	-	db
+wound-3	wound	wound	19178b23-e684-4d37-9df2-8ef46f889ea4	0	0	-	db
+sperm-1	sperm	sperm	6c7710fb-2869-42e0-8f6e-fb753384c868	0	0	-	db
+sperm-2	sperm	sperm	46317ced-f7cb-458a-9dda-db32d025afff	0	0	-	db
+sperm-3	sperm	sperm	2adfcd71-df1e-48f7-8c07-3a6baf8f9056	0	0	-	db
+microtubule-1	microtubule	microtubules	6abca1cd-7fc7-4c01-af52-22eb1ae8e975	0	0	-	db
+microtubule-2	microtubule	microtubules	9a5fd0ee-a799-4bf3-bc2a-30994997dea1	0	0	-	db
+microtubule-3	microtubule	microtubules	982abe7d-42b5-4bfd-ac5a-a5c90a8d0326	0	0	-	db
+microcapsule-1	microcapsule	microcapsule	47c2abfb-e972-475d-9328-509e213e0c20	0	0	-	db
+microcapsule-2	microcapsule	microcapsule	b49bdcf1-b139-4513-a4b0-8f59072f4c80	0	0	-	db
+microcapsule-3	microcapsule	microcapsule	db7c5788-9f69-479d-80b5-071b5bd772b5	0	0	-	db
+neurite_soma-1	neurite_soma	neurite	infer-neurite_soma-neurite_0	1400	1400	work:infer/neurite_0.png	infer
+neurite_soma-2	neurite_soma	neurite	infer-neurite_soma-neurite_1	1400	1400	work:infer/neurite_1.png	infer
+neurite_soma-3	neurite_soma	neurite	infer-neurite_soma-neurite_2	1400	1400	work:infer/neurite_2.png	infer

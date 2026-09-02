@@ -461,6 +461,15 @@ export default {
       chunkProgress: 'Chunk {{current}}/{{total}}',
     },
   },
+  specimens: {
+    preview: {
+      byModel:
+        'Real frames this model segmented, with the outlines it produced.',
+      byType:
+        'Real frames from projects of this type, with the segmentation their model produced.',
+      alt: 'Example {{type}} frame with the segmentation {{model}} produced.',
+    },
+  },
   settings: {
     pageTitle: 'Settings',
     profile: 'Profile',
