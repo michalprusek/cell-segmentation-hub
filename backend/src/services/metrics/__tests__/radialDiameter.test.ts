@@ -5,6 +5,8 @@
 import { describe, it, expect } from 'vitest';
 
 import {
+  annulusWidth,
+  farthestCrossing,
   polygonCentroid,
   radialDiameter,
   RADIAL_DIAMETER_SPOKES,
@@ -175,5 +177,88 @@ describe('polygonCentroid', () => {
     const c = polygonCentroid(line);
     expect(c.x).toBeCloseTo(10, 6);
     expect(c.y).toBeCloseTo(0, 6);
+  });
+});
+
+// ── annulusWidth ───────────────────────────────────────────────────────────
+// The mean gap between a microcapsule's wall and the membrane inside it,
+// measured on the same six-spoke star as the diameter (2026-09-03).
+
+describe('annulusWidth', () => {
+  /** A regular n-gon approximating a circle of radius r about (cx, cy). */
+  const circle = (r: number, n = 180, cx = 0, cy = 0): Point[] =>
+    Array.from({ length: n }, (_, i) => {
+      const t = (2 * Math.PI * i) / n;
+      return { x: cx + r * Math.cos(t), y: cy + r * Math.sin(t) };
+    });
+
+  it('measures the gap between two concentric circles', () => {
+    // Exact by construction: every ray crosses at 100 and at 60.
+    const w = annulusWidth(circle(100), circle(60));
+    expect(w).toBeCloseTo(40, 1);
+  });
+
+  it('reports the mean radial gap for an off-centre membrane', () => {
+    // Membrane of radius 60 pushed 20 px along +x inside a capsule of radius
+    // 100. The gap is 20 on one side and 60 on the other — but the answer is
+    // NOT their average.
+    //
+    // Along a ray at angle t the membrane is crossed at
+    // `20 cos t + sqrt(3600 - 400 sin^2 t)`, so the gap is
+    // `100 - 20 cos t - sqrt(3600 - 400 sin^2 t)`. The cosine cancels over
+    // opposite rays, but the square root averages to 58.30 rather than 60, so
+    // the mean gap is 41.70. Eccentricity INFLATES the mean radial gap: an
+    // off-centre membrane presents a shorter chord to most rays than a
+    // concentric one of the same radius.
+    //
+    // This is a property of the measure, not a defect — the same one the
+    // six-spoke diameter has — and it is pinned here so nobody "fixes" it to
+    // 40 later.
+    const w = annulusWidth(circle(100), circle(60, 180, 20, 0));
+    expect(w).toBeCloseTo(41.7, 1);
+    // Strictly more than the concentric case with the same radii.
+    expect(w!).toBeGreaterThan(annulusWidth(circle(100), circle(60))!);
+  });
+
+  it('returns null when the outlines are not nested', () => {
+    // A "membrane" larger than the capsule is not an annulus. Reporting a
+    // negative or zero width would let it average into a dataset as real.
+    expect(annulusWidth(circle(60), circle(100))).toBeNull();
+  });
+
+  it('returns null for a degenerate outline', () => {
+    expect(annulusWidth(circle(100), [{ x: 0, y: 0 }, { x: 1, y: 1 }])).toBeNull();
+    expect(annulusWidth([{ x: 0, y: 0 }], circle(60))).toBeNull();
+  });
+
+  it('is measured from the capsule centroid, not the membrane centroid', () => {
+    // Same geometry as the off-centre case. If the implementation switched to
+    // the membrane's own centre, both sides would read 40 and the result would
+    // be identical to the concentric case — this pins that it does not, by
+    // checking a ray-level consequence: the gap on the +x side is smaller.
+    const capsule = circle(100);
+    const membrane = circle(60, 180, 20, 0);
+    const centre = polygonCentroid(capsule);
+    const near = farthestCrossing(capsule, centre, 1, 0) -
+      farthestCrossing(membrane, centre, 1, 0);
+    const far = farthestCrossing(capsule, centre, -1, 0) -
+      farthestCrossing(membrane, centre, -1, 0);
+    expect(near).toBeCloseTo(20, 0);
+    expect(far).toBeCloseTo(60, 0);
+    // The two sides genuinely differ, which is only visible from the CAPSULE's
+    // centroid. Measured from the membrane's own centre every ray would read
+    // 40 and the result would be indistinguishable from the concentric case —
+    // so the eccentric answer differing from 40 is the discriminating fact.
+    expect(annulusWidth(capsule, membrane)).not.toBeCloseTo(40, 1);
+  });
+
+  it('drops a ray with no membrane crossing rather than counting it as zero', () => {
+    // A membrane spanning only part of the capsule (a half-arc, as a partly
+    // traced contour would be). The rays that miss it must not contribute a
+    // full-radius "gap" that would inflate the mean.
+    const half = circle(60).filter(p => p.x >= 0);
+    const w = annulusWidth(circle(100), half);
+    expect(w).not.toBeNull();
+    expect(w!).toBeLessThan(60);
   });
 });

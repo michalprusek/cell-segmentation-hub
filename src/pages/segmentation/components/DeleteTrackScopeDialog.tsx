@@ -68,7 +68,9 @@ const DeleteTrackScopeDialog = ({
               : t('contextMenu.confirmDeleteScope')}
           </DialogTitle>
           <DialogDescription>
-            {t('contextMenu.deleteScopeDescription')}
+            {count > 1
+              ? t('contextMenu.deleteScopeSelectedDescription')
+              : t('contextMenu.deleteScopeDescription')}
           </DialogDescription>
         </DialogHeader>
         <DialogFooter className="gap-2 sm:gap-2">

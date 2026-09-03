@@ -69,7 +69,7 @@ export function polygonCentroid(points: readonly Point[]): Point {
  * Returns 0 when the ray misses the outline entirely, which can only happen if
  * the centroid fell outside a strongly non-convex polygon.
  */
-function farthestCrossing(
+export function farthestCrossing(
   points: readonly Point[],
   origin: Point,
   dx: number,
@@ -131,4 +131,62 @@ export function radialDiameter(points: readonly Point[]): number {
     }
   }
   return counted > 0 ? total / counted : 0;
+}
+
+
+/**
+ * Mean radial gap between a microcapsule's wall and the membrane inside it —
+ * the average width of the annulus, in the units of the input points.
+ *
+ * Measured on the SAME six-spoke star as {@link radialDiameter}, from the
+ * capsule's area centroid, so the two numbers describe the same geometry and a
+ * reader can put them side by side. Each spoke contributes two rays (forward
+ * and backward), giving twelve samples of the gap around the capsule.
+ *
+ * Per ray the gap is `outer crossing − membrane crossing`. Both use
+ * {@link farthestCrossing}, so a ragged outline is read at its outer edge on
+ * both boundaries and the difference stays a like-for-like radial distance.
+ *
+ * ONE centroid, the capsule's, for both boundaries. The membrane is not
+ * concentric with the wall — the upstream method says so explicitly, and it is
+ * why that method aligns everything to a per-angle guide — so measuring each
+ * from its own centre would compare radii taken along different lines and
+ * report a gap that exists nowhere on the image.
+ *
+ * A ray is dropped when it finds no membrane crossing (the membrane does not
+ * span that direction) or when the membrane lies outside the wall along it,
+ * which means the two outlines are not nested and no annulus is defined there.
+ * Returns null when no ray survives — "not measurable" rather than a zero that
+ * would average into a dataset as a real, very thin annulus.
+ */
+export function annulusWidth(
+  capsulePoints: readonly Point[],
+  membranePoints: readonly Point[]
+): number | null {
+  if (capsulePoints.length < 3 || membranePoints.length < 3) {
+    return null;
+  }
+  const centre = polygonCentroid(capsulePoints);
+  let total = 0;
+  let counted = 0;
+  for (let k = 0; k < RADIAL_DIAMETER_SPOKES; k++) {
+    const angle = (Math.PI * k) / RADIAL_DIAMETER_SPOKES;
+    const dx = Math.cos(angle);
+    const dy = Math.sin(angle);
+    // Both directions of the spoke are separate samples of the gap: on an
+    // off-centre membrane the two sides genuinely differ, and averaging them
+    // is the point.
+    for (const [ux, uy] of [
+      [dx, dy],
+      [-dx, -dy],
+    ]) {
+      const outer = farthestCrossing(capsulePoints, centre, ux, uy);
+      const inner = farthestCrossing(membranePoints, centre, ux, uy);
+      if (outer > 0 && inner > 0 && outer > inner) {
+        total += outer - inner;
+        counted++;
+      }
+    }
+  }
+  return counted > 0 ? total / counted : null;
 }

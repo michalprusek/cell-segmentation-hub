@@ -168,6 +168,163 @@ describe('MetricsCalculator — microcapsule completeness exclusion', () => {
     const metrics = await calc.calculateAllMetrics([image]);
     expect(metrics[0]!.confidence).toBeCloseTo(0.97, 5);
   });
+
+  // A capsule with an intact membrane stores TWO closed outlines, both
+  // `type: 'external'`. Only the capsule is an object to count.
+  it('does not emit a metric row for the membrane inside a capsule', async () => {
+    const ring = (r: number) =>
+      Array.from({ length: 60 }, (_, i) => {
+        const t = (2 * Math.PI * i) / 60;
+        return { x: 100 + r * Math.cos(t), y: 100 + r * Math.sin(t) };
+      });
+    const image = buildImage([
+      {
+        type: 'external',
+        class: 'microcapsule',
+        points: ring(50),
+        complete: true,
+      },
+      { type: 'external', class: 'membrane', points: ring(30) },
+    ]);
+
+    const metrics = await calc.calculateAllMetrics([image]);
+
+    // ONE row. Without the class filter this is 2 and every microcapsule
+    // export silently doubles.
+    expect(metrics).toHaveLength(1);
+  });
+
+  it('measures the annulus onto the capsule row that contains the membrane', async () => {
+    const ring = (r: number, cx = 100, cy = 100) =>
+      Array.from({ length: 120 }, (_, i) => {
+        const t = (2 * Math.PI * i) / 120;
+        return { x: cx + r * Math.cos(t), y: cy + r * Math.sin(t) };
+      });
+    const image = buildImage([
+      {
+        type: 'external',
+        class: 'microcapsule',
+        points: ring(50),
+        complete: true,
+      },
+      { type: 'external', class: 'membrane', points: ring(30) },
+    ]);
+
+    const metrics = await calc.calculateAllMetrics([image]);
+
+    expect(metrics).toHaveLength(1);
+    // Concentric circles of radius 50 and 30: the gap is 20 everywhere.
+    expect(metrics[0]!.membraneAnnulusWidth).toBeCloseTo(20, 0);
+  });
+
+  it('leaves the annulus undefined for a capsule with no membrane', async () => {
+    const image = buildImage([capsule(10, true, 0.9)]);
+    const metrics = await calc.calculateAllMetrics([image]);
+    expect(metrics[0]!.membraneAnnulusWidth).toBeUndefined();
+  });
+
+  it('pairs by containment on the ML-service path too, not only the fallback', async () => {
+    // Every other test in this file mocks the metrics service as UNAVAILABLE,
+    // so they all exercise the fallback branch. The pairing also exists on the
+    // success path, and "the same code is tested over there" is exactly the
+    // reasoning that lets a divergence through — so this one lets the service
+    // succeed.
+    const OK_METRICS = {
+      Area: 100,
+      Perimeter: 40,
+      PerimeterWithHoles: 40,
+      EquivalentDiameter: 11,
+      Circularity: 0.9,
+      FeretDiameterMax: 14,
+      FeretDiameterMaxOrthogonalDistance: 10,
+      FeretDiameterMin: 10,
+      FeretAspectRatio: 1.4,
+      LengthMajorDiameterThroughCentroid: 14,
+      LengthMinorDiameterThroughCentroid: 10,
+      BoundingBoxWidth: 10,
+      BoundingBoxHeight: 10,
+      Extent: 1,
+      Compactness: 1,
+      Convexity: 1,
+      Solidity: 1,
+      Sphericity: 0.6,
+    };
+    postMock.mockResolvedValue({ data: OK_METRICS });
+
+    const ring = (r: number, cx: number) =>
+      Array.from({ length: 120 }, (_, i) => {
+        const t = (2 * Math.PI * i) / 120;
+        return { x: cx + r * Math.cos(t), y: 100 + r * Math.sin(t) };
+      });
+    const image = buildImage([
+      { type: 'external', class: 'microcapsule', points: ring(40, 100), complete: true },
+      { type: 'external', class: 'membrane', points: ring(30, 100) },
+      { type: 'external', class: 'microcapsule', points: ring(40, 300), complete: true },
+      { type: 'external', class: 'membrane', points: ring(15, 300) },
+    ]);
+
+    const metrics = await calc.calculateAllMetrics([image]);
+
+    expect(metrics).toHaveLength(2);
+    const widths = metrics.map(m =>
+      typeof m.membraneAnnulusWidth === 'number'
+        ? Math.round(m.membraneAnnulusWidth)
+        : m.membraneAnnulusWidth
+    );
+    expect(widths).toEqual([10, 25]);
+  });
+
+  it('gives each capsule ITS OWN membrane, not merely the first one', async () => {
+    // Two capsules, each with its own membrane of a different radius. Pairing
+    // by position rather than containment ("take the first membrane") would
+    // hand capsule B capsule A's membrane; `annulusWidth` would then refuse
+    // the non-nested pair and B would silently lose its measurement. Distinct
+    // radii are what make the mix-up visible instead of merely absent.
+    const ring = (r: number, cx: number) =>
+      Array.from({ length: 120 }, (_, i) => {
+        const t = (2 * Math.PI * i) / 120;
+        return { x: cx + r * Math.cos(t), y: 100 + r * Math.sin(t) };
+      });
+    const image = buildImage([
+      { type: 'external', class: 'microcapsule', points: ring(40, 100), complete: true },
+      { type: 'external', class: 'membrane', points: ring(30, 100) },
+      { type: 'external', class: 'microcapsule', points: ring(40, 300), complete: true },
+      { type: 'external', class: 'membrane', points: ring(15, 300) },
+    ]);
+
+    const metrics = await calc.calculateAllMetrics([image]);
+
+    expect(metrics).toHaveLength(2);
+    const widths = metrics
+      .map(m => m.membraneAnnulusWidth)
+      .map(w => (typeof w === 'number' ? Math.round(w) : w));
+    // 40-30 = 10 and 40-15 = 25: both measured, and each from its own pair.
+    expect(widths).toEqual([10, 25]);
+  });
+
+  it('does not pair a membrane with a capsule that does not contain it', async () => {
+    // Two capsules, one membrane. Pairing is by containment, so the membrane
+    // must land on the capsule it sits inside and NOT on its neighbour.
+    const ring = (r: number, cx: number) =>
+      Array.from({ length: 120 }, (_, i) => {
+        const t = (2 * Math.PI * i) / 120;
+        return { x: cx + r * Math.cos(t), y: 100 + r * Math.sin(t) };
+      });
+    const image = buildImage([
+      { type: 'external', class: 'microcapsule', points: ring(40, 100), complete: true },
+      { type: 'external', class: 'microcapsule', points: ring(40, 300), complete: true },
+      { type: 'external', class: 'membrane', points: ring(25, 300) },
+    ]);
+
+    const metrics = await calc.calculateAllMetrics([image]);
+
+    expect(metrics).toHaveLength(2);
+    const withMembrane = metrics.filter(
+      m => typeof m.membraneAnnulusWidth === 'number'
+    );
+    expect(withMembrane).toHaveLength(1);
+    expect(withMembrane[0]!.membraneAnnulusWidth).toBeCloseTo(15, 0);
+  });
 });
 
 describe('MetricsCalculator — exportMicrocapsuleMetricsToExcel', () => {
@@ -198,6 +355,9 @@ describe('MetricsCalculator — exportMicrocapsuleMetricsToExcel', () => {
       'Equivalent Diameter (px)',
       'Compactness',
       'Ovality',
+      // Added 2026-09-03. Blank for a capsule whose membrane has dissolved —
+      // see the membrane-annulus suite below for why that is not a 0.
+      'Membrane annulus width (px)',
       'Confidence',
     ]);
     // The focused report must NOT carry the rich spheroid descriptors.
@@ -347,5 +507,100 @@ describe('MetricsCalculator — exportMicrocapsuleToCSV', () => {
     expect(valOf('Feret Min')).toBeCloseTo(20, 4);
     expect(valOf('Ovality')).toBeCloseTo(1.5, 4); // 30 / 20 — guards the CSV
     // copy of the ovality logic against drifting from the Excel path.
+  });
+});
+
+// ── Membrane annulus ───────────────────────────────────────────────────────
+// A microcapsule with an intact internal membrane carries a SECOND closed
+// outline of class `membrane` beside it (2026-09-03). It is not an object to
+// count — it belongs to the capsule around it and contributes one number to
+// that capsule's row: the mean radial gap between the two boundaries.
+
+describe('MetricsCalculator — membrane annulus width', () => {
+  let calc: MetricsCalculator;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    calc = new MetricsCalculator();
+  });
+
+  it('writes the annulus width into the capsule row', async () => {
+    await calc.exportMicrocapsuleToCSV(
+      [metricRow({ polygonId: 1, membraneAnnulusWidth: 40, complete: true })],
+      '/tmp/m.csv'
+    );
+    const content = String(fsWriteFile.mock.calls[0]![1]);
+    expect(content).toContain('Membrane annulus width');
+    expect(content.trim().split('\n')[1]).toContain('40');
+  });
+
+  it('leaves the cell EMPTY, not 0, for a capsule with no membrane', async () => {
+    // A dissolved membrane means there is no annulus at all. A 0 would average
+    // into the column as a real, infinitely thin one — and the whole point of
+    // the measurement is to compare widths across capsules.
+    await calc.exportMicrocapsuleToCSV(
+      [metricRow({ polygonId: 1, complete: true })],
+      '/tmp/m.csv'
+    );
+    const content = String(fsWriteFile.mock.calls[0]![1]);
+    const header = content.trim().split('\n')[0].split(',');
+    const row = content.trim().split('\n')[1].split(',');
+    const col = header.indexOf('Membrane annulus width (px)');
+    expect(col).toBeGreaterThanOrEqual(0);
+    expect(row[col]).toBe('');
+  });
+
+  it('labels the column with the unit in use, like every other length', async () => {
+    // It sits in the same table as Diameter. A length column with no unit
+    // beside columns that have one reads as dimensionless.
+    await calc.exportMicrocapsuleToCSV(
+      [metricRow({ polygonId: 1, membraneAnnulusWidth: 40, complete: true })],
+      '/tmp/m.csv',
+      0.5
+    );
+    const content = String(fsWriteFile.mock.calls[0]![1]);
+    expect(content).toContain('Membrane annulus width (um)');
+  });
+});
+
+describe('MetricsCalculator — annulus scale conversion', () => {
+  it('converts the annulus width to micrometres with the other lengths', () => {
+    // `applyScaleConversion` is where every length becomes micrometres. The
+    // annulus MUST go through it: the CSV header says `(um)` whenever a scale
+    // is set, so a value left in pixels would be mislabelled rather than
+    // merely wrong — the column would read as micrometres and be off by the
+    // scale factor with nothing on screen to show it.
+    const calc = new MetricsCalculator();
+    const convert = (
+      calc as unknown as {
+        applyScaleConversion: (
+          m: PolygonMetrics[],
+          scale: number
+        ) => PolygonMetrics[];
+      }
+    ).applyScaleConversion.bind(calc);
+
+    const [out] = convert(
+      [metricRow({ polygonId: 1, membraneAnnulusWidth: 40, complete: true })],
+      0.5
+    );
+    expect(out.membraneAnnulusWidth).toBeCloseTo(20, 6);
+    // ...and scaled by the SAME factor as the diameter beside it.
+    expect(out.feretDiameterMax).toBeCloseTo(14.1 * 0.5, 6);
+  });
+
+  it('leaves a missing annulus undefined rather than scaling it to 0', () => {
+    const calc = new MetricsCalculator();
+    const convert = (
+      calc as unknown as {
+        applyScaleConversion: (
+          m: PolygonMetrics[],
+          scale: number
+        ) => PolygonMetrics[];
+      }
+    ).applyScaleConversion.bind(calc);
+
+    const [out] = convert([metricRow({ polygonId: 1, complete: true })], 0.5);
+    expect(out.membraneAnnulusWidth).toBeUndefined();
   });
 });

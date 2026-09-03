@@ -1268,6 +1268,7 @@ class ModelLoader:
             processing_time = _time.time() - start_time
 
             polygons = []
+            capsule_outlines = []
             polygon_id_counter = 1
             for inst in instances:
                 points = [
@@ -1286,12 +1287,75 @@ class ModelLoader:
                     "vertices_count": len(points),
                 })
                 polygon_id_counter += 1
+                capsule_outlines.append(
+                    (points, float(inst["confidence"]))
+                )
 
-            num_complete = sum(1 for p in polygons if p["complete"])
+            # Membrane stage. Classical, unsupervised, CPU — see
+            # `models/microcapsule_membrane.py`. Runs on the RAW grayscale at
+            # native resolution, which is what the method requires: it is
+            # explicit that illumination-flattened input falsifies both of its
+            # features.
+            #
+            # A capsule whose membrane has dissolved gets NO membrane polygon.
+            # That is the upstream design and it is kept: the absence of the
+            # polygon IS the verdict, so nothing has to be trusted about a
+            # capsule the method refused. It also means a membrane a user draws
+            # or edits by hand counts exactly like a detected one, because
+            # everything downstream measures the stored polygons rather than
+            # this verdict.
+            #
+            # Never fatal. The capsules are already segmented and returning them
+            # without membranes is a strictly better outcome than failing the
+            # whole request over the optional second stage.
+            membrane_count = 0
+            try:
+                from models.microcapsule_membrane import (
+                    membrane_polygon_for,
+                    prepare_gray,
+                )
+
+                gray = prepare_gray(cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY))
+                for outline, capsule_conf in capsule_outlines:
+                    _state, _score, _feats, membrane_points = (
+                        membrane_polygon_for(gray, outline)
+                    )
+                    if not membrane_points:
+                        continue
+                    polygons.append({
+                        "id": f"polygon_{polygon_id_counter}",
+                        "points": membrane_points,
+                        "type": "external",
+                        "class": "membrane",
+                        # The membrane inherits its capsule's confidence: it is
+                        # a second boundary of the same object, and the
+                        # classical stage has no probability of its own to
+                        # report. Its evidence is the verdict, which is carried
+                        # by the polygon existing at all.
+                        "confidence": capsule_conf,
+                        "complete": True,
+                        "vertices_count": len(membrane_points),
+                    })
+                    polygon_id_counter += 1
+                    membrane_count += 1
+            except Exception as membrane_error:  # pragma: no cover - defensive
+                logger.warning(
+                    "Microcapsule membrane stage failed; returning capsules "
+                    f"without membranes: {membrane_error}"
+                )
+
+            # Counts are about CAPSULES. `polygons` now also carries membrane
+            # outlines, and calling those "capsules" in the log — or counting a
+            # membrane's always-True `complete` towards the cut-off tally —
+            # would make the numbers disagree with what the user sees.
+            capsules = [p for p in polygons if p["class"] == "microcapsule"]
+            num_complete = sum(1 for p in capsules if p["complete"])
             logger.info(
-                f"Microcapsule: {len(polygons)} capsules "
+                f"Microcapsule: {len(capsules)} capsules "
                 f"({num_complete} complete, "
-                f"{len(polygons) - num_complete} cut off) in {processing_time:.2f}s"
+                f"{len(capsules) - num_complete} cut off), "
+                f"{membrane_count} with an intact membrane "
+                f"in {processing_time:.2f}s"
             )
 
             return {
@@ -1302,8 +1366,10 @@ class ModelLoader:
                 "processing_info": {
                     "device": str(self.device),
                     "num_polygons": len(polygons),
+                    "num_capsules": len(capsules),
+                    "num_membranes": membrane_count,
                     "num_complete": num_complete,
-                    "confidence_scores": [p["confidence"] for p in polygons],
+                    "confidence_scores": [p["confidence"] for p in capsules],
                     "processing_time_s": processing_time,
                     "batch_size": 1,
                 },

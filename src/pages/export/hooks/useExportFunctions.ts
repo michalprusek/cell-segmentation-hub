@@ -1,4 +1,5 @@
 import { isMeasuredMicrocapsule } from '@/lib/microcapsuleRelevance';
+import { isMembranePolygon } from '@/lib/microcapsuleMembrane';
 import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
@@ -65,8 +66,14 @@ export const useExportFunctions = (
 
     // Get external polygons, minus the microcapsules that do not count — the
     // user's type label first, the model's border-cut flag as the default.
+    // Membranes are `external` too — a closed outline, not a hole — but they
+    // are boundaries INSIDE a capsule, not objects to count. Left in, every
+    // capsule with an intact membrane would be exported twice.
     const externalPolygons = polygons.filter(
-      p => p.type === 'external' && isMeasuredMicrocapsule(p)
+      p =>
+        p.type === 'external' &&
+        !isMembranePolygon(p) &&
+        isMeasuredMicrocapsule(p)
     );
     if (externalPolygons.length === 0) return null;
 

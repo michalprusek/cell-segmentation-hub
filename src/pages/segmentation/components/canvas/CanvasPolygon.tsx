@@ -13,6 +13,7 @@ import {
   isMicrotubuleInstance,
   NEUTRAL_COLOR,
 } from '@/pages/segmentation/utils/instanceColors';
+import { isMembranePolygon, MEMBRANE_COLOR } from '@/lib/microcapsuleMembrane';
 
 interface CanvasPolygonProps {
   polygon: Polygon;
@@ -209,6 +210,11 @@ const CanvasPolygon = React.memo(
     // (see SegmentationEditorLayout), so a polygon can be both.
     const isEffectivelySelected = isSelected || isMultiSelected;
 
+    // One property read, hoisted out of the memo below so its dependency is a
+    // boolean rather than the whole `polygon` object — which is a new
+    // reference on most renders and would defeat the memo entirely.
+    const isMembrane = isMembranePolygon(polygon);
+
     // Determine path color based on polygon type, polyline partClass, and selection status
     const pathColor = useMemo(() => {
       // A microcapsule the user has typed takes its label's colour — that is
@@ -216,6 +222,15 @@ const CanvasPolygon = React.memo(
       // is also what decides whether it is measured. The `complete` fallback
       // below keeps every untyped capsule exactly as it looked before the
       // palette existed: grey when the model found it cut by the border.
+      // A membrane is the SECOND boundary of a capsule, not a capsule. It is
+      // checked before everything below because those branches all describe a
+      // capsule — the relevance label, the border-cut flag — and none of them
+      // is a property a membrane has.
+      if (isMembrane) {
+        return isEffectivelySelected
+          ? darkenHex(MEMBRANE_COLOR)
+          : MEMBRANE_COLOR;
+      }
       if (!isPolyline && typeof polygon.mtType === 'string' && polygon.mtType) {
         const labelColor = mtTypeLabels?.find(
           l => l.id === polygon.mtType
@@ -277,6 +292,7 @@ const CanvasPolygon = React.memo(
         return isEffectivelySelected ? '#e11d48' : '#ef4444';
       }
     }, [
+      isMembrane,
       isPolyline,
       polygon.id,
       polygon.partClass,

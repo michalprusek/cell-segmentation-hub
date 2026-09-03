@@ -7,8 +7,8 @@
   "totals": {
     "tsconfig.app.json": 399,
     "tsconfig.node.json": 21,
-    "tsconfig.test.json": 1228,
-    "all": 1648
+    "tsconfig.test.json": 1229,
+    "all": 1649
   },
   "projects": {
     "tsconfig.app.json": {
@@ -1039,6 +1039,9 @@
       },
       "src/lib/__tests__/lazyImports.test.ts": {
         "TS6307: File 'src/lib/lazyImports.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
+      },
+      "src/lib/__tests__/microcapsuleMembrane.test.ts": {
+        "TS6307: File 'src/lib/microcapsuleMembrane.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
       },
       "src/lib/__tests__/microcapsuleRelevance.test.ts": {
         "TS6307: File 'src/lib/microcapsuleRelevance.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1

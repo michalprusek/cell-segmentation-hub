@@ -2322,6 +2322,8 @@ export default {
     confirmDeleteScope: '删除该微管？',
     deleteScopeDescription:
       '该微管在整个视频中被跟踪。仅从当前帧删除，还是从所有帧删除？此操作无法撤销。',
+    deleteScopeSelectedDescription:
+      '选中的微管在整个视频中被跟踪。仅从当前帧删除，还是从所有帧删除？此操作无法撤销。',
     deleteScopeThisFrame: '仅当前帧',
     deleteScopeAllFrames: '所有帧',
     deleteScopeAllFramesCount: '全部 {{count}} 帧',

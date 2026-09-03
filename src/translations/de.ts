@@ -2492,6 +2492,8 @@ export default {
     confirmDeleteScope: 'Diesen Mikrotubulus löschen?',
     deleteScopeDescription:
       'Dieser Mikrotubulus wird über das gesamte Video verfolgt. Nur aus dem aktuellen Frame löschen oder aus allen Frames? Dies kann nicht rückgängig gemacht werden.',
+    deleteScopeSelectedDescription:
+      'Die ausgewählten Mikrotubuli werden über das gesamte Video verfolgt. Nur aus dem aktuellen Frame löschen oder aus allen Frames? Dies kann nicht rückgängig gemacht werden.',
     deleteScopeThisFrame: 'Nur dieser Frame',
     deleteScopeAllFrames: 'Alle Frames',
     deleteScopeAllFramesCount: 'Alle {{count}} Frames',
