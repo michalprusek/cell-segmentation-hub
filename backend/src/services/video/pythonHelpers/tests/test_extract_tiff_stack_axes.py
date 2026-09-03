@@ -88,3 +88,96 @@ def test_channel_count_survives_every_branch(
     assert len(channels) == expected_channels, (
         f"{name}: {len(channels)} channel labels for {expected_channels} channels"
     )
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Channel identity comes from metadata only, never from a file name
+# (2026-09-03). These go through `_load_and_resolve` — i.e. through the
+# real tifffile round-trip — because the guard's second signal is the
+# SOURCE FILE'S OWN STEM, and a unit test that calls the resolver with a
+# hand-written `source_stem=` proves the helper works while proving
+# nothing about whether anything passes it.
+# ─────────────────────────────────────────────────────────────────────
+
+
+def _channel_names(meta: dict) -> list[str]:
+    return [c["displayName"] for c in meta["channels"]]
+
+
+def test_labels_repeating_the_files_own_name_do_not_become_channel_names(
+    tmp_path,
+):
+    """An ImageJ-registered stack whose per-slice labels are the file's own
+    name with a per-channel suffix. They are distinct, so the last-resort
+    branch accepts them — and then `IRM` in the file name types channel 1
+    `irm` and `561` gives channel 2 an emission wavelength, both invented
+    out of a string the user typed into a Save dialog.
+
+    Mutation check: drop `source_stem=Path(src).stem` from the
+    `_resolve_channel_names` call in `_load_and_resolve` and both names
+    come back as the file name."""
+    stem = "20260803_Ch1_IRM_taxol_561"
+    src = _write(
+        tmp_path,
+        f"{stem}.tif",
+        np.zeros((2, 2, 8, 8), dtype=np.uint16),
+        imagej=True,
+        metadata={
+            "axes": "TCYX",
+            "Labels": [
+                f"{stem}_w1",
+                f"{stem}_w2",
+                f"{stem}_w1",
+                f"{stem}_w2",
+            ],
+        },
+    )
+    _arr, meta = _load_and_resolve(src)
+    assert _channel_names(meta) == ["Channel 1", "Channel 2"]
+    assert [c["wavelengthNm"] for c in meta["channels"]] == [None, None]
+
+
+def test_a_genuine_per_channel_label_still_names_the_channel(tmp_path):
+    """The other direction, on the same path: real metadata names survive
+    and still carry their wavelength. Without this the test above is also
+    satisfied by a guard that throws every label away."""
+    src = _write(
+        tmp_path,
+        "IRM_488_stack.tif",
+        np.zeros((2, 2, 8, 8), dtype=np.uint16),
+        imagej=True,
+        metadata={
+            "axes": "TCYX",
+            "Labels": ["WD_LED_IRM", "TIRF_491", "WD_LED_IRM", "TIRF_491"],
+        },
+    )
+    _arr, meta = _load_and_resolve(src)
+    assert _channel_names(meta) == ["WD_LED_IRM", "TIRF_491"]
+    assert [c["wavelengthNm"] for c in meta["channels"]] == [None, 491]
+
+
+def test_bioformats_export_of_another_file_never_names_a_channel(tmp_path):
+    """The production case: the embedded name belongs to a DIFFERENT file —
+    the ND2 this TIFF was exported from — so comparing against the file
+    being read cannot catch it. The acquisition extension is what does.
+
+    Mutation check: remove `.nd2` from `_ACQUISITION_EXT_RE` and channel 1
+    is named after the ND2 and typed `irm`."""
+    src = _write(
+        tmp_path,
+        "export.tif",
+        np.zeros((2, 2, 8, 8), dtype=np.uint16),
+        imagej=True,
+        metadata={
+            "axes": "TCYX",
+            "Labels": [
+                "c:1/2 t:1/2 - 20260522_Ch3_HMDS_IRM_60x_GDP-MTs.nd2 (series 1)",
+                "c:2/2 t:1/2 - 20260522_Ch3_HMDS_IRM_60x_GDP-MTs.nd2 (series 2)",
+                "c:1/2 t:2/2 - 20260522_Ch3_HMDS_IRM_60x_GDP-MTs.nd2 (series 1)",
+                "c:2/2 t:2/2 - 20260522_Ch3_HMDS_IRM_60x_GDP-MTs.nd2 (series 2)",
+            ],
+        },
+    )
+    _arr, meta = _load_and_resolve(src)
+    assert _channel_names(meta) == ["c1", "c2"]
+    assert [c["wavelengthNm"] for c in meta["channels"]] == [None, None]

@@ -37,6 +37,7 @@ from extract_tiff_stack import (  # noqa: E402
     _all_distinct,
     _detect_frame_interval_ms,
     _imagej_label_to_seconds,
+    _looks_like_filename,
     _median_interval_ms,
     _metamorph_wave_names,
     _resolve_channel_names,
@@ -499,3 +500,143 @@ def test_sanitize_name_curie_label_fits_the_wire_contract():
     result = _sanitize_name(raw, "fallback")
     assert len(raw) > 64  # sanity: the input really does exceed the cap
     assert CHANNEL_NAME_RE.match(result)
+
+
+# ─────────────────────────────────────────────────────────────────────
+# A channel is identified from METADATA ONLY — never from a filename
+# (2026-09-03, at the user's request).
+#
+# The Institut Curie fix above closed the case where every Bio-Formats
+# slice label carries the SAME source filename. Two holes survived it,
+# both of which let a filename decide a channel's modality and emission
+# wavelength:
+#
+#   1. `_strip_bioformats_scaffold` kept the tails whenever they merely
+#      DIFFERED — and a multi-series export differs only by "(series N)",
+#      so the filename came straight through.
+#   2. `_resolve_channel_names`' last resort accepts any distinct
+#      per-slice labels verbatim, and a per-slice label is very often the
+#      file's own name.
+#
+# Both matter because the name is not decoration: `_wavelength_from_name`
+# reads an emission λ out of it (a date like 20260803 yields "803", which
+# is inside the 350-900 nm band) and `isIrmChannel` types the channel
+# `irm` on an "IRM" substring. Production has exactly that — a container
+# whose channel 1 is typed `irm` purely because the ND2 it was exported
+# from was called `..._HMDS_IRM_60x_...`.
+# ─────────────────────────────────────────────────────────────────────
+
+
+def test_scaffold_tails_that_are_filenames_collapse_to_the_index():
+    """A multi-series Bio-Formats export: the tails differ, but only by the
+    series number — they are still the source filename, so they carry no
+    channel identity at all.
+
+    Mutation check: drop the `_looks_like_filename` guard from
+    `_strip_bioformats_scaffold` and this returns the two filenames."""
+    labels = [
+        "c:1/2 t:1/89 - 2026-07-14_Ba_txMTs_IRM_olig285x.nd2 (series 1)",
+        "c:2/2 t:1/89 - 2026-07-14_Ba_txMTs_IRM_olig285x.nd2 (series 2)",
+    ]
+    assert _strip_bioformats_scaffold(labels, 2) == ["c1", "c2"]
+
+
+def test_scaffold_keeps_a_genuine_per_channel_tail():
+    """The guard must not fire on a real name. Unchanged behaviour, pinned
+    next to the new rule so a broader guard cannot silently eat it."""
+    labels = [
+        "c:1/2 t:1/61 - IRM_widefield",
+        "c:2/2 t:1/61 - TIRF_491",
+    ]
+    assert _strip_bioformats_scaffold(labels, 2) == ["IRM_widefield", "TIRF_491"]
+
+
+def test_distinct_per_slice_filenames_are_not_channel_names():
+    """The last-resort branch: labels that are distinct but are filenames.
+    Without the guard these are returned verbatim, and the first one is
+    then typed `irm` on its `IRM` substring.
+
+    Mutation check: remove the guard from `_resolve_channel_names` and the
+    two `.nd2` names come back."""
+    tf = _tf(ij={"Labels": ["ChannelIRM_488.nd2", "ChannelTIRF_561.nd2"]})
+    assert _resolve_channel_names(tf, 2) == [None, None]
+
+
+def test_labels_repeating_the_source_files_own_name_are_rejected():
+    """An extension-less repeat of the uploaded file's own stem. Nothing in
+    the string says "filename", so it is only recognisable by comparing it
+    against the file being read — which is why the source path is threaded
+    in.
+
+    Mutation check: stop passing `source_stem` through `_load_and_resolve`
+    and these two names survive."""
+    tf = _tf(
+        ij={
+            "Labels": [
+                "20260803_Ch1_IRM_488_pos1",
+                "20260803_Ch1_IRM_488_pos1_c2",
+            ]
+        }
+    )
+    assert (
+        _resolve_channel_names(tf, 2, source_stem="20260803_Ch1_IRM_488_pos1")
+        == [None, None]
+    )
+
+
+def test_a_real_channel_name_survives_the_source_stem_guard():
+    """The guard compares against the FILE's stem, so a short genuine name
+    that merely appears inside a long filename must still be kept — the
+    stem has to be inside the LABEL, not the other way round. Otherwise
+    uploading `IRM_488.tif` would erase a real `IRM` channel name."""
+    tf = _tf(ij={"Labels": ["IRM", "TIRF_491"]})
+    assert _resolve_channel_names(tf, 2, source_stem="IRM_488_stack") == [
+        "IRM",
+        "TIRF_491",
+    ]
+
+
+@pytest.mark.parametrize(
+    "label",
+    [
+        "movie.nd2",
+        "export.ome.tif",
+        "stack.tiff",
+        "acq.lif",
+        "scan.czi",
+        "SERIES.STK",
+        "run.nd2 (series 3)",
+    ],
+)
+def test_looks_like_filename_recognises_acquisition_extensions(label):
+    assert _looks_like_filename(label, None) is True
+
+
+@pytest.mark.parametrize(
+    "label",
+    ["WD_LED_IRM", "TIRF_491", "EGFP", "c1", "Channel 1", "CSU488", "Trans"],
+)
+def test_looks_like_filename_leaves_real_channel_names_alone(label):
+    assert _looks_like_filename(label, None) is False
+
+
+def test_a_short_file_stem_does_not_condemn_every_label():
+    """The stem test is a substring test, so on a SHORT stem it stops being
+    evidence: a file called `MT.tif` would otherwise erase `MT_488` and
+    `MT_561`, which are the genuine channel names, because "mt" appears in
+    both. `_MIN_STEM_MATCH_CHARS` is the floor that keeps a coincidence from
+    reading as "the label repeats the file name".
+
+    Mutation check: drop the `len(source_stem) < _MIN_STEM_MATCH_CHARS`
+    guard and both real names come back as None."""
+    tf = _tf(ij={"Labels": ["MT_488", "MT_561"]})
+    assert _resolve_channel_names(tf, 2, source_stem="MT") == [
+        "MT_488",
+        "MT_561",
+    ]
+    # ...and a stem long enough to be a real acquisition name still fires.
+    tf2 = _tf(ij={"Labels": ["20260522_006_w1", "20260522_006_w2"]})
+    assert _resolve_channel_names(tf2, 2, source_stem="20260522_006") == [
+        None,
+        None,
+    ]
