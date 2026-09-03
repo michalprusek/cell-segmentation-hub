@@ -1381,6 +1381,63 @@ const SegmentationEditor = () => {
     clearMultiSelect,
     t,
   ]);
+  // Bulk delete of the Shift+click selection. The single-microtubule twins
+  // (`handleDeletePolygonOrTrack` / `handleDeletePolygonFromFrame`) already own
+  // the server call, the local removal and the untracked fall-through, so this
+  // only loops them — one scope question, asked once, applied to the lot.
+  //
+  // Ids are snapshotted BEFORE the first await for the same reason
+  // `handleChangeMtType` snapshots: `clearMultiSelect` and any frame change
+  // during the loop must not shrink the set halfway through.
+  const deleteSelected = useCallback(
+    async (deleteOne: (polygonId: string) => Promise<void>) => {
+      const ids = Array.from(selectedPolygonIdsRef.current);
+      if (ids.length === 0) return;
+      let failed = 0;
+      for (const id of ids) {
+        try {
+          await deleteOne(id);
+        } catch (error) {
+          // Keep going: a selection half-deleted with no word about the rest is
+          // worse than one that reports how far it got.
+          logger.error('Failed to delete a selected microtubule', error);
+          failed++;
+        }
+      }
+      clearMultiSelect();
+      if (failed > 0) {
+        toast.warning(
+          t('segmentation.trackOps.deleteSelectedPartial', {
+            done: ids.length - failed,
+            total: ids.length,
+          })
+        );
+      }
+    },
+    [clearMultiSelect, t]
+  );
+
+  const handleDeleteSelected = useCallback(
+    () => deleteSelected(handleDeletePolygonOrTrack),
+    [deleteSelected, handleDeletePolygonOrTrack]
+  );
+  const handleDeleteSelectedFromFrame = useCallback(
+    () => deleteSelected(handleDeletePolygonFromFrame),
+    [deleteSelected, handleDeletePolygonFromFrame]
+  );
+
+  // Does the selection contain anything with a cross-frame track? Decides
+  // whether the bulk delete asks "this frame or all frames" — a selection of
+  // hand-drawn polylines has no other frames to ask about.
+  const selectedHasTrack = useMemo(() => {
+    if (selectedPolygonIds.size === 0) return false;
+    return editorRef.current
+      .getPolygons()
+      .some(p => selectedPolygonIds.has(p.id) && !!p.trackId);
+    // Polygons are read through `editorRef`, so the selection changing is the
+    // only thing worth recomputing on.
+  }, [selectedPolygonIds]);
+
   // ─────────────── End cross-frame track operations ───────────────
 
   // The overlay debounce moved into `FrameLoadingGate` — it needs
@@ -1525,6 +1582,9 @@ const SegmentationEditor = () => {
         handlePropagateTrack={handlePropagateTrack}
         handleCanvasSelect={handleCanvasSelect}
         handlePropagateSelected={handlePropagateSelected}
+        handleDeleteSelected={handleDeleteSelected}
+        handleDeleteSelectedFromFrame={handleDeleteSelectedFromFrame}
+        selectedHasTrack={selectedHasTrack}
         selectedPolygonIds={selectedPolygonIds}
         handleToggleSelectedInList={handleToggleSelectedInList}
         handleSelectAllInList={handleSelectAllInList}

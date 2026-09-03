@@ -143,6 +143,11 @@ export interface SegmentationEditorLayoutProps {
   handleCanvasSelect: (polygonId: string | null, additive?: boolean) => void;
   /** Propagate all Shift-selected microtubules to the following frames. */
   handlePropagateSelected: () => void;
+  /** Bulk delete of the multi-selection — whole track / current frame. */
+  handleDeleteSelected: () => void;
+  handleDeleteSelectedFromFrame: () => void;
+  /** Whether anything in the multi-selection carries a `trackId`. */
+  selectedHasTrack: boolean;
   /** Current Shift+click multi-selection (per-frame polygon ids). */
   selectedPolygonIds: Set<string>;
   /** Sidebar checkbox toggle — mirrors Shift+click on the canvas. */
@@ -244,6 +249,9 @@ const SegmentationEditorLayout: React.FC<SegmentationEditorLayoutProps> = ({
   handlePropagateTrack,
   handleCanvasSelect,
   handlePropagateSelected,
+  handleDeleteSelected,
+  handleDeleteSelectedFromFrame,
+  selectedHasTrack,
   selectedPolygonIds,
   handleToggleSelectedInList,
   handleSelectAllInList,
@@ -464,6 +472,14 @@ const SegmentationEditorLayout: React.FC<SegmentationEditorLayoutProps> = ({
                           isMultiSelected={selectedPolygonIds.has(polygon.id)}
                           multiSelectCount={selectedPolygonIds.size}
                           onPropagateSelected={handlePropagateSelected}
+                          onDeleteSelected={handleDeleteSelected}
+                          // Same video-only gate as the single delete below.
+                          onDeleteSelectedFromFrame={
+                            videoContainerId
+                              ? handleDeleteSelectedFromFrame
+                              : undefined
+                          }
+                          selectedHasTrack={selectedHasTrack}
                           onDeletePolygon={handleDeletePolygonOrTrack}
                           // Only offered on a video: without a container there
                           // is no "other frame" to keep the track on, and the

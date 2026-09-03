@@ -46,6 +46,19 @@ interface PolygonContextMenuProps {
    *  of the plain two-way confirm. Omitted when a frame-scoped delete is not
    *  possible (no video container to address), which keeps the old behaviour. */
   onDeleteFromFrame?: () => void;
+  /** Delete EVERY multi-selected microtubule — whole track, all frames. The
+   *  bulk twin of `onDelete`. Shown only at `multiSelectCount` >= 2, and added
+   *  ALONGSIDE the single delete rather than replacing it, so right-clicking an
+   *  unselected microtubule still deletes just that one. */
+  onDeleteSelected?: () => void;
+  /** As `onDeleteSelected`, current frame only — the bulk twin of
+   *  `onDeleteFromFrame`. */
+  onDeleteSelectedFromFrame?: () => void;
+  /** Whether ANY multi-selected polyline carries a `trackId`. Decides whether
+   *  the bulk delete asks the frame-vs-track question; without a track there is
+   *  no ambiguity to ask about. Not derivable from `trackId`, which describes
+   *  the right-clicked polygon and may not even be in the selection. */
+  selectedHasTrack?: boolean;
   onSlice: () => void;
   onEdit: () => void;
   polygonId: string;
@@ -89,6 +102,9 @@ const PolygonContextMenu = ({
   children,
   onDelete,
   onDeleteFromFrame,
+  onDeleteSelected,
+  onDeleteSelectedFromFrame,
+  selectedHasTrack = false,
   onSlice,
   onEdit,
   polygonId,
@@ -116,6 +132,15 @@ const PolygonContextMenu = ({
   // A tracked MT the caller can also delete from just this frame: the delete
   // item then asks WHICH scope instead of silently taking the whole track.
   const canChooseDeleteScope = hasTrack && !!onDeleteFromFrame;
+  // Bulk delete of the Shift+click selection. Mirrors `canPropagateSelected`
+  // below: microtubule projects only, a handler wired, and a real selection
+  // (>= 2) — one selected microtubule is the single case the plain delete
+  // already covers.
+  const canDeleteSelected =
+    isMicrotubules && !!onDeleteSelected && multiSelectCount >= 2;
+  // Same three-way question as the single delete, asked once for the lot.
+  const canChooseBulkDeleteScope =
+    selectedHasTrack && !!onDeleteSelectedFromFrame;
 
   // Fire the global "open kymograph" event that VideoModeOverlay
   // already listens for — no new prop plumbing needed. The overlay
@@ -129,6 +154,7 @@ const PolygonContextMenu = ({
     );
   }, [polygonId]);
   const [showDeleteDialog, setShowDeleteDialog] = React.useState(false);
+  const [showBulkDeleteDialog, setShowBulkDeleteDialog] = React.useState(false);
   const [showPropagateDialog, setShowPropagateDialog] = React.useState(false);
   const [showPropagateSelectedDialog, setShowPropagateSelectedDialog] =
     React.useState(false);
@@ -371,8 +397,66 @@ const PolygonContextMenu = ({
                     : t('contextMenu.deletePolygon')}
             </span>
           </ContextMenuItem>
+          {canDeleteSelected && (
+            <ContextMenuItem
+              onClick={() => setShowBulkDeleteDialog(true)}
+              className="cursor-pointer text-red-600"
+            >
+              <Trash className="mr-2 h-4 w-4" />
+              <span>
+                {t('contextMenu.deleteSelected', {
+                  count: multiSelectCount,
+                })}
+              </span>
+            </ContextMenuItem>
+          )}
         </ContextMenuContent>
       </ContextMenu>
+
+      {/* Bulk delete of the multi-selection. Same shape as the single delete
+          below: the scope question when a track is involved, a plain confirm
+          otherwise. Kept as its own dialog pair rather than sharing one with a
+          mode flag, so neither path can open holding the other's target. */}
+      {canDeleteSelected &&
+        (canChooseBulkDeleteScope ? (
+          <DeleteTrackScopeDialog
+            open={showBulkDeleteDialog}
+            onOpenChange={setShowBulkDeleteDialog}
+            frameCount={videoFrameCount}
+            onDeleteFrame={() => onDeleteSelectedFromFrame?.()}
+            onDeleteTrack={() => onDeleteSelected?.()}
+            count={multiSelectCount}
+          />
+        ) : (
+          <AlertDialog
+            open={showBulkDeleteDialog}
+            onOpenChange={setShowBulkDeleteDialog}
+          >
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>
+                  {t('contextMenu.confirmDeleteSelected', {
+                    count: multiSelectCount,
+                  })}
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                  {t('contextMenu.deleteSelectedDescription', {
+                    count: multiSelectCount,
+                  })}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={() => onDeleteSelected?.()}
+                  className="bg-red-600 hover:bg-red-700"
+                >
+                  {t('common.delete')}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        ))}
 
       {/* A tracked microtubule is one object spread over the whole video, so
           "delete" is ambiguous and gets a three-way choice. Everything else

@@ -864,6 +864,7 @@ export default {
       propagateSelectedSuccess:
         '{{count}} Mikrotubuli in die folgenden Frames übertragen',
       propagateSelectedPartial: '{{done}} von {{total}} Mikrotubuli übertragen',
+      deleteSelectedPartial: '{{done}} von {{total}} Mikrotubuli gelöscht',
       propagateSuccess: 'Mikrotubulus in {{count}} folgende Frames übertragen',
       propagateFailed: 'Übertragung des Mikrotubulus fehlgeschlagen',
       deleteTrackSuccess: 'Track aus {{count}} Frames entfernt',
@@ -2483,6 +2484,11 @@ export default {
     deleteTrackDescription:
       'Dies entfernt diesen Mikrotubulus aus allen {{count}} Frames des Videos. Dies kann nicht rückgängig gemacht werden.',
     deleteMicrotubule: 'Mikrotubulus löschen…',
+    deleteSelected: '{{count}} Mikrotubuli löschen…',
+    confirmDeleteSelected: '{{count}} Mikrotubuli löschen?',
+    deleteSelectedDescription:
+      'Entfernt alle {{count}} ausgewählten Mikrotubuli. Kann nicht rückgängig gemacht werden.',
+    confirmDeleteScopeSelected: '{{count}} Mikrotubuli löschen?',
     confirmDeleteScope: 'Diesen Mikrotubulus löschen?',
     deleteScopeDescription:
       'Dieser Mikrotubulus wird über das gesamte Video verfolgt. Nur aus dem aktuellen Frame löschen oder aus allen Frames? Dies kann nicht rückgängig gemacht werden.',

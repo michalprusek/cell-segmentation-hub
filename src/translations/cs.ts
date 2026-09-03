@@ -700,6 +700,7 @@ export default {
       propagateSelectedSuccess:
         '{{count}} mikrotubulů propagováno do dalších snímků',
       propagateSelectedPartial: 'Propagováno {{done}} z {{total}} mikrotubulů',
+      deleteSelectedPartial: 'Smazáno {{done}} z {{total}} mikrotubulů',
       propagateSuccess:
         'Mikrotubulus propagován do {{count}} následujících snímků',
       propagateFailed: 'Propagace mikrotubulu selhala',
@@ -2441,6 +2442,11 @@ export default {
     deleteTrackDescription:
       'Odstraní tento mikrotubulus ze všech {{count}} snímků videa. Tuto akci nelze vrátit.',
     deleteMicrotubule: 'Smazat mikrotubulus…',
+    deleteSelected: 'Smazat {{count}} mikrotubulů…',
+    confirmDeleteSelected: 'Smazat {{count}} mikrotubulů?',
+    deleteSelectedDescription:
+      'Odstraní všech {{count}} vybraných mikrotubulů. Tuto akci nelze vrátit.',
+    confirmDeleteScopeSelected: 'Smazat {{count}} mikrotubulů?',
     confirmDeleteScope: 'Smazat tento mikrotubulus?',
     deleteScopeDescription:
       'Tento mikrotubulus je sledován napříč celým videem. Smazat ho jen z aktuálního snímku, nebo ze všech snímků? Tuto akci nelze vrátit.',
