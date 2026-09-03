@@ -19,6 +19,11 @@ export interface DeleteTrackScopeDialogProps {
   onDeleteFrame: () => void;
   /** Remove the microtubule from every frame of the video. */
   onDeleteTrack: () => void;
+  /** How many microtubules the choice applies to. Omitted (or 1) is the
+   *  single-microtubule case and reads exactly as it always did; 2+ is a
+   *  bulk delete and the title says so, because "delete from all frames" over
+   *  a selection the user can no longer see is worth spelling out. */
+  count?: number;
 }
 
 /**
@@ -41,6 +46,7 @@ const DeleteTrackScopeDialog = ({
   frameCount,
   onDeleteFrame,
   onDeleteTrack,
+  count = 1,
 }: DeleteTrackScopeDialogProps) => {
   const { t } = useLanguage();
   // Only label the button with a count we actually have; an unknown frame count
@@ -56,7 +62,11 @@ const DeleteTrackScopeDialog = ({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>{t('contextMenu.confirmDeleteScope')}</DialogTitle>
+          <DialogTitle>
+            {count > 1
+              ? t('contextMenu.confirmDeleteScopeSelected', { count })
+              : t('contextMenu.confirmDeleteScope')}
+          </DialogTitle>
           <DialogDescription>
             {t('contextMenu.deleteScopeDescription')}
           </DialogDescription>

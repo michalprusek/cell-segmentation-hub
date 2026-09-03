@@ -800,6 +800,7 @@ export default {
     trackOps: {
       propagateSelectedSuccess: '已将 {{count}} 个微管传播到后续帧',
       propagateSelectedPartial: '已传播 {{done}}/{{total}} 个微管',
+      deleteSelectedPartial: '已删除 {{total}} 条中的 {{done}} 条微管',
       propagateSuccess: '微管已传播到 {{count}} 个后续帧',
       propagateFailed: '微管传播失败',
       deleteTrackSuccess: '已从 {{count}} 帧中删除轨迹',
@@ -2313,6 +2314,11 @@ export default {
     deleteTrackDescription:
       '这将从视频的全部 {{count}} 帧中删除该微管。此操作无法撤销。',
     deleteMicrotubule: '删除微管…',
+    deleteSelected: '删除 {{count}} 条微管…',
+    confirmDeleteSelected: '删除 {{count}} 条微管？',
+    deleteSelectedDescription:
+      '将删除全部 {{count}} 条选中的微管。此操作无法撤销。',
+    confirmDeleteScopeSelected: '删除 {{count}} 条微管？',
     confirmDeleteScope: '删除该微管？',
     deleteScopeDescription:
       '该微管在整个视频中被跟踪。仅从当前帧删除，还是从所有帧删除？此操作无法撤销。',

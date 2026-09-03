@@ -703,6 +703,7 @@ export default {
       propagateSelectedSuccess:
         'Propagated {{count}} microtubules to the following frames',
       propagateSelectedPartial: '{{done}} of {{total}} microtubules propagated',
+      deleteSelectedPartial: '{{done}} of {{total}} microtubules deleted',
       propagateSuccess:
         'Microtubule propagated to {{count}} following frame(s)',
       propagateFailed: 'Failed to propagate the microtubule',
@@ -2471,6 +2472,11 @@ export default {
     deleteTrackDescription:
       'This removes this microtubule from all {{count}} frames of the video. This cannot be undone.',
     deleteMicrotubule: 'Delete microtubule…',
+    deleteSelected: 'Delete {{count}} microtubules…',
+    confirmDeleteSelected: 'Delete {{count}} microtubules?',
+    deleteSelectedDescription:
+      'This removes all {{count}} selected microtubules. This cannot be undone.',
+    confirmDeleteScopeSelected: 'Delete {{count}} microtubules?',
     confirmDeleteScope: 'Delete this microtubule?',
     deleteScopeDescription:
       'This microtubule is tracked across the video. Delete it from the current frame only, or from every frame? This cannot be undone.',

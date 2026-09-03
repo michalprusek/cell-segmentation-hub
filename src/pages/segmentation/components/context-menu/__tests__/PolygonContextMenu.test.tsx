@@ -450,6 +450,139 @@ describe('PolygonContextMenu', () => {
 
   // ── microtubule kymograph item ────────────────────────────────────────────
 
+  // Reported by a user (Institut Curie, 2026-09-03): "Currently when selecting
+  // multiple polylines, I can only delete the last selected polyline. I can
+  // 'set type for 3 selected', but I cannot delete 3 selected."
+  //
+  // Two bulk actions already honoured the multi-selection — propagate and set
+  // type — and delete did not, so a selection of three could be retyped in one
+  // gesture but had to be deleted one at a time.
+  describe('bulk delete of a multi-selection', () => {
+    const BULK_PROPS = {
+      ...DEFAULT_PROPS,
+      isPolyline: true,
+      projectType: 'microtubules' as const,
+      trackId: 'mt_a1b2c3',
+      videoFrameCount: 12,
+      multiSelectCount: 3,
+      selectedHasTrack: true,
+    };
+
+    it('offers a bulk delete naming the count when 2+ are selected', () => {
+      render(
+        <PolygonContextMenu
+          {...BULK_PROPS}
+          onDeleteSelected={vi.fn()}
+          onDeleteSelectedFromFrame={vi.fn()}
+        />
+      );
+      expect(getMenuItemByText(/contextMenu.deleteSelected/i)).toBeTruthy();
+    });
+
+    it('offers no bulk delete for a lone selection', () => {
+      // One selected microtubule is the single case — the plain delete already
+      // covers it, and a second destructive item would only be a mis-click.
+      render(
+        <PolygonContextMenu
+          {...BULK_PROPS}
+          multiSelectCount={1}
+          onDeleteSelected={vi.fn()}
+          onDeleteSelectedFromFrame={vi.fn()}
+        />
+      );
+      expect(getMenuItemByText(/contextMenu.deleteSelected/i)).toBeFalsy();
+    });
+
+    it('offers no bulk delete when the caller wires no handler', () => {
+      render(<PolygonContextMenu {...BULK_PROPS} />);
+      expect(getMenuItemByText(/contextMenu.deleteSelected/i)).toBeFalsy();
+    });
+
+    it('keeps the single delete available alongside it', () => {
+      // Right-clicking an unselected microtubule must still delete THAT one,
+      // which is why the bulk item is added rather than swapped in.
+      render(
+        <PolygonContextMenu
+          {...BULK_PROPS}
+          onDelete={vi.fn()}
+          onDeleteFromFrame={vi.fn()}
+          onDeleteSelected={vi.fn()}
+          onDeleteSelectedFromFrame={vi.fn()}
+        />
+      );
+      expect(getMenuItemByText(/contextMenu.deleteMicrotubule/i)).toBeTruthy();
+      expect(getMenuItemByText(/contextMenu.deleteSelected/i)).toBeTruthy();
+    });
+
+    it('asks the same frame-vs-track question, once, for the whole selection', async () => {
+      const user = userEvent.setup();
+      const onDeleteSelected = vi.fn();
+      const onDeleteSelectedFromFrame = vi.fn();
+
+      render(
+        <PolygonContextMenu
+          {...BULK_PROPS}
+          onDeleteSelected={onDeleteSelected}
+          onDeleteSelectedFromFrame={onDeleteSelectedFromFrame}
+        />
+      );
+      await user.click(getMenuItemByText(/contextMenu.deleteSelected/i)!);
+
+      expect(screen.getByTestId('delete-scope-frame')).toBeInTheDocument();
+      expect(screen.getByTestId('delete-scope-track')).toBeInTheDocument();
+      // Nothing goes until a scope is picked.
+      expect(onDeleteSelected).not.toHaveBeenCalled();
+      expect(onDeleteSelectedFromFrame).not.toHaveBeenCalled();
+
+      await user.click(screen.getByTestId('delete-scope-frame'));
+      expect(onDeleteSelectedFromFrame).toHaveBeenCalledTimes(1);
+      expect(onDeleteSelected).not.toHaveBeenCalled();
+    });
+
+    it('deletes the whole track for every selected microtubule', async () => {
+      const user = userEvent.setup();
+      const onDeleteSelected = vi.fn();
+      const onDeleteSelectedFromFrame = vi.fn();
+
+      render(
+        <PolygonContextMenu
+          {...BULK_PROPS}
+          onDeleteSelected={onDeleteSelected}
+          onDeleteSelectedFromFrame={onDeleteSelectedFromFrame}
+        />
+      );
+      await user.click(getMenuItemByText(/contextMenu.deleteSelected/i)!);
+      await user.click(screen.getByTestId('delete-scope-track'));
+
+      expect(onDeleteSelected).toHaveBeenCalledTimes(1);
+      expect(onDeleteSelectedFromFrame).not.toHaveBeenCalled();
+    });
+
+    it('uses a plain confirm when nothing selected is tracked', async () => {
+      // No track means no frame-vs-video ambiguity — the scope question would
+      // be asking about something that does not exist.
+      const user = userEvent.setup();
+      const onDeleteSelected = vi.fn();
+
+      render(
+        <PolygonContextMenu
+          {...BULK_PROPS}
+          trackId={undefined}
+          selectedHasTrack={false}
+          onDeleteSelected={onDeleteSelected}
+          onDeleteSelectedFromFrame={vi.fn()}
+        />
+      );
+      await user.click(getMenuItemByText(/contextMenu.deleteSelected/i)!);
+
+      expect(
+        screen.queryByTestId('delete-scope-frame')
+      ).not.toBeInTheDocument();
+      expect(screen.getByTestId('alert-dialog')).toBeInTheDocument();
+      expect(onDeleteSelected).not.toHaveBeenCalled();
+    });
+  });
+
   describe('microtubule kymograph item', () => {
     it('shows kymograph item for polyline + projectType=microtubules', () => {
       render(

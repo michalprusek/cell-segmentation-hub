@@ -860,6 +860,7 @@ export default {
       propagateSelectedSuccess:
         '{{count}} microtubules propagés vers les images suivantes',
       propagateSelectedPartial: '{{done}} sur {{total}} microtubules propagés',
+      deleteSelectedPartial: '{{done}} microtubules sur {{total}} supprimés',
       propagateSuccess: 'Microtubule propagé vers {{count}} images suivantes',
       propagateFailed: 'Échec de la propagation du microtubule',
       deleteTrackSuccess: 'Trace supprimée de {{count}} images',
@@ -2477,6 +2478,11 @@ export default {
     deleteTrackDescription:
       'Cela supprime ce microtubule de toutes les {{count}} images de la vidéo. Cette action est irréversible.',
     deleteMicrotubule: 'Supprimer le microtubule…',
+    deleteSelected: 'Supprimer {{count}} microtubules…',
+    confirmDeleteSelected: 'Supprimer {{count}} microtubules ?',
+    deleteSelectedDescription:
+      'Supprime les {{count}} microtubules sélectionnés. Action irréversible.',
+    confirmDeleteScopeSelected: 'Supprimer {{count}} microtubules ?',
     confirmDeleteScope: 'Supprimer ce microtubule ?',
     deleteScopeDescription:
       'Ce microtubule est suivi sur toute la vidéo. Le supprimer uniquement de l’image actuelle ou de toutes les images ? Cette action est irréversible.',
