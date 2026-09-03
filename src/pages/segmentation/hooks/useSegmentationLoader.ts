@@ -89,12 +89,23 @@ export function useSegmentationLoader({
   // Stamps with the frame the loader is currently working on, which every
   // caller means: the load path writes results for the frame it just read, and
   // the save/reload paths write results for the frame on screen.
+  //
+  // Returning `prev` unchanged is load-bearing, not a micro-optimisation. This
+  // used to be a plain `useState<Polygon[] | null>`, where the very common
+  // `setSegmentationPolygons(null)` on an already-null state was a no-op —
+  // `Object.is(null, null)`, React bails out, nothing re-renders. Wrapping the
+  // value in an object made every such call allocate a NEW state object, so the
+  // load effect re-rendered the editor on each run and re-entered itself: an
+  // infinite render loop that OOMs the tab (and did OOM the CI suite before
+  // this guard was added). Compare both fields and hand back the same object
+  // when neither moved.
   const setSegmentationPolygons = useCallback(
     (polygons: SegmentationPolygon[] | null) => {
-      setLoadedSegmentation({
-        imageId: currentImageIdRef.current,
-        polygons,
-      });
+      setLoadedSegmentation(prev =>
+        prev.polygons === polygons && prev.imageId === currentImageIdRef.current
+          ? prev
+          : { imageId: currentImageIdRef.current, polygons }
+      );
     },
     [currentImageIdRef]
   );
