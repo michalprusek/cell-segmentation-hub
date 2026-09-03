@@ -10,6 +10,8 @@ import PolygonListPanel from './PolygonListPanel';
 import SpermInstancePanel from './SpermInstancePanel';
 import MicrotubuleInstancePanel from './MicrotubuleInstancePanel';
 import ChannelsSection from './sidebar/ChannelsSection';
+import { useSidebarWidth } from '../hooks/useSidebarWidth';
+import { MIN_PANEL_WIDTH, MAX_PANEL_WIDTH } from '../utils/panelWidth';
 import DisplaySection from './sidebar/DisplaySection';
 import KeyboardShortcutsHelp from './KeyboardShortcutsHelp';
 
@@ -274,6 +276,10 @@ const SegmentationEditorLayout: React.FC<SegmentationEditorLayoutProps> = ({
   handleResegmentCurrentFrame,
   t,
 }) => {
+  // Width of the right-hand panel. View-local: nothing in the segmentation
+  // domain cares, and threading it from the orchestrator would only add props.
+  const sidebar = useSidebarWidth();
+
   return (
     <ImageDisplayProvider userId={user?.id}>
       {/* Headless sliding-window prefetcher: warms the FrameImageCache
@@ -596,8 +602,36 @@ const SegmentationEditorLayout: React.FC<SegmentationEditorLayoutProps> = ({
                 </CanvasContainer>
               </div>
 
+              {/* Drag handle for the right panel. Only on `lg` and up, where the
+                  panel is a column beside the canvas; below that it is stacked
+                  full-width and there is nothing to resize. */}
+              <div
+                role="separator"
+                aria-orientation="vertical"
+                aria-label={t('segmentation.resizeSidebar', {
+                  defaultValue: 'Resize panel',
+                })}
+                aria-valuenow={sidebar.width}
+                aria-valuemin={MIN_PANEL_WIDTH}
+                aria-valuemax={MAX_PANEL_WIDTH}
+                tabIndex={0}
+                onPointerDown={sidebar.onResizeStart}
+                onPointerMove={sidebar.onResizeMove}
+                onPointerUp={sidebar.onResizeEnd}
+                onPointerCancel={sidebar.onResizeEnd}
+                onKeyDown={sidebar.onResizeKey}
+                title={t('segmentation.resizeSidebar', {
+                  defaultValue: 'Resize panel',
+                })}
+                className="hidden lg:block w-1 flex-shrink-0 cursor-col-resize bg-transparent hover:bg-violet-400/60 focus-visible:bg-violet-500 focus-visible:outline-none transition-colors"
+              />
+
               {/* Right: Channels + Display (video only) + Polygon List + Sperm Instance Panel */}
-              <div className="flex flex-col w-full lg:w-72 h-64 lg:h-full overflow-y-auto">
+              <div
+                className="flex flex-col w-full lg:w-[var(--sidebar-w)] h-64 lg:h-full overflow-y-auto lg:flex-shrink-0"
+                style={{ ['--sidebar-w' as string]: `${sidebar.width}px` }}
+                data-sidebar-width={sidebar.width}
+              >
                 {isVideoMode && video.container && (
                   <>
                     <ChannelsSection

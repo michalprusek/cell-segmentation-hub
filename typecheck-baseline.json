@@ -7,8 +7,8 @@
   "totals": {
     "tsconfig.app.json": 399,
     "tsconfig.node.json": 21,
-    "tsconfig.test.json": 1224,
-    "all": 1644
+    "tsconfig.test.json": 1228,
+    "all": 1648
   },
   "projects": {
     "tsconfig.app.json": {
@@ -1432,7 +1432,8 @@
         "TS6307: File 'src/pages/segmentation/components/canvas/VideoFrameImage.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
         "TS6307: File 'src/pages/segmentation/components/layout/EditorLayout.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
         "TS6307: File 'src/pages/segmentation/components/sidebar/ChannelsSection.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
-        "TS6307: File 'src/pages/segmentation/components/sidebar/DisplaySection.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
+        "TS6307: File 'src/pages/segmentation/components/sidebar/DisplaySection.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
+        "TS6307: File 'src/pages/segmentation/hooks/useSidebarWidth.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
       },
       "src/pages/segmentation/components/SegmentationErrorBoundary.tsx": {
         "TS2322: Type '{title: string | string[]; description: string | string[]; errorDetails: string | string[]; tryAgain: string | string[]; }' is not assignable to type '{ title: string; description: string; errorDetails: string; tryAgain: string; }'.": 1,
@@ -1587,8 +1588,17 @@
       "src/pages/segmentation/hooks/useVideoFrames.ts": {
         "TS2339: Property 'data' does not exist on type '{}'.": 1
       },
+      "src/pages/segmentation/utils/__tests__/instanceLabels.test.ts": {
+        "TS6307: File 'src/pages/segmentation/utils/instanceLabels.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
+      },
       "src/pages/segmentation/utils/__tests__/mtTypeTargets.test.ts": {
         "TS6307: File 'src/pages/segmentation/utils/mtTypeTargets.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
+      },
+      "src/pages/segmentation/utils/__tests__/multiSelect.test.ts": {
+        "TS6307: File 'src/pages/segmentation/utils/multiSelect.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
+      },
+      "src/pages/segmentation/utils/__tests__/panelWidth.test.ts": {
+        "TS6307: File 'src/pages/segmentation/utils/panelWidth.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
       },
       "src/pages/segmentation/utils/__tests__/transformSegmentationPolygons.test.ts": {
         "TS6307: File 'src/pages/segmentation/utils/transformSegmentationPolygons.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1

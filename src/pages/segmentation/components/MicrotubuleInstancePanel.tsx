@@ -9,6 +9,10 @@ import {
   colorFromInstanceId,
   isMicrotubuleInstance,
 } from '../utils/instanceColors';
+import {
+  buildInstanceLabelMap,
+  MICROTUBULE_LABEL_PREFIX,
+} from '../utils/instanceLabels';
 import MtTypeLabelDialog from './context-menu/MtTypeLabelDialog';
 
 interface MicrotubuleInstancePanelProps {
@@ -113,6 +117,18 @@ const MicrotubuleInstancePanel: React.FC<MicrotubuleInstancePanelProps> = ({
           !p.partClass &&
           (p.class === 'microtubule' || isMicrotubuleInstance(p.instanceId))
       ),
+    [deferredPolygons]
+  );
+
+  // The identifier the EXPORT uses for each microtubule: the badge burned onto
+  // the exported image and the `label` column of the metrics table. Built from
+  // the unfiltered, unsorted array, because that is exactly what the export
+  // parses — first-appearance order of `instanceId`, not this panel's display
+  // order. Showing anything else here is why a metrics row could not be traced
+  // back to a microtubule (Institut Curie, 2026-09-03); see
+  // `utils/instanceLabels.ts`.
+  const instanceLabels = useMemo(
+    () => buildInstanceLabelMap(deferredPolygons, MICROTUBULE_LABEL_PREFIX),
     [deferredPolygons]
   );
 
@@ -257,6 +273,16 @@ const MicrotubuleInstancePanel: React.FC<MicrotubuleInstancePanelProps> = ({
               : instanceColor;
           const isSelected = selectedPolygonId === mt.id;
           const isChecked = isSelected || selectedPolygonIds.has(mt.id);
+          // Default display name. The EXPORT label ("MT1", …) so this row and
+          // the metrics table name the same object; the positional
+          // "Microtubule N" survives only for a polyline that earns no badge
+          // (no instanceId, or too few points to draw), which is also the case
+          // the export leaves blank.
+          const exportLabel = mt.instanceId
+            ? instanceLabels.get(mt.instanceId)
+            : undefined;
+          const defaultName =
+            exportLabel ?? `${t('microtubule.instance')} ${idx + 1}`;
           const isHidden = hiddenPolygonIds?.has(mt.id) ?? false;
           return (
             <div
@@ -271,7 +297,7 @@ const MicrotubuleInstancePanel: React.FC<MicrotubuleInstancePanelProps> = ({
                 <Checkbox
                   checked={isChecked}
                   onCheckedChange={() => onToggleSelected?.(mt.id)}
-                  aria-label={`${t('microtubule.instance')} ${idx + 1}`}
+                  aria-label={defaultName}
                   className="flex-shrink-0"
                 />
               )}
@@ -297,7 +323,7 @@ const MicrotubuleInstancePanel: React.FC<MicrotubuleInstancePanelProps> = ({
                         setRenameValue('');
                       }
                     }}
-                    placeholder={`${t('microtubule.instance')} ${idx + 1}`}
+                    placeholder={defaultName}
                     className="flex-1 min-w-0 px-1 py-0.5 text-xs bg-white dark:bg-gray-900 border border-violet-400 rounded focus:outline-none focus:ring-1 focus:ring-violet-500"
                     aria-label={t('microtubule.renameInstance')}
                   />
@@ -314,9 +340,7 @@ const MicrotubuleInstancePanel: React.FC<MicrotubuleInstancePanelProps> = ({
                     aria-hidden
                   />
                   <span className="font-mono truncate">
-                    {mt.name && mt.name.trim()
-                      ? mt.name
-                      : `${t('microtubule.instance')} ${idx + 1}`}
+                    {mt.name && mt.name.trim() ? mt.name : defaultName}
                   </span>
                   {typeLabel && (
                     <span

@@ -852,6 +852,7 @@ export default {
       deselectAll: 'Deseleccionar todo',
       selected: '{{count}} seleccionados',
     },
+    resizeSidebar: 'Redimensionar panel',
     trackOps: {
       propagateSelectedSuccess:
         '{{count}} microtúbulos propagados a los fotogramas siguientes',
@@ -1226,6 +1227,9 @@ export default {
       notFound: 'Proyecto no encontrado',
       invalidResponse: 'La respuesta del servidor fue inválida',
       readyForImages: 'está listo para imágenes',
+      createdAtRootInstead: 'Proyecto creado en el nivel superior',
+      moveToFolderFailed:
+        'No se pudo archivar en la carpeta actual: muévelo allí manualmente.',
       selected: '{{count}} imagen seleccionada',
       selected_other: '{{count}} imágenes seleccionadas',
       deleteSelected: 'Eliminar Seleccionadas',

@@ -27,6 +27,7 @@ import {
   resolveTargetPolygonIds,
   applyMtTypeToPolygons,
 } from './utils/mtTypeTargets';
+import { planAdditiveToggle } from './utils/multiSelect';
 import { usePolygonHandlers } from './hooks/usePolygonHandlers';
 import { useDeleteTrackScope } from './hooks/useDeleteTrackScope';
 import { useCanvasBackgroundDeselect } from './hooks/useCanvasBackgroundDeselect';
@@ -1070,18 +1071,44 @@ const SegmentationEditor = () => {
   const selectedPolygonIdsRef = useRef(selectedPolygonIds);
   selectedPolygonIdsRef.current = selectedPolygonIds;
 
+  // The one place an ADDITIVE selection gesture is interpreted. Shift+click on
+  // the canvas and a sidebar checkbox both mean "also include this one", so
+  // both run this — `planAdditiveToggle` carries the rule and the reason.
+  //
+  // Declared here, ABOVE both call sites, on purpose: `handleCanvasSelect` is
+  // defined a few lines down and `handleToggleSelectedInList` ~170 lines later,
+  // and a callback that closes over a `const` declared after it throws at
+  // runtime (CLAUDE.md production bug #11).
+  const applyAdditiveToggle = useCallback(
+    (polygonId: string) => {
+      const { clearSingle, toggle } = planAdditiveToggle(
+        editorRef.current.selectedPolygonId,
+        polygonId
+      );
+      if (clearSingle) {
+        // Via handleSelectPolygon(null), not setSelectedPolygonId(null) — see
+        // `AdditiveTogglePlan.clearSingle`.
+        handleSelectPolygon(null);
+      }
+      for (const id of toggle) {
+        toggleMultiSelect(id);
+      }
+    },
+    [handleSelectPolygon, toggleMultiSelect]
+  );
+
   // Canvas click: Shift+click toggles the polygon in the multi-selection; a
   // plain click clears the multi-selection and runs the normal single select.
   const handleCanvasSelect = useCallback(
     (polygonId: string | null, additive?: boolean) => {
       if (additive && polygonId) {
-        toggleMultiSelect(polygonId);
+        applyAdditiveToggle(polygonId);
         return;
       }
       clearMultiSelect();
       editorRef.current.handlePolygonClick(polygonId);
     },
-    [toggleMultiSelect, clearMultiSelect]
+    [applyAdditiveToggle, clearMultiSelect]
   );
 
   // Assign (or clear) a microtubule type label. When ≥2 MTs are multi-selected
@@ -1242,23 +1269,8 @@ const SegmentationEditor = () => {
   // single (vertex-edit) selection, we fold it into the bulk set first so the
   // checked rows and the "propagate selected (N)" count always agree.
   const handleToggleSelectedInList = useCallback(
-    (id: string) => {
-      const single = editorRef.current.selectedPolygonId;
-      if (single === id) {
-        // Clear the single selection via handleSelectPolygon(null) — NOT a bare
-        // setSelectedPolygonId(null). The latter leaves persistedSelectionTrackId
-        // set, so the cross-frame re-select effect (usePolygonHandlers) instantly
-        // re-selects this MT and the checkbox can never be unchecked.
-        handleSelectPolygon(null);
-        return;
-      }
-      if (single) {
-        handleSelectPolygon(null);
-        toggleMultiSelect(single);
-      }
-      toggleMultiSelect(id);
-    },
-    [toggleMultiSelect, handleSelectPolygon]
+    (id: string) => applyAdditiveToggle(id),
+    [applyAdditiveToggle]
   );
 
   // Sidebar "select all": put every listed current-frame polygon id into the

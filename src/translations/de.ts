@@ -859,6 +859,7 @@ export default {
       deselectAll: 'Auswahl aufheben',
       selected: '{{count}} ausgewählt',
     },
+    resizeSidebar: 'Panelbreite ändern',
     trackOps: {
       propagateSelectedSuccess:
         '{{count}} Mikrotubuli in die folgenden Frames übertragen',
@@ -1242,6 +1243,9 @@ export default {
       notFound: 'Projekt nicht gefunden',
       invalidResponse: 'Serverantwort war ungültig',
       readyForImages: 'ist bereit für Bilder',
+      createdAtRootInstead: 'Projekt auf der obersten Ebene erstellt',
+      moveToFolderFailed:
+        'Es konnte nicht im aktuellen Ordner abgelegt werden — verschiebe es dort manuell.',
       selected: '{{count}} Bild ausgewählt',
       selected_other: '{{count}} Bilder ausgewählt',
       deleteSelected: 'Ausgewählte löschen',

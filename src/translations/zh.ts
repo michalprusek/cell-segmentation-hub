@@ -796,6 +796,7 @@ export default {
       deselectAll: '取消全选',
       selected: '已选择 {{count}} 个',
     },
+    resizeSidebar: '调整面板宽度',
     trackOps: {
       propagateSelectedSuccess: '已将 {{count}} 个微管传播到后续帧',
       propagateSelectedPartial: '已传播 {{done}}/{{total}} 个微管',
@@ -1143,6 +1144,8 @@ export default {
       notFound: '项目未找到',
       invalidResponse: '服务器响应无效',
       readyForImages: '已准备好接收图片',
+      createdAtRootInstead: '项目已在顶层创建',
+      moveToFolderFailed: '无法归入当前文件夹 — 请手动移动。',
       selected: '已选择{{count}}张图片',
       selected_other: '已选择{{count}}张图片',
       deleteSelected: '删除选中项',

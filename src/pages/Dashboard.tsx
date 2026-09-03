@@ -553,6 +553,8 @@ const Dashboard = () => {
         <NewProjectCard
           isOpen={newProjectOpen}
           onOpenChange={setNewProjectOpen}
+          // Create inside the folder the user is looking at, not at the root.
+          folderId={currentFolderId}
         />
       </div>
     </PageTransition>

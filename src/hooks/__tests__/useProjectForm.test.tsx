@@ -19,6 +19,7 @@ vi.mock('@/lib/api', () => ({
     updateUserProfile: vi.fn(),
     deleteAccount: vi.fn(),
     createProject: vi.fn(),
+    moveProjectsToFolder: vi.fn(),
     getProject: vi.fn(),
     getProjectImages: vi.fn(),
     getSegmentationResults: vi.fn(),
@@ -228,6 +229,116 @@ describe('useProjectForm', () => {
 
       expect(toast.success).toHaveBeenCalled();
       expect(onSuccess).toHaveBeenCalledWith('proj-new');
+    });
+
+    // Requested by a user (Institut Curie, 2026-09-03): "when I create a new
+    // project, the project will always go directly to the homepage and not into
+    // the folder that I currently am in."
+    //
+    // `POST /projects` has no folder field, so the placement is a second call
+    // to the existing (already tested) move endpoint. The tests below pin the
+    // three things that matter: it happens, it does NOT happen at the root, and
+    // a failed move never presents as a failed creation.
+    it('files the new project into the folder the user is currently in', async () => {
+      vi.mocked(apiClient.getUserProfile).mockResolvedValue({
+        id: 'user-1',
+        email: 'test@test.com',
+        preferred_theme: 'system',
+        preferredLang: 'en',
+      } as any);
+      vi.mocked(apiClient.createProject).mockResolvedValue({
+        id: 'proj-new',
+        name: 'New Project',
+      } as any);
+      vi.mocked(apiClient.moveProjectsToFolder).mockResolvedValue({
+        movedProjectIds: ['proj-new'],
+        skippedProjectIds: [],
+      });
+
+      const { result } = renderHook(
+        () => useProjectForm({ onSuccess, onClose, folderId: 'folder-7' }),
+        { wrapper }
+      );
+      // Let AuthProvider's getUserProfile settle — the hook bails out with a
+      // login error while `user` is still null.
+      await waitFor(() => expect(apiClient.getUserProfile).toHaveBeenCalled());
+      act(() => result.current.setProjectName('New Project'));
+      await act(async () => {
+        await result.current.handleCreateProject(makeFormEvent());
+      });
+
+      await waitFor(() => {
+        expect(apiClient.moveProjectsToFolder).toHaveBeenCalledWith(
+          'folder-7',
+          ['proj-new']
+        );
+      });
+      expect(onSuccess).toHaveBeenCalledWith('proj-new');
+    });
+
+    it('does not call the move endpoint at the dashboard root', async () => {
+      vi.mocked(apiClient.getUserProfile).mockResolvedValue({
+        id: 'user-1',
+        email: 'test@test.com',
+        preferred_theme: 'system',
+        preferredLang: 'en',
+      } as any);
+      vi.mocked(apiClient.createProject).mockResolvedValue({
+        id: 'proj-new',
+        name: 'New Project',
+      } as any);
+
+      const { result } = renderHook(
+        () => useProjectForm({ onSuccess, onClose, folderId: null }),
+        { wrapper }
+      );
+      // Let AuthProvider's getUserProfile settle — the hook bails out with a
+      // login error while `user` is still null.
+      await waitFor(() => expect(apiClient.getUserProfile).toHaveBeenCalled());
+      act(() => result.current.setProjectName('New Project'));
+      await act(async () => {
+        await result.current.handleCreateProject(makeFormEvent());
+      });
+
+      await waitFor(() => expect(onClose).toHaveBeenCalled());
+      // A project with no placement is already at the root; posting a move
+      // would be a pointless round trip that can only fail.
+      expect(apiClient.moveProjectsToFolder).not.toHaveBeenCalled();
+    });
+
+    it('keeps the project when only the filing fails', async () => {
+      vi.mocked(apiClient.getUserProfile).mockResolvedValue({
+        id: 'user-1',
+        email: 'test@test.com',
+        preferred_theme: 'system',
+        preferredLang: 'en',
+      } as any);
+      vi.mocked(apiClient.createProject).mockResolvedValue({
+        id: 'proj-new',
+        name: 'New Project',
+      } as any);
+      vi.mocked(apiClient.moveProjectsToFolder).mockRejectedValue(
+        new Error('folder vanished')
+      );
+
+      const { result } = renderHook(
+        () => useProjectForm({ onSuccess, onClose, folderId: 'folder-7' }),
+        { wrapper }
+      );
+      // Let AuthProvider's getUserProfile settle — the hook bails out with a
+      // login error while `user` is still null.
+      await waitFor(() => expect(apiClient.getUserProfile).toHaveBeenCalled());
+      act(() => result.current.setProjectName('New Project'));
+      await act(async () => {
+        await result.current.handleCreateProject(makeFormEvent());
+      });
+
+      // The project EXISTS — it is merely at the root. Reporting a failure
+      // would send the user hunting for a project that is already there.
+      await waitFor(() => expect(onSuccess).toHaveBeenCalledWith('proj-new'));
+      expect(onClose).toHaveBeenCalled();
+      expect(toast.warning).toHaveBeenCalled();
+      expect(toast.error).not.toHaveBeenCalled();
     });
 
     it('resets projectName and projectDescription after successful creation', async () => {
