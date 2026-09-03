@@ -1,5 +1,6 @@
 import { isMeasuredMicrocapsule } from '../microcapsuleRelevance';
-import { radialDiameter } from './radialDiameter';
+import { MEMBRANE_CLASS } from '../microcapsuleMembrane';
+import { annulusWidth, radialDiameter } from './radialDiameter';
 import axios, { AxiosInstance } from 'axios';
 import ExcelJS from 'exceljs';
 import { createObjectCsvStringifier } from 'csv-writer';
@@ -52,6 +53,11 @@ export interface PolygonMetrics {
    *  available on both metric paths (the Python service and the local
    *  fallback), neither of which returns it. */
   radialDiameter?: number;
+  /** Mean radial gap between this capsule's wall and the membrane inside it,
+   *  in the same units as the other lengths. Undefined when the capsule has no
+   *  membrane — which for a microcapsule means its membrane has dissolved, a
+   *  different statement from an annulus of zero width. See `annulusWidth`. */
+  membraneAnnulusWidth?: number;
   /** The user's type label, if they set one. Carried so the later filters ask
    *  `isMeasuredMicrocapsule` the SAME question the parse filter asked: a
    *  border-cut capsule re-typed as relevant passes upstream and would be
@@ -153,6 +159,11 @@ export interface ParsedPolygon {
   points: Point[];
   type?: 'external' | 'internal';
   geometry?: 'polygon' | 'polyline';
+  /** Semantic class stamped by the model — `microcapsule`, `membrane`,
+   *  `microtubule`, … Already carried on the wire and through storage; declared
+   *  here because the microcapsule export has to tell a capsule from the
+   *  membrane inside it, and both are `type: 'external'`. */
+  class?: string;
   partClass?: PolygonPartClass;
   instanceId?: string;
   /** Per-instance detection score (microcapsule YOLO). */
@@ -365,8 +376,17 @@ export class MetricsCalculator {
     // Separate external and internal polygons. Type-guard predicates narrow the
     // optional `type` to a required literal so each element satisfies the
     // MinimalPolygon shape the geometry helpers expect.
+    // Membranes are `type: 'external'` too — they are closed outlines, not
+    // holes — but they are NOT objects to measure: each one belongs to the
+    // capsule around it and contributes ONE number to that capsule's row, the
+    // annulus width. Leaving them in would double every microcapsule export
+    // with rows for boundaries the user never counts.
+    const membranePolygons = polygons.filter(
+      p => p.type === 'external' && p.class === MEMBRANE_CLASS
+    );
     const externalPolygons = polygons.filter(
-      (p): p is ParsedPolygon & { type: 'external' } => p.type === 'external'
+      (p): p is ParsedPolygon & { type: 'external' } =>
+        p.type === 'external' && p.class !== MEMBRANE_CLASS
     );
     const internalPolygons = polygons.filter(
       (p): p is ParsedPolygon & { type: 'internal' } => p.type === 'internal'
@@ -405,6 +425,17 @@ export class MetricsCalculator {
           holesForPolygon
         );
 
+        // The membrane this capsule encloses, if any. Paired by CONTAINMENT
+        // rather than by an id on either polygon: a membrane can be drawn,
+        // moved or deleted by hand, so a stored link would have to be
+        // maintained through every edit path (and through the five polygon
+        // validator stages that strip unknown fields). Where a membrane sits
+        // is the durable fact — capsules do not overlap, so the capsule
+        // containing it is unambiguous.
+        const membrane = membranePolygons.find(m =>
+          isPolygonInside(m, polygon)
+        );
+
         metrics.push({
           imageId,
           imageName,
@@ -414,6 +445,12 @@ export class MetricsCalculator {
           complete: polygon.complete,
           mtType: polygon.mtType,
           radialDiameter: radialDiameter(polygon.points),
+          // undefined (not 0) when there is no membrane: the capsule has no
+          // annulus, which is a different statement from one of zero width.
+          membraneAnnulusWidth:
+            membrane && membrane.points
+              ? (annulusWidth(polygon.points, membrane.points) ?? undefined)
+              : undefined,
           ...polygonMetrics,
         });
       } catch (error) {
@@ -428,6 +465,16 @@ export class MetricsCalculator {
           isPolygonInside(inner, polygon)
         );
 
+        // The annulus is computed here too. It is pure local geometry — two
+        // stored outlines and a centroid — so losing it when the Python
+        // metrics service is unreachable would drop a column for a reason
+        // that has nothing to do with it. This branch runs whenever that
+        // service is down, which is a real production state, not a test-only
+        // one.
+        const fallbackMembrane = membranePolygons.find(m =>
+          isPolygonInside(m, polygon)
+        );
+
         metrics.push({
           imageId,
           imageName,
@@ -435,6 +482,11 @@ export class MetricsCalculator {
           type: 'external',
           confidence: polygon.confidence,
           complete: polygon.complete,
+          membraneAnnulusWidth:
+            fallbackMembrane && fallbackMembrane.points
+              ? (annulusWidth(polygon.points, fallbackMembrane.points) ??
+                undefined)
+              : undefined,
           ...this.calculateBasicMetrics(polygon, holesForPolygon),
         });
       }
@@ -971,6 +1023,14 @@ export class MetricsCalculator {
       },
       { header: 'Compactness', key: 'compactness', width: 12 },
       { header: 'Ovality', key: 'ovality', width: 10 },
+      // Blank, not 0, when the capsule has no membrane: its membrane has
+      // dissolved, which is a different fact from an annulus of zero width and
+      // must not average into a column as one.
+      {
+        header: `Membrane annulus width (${lengthUnit})`,
+        key: 'membraneAnnulusWidth',
+        width: 24,
+      },
       { header: 'Confidence', key: 'confidence', width: 12 },
     ];
 
@@ -993,6 +1053,10 @@ export class MetricsCalculator {
         equivalentDiameter: safeValue(m.equivalentDiameter, 2),
         compactness: safeValue(m.circularity, 4),
         ovality: safeValue(microcapsuleOvality(m), 4),
+        membraneAnnulusWidth:
+          typeof m.membraneAnnulusWidth === 'number'
+            ? safeValue(m.membraneAnnulusWidth, 2)
+            : '',
         confidence:
           typeof m.confidence === 'number' ? safeValue(m.confidence, 4) : '',
       });
@@ -1064,6 +1128,10 @@ export class MetricsCalculator {
         },
         { id: 'compactness', title: 'Compactness' },
         { id: 'ovality', title: 'Ovality' },
+        {
+          id: 'membraneAnnulusWidth',
+          title: `Membrane annulus width (${lengthUnit})`,
+        },
         { id: 'confidence', title: 'Confidence' },
       ],
     });
@@ -1088,6 +1156,13 @@ export class MetricsCalculator {
         // "Compactness" column carries the circularity value by design.
         compactness: m.circularity,
         ovality: microcapsuleOvality(m),
+        // Mean radial gap between the capsule wall and the membrane inside it,
+        // on the same six-spoke star as Diameter. Empty when the capsule has
+        // no membrane — see the Excel writer above.
+        membraneAnnulusWidth:
+          typeof m.membraneAnnulusWidth === 'number'
+            ? m.membraneAnnulusWidth
+            : '',
         confidence: typeof m.confidence === 'number' ? m.confidence : '',
       }));
 
@@ -1571,6 +1646,13 @@ export class MetricsCalculator {
         metric.radialDiameter === undefined
           ? undefined
           : metric.radialDiameter * scale,
+      // A LENGTH too, and it sits in the same table as Diameter — leaving it
+      // in pixels would put two columns of different units side by side with
+      // nothing on screen to say so.
+      membraneAnnulusWidth:
+        metric.membraneAnnulusWidth === undefined
+          ? undefined
+          : metric.membraneAnnulusWidth * scale,
       feretDiameterMax: metric.feretDiameterMax * scale,
       feretDiameterMaxOrthogonalDistance:
         metric.feretDiameterMaxOrthogonalDistance * scale,
