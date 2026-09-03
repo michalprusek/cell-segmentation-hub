@@ -109,6 +109,60 @@ def _imagej_channel_labels(tf, count: int) -> list[str | None]:
         return [None] * count
 
 
+# Extensions an acquisition/export filename carries. A genuine channel name
+# never does — measured over every multi-page TIFF in production, the real
+# per-channel names are `WD_LED_IRM`, `TIRF_491/561/642`, `CSU488/561`,
+# `Trans`, `StaticIRM`, and not one contains a dot-extension.
+_ACQUISITION_EXT_RE = re.compile(
+    r"\.(?:ome\.)?(?:nd2|tiff?|lif|czi|lsm|oib|oif|stk|ims|dv|vsi|zvi|png|jpe?g|avi|mp4|mov)\b",
+    re.IGNORECASE,
+)
+
+
+def _looks_like_filename(label: str | None, source_stem: str | None) -> bool:
+    """True when ``label`` is a FILE NAME rather than a channel name.
+
+    A channel's identity must come from metadata only. The name is not
+    decoration downstream: ``_wavelength_from_name`` reads an emission λ out
+    of it (a date like ``20260803`` contains ``803``, which is inside the
+    350-900 nm band it accepts) and ``isIrmChannel`` types the channel ``irm``
+    on an ``IRM`` substring. Production carries the proof — a container whose
+    channel 1 is typed ``irm`` for no reason but that the ND2 it was exported
+    from was called ``..._HMDS_IRM_60x_...``.
+
+    Two independent signals, because neither alone is enough:
+
+    - **An acquisition extension** (``.nd2``, ``.ome.tif``, ``.lif``, …).
+      This is what catches the usual case, where the embedded name belongs to
+      a DIFFERENT file — the original the TIFF was exported from — and so
+      cannot be recognised by comparing against the file being read.
+    - **The source file's own stem inside the label.** An ImageJ-registered
+      stack often repeats the file's name with the extension already stripped,
+      leaving nothing structural to match on.
+
+    The stem test is deliberately one-directional: the stem must be found
+    inside the LABEL, never the reverse. A short genuine name that merely
+    appears inside a long filename is still a genuine name — the reverse test
+    would erase the ``IRM`` channel of a file called ``IRM_488.tif``. It also
+    only fires on a stem long enough to be a filename rather than a coincidence
+    (``a.tif`` must not condemn every label containing an ``a``).
+    """
+    if not isinstance(label, str) or not label.strip():
+        return False
+    if _ACQUISITION_EXT_RE.search(label):
+        return True
+    if not source_stem or len(source_stem) < _MIN_STEM_MATCH_CHARS:
+        return False
+    return source_stem.strip().casefold() in label.casefold()
+
+
+# Below this a stem is too short to distinguish "the label repeats the file
+# name" from "the label happens to contain those characters". Real acquisition
+# names are far longer; this only stops a file called `a.tif` or `MT.tif` from
+# condemning every label.
+_MIN_STEM_MATCH_CHARS = 6
+
+
 def _all_distinct(names: list[str | None]) -> bool:
     """True only when every entry is a non-empty string AND all are unique.
     Used to reject the two failure modes that made every channel look the
@@ -161,7 +215,7 @@ _BIOFORMATS_LABEL_RE = re.compile(
 
 
 def _strip_bioformats_scaffold(
-    labels: list[str | None], count: int
+    labels: list[str | None], count: int, source_stem: str | None = None
 ) -> list[str] | None:
     """Recover per-channel names from Fiji/Bio-Formats' per-slice label
     format ``"c:N/C t:T/TT - <tail>"``.
@@ -189,6 +243,12 @@ def _strip_bioformats_scaffold(
     — this is what lets a real ``IRM``-labelled channel still be typed
     ``irm`` after this step runs.
 
+    "Differ" is not enough on its own, though: a MULTI-SERIES export differs
+    only by the ``(series N)`` suffix, so the whole filename came through this
+    branch until 2026-09-03. Tails are therefore kept only when none of them
+    is a filename (``_looks_like_filename``) — the identity of a channel comes
+    from metadata, never from what a file happens to be called.
+
     Returns ``None`` when fewer than ``count`` labels match the pattern,
     so the caller falls through to the next, more permissive strategy —
     this never fires on an ordinary short label like ``"EGFP"``.
@@ -203,12 +263,16 @@ def _strip_bioformats_scaffold(
         return None
     indices = [m.group(1) for m in matches]  # type: ignore[union-attr]
     tails = [m.group(2).strip() for m in matches]  # type: ignore[union-attr]
-    if _all_distinct(tails):
+    if _all_distinct(tails) and not any(
+        _looks_like_filename(t, source_stem) for t in tails
+    ):
         return tails
     return [f"c{idx}" for idx in indices]
 
 
-def _resolve_channel_names(tf, count: int) -> list[str | None]:
+def _resolve_channel_names(
+    tf, count: int, source_stem: str | None = None
+) -> list[str | None]:
     """Best-effort DISTINCT per-channel names, tried most-reliable first.
 
     Order matters — the earlier sources carry the true per-wavelength
@@ -224,25 +288,47 @@ def _resolve_channel_names(tf, count: int) -> list[str | None]:
     stack whose only label is the source filename, repeated per channel)
     we return all-``None`` so the caller falls back to ``"Channel N"`` —
     two channels named ``"Channel 1"``/``"Channel 2"`` are far more useful
-    than two identical names the user can't tell apart."""
+    than two identical names the user can't tell apart.
+
+    Every candidate set is gated on ``_looks_like_filename`` before it is
+    accepted: a channel is identified from METADATA ONLY, and a file name is
+    not metadata about a channel. Without that gate step 4 hands back whatever
+    the per-slice labels say, and a per-slice label is very often the file's
+    own name — which then decides the channel's modality and its emission
+    wavelength. Rejecting the set (rather than the offending entry) is
+    deliberate: names that came from one source are trustworthy together or
+    not at all, and a half-filename set would leave the user comparing a real
+    name against a path."""
     try:
         meta = getattr(tf, "imagej_metadata", None)
         info = ""
         if isinstance(meta, dict):
             info = meta.get("Info") or meta.get("info") or ""
 
-        wave = _metamorph_wave_names(info, count)
+        def accept(names: list[str] | None) -> list[str] | None:
+            """A candidate set, unless any of it is a file name."""
+            if not names:
+                return None
+            if any(_looks_like_filename(n, source_stem) for n in names):
+                return None
+            return names
+
+        wave = accept(_metamorph_wave_names(info, count))
         if wave:
             return wave
 
         labels = _imagej_channel_labels(tf, count)
-        split = _split_shared_label(labels, count)
+        split = accept(_split_shared_label(labels, count))
         if split:
             return split
-        scaffold = _strip_bioformats_scaffold(labels, count)
+        # The scaffold step needs the stem too: its own tail check is what
+        # decides between the tails and the bare `cN` index, and falling back
+        # to the index is a RESULT, not a rejection — so it must not be
+        # filtered by `accept` afterwards.
+        scaffold = _strip_bioformats_scaffold(labels, count, source_stem)
         if scaffold:
             return scaffold
-        if _all_distinct(labels):
+        if _all_distinct(labels) and accept(labels):
             return labels
     except Exception as exc:
         # A regex/type/index bug in the helpers above would otherwise be
@@ -685,7 +771,12 @@ def _load_and_resolve(src: Path) -> tuple[np.ndarray, dict]:
             if "C" in axes
             else (arr.shape[0] if axes.startswith("C") else 1)
         )
-        raw_channel_labels = _resolve_channel_names(tf, _C_for_meta)
+        # The file's own name is passed ONLY so the resolver can recognise a
+        # label that repeats it and throw that label away — never as a source
+        # of channel identity. See `_looks_like_filename`.
+        raw_channel_labels = _resolve_channel_names(
+            tf, _C_for_meta, source_stem=Path(src).stem
+        )
         # Pixel calibration + frame interval. Priority chain:
         #   1. OME-XML (most precise when present)
         #   2. ImageJ metadata (most common in microscopy)
