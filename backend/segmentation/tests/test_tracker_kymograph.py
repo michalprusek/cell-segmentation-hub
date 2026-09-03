@@ -1102,7 +1102,7 @@ def _row_job(path, pts, n_samples: int):
         file_key=(0, 0, 0, 0),
         pts=np.asarray(pts, dtype=np.float32),
         n_samples=n_samples,
-        cache_key=(0, 0, 0, 0, n_samples, b""),
+        cache_key=(0, 0, 0, 0, n_samples, 1, b""),
     )
 
 
@@ -1499,7 +1499,10 @@ def test_sampled_row_cache_evicts_least_recently_used_within_its_budget():
     cache = tracker_kymograph._SampledRowCache(budget_bytes=4 * entry)
 
     def row():
-        return np.zeros(200, dtype=np.float32)
+        # A width-1 pair: one array under both reductions, so an entry costs
+        # exactly one row plus the overhead (see ``_ReducedRows``).
+        arr = np.zeros(200, dtype=np.float32)
+        return tracker_kymograph._ReducedRows(arr, arr)
 
     for i in range(4):
         cache.put((i,), row())
@@ -1522,8 +1525,10 @@ def test_sampled_row_cache_refuses_an_entry_larger_than_its_whole_budget():
     """A row wider than the budget must be dropped rather than evicting the
     entire cache to make room for something that still will not fit."""
     cache = tracker_kymograph._SampledRowCache(budget_bytes=2000)
-    cache.put(("small",), np.zeros(100, dtype=np.float32))
-    cache.put(("huge",), np.zeros(100_000, dtype=np.float32))
+    small = np.zeros(100, dtype=np.float32)
+    huge = np.zeros(100_000, dtype=np.float32)
+    cache.put(("small",), tracker_kymograph._ReducedRows(small, small))
+    cache.put(("huge",), tracker_kymograph._ReducedRows(huge, huge))
     stats = cache.stats()
     assert cache.get(("huge",)) is None
     assert cache.get(("small",)) is not None, "a too-large entry flushed the cache"
@@ -1536,12 +1541,13 @@ def test_sampled_rows_are_frozen_against_accidental_writes(tmp_path):
     back read-only, which turns that into an exception at the write."""
     png = tmp_path / "f0.png"
     _write_gradient_png(png)
-    (row,) = tracker_kymograph._sample_frame_rows(
+    (reduced,) = tracker_kymograph._sample_frame_rows(
         png, [_row_job(png, [[8.0, 0.0], [8.0, 63.0]], 64)]
     )
-    assert row.flags.writeable is False
-    with pytest.raises(ValueError):
-        row[0] = 1.0
+    for row in (reduced.mean, reduced.max):
+        assert row.flags.writeable is False
+        with pytest.raises(ValueError):
+            row[0] = 1.0
 
 
 def test_decode_keeps_the_previous_frame_alive_per_thread(tmp_path):
@@ -1994,14 +2000,14 @@ def test_sampling_is_bilinear_not_nearest(tmp_path):
     On a ``value = col`` ramp a half-integer column has an exact bilinear
     answer, and nearest cannot produce it.
 
-    Mutation check: put ``order=0`` back in ``_sample_line_profile`` and this
+    Mutation check: put ``order=0`` back in ``_sample_line_profiles`` and this
     goes red (every value becomes a whole number)."""
     png = tmp_path / "ramp.png"
     _write_ramp_png(png)
     img = _read_png(png)
     pts = np.array([[8.0, 10.5], [8.0, 11.5], [8.0, 12.5]], dtype=np.float32)
 
-    profile = tracker_kymograph._sample_line_profile(img, pts, 1, "mean")
+    profile = tracker_kymograph._sample_line_profiles(img, pts, 1).mean
 
     assert np.allclose(profile, [10.5, 11.5, 12.5], atol=1e-5)
     assert not np.allclose(profile, np.round(profile))
@@ -2016,7 +2022,7 @@ def test_width_one_is_the_plain_line_profile_bit_for_bit(tmp_path):
     img = _read_png(png)
     sp = _resampled(_diag_polyline())
 
-    got = tracker_kymograph._sample_line_profile(img, sp, 1, "mean")
+    got = tracker_kymograph._sample_line_profiles(img, sp, 1).mean
     ref = _bilinear(img, sp[:, 0], sp[:, 1]).astype(np.float32)
 
     assert np.array_equal(got, ref)
@@ -2058,7 +2064,7 @@ def test_a_uniform_diagonal_ridge_keeps_its_true_intensity_at_width_5(tmp_path):
     img = _read_png(png)
     sp = _resampled(_diag_polyline())
 
-    profile = tracker_kymograph._sample_line_profile(img, sp, 5, "mean")
+    profile = tracker_kymograph._sample_line_profiles(img, sp, 5).mean
 
     assert np.all(profile == 240.0), f"band mean drifted: {np.unique(profile)}"
 
@@ -2083,7 +2089,7 @@ def test_the_band_crosses_a_diagonal_ridge_rather_than_running_along_it(
     width = 11
     offsets = (np.arange(width, dtype=np.float64) - (width - 1) / 2.0)[:, None]
 
-    got = tracker_kymograph._sample_line_profile(img, sp, width, "mean")
+    got = tracker_kymograph._sample_line_profiles(img, sp, width).mean
 
     # Reference: the analytic normal of a 45-degree line in (row, col).
     unit = np.array([1.0, -1.0]) / np.sqrt(2.0)
@@ -2127,8 +2133,8 @@ def test_max_reduces_differently_from_mean(tmp_path):
     img = _read_png(png)
     sp = _resampled(_diag_polyline())
 
-    mean_profile = tracker_kymograph._sample_line_profile(img, sp, 11, "mean")
-    max_profile = tracker_kymograph._sample_line_profile(img, sp, 11, "max")
+    mean_profile = tracker_kymograph._sample_line_profiles(img, sp, 11).mean
+    max_profile = tracker_kymograph._sample_line_profiles(img, sp, 11).max
 
     # The centre sample is always on the plateau, so max pins to the peak...
     assert np.all(max_profile == 240.0)
@@ -2150,7 +2156,7 @@ def test_the_band_is_zero_filled_outside_the_image(tmp_path):
     # sit at rows -2 and -1, outside the image.
     pts = np.array([[0.0, float(c)] for c in range(10, 40)], dtype=np.float32)
 
-    profile = tracker_kymograph._sample_line_profile(img, pts, 5, "mean")
+    profile = tracker_kymograph._sample_line_profiles(img, pts, 5).mean
 
     assert np.allclose(profile, 200.0 * 3.0 / 5.0, atol=1e-4)
 
@@ -2205,9 +2211,9 @@ def test_line_width_reaches_the_sampler_through_the_endpoint(
 
     assert r.status_code == 200, r.text
     row = np.array([float(v) for v in _csv_rows(r.json())[0][1:]])
-    expected = tracker_kymograph._sample_line_profile(img, sp, 11, "mean")
+    expected = tracker_kymograph._sample_line_profiles(img, sp, 11).mean
     assert np.allclose(row, expected, atol=1e-4)
-    plain = tracker_kymograph._sample_line_profile(img, sp, 1, "mean")
+    plain = tracker_kymograph._sample_line_profiles(img, sp, 1).mean
     assert not np.allclose(row, plain, atol=1e-4)
 
 
@@ -2232,25 +2238,25 @@ def test_line_reduce_reaches_the_sampler_through_the_endpoint(
     row = np.array([float(v) for v in _csv_rows(r.json())[0][1:]])
     assert np.allclose(
         row,
-        tracker_kymograph._sample_line_profile(img, sp, 11, "max"),
+        tracker_kymograph._sample_line_profiles(img, sp, 11).max,
         atol=1e-4,
     )
     assert not np.allclose(
         row,
-        tracker_kymograph._sample_line_profile(img, sp, 11, "mean"),
+        tracker_kymograph._sample_line_profiles(img, sp, 11).mean,
         atol=1e-4,
     )
 
 
-def test_row_cache_misses_when_the_line_width_or_reduction_changes(
+def test_row_cache_misses_when_the_line_width_changes(
     client, monkeypatch, tmp_path
 ):
-    """The sampled ROW depends on both, so both are in its key. Without them
-    the second request below would be served the first request's rows — the
-    user would nudge the width and see the identical picture.
+    """The sampled ROW depends on the width, so the width is in its key.
+    Without it the second request below would be served the first request's
+    rows — the user would nudge the width and see the identical picture.
 
-    Mutation check: drop ``line_width`` (or ``line_reduce``) from ``cache_key``
-    in ``_plan_rows`` and the decode counts collapse to 0."""
+    Mutation check: drop ``line_width`` from ``cache_key`` in ``_plan_rows``
+    and the decode count collapses to 0."""
     td_path = tmp_path.resolve()
     monkeypatch.setattr(tracker_kymograph, "_UPLOAD_ROOT", td_path)
     png = td_path / "f0.png"
@@ -2264,20 +2270,92 @@ def test_row_cache_misses_when_the_line_width_or_reduction_changes(
         json=_kymo_payload([png], polyline, line_width=11),
     )
     assert decodes["n"] == 1, "a new width must re-sample, not reuse the row"
-    widest = client.post(
-        "/api/v1/kymograph",
-        json=_kymo_payload([png], polyline, line_width=11, line_reduce="max"),
-    )
-    assert decodes["n"] == 2, "a new reduction must re-sample too"
     warm = client.post(
         "/api/v1/kymograph",
         json=_kymo_payload([png], polyline, line_width=11),
     )
-    assert decodes["n"] == 2, "the width-11 mean row is still cached"
+    assert decodes["n"] == 1, "the width-11 row is still cached"
 
     assert first.json()["csv_base64"] != wide.json()["csv_base64"]
-    assert wide.json()["csv_base64"] != widest.json()["csv_base64"]
     assert wide.json() == warm.json()
+
+
+def test_switching_the_reduction_reuses_the_decode_the_other_one_paid_for(
+    client, monkeypatch, tmp_path
+):
+    """``mean`` and ``max`` are two reductions of the SAME band of samples, so
+    the second one must not re-read a single frame.
+
+    This was the opposite contract until 2026-09-03: ``line_reduce`` was part
+    of the row-cache key, so flipping the modal's "Across width" select paid a
+    full cold rebuild — measured on the real 299-frame container 4972cad8,
+    2.6-3.4 s against 0.35-0.49 s warm, to avoid a numpy reduction over an
+    already-materialised band that costs 0.0016 ms per frame (0.004 % of the
+    41.8 ms it takes to decode the frame it came from).
+
+    Mutation check: put ``line_reduce`` back in ``cache_key`` in ``_plan_rows``
+    and the second decode count is 1 rather than 0. The output assertions are
+    the other half of the guard: serving the cached MEAN row for a ``max``
+    request would also decode nothing."""
+    td_path = tmp_path.resolve()
+    monkeypatch.setattr(tracker_kymograph, "_UPLOAD_ROOT", td_path)
+    png = td_path / "f0.png"
+    # Asymmetric about the drawn line, so the brightest sample of a centred
+    # band is NOT the centre one and max genuinely differs from mean.
+    _write_offset_stripe_diagonal_png(png)
+    polyline = _diag_polyline()
+
+    mean = client.post(
+        "/api/v1/kymograph",
+        json=_kymo_payload([png], polyline, line_width=11),
+    )
+    decodes = _count_decodes(monkeypatch)
+    mx = client.post(
+        "/api/v1/kymograph",
+        json=_kymo_payload([png], polyline, line_width=11, line_reduce="max"),
+    )
+    assert decodes["n"] == 0, "the reduction switch re-read the frames"
+    back = client.post(
+        "/api/v1/kymograph",
+        json=_kymo_payload([png], polyline, line_width=11),
+    )
+    assert decodes["n"] == 0, "switching back re-read the frames"
+
+    assert mean.status_code == 200 and mx.status_code == 200
+    # Cheap to serve, still the right pixels: max must not have been handed
+    # the mean row that shared its decode.
+    assert mean.json()["csv_base64"] != mx.json()["csv_base64"]
+    assert mean.json() == back.json()
+    img = _read_png(png)
+    sp = _resampled(polyline)
+    row = np.array([float(v) for v in _csv_rows(mx.json())[0][1:]])
+    assert np.allclose(
+        row, tracker_kymograph._sample_line_profiles(img, sp, 11).max, atol=1e-4
+    )
+
+
+def test_a_width_one_row_is_the_same_array_under_both_reductions(tmp_path):
+    """At width 1 there is no band, so the two reductions are the identical
+    row. Storing it once keeps a width-1 entry costing exactly what it cost
+    before the cache learned to hold both — which is every entry the export
+    and the default modal view create.
+
+    Mutation check: make ``_sample_line_profiles`` build the width-1 pair with
+    two copies and the identity assertion fails; make ``_SampledRowCache._cost``
+    add both unconditionally and the byte assertion fails."""
+    png = tmp_path / "f0.png"
+    _write_gradient_png(png)
+    img = _read_png(png)
+    sp = _resampled([[8.0, 0.0], [8.0, 63.0]])
+
+    rows = tracker_kymograph._sample_line_profiles(img, sp, 1)
+    assert rows.max is rows.mean
+
+    cache = tracker_kymograph._SampledRowCache(budget_bytes=1 << 20)
+    cache.put(("k",), rows)
+    assert cache.stats()["bytes"] == (
+        rows.mean.nbytes + tracker_kymograph._ENTRY_OVERHEAD_BYTES
+    )
 
 
 def _write_offset_stripe_diagonal_png(
@@ -2388,10 +2466,10 @@ def test_an_even_width_band_is_centred_on_the_line(tmp_path):
     img = (4.0 * rows + cols).astype(np.float32)
     sp = _resampled(_diag_polyline())
 
-    centre = tracker_kymograph._sample_line_profile(img, sp, 1, "mean")
+    centre = tracker_kymograph._sample_line_profiles(img, sp, 1).mean
 
     for width in (2, 4, 3, 5):
-        band = tracker_kymograph._sample_line_profile(img, sp, width, "mean")
+        band = tracker_kymograph._sample_line_profiles(img, sp, width).mean
         assert np.allclose(band, centre, atol=1e-2), (
             f"width {width} band is off-centre by "
             f"{np.mean(band - centre):+.4f} counts"
