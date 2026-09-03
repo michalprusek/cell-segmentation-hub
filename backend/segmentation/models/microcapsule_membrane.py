@@ -1,15 +1,19 @@
 """Membrane state per microcapsule + inner-circle segmentation.
 
 VENDORED, 2026-09-03, from the `microcapsule-membrane` archive
-(`microcaps/membrane.py`), with two deliberate changes and no others:
+(`microcaps/membrane.py`), with three deliberate changes and no others:
 
-  - `_fill_circular` is inlined (see its docstring). The archive's
-    `microcaps/pipeline.py` — its own Hough + overlap-suppression outer-wall
-    detector — is NOT vendored: this repo already has the capsule contours from
-    the distilled U-Net, and that detector is documented upstream as returning
-    a single capsule per image, which would be a downgrade here.
+  - The archive's `microcaps/pipeline.py` — its own Hough + overlap-suppression
+    outer-wall detector — is NOT vendored: this repo already has the capsule
+    contours from the distilled U-Net, and that detector is documented upstream
+    as returning a single capsule per image, which would be a downgrade here.
   - `analyze_image` (which called that detector) is dropped; `analyze` is the
     entry point, driven by `capsule_from_polygon` below.
+  - `_trace_inner` traces the inner contour by dynamic programming instead of
+    an independent per-ray argmax. This is the one place the method's OUTPUT
+    differs from upstream, and it is deliberate — see that function. Upstream's
+    `_fill_circular` came over with the old tracer and left with it; nothing
+    else here needed it.
 
 The classifier is classical and unsupervised — no weights, no GPU, ~1.3 s per
 1280x1024 image on CPU. Its two thresholds were calibrated on 42 labelled
@@ -69,25 +73,6 @@ from scipy.ndimage import gaussian_filter1d, map_coordinates
 
 
 
-def _fill_circular(r):
-    """Linearly interpolate NaNs on a periodic signal.
-
-    Vendored verbatim from the upstream `microcaps.pipeline`. It is the ONLY
-    thing this module needed from there, and that module is the archive's own
-    Hough/overlap outer-wall detector — which this repo does not use, because
-    the distilled U-Net already supplies the capsule contours. Copying ten
-    lines beats carrying a second, unused capsule detector.
-    """
-    n = len(r)
-    idx = np.arange(n)
-    good = ~np.isnan(r)
-    if good.sum() < 8:
-        return None
-    ext_i = np.concatenate([idx[good] - n, idx[good], idx[good] + n])
-    ext_v = np.tile(r[good], 3)
-    return np.interp(idx, ext_i, ext_v)
-
-
 # --------------------------------------------------------------------------- #
 # Tunables.  Radii are (fraction of the capsule radius, absolute px floor) and
 # resolve to whichever is larger -- the dataset mixes magnifications.
@@ -104,6 +89,9 @@ BASELINE_GAP = (0.05, 15.0) # keep the compartment medians this clear of the edg
 SIGMA_G = 1.5               # px, fine derivative scale (edge localisation)
 SIGMA_BG = 8.0              # px, coarse scale subtracted to reject broad ramps
 MIN_RADIUS = 40.0           # px, below this a capsule is not worth measuring
+TRACE_SLOPE = 0.23          # max radial px per arc px for the inner contour
+TRACE_PENALTY = 0.7         # movement cost, as a fraction of the median edge
+_NEG = -1e18                # DP stand-in for "impossible", safe to add up
 
 # Feature values for a capsule the method cannot read.  Both are pushed well
 # past their thresholds on the "dissolved" side ON PURPOSE: an unreadable
@@ -421,11 +409,116 @@ def _compartment_contrast(img, cap, angs, rout, r_edge):
 # --------------------------------------------------------------------------- #
 # Pass 3 -- the pixel-precise inner contour
 # --------------------------------------------------------------------------- #
+def _relax(cost, step_cost, offs, want_arg=False):
+    """One DP transition: best predecessor for every state, over `offs`.
+
+    Works on a 1-D cost vector or a stack of them (the start-state axis rides
+    in front), which is what lets stage 1 and stage 2 below share the code.
+    """
+    best = np.full_like(cost, _NEG)
+    arg = np.zeros(cost.shape, np.int8) if want_arg else None
+    for j, o in enumerate(offs):
+        if o == 0:
+            sh = cost
+        else:
+            sh = np.full_like(cost, _NEG)
+            if o > 0:
+                sh[..., o:] = cost[..., :-o]
+            else:
+                sh[..., :o] = cost[..., -o:]
+        v = sh - step_cost[j]
+        m = v > best
+        best[m] = v[m]
+        if arg is not None:
+            arg[m] = o
+    return best, arg
+
+
+def _trace_path(E, smax, lam):
+    """Best CLOSED path through the polar response `E` (rays x radial states).
+
+    Maximises total edge evidence minus `lam` per state of ray-to-ray radial
+    movement, with movement capped at `smax` states. Exact: every start state
+    is evaluated, so the answer is the global optimum rather than whatever a
+    greedy or single-anchor pass happens to find -- which matters, because the
+    whole point is to choose between two nearly-tied concentric edges, and an
+    anchored two-pass variant measurably picked the wrong one (a 19 px error on
+    a real capsule).
+
+    Done in two stages purely to keep memory O(S^2 + n*S) instead of O(n*S^2):
+    stage 1 carries costs only, to learn WHICH start state wins; stage 2 replays
+    that one start with a backtrack table. Same answer, ~S times less memory --
+    at 2048px capsules the one-stage form wanted hundreds of MB.
+    """
+    n, S = E.shape
+    offs = np.arange(-smax, smax + 1)
+    step_cost = lam * np.abs(offs)
+
+    # Stage 1: cost[b, s] = best score of a path that began at state b and has
+    # reached state s. No backtrack table.
+    cost = np.full((S, S), _NEG)
+    cost[np.arange(S), np.arange(S)] = E[0]
+    for k in range(1, n):
+        cost, _ = _relax(cost, step_cost, offs)
+        cost += E[k][None, :]
+
+    # Close the ring: a path that began at b must step back onto b.
+    idx = np.arange(S)
+    total = np.full(S, _NEG)
+    for j, o in enumerate(offs):
+        e = idx - o
+        ok = (e >= 0) & (e < S)
+        v = np.where(ok, cost[idx, np.clip(e, 0, S - 1)] - step_cost[j], _NEG)
+        m = v > total
+        total[m] = v[m]
+    if not np.isfinite(total).any() or total.max() <= _NEG / 2:
+        return None
+    b = int(np.argmax(total))
+
+    # Stage 2: replay start `b`, this time recording the transitions.
+    cost = np.full(S, _NEG)
+    cost[b] = E[0][b]
+    back = np.zeros((n, S), np.int8)
+    for k in range(1, n):
+        cost, back[k] = _relax(cost, step_cost, offs, want_arg=True)
+        cost += E[k]
+    end, best = b, _NEG
+    for j, o in enumerate(offs):
+        e = b - o
+        if 0 <= e < S and cost[e] - step_cost[j] > best:
+            best, end = cost[e] - step_cost[j], e
+    path = np.empty(n, int)
+    path[n - 1] = end
+    for k in range(n - 1, 0, -1):
+        path[k - 1] = path[k] - back[k, path[k]]
+    return path
+
+
 def _trace_inner(img, cap, angs, guide, rout):
-    """Free-form inner boundary: per-ray sub-pixel gradient maximum inside a
-    narrow band around the guide.  Radii are used RAW -- no Fourier or any
-    other smoothing -- so the contour follows the real membrane pixel by pixel,
-    exactly as ``pipeline.refine_boundary`` does for the outer wall."""
+    """Inner boundary as ONE closed contour, by dynamic programming.
+
+    Every ray offers several candidate edges inside the search band, and on a
+    real capsule the membrane's two faces are near-concentric and nearly
+    equal in strength. Choosing each ray's argmax INDEPENDENTLY -- which is
+    what this did until 2026-09-03, and what `pipeline.refine_boundary` does
+    for the outer wall -- therefore lets a 0.01 difference in edge response
+    move the contour 16 px, and the result steps between the two faces in
+    square notches. Measured on the eleven membranes in production at the
+    time: 5 of 11 stepped, ray-to-ray jumps up to 19.7 px on a contour whose
+    points are 2.2 px apart.
+
+    So the rays are not independent any more: the contour is the single
+    closed path of maximum total edge evidence, subject to a cap on how fast
+    it may move radially from one ray to the next. Continuity is a property
+    of the boundary being traced, not a cosmetic filter, so this is imposed
+    during the search rather than smoothed on afterwards -- a low-pass over
+    the stepped contour would have parked it BETWEEN the two faces, wrong
+    everywhere instead of wrong in patches.
+
+    It does not flatten the capsule into a circle: on the same eleven, the
+    path keeps 97.5% of the evidence an unconstrained per-ray argmax could
+    reach, against 44% for the best-fitting fixed radius.
+    """
     R = cap.mean_radius
     band = _px(TRACE_BAND, R)
     step = 0.25
@@ -437,55 +530,52 @@ def _trace_inner(img, cap, angs, guide, rout):
     F = _row_fill(V)
     D = (gaussian_filter1d(F, SIGMA_G / step, order=1, axis=1) -
          gaussian_filter1d(F, SIGMA_BG / step, order=1, axis=1)) / step
-    D[~np.isfinite(V)] = -np.inf
+    D[~np.isfinite(V)] = np.nan
 
-    radial = np.full(len(angs), np.nan)
-    strength = np.zeros(len(angs))
-    for k in range(len(angs)):
-        d = D[k]
-        if not np.isfinite(d).any() or np.nanmax(d) <= 0:
-            continue
-        i = int(np.nanargmax(d))
-        off = 0.0
-        if 0 < i < len(u) - 1 and np.isfinite(d[i - 1]) and np.isfinite(d[i + 1]):
-            a, b, c = d[i - 1], d[i], d[i + 1]
-            den = a - 2 * b + c
-            off = float(np.clip(0.5 * (a - c) / den, -1, 1)) if abs(den) > 1e-9 else 0.0
-        radial[k] = guide[k] + u[i] + off * step
-        strength[k] = float(d[i])
-
-    # Drop rays that carry no real edge, and single-ray spikes where the argmax
-    # jumped to a neighbouring feature.  A genuine irregularity varies smoothly
-    # with angle and survives both tests; the surviving radii are then used RAW.
-    ref = np.median(strength[strength > 0]) if (strength > 0).any() else 0.0
-    radial[strength < 0.30 * ref] = np.nan
-    ok = np.isfinite(radial)
-    if ok.sum() >= 24:
-        local = _circular_median(radial, win=15)
-        dev = np.abs(radial - local)
-        mad = np.nanmedian(dev[ok])
-        radial[dev > max(2.0, 4.0 * mad)] = np.nan
-
-    filled = _fill_circular(radial)
-    if filled is None:
+    finite = D[np.isfinite(D)]
+    if finite.size == 0 or not (finite > 0).any():
         return None, 0.0
-    xs = cap.cx + filled * np.cos(angs)
-    ys = cap.cy + filled * np.sin(angs)
-    return (np.stack([xs, ys], 1).astype(np.float32),
-            float(np.isfinite(radial).mean()))
+    ref = float(np.median(finite[finite > 0]))
 
+    # The movement cap is a SHAPE constraint, so it is set per unit arc rather
+    # than per ray: the rays get closer together on a smaller capsule, and a
+    # fixed per-ray cap would silently tighten with magnification. 0.23 radial
+    # px per arc px is ~0.5 px/ray at the ~250 px radii in production, which is
+    # where cap saturation levels off (22% of rays pinned at 0.35 px/ray, 3.1%
+    # at 0.5, 1.4% beyond) and before a looser cap starts letting the path
+    # wander between faces again.
+    arc = 2 * np.pi * float(np.mean(guide)) / max(len(angs), 1)
+    smax = int(np.clip(round(TRACE_SLOPE * arc / step), 1, len(u) - 1))
+    lam = TRACE_PENALTY * ref / smax
 
-def _circular_median(r, win=15):
-    """Running median over a wrap-around window; a reference for spike
-    rejection only -- it never reaches the output contour."""
-    n = len(r)
-    pad = np.concatenate([r[-win:], r, r[:win]])
-    out = np.empty(n)
-    with np.errstate(invalid="ignore"):
-        for k in range(n):
-            seg = pad[k + win - win // 2: k + win + win // 2 + 1]
-            out[k] = np.nanmedian(seg) if np.isfinite(seg).any() else np.nan
-    return out
+    E = np.where(np.isfinite(D), D, _NEG)
+    path = _trace_path(E, smax, lam)
+    if path is None:
+        return None, 0.0
+
+    # Sub-pixel: parabola through the chosen state and its neighbours.
+    k = np.arange(len(angs))
+    i = path
+    off = np.zeros(len(angs))
+    inner = (i > 0) & (i < len(u) - 1)
+    if inner.any():
+        kk, ii = k[inner], i[inner]
+        a, b_, c = E[kk, ii - 1], E[kk, ii], E[kk, ii + 1]
+        den = a - 2 * b_ + c
+        ok = np.abs(den) > 1e-9
+        good = np.isfinite(a) & np.isfinite(c) & (a > _NEG / 2) & (c > _NEG / 2)
+        val = np.zeros(len(kk))
+        sel = ok & good
+        val[sel] = np.clip(0.5 * (a[sel] - c[sel]) / den[sel], -1, 1)
+        off[inner] = val
+
+    radial = guide + u[i] + off * step
+    strength = E[k, i]
+    support = float(np.mean(strength >= 0.30 * ref))
+
+    xs = cap.cx + radial * np.cos(angs)
+    ys = cap.cy + radial * np.sin(angs)
+    return np.stack([xs, ys], 1).astype(np.float32), support
 
 
 # --------------------------------------------------------------------------- #
