@@ -2430,7 +2430,7 @@ export default {
   },
   contextMenu: {
     propagateSelectedTracks: 'Propagovat vybrané mikrotubuly ({{count}})',
-    confirmPropagateSelected: 'Propagovat {{count}} vybraných mikrotubulů?',
+    confirmPropagateSelected: 'Propagovat vybrané mikrotubuly ({{count}})?',
     propagateSelectedDescription:
       'Přepíše tvar {{count}} vybraných mikrotubulů ve všech následujících snímcích videa. Tuto akci nelze vrátit.',
     propagateTrack: 'Propagovat do dalších snímků',
@@ -2442,11 +2442,11 @@ export default {
     deleteTrackDescription:
       'Odstraní tento mikrotubulus ze všech {{count}} snímků videa. Tuto akci nelze vrátit.',
     deleteMicrotubule: 'Smazat mikrotubulus…',
-    deleteSelected: 'Smazat {{count}} mikrotubulů…',
-    confirmDeleteSelected: 'Smazat {{count}} mikrotubulů?',
+    deleteSelected: 'Smazat vybrané mikrotubuly ({{count}})…',
+    confirmDeleteSelected: 'Smazat vybrané mikrotubuly ({{count}})?',
     deleteSelectedDescription:
-      'Odstraní všech {{count}} vybraných mikrotubulů. Tuto akci nelze vrátit.',
-    confirmDeleteScopeSelected: 'Smazat {{count}} mikrotubulů?',
+      'Odstraní všechny vybrané mikrotubuly ({{count}}). Tuto akci nelze vrátit.',
+    confirmDeleteScopeSelected: 'Smazat vybrané mikrotubuly ({{count}})?',
     confirmDeleteScope: 'Smazat tento mikrotubulus?',
     deleteScopeDescription:
       'Tento mikrotubulus je sledován napříč celým videem. Smazat ho jen z aktuálního snímku, nebo ze všech snímků? Tuto akci nelze vrátit.',
@@ -2648,7 +2648,7 @@ export default {
     showAll: 'Zobrazit vše',
     type: {
       set: 'Nastavit typ',
-      setForSelected: 'Nastavit typ pro {{count}} vybraných',
+      setForSelected: 'Nastavit typ pro vybrané ({{count}})',
       none: 'Žádný',
       newLabel: 'Nový label…',
       renameLabel: 'Přejmenovat label',
