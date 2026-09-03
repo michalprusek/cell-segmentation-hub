@@ -2486,6 +2486,8 @@ export default {
     confirmDeleteScope: 'Supprimer ce microtubule ?',
     deleteScopeDescription:
       'Ce microtubule est suivi sur toute la vidéo. Le supprimer uniquement de l’image actuelle ou de toutes les images ? Cette action est irréversible.',
+    deleteScopeSelectedDescription:
+      'Les microtubules sélectionnés sont suivis sur toute la vidéo. Les supprimer uniquement de l’image actuelle ou de toutes les images ? Cette action est irréversible.',
     deleteScopeThisFrame: 'Cette image uniquement',
     deleteScopeAllFrames: 'Toutes les images',
     deleteScopeAllFramesCount: 'Les {{count}} images',

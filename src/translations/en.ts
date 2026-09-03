@@ -2480,6 +2480,8 @@ export default {
     confirmDeleteScope: 'Delete this microtubule?',
     deleteScopeDescription:
       'This microtubule is tracked across the video. Delete it from the current frame only, or from every frame? This cannot be undone.',
+    deleteScopeSelectedDescription:
+      'The selected microtubules are tracked across the video. Delete them from the current frame only, or from every frame? This cannot be undone.',
     deleteScopeThisFrame: 'This frame only',
     deleteScopeAllFrames: 'All frames',
     deleteScopeAllFramesCount: 'All {{count}} frames',

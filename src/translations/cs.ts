@@ -2450,6 +2450,8 @@ export default {
     confirmDeleteScope: 'Smazat tento mikrotubulus?',
     deleteScopeDescription:
       'Tento mikrotubulus je sledován napříč celým videem. Smazat ho jen z aktuálního snímku, nebo ze všech snímků? Tuto akci nelze vrátit.',
+    deleteScopeSelectedDescription:
+      'Vybrané mikrotubuly jsou sledovány napříč celým videem. Smazat je jen z aktuálního snímku, nebo ze všech snímků? Tuto akci nelze vrátit.',
     deleteScopeThisFrame: 'Jen z tohoto snímku',
     deleteScopeAllFrames: 'Ze všech snímků',
     deleteScopeAllFramesCount: 'Ze všech {{count}} snímků',

@@ -2468,6 +2468,8 @@ export default {
     confirmDeleteScope: '¿Eliminar este microtúbulo?',
     deleteScopeDescription:
       'Este microtúbulo se sigue a lo largo del vídeo. ¿Eliminarlo solo del fotograma actual o de todos los fotogramas? Esta acción no se puede deshacer.',
+    deleteScopeSelectedDescription:
+      'Los microtúbulos seleccionados se siguen a lo largo del vídeo. ¿Eliminarlos solo del fotograma actual o de todos los fotogramas? Esta acción no se puede deshacer.',
     deleteScopeThisFrame: 'Solo este fotograma',
     deleteScopeAllFrames: 'Todos los fotogramas',
     deleteScopeAllFramesCount: 'Los {{count}} fotogramas',
