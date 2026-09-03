@@ -34,9 +34,16 @@ interface UseSegmentationLoaderParams {
 
 interface UseSegmentationLoaderResult {
   segmentationPolygons: SegmentationPolygon[] | null;
-  setSegmentationPolygons: React.Dispatch<
-    React.SetStateAction<SegmentationPolygon[] | null>
-  >;
+  /** The frame `segmentationPolygons` were loaded for. Differs from the
+   *  orchestrator's `imageId` for the one render between a scrub and the load
+   *  that answers it — see `useEnhancedSegmentationEditor`'s `polygonsImageId`. */
+  polygonsImageId: string | undefined;
+  /** Not a plain `setState`: it stamps the polygons with the current frame, so
+   *  the two can never be written a render apart. Takes a value, never an
+   *  updater function — a caller-supplied updater would have to reproduce the
+   *  stamp, and nothing needs one. (It uses an updater internally, to keep the
+   *  no-op bail-out; see the implementation.) */
+  setSegmentationPolygons: (polygons: SegmentationPolygon[] | null) => void;
   imageDimensions: { width: number; height: number } | null;
   setImageDimensions: React.Dispatch<
     React.SetStateAction<{ width: number; height: number } | null>
@@ -67,10 +74,43 @@ export function useSegmentationLoader({
   t,
   currentImageIdRef,
 }: UseSegmentationLoaderParams): UseSegmentationLoaderResult {
-  // State for segmentation polygons from API
-  const [segmentationPolygons, setSegmentationPolygons] = useState<
-    SegmentationPolygon[] | null
-  >(null);
+  // Polygons AND the frame they were loaded for, in ONE piece of state.
+  //
+  // They are stored together rather than side by side because the consumer
+  // (`useEnhancedSegmentationEditor`) has to tell "these belong to the frame on
+  // screen" from "these belong to the frame we just left" — and two separate
+  // useStates could be written a render apart, which is precisely the bug this
+  // stamp exists to fix. One setter, one object, no window in which the stamp
+  // describes the wrong array.
+  const [loadedSegmentation, setLoadedSegmentation] = useState<{
+    imageId: string | undefined;
+    polygons: SegmentationPolygon[] | null;
+  }>({ imageId: undefined, polygons: null });
+  const segmentationPolygons = loadedSegmentation.polygons;
+  const polygonsImageId = loadedSegmentation.imageId;
+  // Stamps with the frame the loader is currently working on, which every
+  // caller means: the load path writes results for the frame it just read, and
+  // the save/reload paths write results for the frame on screen.
+  //
+  // Returning `prev` unchanged is load-bearing, not a micro-optimisation. This
+  // used to be a plain `useState<Polygon[] | null>`, where the very common
+  // `setSegmentationPolygons(null)` on an already-null state was a no-op —
+  // `Object.is(null, null)`, React bails out, nothing re-renders. Wrapping the
+  // value in an object made every such call allocate a NEW state object, so the
+  // load effect re-rendered the editor on each run and re-entered itself: an
+  // infinite render loop that OOMs the tab (and did OOM the CI suite before
+  // this guard was added). Compare both fields and hand back the same object
+  // when neither moved.
+  const setSegmentationPolygons = useCallback(
+    (polygons: SegmentationPolygon[] | null) => {
+      setLoadedSegmentation(prev =>
+        prev.polygons === polygons && prev.imageId === currentImageIdRef.current
+          ? prev
+          : { imageId: currentImageIdRef.current, polygons }
+      );
+    },
+    [currentImageIdRef]
+  );
   const [imageDimensions, setImageDimensions] = useState<{
     width: number;
     height: number;
@@ -370,6 +410,7 @@ export function useSegmentationLoader({
   return {
     segmentationPolygons,
     setSegmentationPolygons,
+    polygonsImageId,
     imageDimensions,
     setImageDimensions,
     loadedFrameKey,

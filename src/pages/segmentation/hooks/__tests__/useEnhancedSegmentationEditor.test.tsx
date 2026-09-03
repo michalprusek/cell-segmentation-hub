@@ -271,6 +271,88 @@ describe('useEnhancedSegmentationEditor', () => {
       expect(result.current.polygons).toEqual([p1, p2]);
       expect(result.current.hasUnsavedChanges).toBe(false);
     });
+
+    // ── The editor painted the PREVIOUS frame (2026-09-03) ─────────────────
+    // Scrubbing between two frames with the SAME polygon count left the canvas
+    // showing the frame you came from, permanently — a reload was the only
+    // way out. Measured in production on a 3-frame container: 10 of 24 scrubs
+    // wrong, and still wrong 3 s later, always exactly the previous frame's
+    // polygons. The two 6-polygon frames stuck; the 1-polygon frame never did,
+    // which is the whole tell.
+    //
+    // The mechanism is that `imageId` changes one render BEFORE the loader has
+    // replaced `initialPolygons`, so the effect saw (new imageId, OLD
+    // polygons), consumed the `imageChanged` signal on them, and by the time
+    // the right polygons arrived only `lengthChanged` was left to notice — and
+    // 6 === 6 notices nothing.
+    //
+    // `polygonsImageId` stamps the polygons with the frame they were loaded
+    // for, so the effect can tell the two apart instead of inferring.
+    it('does not adopt polygons belonging to the frame we just left', () => {
+      const a1 = makePolygon('a1');
+      const a2 = makePolygon('a2');
+
+      const { result, rerender } = renderHook(
+        props => useEnhancedSegmentationEditor(props),
+        {
+          initialProps: {
+            ...baseProps,
+            imageId: 'frameA',
+            polygonsImageId: 'frameA',
+            initialPolygons: [a1, a2],
+          },
+        }
+      );
+      expect(result.current.polygons).toEqual([a1, a2]);
+
+      // The scrub: imageId is already frameB, the polygons are still frameA's.
+      rerender({
+        ...baseProps,
+        imageId: 'frameB',
+        polygonsImageId: 'frameA',
+        initialPolygons: [a1, a2],
+      });
+
+      expect(result.current.polygons).toEqual([]);
+    });
+
+    it('adopts the new frame even when its polygon count is unchanged', () => {
+      const a1 = makePolygon('a1');
+      const a2 = makePolygon('a2');
+      const b1 = makePolygon('b1');
+      const b2 = makePolygon('b2');
+
+      const { result, rerender } = renderHook(
+        props => useEnhancedSegmentationEditor(props),
+        {
+          initialProps: {
+            ...baseProps,
+            imageId: 'frameA',
+            polygonsImageId: 'frameA',
+            initialPolygons: [a1, a2],
+          },
+        }
+      );
+
+      // One render with the stale polygons — this is what used to burn the
+      // `imageChanged` signal...
+      rerender({
+        ...baseProps,
+        imageId: 'frameB',
+        polygonsImageId: 'frameA',
+        initialPolygons: [a1, a2],
+      });
+      // ...and then frameB lands with the SAME count, which `lengthChanged`
+      // cannot see.
+      rerender({
+        ...baseProps,
+        imageId: 'frameB',
+        polygonsImageId: 'frameB',
+        initialPolygons: [b1, b2],
+      });
+
+      expect(result.current.polygons).toEqual([b1, b2]);
+    });
   });
 
   // ────────────────────────────────────────────────────────────────────────────
