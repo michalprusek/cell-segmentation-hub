@@ -23,9 +23,16 @@ import { PROJECT_TYPES, type ProjectType } from '@/types';
 interface ProjectDialogFormProps {
   onSuccess?: (projectId: string) => void;
   onClose: () => void;
+  /** Folder the dashboard is showing, so the project is created there rather
+   *  than at the root. See `useProjectForm`. */
+  folderId?: string | null;
 }
 
-const ProjectDialogForm = ({ onSuccess, onClose }: ProjectDialogFormProps) => {
+const ProjectDialogForm = ({
+  onSuccess,
+  onClose,
+  folderId,
+}: ProjectDialogFormProps) => {
   const { t } = useLanguage();
   const {
     projectName,
@@ -36,7 +43,7 @@ const ProjectDialogForm = ({ onSuccess, onClose }: ProjectDialogFormProps) => {
     setProjectType,
     isCreating,
     handleCreateProject,
-  } = useProjectForm({ onSuccess, onClose });
+  } = useProjectForm({ onSuccess, onClose, folderId });
 
   return (
     <>

@@ -698,6 +698,7 @@ export default {
       deselectAll: 'Deselect all',
       selected: '{{count}} selected',
     },
+    resizeSidebar: 'Resize panel',
     trackOps: {
       propagateSelectedSuccess:
         'Propagated {{count}} microtubules to the following frames',
@@ -1201,6 +1202,9 @@ export default {
       notFound: 'Project not found',
       invalidResponse: 'Server response was invalid',
       readyForImages: 'is ready for images',
+      createdAtRootInstead: 'Project created at the top level',
+      moveToFolderFailed:
+        'It could not be filed into the current folder — move it there manually.',
       selected: '{{count}} image selected',
       selected_other: '{{count}} images selected',
       deleteSelected: 'Delete Selected',

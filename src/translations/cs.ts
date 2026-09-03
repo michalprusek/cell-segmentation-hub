@@ -695,6 +695,7 @@ export default {
       deselectAll: 'Zrušit výběr',
       selected: 'Vybráno: {{count}}',
     },
+    resizeSidebar: 'Změnit šířku panelu',
     trackOps: {
       propagateSelectedSuccess:
         '{{count}} mikrotubulů propagováno do dalších snímků',
@@ -1214,6 +1215,9 @@ export default {
       unshared: 'Projekt byl odebrán ze sdílených',
       invalidResponse: 'Odpověď serveru byla neplatná',
       readyForImages: 'je připraven pro obrázky',
+      createdAtRootInstead: 'Projekt vytvořen na hlavní úrovni',
+      moveToFolderFailed:
+        'Nepodařilo se ho vložit do aktuální složky — přesuň ho tam ručně.',
       selected: '{{count}} obrázek vybrán',
       selected_other: '{{count}} obrázky vybrány',
       deleteSelected: 'Smazat vybrané',

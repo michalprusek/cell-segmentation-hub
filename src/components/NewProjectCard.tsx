@@ -6,9 +6,16 @@ import ProjectDialogForm from '@/components/project/ProjectDialogForm';
 interface NewProjectCardProps {
   isOpen?: boolean;
   onOpenChange?: (open: boolean) => void;
+  /** Folder the dashboard is currently showing (null at the root). Threaded so
+   *  a project created from inside a folder lands in it. */
+  folderId?: string | null;
 }
 
-const NewProjectCard = ({ isOpen, onOpenChange }: NewProjectCardProps) => {
+const NewProjectCard = ({
+  isOpen,
+  onOpenChange,
+  folderId,
+}: NewProjectCardProps) => {
   const [open, setOpen] = useState(false);
 
   // Determine if the dialog is open using internal or external state
@@ -35,7 +42,7 @@ const NewProjectCard = ({ isOpen, onOpenChange }: NewProjectCardProps) => {
 
         <Dialog open={isDialogOpen} onOpenChange={setDialogOpen}>
           <DialogContent className="sm:max-w-[425px]">
-            <ProjectDialogForm onClose={handleClose} />
+            <ProjectDialogForm onClose={handleClose} folderId={folderId} />
           </DialogContent>
         </Dialog>
       </>
@@ -46,7 +53,7 @@ const NewProjectCard = ({ isOpen, onOpenChange }: NewProjectCardProps) => {
   return (
     <Dialog open={isDialogOpen} onOpenChange={setDialogOpen}>
       <DialogContent className="sm:max-w-[425px]">
-        <ProjectDialogForm onClose={handleClose} />
+        <ProjectDialogForm onClose={handleClose} folderId={folderId} />
       </DialogContent>
     </Dialog>
   );

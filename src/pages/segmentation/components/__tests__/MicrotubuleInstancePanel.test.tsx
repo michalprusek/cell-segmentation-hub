@@ -185,8 +185,40 @@ describe('MicrotubuleInstancePanel', () => {
       renderWithProviders(
         <MicrotubuleInstancePanel {...DEFAULT_PROPS} polygons={[legacy]} />
       );
-      // Shows the row label "Microtubule 1"
-      expect(screen.getByText('Microtubule 1')).toBeInTheDocument();
+      // Shows the EXPORT label, "MT1" — the same identifier the metrics table's
+      // `label` column and the badge on the exported image carry, so a
+      // spreadsheet row can be traced back to this row. It used to read
+      // "Microtubule 1", numbered by this panel's own trackId-sorted position,
+      // which matched the export only by luck (Institut Curie, 2026-09-03).
+      expect(screen.getByText('MT1')).toBeInTheDocument();
+      expect(screen.queryByText('Microtubule 1')).not.toBeInTheDocument();
+    });
+
+    it('numbers rows the way the export does, not by row position', () => {
+      // The divergence itself: display order sorts on trackId, so `t_a` is the
+      // FIRST row — but the export numbers by first appearance in the array,
+      // where `t_a` is second. The row must read MT2.
+      const mk = (id: string, trackId: string, instanceId: string): Polygon =>
+        ({
+          id,
+          points: [
+            { x: 0, y: 0 },
+            { x: 5, y: 5 },
+          ],
+          geometry: 'polyline',
+          class: 'microtubule',
+          instanceId,
+          trackId,
+        }) as Polygon;
+      renderWithProviders(
+        <MicrotubuleInstancePanel
+          {...DEFAULT_PROPS}
+          polygons={[mk('p1', 't_b', 'mt_b'), mk('p2', 't_a', 'mt_a')]}
+        />
+      );
+      const rows = screen.getAllByText(/^MT\d+$/).map(n => n.textContent);
+      // Sorted by trackId → t_a's row is rendered first, and it is MT2.
+      expect(rows).toEqual(['MT2', 'MT1']);
     });
   });
 
