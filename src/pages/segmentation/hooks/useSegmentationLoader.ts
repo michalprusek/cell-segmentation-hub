@@ -39,8 +39,10 @@ interface UseSegmentationLoaderResult {
    *  that answers it — see `useEnhancedSegmentationEditor`'s `polygonsImageId`. */
   polygonsImageId: string | undefined;
   /** Not a plain `setState`: it stamps the polygons with the current frame, so
-   *  the two can never be written a render apart. No functional-update form —
-   *  nothing needs it, and it would have to reproduce the stamp. */
+   *  the two can never be written a render apart. Takes a value, never an
+   *  updater function — a caller-supplied updater would have to reproduce the
+   *  stamp, and nothing needs one. (It uses an updater internally, to keep the
+   *  no-op bail-out; see the implementation.) */
   setSegmentationPolygons: (polygons: SegmentationPolygon[] | null) => void;
   imageDimensions: { width: number; height: number } | null;
   setImageDimensions: React.Dispatch<
