@@ -194,10 +194,12 @@ describe('MicrotubuleInstancePanel', () => {
       expect(screen.queryByText('Microtubule 1')).not.toBeInTheDocument();
     });
 
-    it('numbers rows the way the export does, not by row position', () => {
-      // The divergence itself: display order sorts on trackId, so `t_a` is the
-      // FIRST row — but the export numbers by first appearance in the array,
-      // where `t_a` is second. The row must read MT2.
+    it('numbers rows the way the export does, and lists them in that order', () => {
+      // Two rules at once. The LABEL comes from first-appearance order of
+      // `instanceId` (the export's rule), so `mt_b` is MT1 even though its
+      // trackId sorts last. The ROW ORDER then follows that label, so the panel
+      // reads top-to-bottom in the same order as the metrics table — which is
+      // the whole point of showing the export's number here.
       const mk = (id: string, trackId: string, instanceId: string): Polygon =>
         ({
           id,
@@ -217,8 +219,94 @@ describe('MicrotubuleInstancePanel', () => {
         />
       );
       const rows = screen.getAllByText(/^MT\d+$/).map(n => n.textContent);
-      // Sorted by trackId → t_a's row is rendered first, and it is MT2.
-      expect(rows).toEqual(['MT2', 'MT1']);
+      // Ascending by MT number, NOT by trackId (which would give MT2, MT1).
+      expect(rows).toEqual(['MT1', 'MT2']);
+    });
+
+    it('orders MT10 after MT9, not between MT1 and MT2', () => {
+      // A lexicographic sort on the label string would read
+      // MT1, MT10, MT2 … — the classic wrong answer, and invisible until a
+      // user has ten microtubules on a frame, which is the normal case.
+      const mk = (i: number): Polygon =>
+        ({
+          id: `p${i}`,
+          points: [
+            { x: 0, y: 0 },
+            { x: 5, y: 5 },
+          ],
+          geometry: 'polyline',
+          class: 'microtubule',
+          instanceId: `mt_${i}`,
+          // trackIds deliberately reversed, so a fallback to the old sort
+          // would produce the opposite order.
+          trackId: `t_${String(100 - i).padStart(3, '0')}`,
+        }) as Polygon;
+      renderWithProviders(
+        <MicrotubuleInstancePanel
+          {...DEFAULT_PROPS}
+          polygons={Array.from({ length: 11 }, (_, i) => mk(i + 1))}
+        />
+      );
+      const rows = screen.getAllByText(/^MT\d+$/).map(n => n.textContent);
+      expect(rows.slice(0, 3)).toEqual(['MT1', 'MT2', 'MT3']);
+      expect(rows[9]).toBe('MT10');
+      expect(rows[10]).toBe('MT11');
+    });
+
+    it('puts rows that earn no export label at the end', () => {
+      // A 1-point polyline draws no badge and gets no number, so it has no
+      // place in the numbered sequence — but it must still be listed, and in a
+      // defined position rather than wherever the sort happens to drop it.
+      const line = (id: string, track: string, pts: number): Polygon =>
+        ({
+          id,
+          points: Array.from({ length: pts }, (_, i) => ({ x: i, y: i })),
+          geometry: 'polyline',
+          class: 'microtubule',
+          instanceId: `mt_${id}`,
+          trackId: track,
+        }) as Polygon;
+      renderWithProviders(
+        <MicrotubuleInstancePanel
+          {...DEFAULT_PROPS}
+          // The unlabelled row's trackId sorts FIRST, so the tie-break alone
+          // would put it at the top. Only the rank can push it to the end.
+          polygons={[line('a', 't_aaa', 1), line('b', 't_zzz', 2)]}
+        />
+      );
+      const labelled = screen.getAllByText(/^MT\d+$/).map(n => n.textContent);
+      expect(labelled).toEqual(['MT1']);
+      // Two rows rendered, the unlabelled one after the labelled one.
+      const names = screen
+        .getAllByText(/^(MT\d+|Microtubule \d+)$/)
+        .map(n => n.textContent);
+      expect(names[0]).toBe('MT1');
+      expect(names).toHaveLength(2);
+    });
+
+    it('orders two unlabelled rows by trackId, not by array order', () => {
+      // Both rank the same (no export label), so the tie-break decides — and
+      // it must actually run, rather than returning 0 and silently inheriting
+      // the array order that a stable sort would preserve.
+      const undrawable = (name: string, track: string): Polygon =>
+        ({
+          id: name,
+          points: [{ x: 0, y: 0 }],
+          geometry: 'polyline',
+          class: 'microtubule',
+          instanceId: `mt_${name}`,
+          trackId: track,
+          name,
+        }) as Polygon;
+      renderWithProviders(
+        <MicrotubuleInstancePanel
+          {...DEFAULT_PROPS}
+          // Array order is ZZZ, AAA — the reverse of the trackId order.
+          polygons={[undrawable('ZZZ', 't_zzz'), undrawable('AAA', 't_aaa')]}
+        />
+      );
+      const names = screen.getAllByText(/^(AAA|ZZZ)$/).map(n => n.textContent);
+      expect(names).toEqual(['AAA', 'ZZZ']);
     });
   });
 

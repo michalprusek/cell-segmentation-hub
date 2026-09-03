@@ -132,18 +132,42 @@ const MicrotubuleInstancePanel: React.FC<MicrotubuleInstancePanelProps> = ({
     [deferredPolygons]
   );
 
-  // Stable identity for sort + color: prefer trackId (preserved across
-  // frames by the Hungarian tracker), fall back to instanceId before
-  // tracking has run on the container.
-  const sorted = useMemo(
-    () =>
-      [...microtubules].sort((a, b) =>
-        (a.trackId ?? a.instanceId ?? '').localeCompare(
-          b.trackId ?? b.instanceId ?? ''
-        )
-      ),
-    [microtubules]
-  );
+  // Rows are listed in EXPORT-LABEL order, so the panel reads top-to-bottom in
+  // the same order as the metrics table and a spreadsheet row can be found by
+  // scanning down. That is a deliberate trade against the previous trackId
+  // sort, which kept a microtubule at a fixed row position while scrubbing:
+  // the label is a per-frame ordinal, so its NUMBER already changes between
+  // frames, and holding the row still while the number moved was the more
+  // confusing half of the pair.
+  //
+  // `trackId ?? instanceId` remains the tie-break, so rows that earn no export
+  // label (no instanceId, or too few points to draw) keep a stable, defined
+  // order at the end of the list instead of shuffling on every render.
+  const sorted = useMemo(() => {
+    const rank = (p: Polygon): number => {
+      const label = p.instanceId ? instanceLabels.get(p.instanceId) : undefined;
+      if (!label) return Number.POSITIVE_INFINITY;
+      // `MT12` -> 12. Numeric, not lexicographic: a string sort puts MT10
+      // between MT1 and MT2.
+      const n = Number.parseInt(
+        label.slice(MICROTUBULE_LABEL_PREFIX.length),
+        10
+      );
+      return Number.isFinite(n) ? n : Number.POSITIVE_INFINITY;
+    };
+    return [...microtubules].sort((a, b) => {
+      const ra = rank(a);
+      const rb = rank(b);
+      // Compared rather than subtracted. `ra - rb` would in fact be correct
+      // here — the `!==` guard already excludes the only NaN case,
+      // `Infinity - Infinity` — but that is a fact the reader has to derive.
+      // A comparison is true on its face and stays true if the guard moves.
+      if (ra !== rb) return ra < rb ? -1 : 1;
+      return (a.trackId ?? a.instanceId ?? '').localeCompare(
+        b.trackId ?? b.instanceId ?? ''
+      );
+    });
+  }, [microtubules, instanceLabels]);
 
   if (sorted.length === 0) return null;
 
