@@ -567,6 +567,66 @@ describe('KymographModal', () => {
       );
     });
 
+    // The box was unusable at a single-digit value until 2026-09-03: it was
+    // rendered straight from the clamped number, so deleting the last digit
+    // handed the clamp an empty string, which floored to 1 and was written
+    // back into the box on the same render. You could append to a width but
+    // never replace one.
+    it('lets the user clear a single-digit width instead of flooring it to 1', async () => {
+      mockApiPost.mockResolvedValue({ data: { data: mockResult } });
+      render(<KymographModal {...defaultProps} />);
+
+      const input = await screen.findByLabelText(/Line width/i);
+      fireEvent.change(input, { target: { value: '5' } });
+      await waitFor(
+        () => expect(requestBody()).toMatchObject({ lineWidth: 5 }),
+        { timeout: 3000 }
+      );
+
+      fireEvent.change(input, { target: { value: '' } });
+      expect(input).toHaveValue(null);
+    });
+
+    it('keeps the width in force while the box is empty mid-edit', async () => {
+      mockApiPost.mockResolvedValue({ data: { data: mockResult } });
+      render(<KymographModal {...defaultProps} />);
+
+      const input = await screen.findByLabelText(/Line width/i);
+      fireEvent.change(input, { target: { value: '5' } });
+      await waitFor(
+        () => expect(requestBody()).toMatchObject({ lineWidth: 5 }),
+        { timeout: 3000 }
+      );
+
+      // An empty box is an unfinished edit, not "go back to a single-pixel
+      // profile" — rebuilding the whole kymograph at width 1 on the way to
+      // typing 12 is exactly the round trip this control must not spend.
+      fireEvent.change(input, { target: { value: '' } });
+      await new Promise(resolve => setTimeout(resolve, 600));
+      expect(requestBody()).toMatchObject({ lineWidth: 5 });
+
+      // ...and the digits typed next REPLACE the old value rather than
+      // appending to a value the box put back.
+      fireEvent.change(input, { target: { value: '12' } });
+      await waitFor(
+        () => expect(requestBody()).toMatchObject({ lineWidth: 12 }),
+        { timeout: 3000 }
+      );
+    });
+
+    it('puts the width in force back in the box when it is left empty', async () => {
+      mockApiPost.mockResolvedValue({ data: { data: mockResult } });
+      render(<KymographModal {...defaultProps} />);
+
+      const input = await screen.findByLabelText(/Line width/i);
+      fireEvent.change(input, { target: { value: '7' } });
+      fireEvent.change(input, { target: { value: '' } });
+      fireEvent.blur(input);
+
+      // The box must never be left showing something that is not being used.
+      expect(input).toHaveValue(7);
+    });
+
     it('clamps a width the ML service would reject', async () => {
       mockApiPost.mockResolvedValue({ data: { data: mockResult } });
       render(<KymographModal {...defaultProps} />);
@@ -618,6 +678,70 @@ describe('KymographModal', () => {
         detectVelocity: true,
         intensityWidth: 5,
       });
+    });
+
+    // Same edit bug as the line-width box, and the same fix: the intensity
+    // width floored an empty string to 1 and wrote it straight back, so a
+    // single-digit value could only be appended to.
+    it('lets the user clear a single-digit intensity width', async () => {
+      const user = userEvent.setup();
+      mockApiPost.mockResolvedValue({ data: { data: mockResult } });
+      render(<KymographModal {...defaultProps} />);
+
+      await user.click(
+        await screen.findByRole('button', { name: /Analyse velocities/i })
+      );
+      const input = await screen.findByLabelText(/Intensity width/i);
+      expect(input).toHaveValue(5);
+
+      fireEvent.change(input, { target: { value: '' } });
+      expect(input).toHaveValue(null);
+
+      // The width in force is unchanged until the edit finishes, so nothing
+      // re-measures at width 1 on the way to typing 12.
+      await new Promise(resolve => setTimeout(resolve, 600));
+      expect(requestBody()).toMatchObject({ intensityWidth: 5 });
+
+      fireEvent.change(input, { target: { value: '12' } });
+      await waitFor(
+        () => expect(requestBody()).toMatchObject({ intensityWidth: 12 }),
+        { timeout: 3000 }
+      );
+    });
+
+    it('keeps clearing the intensity floor meaning "off"', async () => {
+      const user = userEvent.setup();
+      mockApiPost.mockResolvedValue({ data: { data: mockResult } });
+      render(<KymographModal {...defaultProps} />);
+
+      await user.click(
+        await screen.findByRole('button', { name: /Analyse velocities/i })
+      );
+      const floor = await screen.findByLabelText(/Min. intensity/i);
+      fireEvent.change(floor, { target: { value: '40' } });
+      await waitFor(
+        () => expect(requestBody()).toMatchObject({ minIntensityMinusBg: 40 }),
+        { timeout: 3000 }
+      );
+
+      // Unlike the two widths, an EMPTY floor is a real instruction: it is how
+      // the user turns the filter off, so it must publish 0 (and 0 is omitted
+      // from the body) rather than keeping 40 in force.
+      fireEvent.change(floor, { target: { value: '' } });
+      expect(floor).toHaveValue(null);
+
+      // Clearing it back to 0 is a query key this modal already fetched, and
+      // React Query serves that from cache with no request at all — which is
+      // the right behaviour and also why the assertion cannot be "the next
+      // body omits the floor". Move a different control instead: the body it
+      // sends for that FRESH key is where the floor in force shows up.
+      const width = screen.getByLabelText(/Intensity width/i);
+      fireEvent.change(width, { target: { value: '7' } });
+      await waitFor(
+        () => expect(requestBody()).toMatchObject({ intensityWidth: 7 }),
+        { timeout: 3000 }
+      );
+      expect(requestBody()).not.toHaveProperty('minIntensityMinusBg');
     });
 
     it('keeps the kymograph on screen while velocities are computed', async () => {

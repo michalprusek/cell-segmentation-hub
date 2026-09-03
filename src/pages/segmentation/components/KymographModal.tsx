@@ -187,8 +187,10 @@ const clampScale = (s: number) => Math.min(Math.max(s, 0.05), 20);
  *  `intensity_width` in the ML `KymographRequest`, or the modal's opening view
  *  disagrees with what an export of the same microtubule reports.
  *
- *  The default is also the fallback for NaN-producing (truly non-numeric)
- *  input; empty or whitespace input parses to 0 and clamps up to 1. */
+ *  The default is the fallback for NaN-producing input, which
+ *  `useNumericField` already filters out — belt and braces, since this is also
+ *  called with a number. An empty box never reaches here: it is an unfinished
+ *  edit and leaves the width in force unchanged. */
 const DEFAULT_INTENSITY_WIDTH = 5;
 const clampWidth = (raw: string | number): number => {
   const n = Math.round(Number(raw));
@@ -198,8 +200,9 @@ const clampWidth = (raw: string | number): number => {
 
 /** The absolute intensity floor, in raw sample units.
  *
- *  An empty field, or anything that is not a number, means OFF rather than an
- *  error — clearing the box has to restore the unfiltered view. Not rounded:
+ *  Anything that is not a positive number means OFF rather than an error —
+ *  clearing the box has to restore the unfiltered view, which is why this is
+ *  the one field `useNumericField` is given an `emptyValue` for. Not rounded:
  *  the measurement it is compared against is a band mean, and on a dim channel
  *  the useful range is single digits where 1 count is a real step. No ceiling
  *  either, because a 16-bit frame can legitimately need one in the thousands. */
@@ -231,6 +234,58 @@ const clampLineWidth = (raw: string | number): number => {
   if (!Number.isFinite(n)) return DEFAULT_LINE_WIDTH;
   return Math.min(Math.max(n, 1), MAX_LINE_WIDTH);
 };
+
+/** State for a numeric `<input>` the user can actually EDIT.
+ *
+ *  A box rendered straight from its clamped number — `value={n}` with
+ *  `onChange={e => setN(clamp(e.target.value))}` — cannot be emptied. Deleting
+ *  the last digit hands the clamp an empty string, `Number('')` is 0, 0 is
+ *  finite, so the clamp floors it to the minimum and React writes that back
+ *  into the box on the same render. At a single-digit value that happens on
+ *  every keystroke, so the field only ever accepts an APPEND: you could turn 5
+ *  into 51, never into 12.
+ *
+ *  So the box is driven by the TEXT being typed and the number in force is
+ *  published beside it. Text that is not a number — "", "-", "1e" — publishes
+ *  nothing and the last value stays in effect, which also stops a full
+ *  kymograph rebuild at the minimum width on the way to typing a bigger one.
+ *  `onBlur` writes the value actually in force back into the box, so an
+ *  abandoned edit can never leave it showing something that is not being used.
+ *
+ *  `emptyValue` is for the one field where an empty box is a real instruction
+ *  rather than an unfinished edit: the intensity floor, where clearing the box
+ *  is how the filter is turned off. It is also what that field renders instead
+ *  of the number, keeping "off" and "empty" the same thing on screen.
+ */
+function useNumericField(
+  initial: number,
+  clamp: (raw: string) => number,
+  emptyValue?: number
+) {
+  const [value, setValue] = useState(initial);
+  const [text, setText] = useState(() =>
+    initial === emptyValue ? '' : String(initial)
+  );
+
+  const handleChange = (raw: string) => {
+    setText(raw);
+    if (raw.trim() === '') {
+      if (emptyValue !== undefined) {
+        setValue(emptyValue);
+      }
+      return;
+    }
+    // `Number` and not `parseFloat`: a half-typed "1e" must count as
+    // unfinished (NaN) rather than as 1.
+    if (Number.isFinite(Number(raw))) {
+      setValue(clamp(raw));
+    }
+  };
+
+  const handleBlur = () => setText(value === emptyValue ? '' : String(value));
+
+  return { value, text, handleChange, handleBlur };
+}
 
 /** Glyph marking which kymograph end(s) the trajectory reaches (position only —
  *  the motor's antero/retro travel direction is shown by track colour). */
@@ -274,14 +329,24 @@ export function KymographModal({
   // on a 300-frame container), so the image is fetched without it and the user
   // asks for the trajectories when they want them.
   const [detectVelocity, setDetectVelocity] = useState(false);
-  const [intensityWidth, setIntensityWidth] = useState(DEFAULT_INTENSITY_WIDTH);
+  const {
+    value: intensityWidth,
+    text: intensityWidthText,
+    handleChange: onIntensityWidthChange,
+    handleBlur: onIntensityWidthBlur,
+  } = useNumericField(DEFAULT_INTENSITY_WIDTH, clampWidth);
   // Debounced width drives the (expensive) kymograph refetch — each rebuild
   // re-reads every frame PNG + re-runs blob detection, so we coalesce rapid
   // keystrokes instead of firing a full ML round-trip per character.
   const [debouncedWidth, setDebouncedWidth] = useState(DEFAULT_INTENSITY_WIDTH);
   // Line width + its reduction. Unlike `intensityWidth` these change the
   // PICTURE, so they are part of `imageKey` below and both queries refetch.
-  const [lineWidth, setLineWidth] = useState(DEFAULT_LINE_WIDTH);
+  const {
+    value: lineWidth,
+    text: lineWidthText,
+    handleChange: onLineWidthChange,
+    handleBlur: onLineWidthBlur,
+  } = useNumericField(DEFAULT_LINE_WIDTH, clampLineWidth);
   const [debouncedLineWidth, setDebouncedLineWidth] =
     useState(DEFAULT_LINE_WIDTH);
   const [lineReduce, setLineReduce] = useState<'mean' | 'max'>('mean');
@@ -294,7 +359,12 @@ export function KymographModal({
   // It is a per-channel judgement: on a real container 488 nm trajectories
   // measured 9-51 counts above background where 640 nm measured 93-228. That is why the
   // control lives here, next to the channel picker, rather than in settings.
-  const [minIntensity, setMinIntensity] = useState(0);
+  const {
+    value: minIntensity,
+    text: minIntensityText,
+    handleChange: onMinIntensityChange,
+    handleBlur: onMinIntensityBlur,
+  } = useNumericField(0, clampMinIntensity, 0);
   const [debouncedMinIntensity, setDebouncedMinIntensity] = useState(0);
   const [activeTrack, setActiveTrack] = useState<number | null>(null);
 
@@ -650,8 +720,9 @@ export function KymographModal({
               type="number"
               min={1}
               max={MAX_LINE_WIDTH}
-              value={lineWidth}
-              onChange={e => setLineWidth(clampLineWidth(e.target.value))}
+              value={lineWidthText}
+              onChange={e => onLineWidthChange(e.target.value)}
+              onBlur={onLineWidthBlur}
               className="h-8 w-16"
               title={String(
                 t('editor.kymograph.lineWidthHint', {
@@ -726,8 +797,9 @@ export function KymographModal({
                 type="number"
                 min={1}
                 max={50}
-                value={intensityWidth}
-                onChange={e => setIntensityWidth(clampWidth(e.target.value))}
+                value={intensityWidthText}
+                onChange={e => onIntensityWidthChange(e.target.value)}
+                onBlur={onIntensityWidthBlur}
                 className="h-8 w-16"
                 title={t('editor.kymograph.widthHint', {
                   defaultValue:
@@ -744,11 +816,10 @@ export function KymographModal({
                 type="number"
                 min={0}
                 step={1}
-                value={minIntensity === 0 ? '' : minIntensity}
+                value={minIntensityText}
                 placeholder="0"
-                onChange={e =>
-                  setMinIntensity(clampMinIntensity(e.target.value))
-                }
+                onChange={e => onMinIntensityChange(e.target.value)}
+                onBlur={onMinIntensityBlur}
                 className="h-8 w-20"
                 title={String(
                   t('editor.kymograph.minIntensityHint', {

@@ -982,7 +982,7 @@ def _track_sync(req: TrackRequest) -> TrackResponse:
 #  /kymograph
 # ----------------------------------------------------------------------------
 
-# Widest band ``line_width`` may ask for. See ``_sample_line_profile`` for the
+# Widest band ``line_width`` may ask for. See ``_sample_line_profiles`` for the
 # whole method; the bound lives up here because the pydantic Field below needs
 # it. 51 spans 50 px between the outermost samples.
 #
@@ -1041,7 +1041,7 @@ class KymographRequest(BaseModel):
     # polyline. 1 is a single-pixel line profile — exactly what this endpoint
     # did before 2026-09-01 and still the default, so an omitted field renders
     # the identical kymograph. Everything about the band is in
-    # ``_sample_line_profile``.
+    # ``_sample_line_profiles``.
     #
     # NOT ``intensity_width``, which is a band in kymograph COLUMN space around
     # an already-detected trajectory on the finished image. This one decides
@@ -1449,14 +1449,35 @@ def _band_normals_rc(pts_rc: np.ndarray) -> np.ndarray:
     return np.stack([unit[:, 1], -unit[:, 0]], axis=1)
 
 
-def _sample_line_profile(
+class _ReducedRows(NamedTuple):
+    """One frame's kymograph row under EACH reduction of the same band.
+
+    ``mean`` and ``max`` are read off one ``map_coordinates`` call, so the
+    second is a numpy reduction over an array that is already materialised:
+    measured 0.0016 ms per frame at width 5 / 1251 columns, against 41.8 ms to
+    decode the frame it came from — 0.004 %. That is why ``line_reduce`` is not
+    part of the row cache's key. The key says what was READ off the disk; the
+    reduction only picks a summary of it, and pricing that choice at a full
+    re-decode is what made the modal's "Across width" select cost 2.6-3.4 s on
+    the real 299-frame container 4972cad8 where a warm repeat costs 0.35-0.49 s.
+
+    At ``line_width`` 1 there is no band, so both fields are the SAME array —
+    stored once and counted once by ``_SampledRowCache._cost``, which keeps the
+    default (and every export) costing exactly what it cost before.
+    """
+
+    mean: np.ndarray
+    max: np.ndarray
+
+
+def _sample_line_profiles(
     img: np.ndarray,
     pts_rc: np.ndarray,
     line_width: int,
-    line_reduce: str,
-) -> np.ndarray:
-    """One kymograph row: intensity along ``pts_rc``, averaged across a band
-    ``line_width`` pixels wide, perpendicular to the line.
+) -> _ReducedRows:
+    """One kymograph row: intensity along ``pts_rc``, reduced across a band
+    ``line_width`` pixels wide, perpendicular to the line — under both
+    reductions, because they share every sample (see ``_ReducedRows``).
 
     The recipe is KymoResliceWide's ``getIrregularProfileWide`` (L679-824) plus
     ``processWideLine`` (L843-914), with two deliberate deviations noted below.
@@ -1479,7 +1500,8 @@ def _sample_line_profile(
        0.5 px off-centre. Note the consequence: "width 5" spans 4 px between
        the outermost samples, not 5.
     4. Bilinear sample, zero fill.
-    5. Reduce with mean (default) or max.
+    5. Reduce with mean (ImageJ's convention, and the default the caller
+       almost always selects) AND with max (KymoResliceWide's).
 
     Two things NONE of the reference implementations handle, matched here
     anyway because matching them is the point:
@@ -1549,10 +1571,16 @@ def _sample_line_profile(
         mode="constant",
         cval=0.0,
     )
-    if line_width > 1:
-        band = profile.reshape(line_width, -1)
-        profile = band.max(axis=0) if line_reduce == "max" else band.mean(axis=0)
-    return profile.astype(np.float32)
+    if line_width == 1:
+        # No band, so the two reductions are the identical row. One array,
+        # shared by both fields — see ``_ReducedRows``.
+        row = profile.astype(np.float32)
+        return _ReducedRows(row, row)
+    band = profile.reshape(line_width, -1)
+    return _ReducedRows(
+        band.mean(axis=0).astype(np.float32),
+        band.max(axis=0).astype(np.float32),
+    )
 
 
 # ----------------------------------------------------------------------------
@@ -1681,6 +1709,13 @@ def _sample_cache_budget_bytes() -> int:
     over. At the LONGEST one in production (2076 px -> 2077 columns) an entry is
     8.5 KB and the budget still holds ~25 full-length kymographs.
 
+    An entry holds both reductions since 2026-09-03, so a ``line_width`` > 1
+    entry is twice those figures (a width-1 one is unchanged — the two fields
+    are one array). That is the whole memory cost of never re-decoding a
+    container to switch mean<->max, and it lands only on the entries a user who
+    asked for a band actually creates: at the longest production microtubule a
+    300-frame kymograph goes from 2.6 MB to 5.1 MB against a 64 MB budget.
+
     ``KYMOGRAPH_SAMPLE_CACHE_MB`` overrides it. A malformed value must not take
     the module's import down with it: this endpoint is registered by
     ``api.main``, so a typo in the compose file would stop the whole ml service
@@ -1703,7 +1738,9 @@ def _sample_cache_budget_bytes() -> int:
 class _SampledRowCache:
     """Bounded, byte-accounted LRU of sampled kymograph rows.
 
-    Keyed on ``(st_dev, st_ino, st_mtime_ns, st_size, n_samples, geometry)``.
+    Keyed on ``(st_dev, st_ino, st_mtime_ns, st_size, n_samples, line_width,
+    geometry)``; the value is a ``_ReducedRows`` holding BOTH reductions of the
+    band that key describes.
 
     The file half of that key is the stat identity rather than the path string,
     because the bytes are what the row depends on: two spellings of one frame
@@ -1724,40 +1761,54 @@ class _SampledRowCache:
     and still want different row lengths for it, because their frame 0 polylines
     differ. Drop ``n_samples`` from the key and the second request is served the
     first one's row at the wrong length.
+
+    ``line_reduce`` deliberately does NOT appear: it selects one of the two
+    rows an entry already holds rather than deciding what was sampled. Entries
+    are pairs rather than one key per reduction so that eviction is atomic — a
+    split pair could hit for ``mean`` and miss for ``max``, which is the whole
+    2.6-3.4 s bug back again, intermittently.
     """
 
     def __init__(self, budget_bytes: int) -> None:
         self._budget = budget_bytes
         self._lock = threading.Lock()
-        self._entries: "OrderedDict[Tuple[Any, ...], np.ndarray]" = OrderedDict()
+        self._entries: "OrderedDict[Tuple[Any, ...], _ReducedRows]" = (
+            OrderedDict()
+        )
         self._bytes = 0
         self.hits = 0
         self.misses = 0
         self.evictions = 0
 
     @staticmethod
-    def _cost(row: np.ndarray) -> int:
-        return int(row.nbytes) + _ENTRY_OVERHEAD_BYTES
+    def _cost(rows: _ReducedRows) -> int:
+        # ``is`` rather than an equality test: at width 1 the two fields are
+        # literally one array (see ``_ReducedRows``), and counting it twice
+        # would halve the effective budget for the default case.
+        total = int(rows.mean.nbytes)
+        if rows.max is not rows.mean:
+            total += int(rows.max.nbytes)
+        return total + _ENTRY_OVERHEAD_BYTES
 
-    def get(self, key: Tuple[Any, ...]) -> Optional[np.ndarray]:
+    def get(self, key: Tuple[Any, ...]) -> Optional[_ReducedRows]:
         with self._lock:
-            row = self._entries.get(key)
-            if row is None:
+            rows = self._entries.get(key)
+            if rows is None:
                 self.misses += 1
                 return None
             self._entries.move_to_end(key)
             self.hits += 1
-            return row
+            return rows
 
-    def put(self, key: Tuple[Any, ...], row: np.ndarray) -> None:
-        cost = self._cost(row)
+    def put(self, key: Tuple[Any, ...], rows: _ReducedRows) -> None:
+        cost = self._cost(rows)
         if cost > self._budget:
             return
         with self._lock:
             previous = self._entries.pop(key, None)
             if previous is not None:
                 self._bytes -= self._cost(previous)
-            self._entries[key] = row
+            self._entries[key] = rows
             self._bytes += cost
             while self._bytes > self._budget:
                 _, evicted = self._entries.popitem(last=False)
@@ -1821,7 +1872,11 @@ class _RowJob(NamedTuple):
     ``line_width`` / ``line_reduce`` travel WITH the job rather than being read
     off the request in ``_sample_frame_rows``, because a batch groups jobs from
     different items onto one decode and two items may ask for different bands
-    of the same frame. They are in ``cache_key`` for the same reason.
+    of the same frame — or for different reductions of one band.
+
+    Only ``line_width`` is in ``cache_key``: it changes what is sampled.
+    ``line_reduce`` picks one of the two rows the entry holds, so it is a
+    SELECTOR here and nothing more (see ``_ReducedRows``).
     """
 
     item: int
@@ -1835,7 +1890,7 @@ class _RowJob(NamedTuple):
     line_reduce: str = "mean"
 
 
-def _sample_frame_rows(path: Path, jobs: List[_RowJob]) -> List[np.ndarray]:
+def _sample_frame_rows(path: Path, jobs: List[_RowJob]) -> List[_ReducedRows]:
     """Decode one frame ONCE and read every job's intensity profile off it.
 
     This is the whole point of the batch endpoint. The export builds one
@@ -1852,6 +1907,10 @@ def _sample_frame_rows(path: Path, jobs: List[_RowJob]) -> List[np.ndarray]:
     ``np.stack`` copies them into the kymograph matrix, so nothing downstream
     has a reason to write through one — an accidental write should raise rather
     than corrupt every later request that reads the same entry.
+
+    Each job yields BOTH reductions of its band, which is what lets a mean<->max
+    switch be served without reopening this file. See ``_ReducedRows`` for what
+    that costs (0.004 % of one decode).
     """
     from PIL import Image as PILImage
 
@@ -1863,7 +1922,7 @@ def _sample_frame_rows(path: Path, jobs: List[_RowJob]) -> List[np.ndarray]:
     else:
         img = np.array(pil_frame.convert("L"), dtype=np.float32)
     _, _ = img.shape
-    rows: List[np.ndarray] = []
+    rows: List[_ReducedRows] = []
     for job in jobs:
         # Step 1 (ImageJ-style): resample the polyline geometry to
         # ``n_samples`` arc-length-uniform points. This is THE change
@@ -1872,12 +1931,14 @@ def _sample_frame_rows(path: Path, jobs: List[_RowJob]) -> List[np.ndarray]:
         sampled_pts = _arc_length_resample_polyline(job.pts, job.n_samples)
         # Step 2: read the image along those points — one bilinear sample per
         # column at line_width 1, a band of them reduced to one value above it.
-        # See ``_sample_line_profile``.
-        row = _sample_line_profile(
-            img, sampled_pts, job.line_width, job.line_reduce
-        )
-        row.setflags(write=False)
-        rows.append(row)
+        # See ``_sample_line_profiles``.
+        sampled = _sample_line_profiles(img, sampled_pts, job.line_width)
+        sampled.mean.setflags(write=False)
+        # At width 1 both fields are one array, already frozen by the line
+        # above; ``setflags`` on it again would be harmless but says less.
+        if sampled.max is not sampled.mean:
+            sampled.max.setflags(write=False)
+        rows.append(sampled)
     # See _DECODE_SCRATCH: hold this frame until the next one on this thread
     # has been allocated, so the allocator reuses the block instead of
     # returning it to the kernel and re-faulting every page.
@@ -1925,19 +1986,20 @@ def _plan_rows(
             rows[i] = np.zeros(n_samples, dtype=np.float32)
             continue
         file_key = (st.st_dev, st.st_ino, st.st_mtime_ns, st.st_size)
-        # Every input the sampled row depends on. ``line_width`` and
-        # ``line_reduce`` joined it on 2026-09-01: without them, asking for the
-        # same microtubule at width 5 would be served the width-1 row.
+        # Every input the SAMPLES depend on. ``line_width`` joined it on
+        # 2026-09-01: without it, asking for the same microtubule at width 5
+        # would be served the width-1 row. ``line_reduce`` was in it too until
+        # 2026-09-03 and should never have been — the entry holds both
+        # reductions, so it selects rather than keys (see ``_ReducedRows``).
         cache_key = (
             *file_key,
             n_samples,
             line_width,
-            line_reduce,
             hashlib.blake2b(pts.tobytes(), digest_size=16).digest(),
         )
         cached = _SAMPLE_CACHE.get(cache_key)
         if cached is not None:
-            rows[i] = cached
+            rows[i] = cached.max if line_reduce == "max" else cached.mean
             hits += 1
         else:
             jobs.append(
@@ -1997,9 +2059,13 @@ def _run_row_jobs(
     grouped = list(by_file.values())
     sampled = _DECODE_POOL.map(lambda g: _sample_frame_rows(g[0], g[1]), grouped)
     for (_path, file_jobs), file_rows in zip(grouped, sampled):
-        for job, row in zip(file_jobs, file_rows):
-            rows_by_item[job.item][job.row] = row
-            _SAMPLE_CACHE.put(job.cache_key, row)
+        for job, reduced in zip(file_jobs, file_rows):
+            # The whole pair is cached; the item gets the one it asked for. A
+            # later request that flips the reduction is then a cache HIT.
+            rows_by_item[job.item][job.row] = (
+                reduced.max if job.line_reduce == "max" else reduced.mean
+            )
+            _SAMPLE_CACHE.put(job.cache_key, reduced)
     return len(grouped)
 
 
