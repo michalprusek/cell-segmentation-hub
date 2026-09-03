@@ -81,7 +81,24 @@ export function useSidebarWidth() {
 
   // Keyboard resize, so the handle is not mouse-only: it is a focusable
   // separator, and left/right must move it.
+  //
+  // Every key handled here also STOPS PROPAGATING. The editor binds arrows and
+  // Home/End to frame navigation at the document level, so without this,
+  // widening the panel scrubbed the video underneath it — observed in
+  // production while verifying this feature: four ArrowLefts resized the panel
+  // AND moved the URL two frames on.
   const onResizeKey = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
+    const handled = [
+      'ArrowLeft',
+      'ArrowRight',
+      'Home',
+      'End',
+      'Enter',
+      ' ',
+    ].includes(e.key);
+    if (handled) {
+      e.stopPropagation();
+    }
     if (e.key === 'ArrowLeft') {
       e.preventDefault();
       setWidth(w => clampPanelWidth(w + KEYBOARD_STEP));
