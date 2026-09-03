@@ -34,6 +34,11 @@ interface CanvasPolygonProps {
   multiSelectCount?: number;
   /** Propagate all multi-selected microtubules to the following frames. */
   onPropagateSelected?: () => void;
+  /** Bulk delete of the multi-selection (whole track / current frame) and
+   *  whether any of it is tracked. Forwarded straight to the context menu. */
+  onDeleteSelected?: () => void;
+  onDeleteSelectedFromFrame?: () => void;
+  selectedHasTrack?: boolean;
   onDeletePolygon?: (id: string) => void;
   /** Remove a tracked microtubule from the current frame only. Wired only when
    *  a frame-scoped delete is possible; its presence is what turns the
@@ -93,6 +98,9 @@ const CanvasPolygon = React.memo(
     isMultiSelected = false,
     multiSelectCount = 0,
     onPropagateSelected,
+    onDeleteSelected,
+    onDeleteSelectedFromFrame,
+    selectedHasTrack,
     onDeletePolygon,
     onDeletePolygonFromFrame,
     onSlicePolygon,
@@ -408,6 +416,11 @@ const CanvasPolygon = React.memo(
           isPolyline && onPropagateTrack ? handlePropagate : undefined
         }
         onPropagateSelected={isPolyline ? onPropagateSelected : undefined}
+        onDeleteSelected={isPolyline ? onDeleteSelected : undefined}
+        onDeleteSelectedFromFrame={
+          isPolyline ? onDeleteSelectedFromFrame : undefined
+        }
+        selectedHasTrack={selectedHasTrack}
         multiSelectCount={multiSelectCount}
         trackId={polygon.trackId}
         videoFrameCount={videoFrameCount}
@@ -629,6 +642,10 @@ const CanvasPolygon = React.memo(
       prevProps.isMultiSelected === nextProps.isMultiSelected &&
       prevProps.multiSelectCount === nextProps.multiSelectCount &&
       prevProps.onPropagateSelected === nextProps.onPropagateSelected &&
+      prevProps.onDeleteSelected === nextProps.onDeleteSelected &&
+      prevProps.onDeleteSelectedFromFrame ===
+        nextProps.onDeleteSelectedFromFrame &&
+      prevProps.selectedHasTrack === nextProps.selectedHasTrack &&
       // Drives context-menu gating; must be in comparator.
       prevProps.projectType === nextProps.projectType &&
       // Context-menu / vertex callbacks. These are identity-stable

@@ -857,6 +857,7 @@ export default {
       propagateSelectedSuccess:
         '{{count}} microtúbulos propagados a los fotogramas siguientes',
       propagateSelectedPartial: '{{done}} de {{total}} microtúbulos propagados',
+      deleteSelectedPartial: '{{done}} de {{total}} microtúbulos eliminados',
       propagateSuccess:
         'Microtúbulo propagado a {{count}} fotogramas siguientes',
       propagateFailed: 'No se pudo propagar el microtúbulo',
@@ -2459,6 +2460,11 @@ export default {
     deleteTrackDescription:
       'Esto elimina este microtúbulo de los {{count}} fotogramas del vídeo. Esta acción no se puede deshacer.',
     deleteMicrotubule: 'Eliminar microtúbulo…',
+    deleteSelected: 'Eliminar {{count}} microtúbulos…',
+    confirmDeleteSelected: '¿Eliminar {{count}} microtúbulos?',
+    deleteSelectedDescription:
+      'Esto elimina los {{count}} microtúbulos seleccionados. No se puede deshacer.',
+    confirmDeleteScopeSelected: '¿Eliminar {{count}} microtúbulos?',
     confirmDeleteScope: '¿Eliminar este microtúbulo?',
     deleteScopeDescription:
       'Este microtúbulo se sigue a lo largo del vídeo. ¿Eliminarlo solo del fotograma actual o de todos los fotogramas? Esta acción no se puede deshacer.',
