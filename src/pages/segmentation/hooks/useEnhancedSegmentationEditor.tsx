@@ -30,12 +30,30 @@ import { useAbortController } from '@/hooks/shared/useAbortController';
 import { handleCancelledError } from '@/lib/errorUtils';
 import type { ProjectType } from '@/types';
 
+/** Shared empty result. A fresh `[]` per render would be a new reference every
+ *  time, which the sync effect's reference bookkeeping below would read as a
+ *  change on every render. */
+const EMPTY_POLYGONS: Polygon[] = [];
+
 interface UseEnhancedSegmentationEditorProps {
   initialPolygons?: Polygon[];
   /** Increments on every fresh reload (resegment / WS completion) so the
    *  polygon-sync effect replaces the canvas even when the new result has
    *  the same polygon count as the old one (a length check alone misses it). */
   reloadNonce?: number;
+  /** Which frame `initialPolygons` were LOADED for.
+   *
+   *  `imageId` is the frame on screen and these two disagree for one render on
+   *  every scrub: the route (and so `imageId`) changes before the loader has
+   *  replaced the polygons. Without the stamp this effect could only infer
+   *  "new frame" from `imageId` — and it burned that signal on the previous
+   *  frame's array, leaving a polygon-COUNT comparison to notice the real
+   *  arrival. Two frames with the same count then left the canvas showing the
+   *  frame you came from until a page reload.
+   *
+   *  Optional: callers that render a single image (the /segmenter page) pass
+   *  nothing and the stamp defaults to `imageId`, i.e. always a match. */
+  polygonsImageId?: string;
   imageWidth: number;
   imageHeight: number;
   canvasWidth: number;
@@ -67,6 +85,7 @@ interface UseEnhancedSegmentationEditorProps {
 export const useEnhancedSegmentationEditor = ({
   initialPolygons = [],
   reloadNonce = 0,
+  polygonsImageId,
   imageWidth,
   imageHeight,
   canvasWidth,
@@ -335,10 +354,27 @@ export const useEnhancedSegmentationEditor = ({
   }, [imageId, hasUnsavedChanges, onSave, history, historyIndex, t, getSignal]);
 
   useEffect(() => {
+    // Which frame the polygons in hand belong to. Callers that do not track
+    // frames pass nothing, and the stamp is then `imageId` — always a match, so
+    // their behaviour is exactly what it was.
+    const polygonsFrame = polygonsImageId ?? imageId;
+    // On every scrub there is one render where `imageId` is already the new
+    // frame and the polygons are still the old one's. Painting those is how the
+    // canvas ended up a frame behind, so they are treated as "nothing loaded
+    // yet" — `FrameLoadingGate` is already covering the canvas at this point.
+    const framePolygons =
+      polygonsFrame === imageId ? initialPolygons : EMPTY_POLYGONS;
+
     // Check if this is truly new data (different imageId, different length, or first load)
     const imageChanged = currentImageIdRef.current !== imageId;
+    // Both sides of this comparison must be the FRAME-CHECKED array, and so
+    // must the ref assignment at the bottom of the effect. Comparing
+    // `initialPolygons` against a ref holding `framePolygons` never settles:
+    // the guard yields [] while the prop still has the old frame's polygons, so
+    // the lengths differ forever and the effect re-syncs on every render — a
+    // render loop that OOMs the tab, not a wrong pixel.
     const lengthChanged =
-      initialPolygons.length !== initialPolygonsRef.current.length;
+      framePolygons.length !== initialPolygonsRef.current.length;
     // A resegment usually returns the SAME polygon count with new geometry,
     // so length/imageId stay put — the reload nonce is what tells us to
     // replace the canvas with the freshly-loaded result.
@@ -365,7 +401,7 @@ export const useEnhancedSegmentationEditor = ({
       if (process.env.NODE_ENV === 'development') {
         logger.debug(
           '🔄 Loading new polygon data:',
-          initialPolygons.length,
+          framePolygons.length,
           'polygons for image:',
           imageId,
           {
@@ -379,7 +415,7 @@ export const useEnhancedSegmentationEditor = ({
       // Batch state updates to prevent multiple re-renders
       unstable_batchedUpdates(() => {
         // Reset all editor state when switching images
-        setPolygons(initialPolygons);
+        setPolygons(framePolygons);
         setSelectedPolygonId(null); // Clear selection
 
         // CRITICAL FIX: Only reset to View mode when actually switching images, not on polygon updates
@@ -411,14 +447,14 @@ export const useEnhancedSegmentationEditor = ({
         });
 
         // Reset history with new initial state
-        setHistory([initialPolygons]);
+        setHistory([framePolygons]);
         setHistoryIndex(0);
         setSavedHistoryIndex(0); // Reset saved index when changing images
         setHasUnsavedChanges(false);
       });
 
       // Update refs
-      initialPolygonsRef.current = initialPolygons;
+      initialPolygonsRef.current = framePolygons;
       prevReloadNonceRef.current = reloadNonce;
       currentImageIdRef.current = imageId;
       hasInitialized.current = true;
@@ -426,7 +462,7 @@ export const useEnhancedSegmentationEditor = ({
       if (process.env.NODE_ENV === 'development') {
         logger.debug(
           '✅ Loaded',
-          initialPolygons.length,
+          framePolygons.length,
           'polygons for image:',
           imageId
         );
@@ -438,6 +474,7 @@ export const useEnhancedSegmentationEditor = ({
   }, [
     initialPolygons,
     reloadNonce,
+    polygonsImageId,
     imageId,
     autosaveBeforeReset,
     abortAutosave,

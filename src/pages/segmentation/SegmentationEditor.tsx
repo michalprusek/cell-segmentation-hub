@@ -130,6 +130,7 @@ const SegmentationEditor = () => {
   // + the primary loadSegmentation effect (cache-first → API) + handleImageLoad.
   const {
     segmentationPolygons,
+    polygonsImageId,
     setSegmentationPolygons,
     imageDimensions,
     setImageDimensions,
@@ -346,6 +347,10 @@ const SegmentationEditor = () => {
   const editor = useEnhancedSegmentationEditor({
     initialPolygons,
     reloadNonce,
+    // Which frame `initialPolygons` came from. On a scrub `imageId` is already
+    // the new frame while these are still the old one's, and painting them is
+    // what left the canvas a frame behind.
+    polygonsImageId,
     imageWidth: imageDimensions?.width || 1024,
     imageHeight: imageDimensions?.height || 768,
     canvasWidth,
