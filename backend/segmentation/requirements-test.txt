@@ -27,4 +27,4 @@ pytest-timeout>=2.2
 asgi-lifespan>=2.1
 # httpx MUST stay <0.28: starlette 0.27's TestClient passes app= to
 # httpx.Client, a kwarg removed in httpx 0.28 (TypeError at setup otherwise).
-httpx<0.28
+httpx<0.29
