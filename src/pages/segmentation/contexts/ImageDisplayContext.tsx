@@ -36,6 +36,14 @@ export interface ChannelWindow {
   max: number;
   rangeMax: number;
   dataMin: number;
+  /** False while the window is still the 8-bit placeholder below — nothing has
+   *  reported this channel's real samples yet. It is a provenance bit, not a
+   *  range check: a 16-bit image that happens to top out at 200 is measured,
+   *  and an 8-bit image that never reports is not, and the two are otherwise
+   *  indistinguishable from the numbers. The sidebar hides Min/Max when it is
+   *  false, because on a plain 8-bit image nothing decodes the samples and the
+   *  cutoffs would move a slider that changes no pixel. */
+  measured: boolean;
 }
 
 /** Window for images with no channel set (standalone frames, single-channel
@@ -48,6 +56,7 @@ const DEFAULT_CHANNEL_WINDOW: ChannelWindow = {
   max: 255,
   rangeMax: 255,
   dataMin: 0,
+  measured: false,
 };
 
 interface ImageDisplayState {
@@ -111,6 +120,9 @@ interface ImageDisplayContextValue extends ImageDisplayState {
   readonly windowMax: number;
   /** Slider ceiling for the active channel = its brightest sample so far. */
   readonly windowRangeMax: number;
+  /** Whether the active window came from a decoded image rather than the 8-bit
+   *  placeholder. See {@link ChannelWindow.measured}. */
+  readonly windowIsMeasured: boolean;
   /** The window for images with no channel set. Exposed so the playback-proxy
    *  gate can ask for it directly instead of reaching into `channelWindows`
    *  with the pseudo-key, or — worse — reading it off the scalar projection,
@@ -267,13 +279,20 @@ function applyRanges(
     const lo = Math.max(0, Math.min(Math.round(raw.min), hi));
     const current = dropUnlisted ? undefined : s.channelWindows[channel];
     if (!current || refitAll) {
-      const fitted = { min: lo, max: hi, rangeMax: hi, dataMin: lo };
+      const fitted = {
+        min: lo,
+        max: hi,
+        rangeMax: hi,
+        dataMin: lo,
+        measured: true,
+      };
       if (
         !current ||
         current.min !== lo ||
         current.max !== hi ||
         current.rangeMax !== hi ||
-        current.dataMin !== lo
+        current.dataMin !== lo ||
+        !current.measured
       ) {
         changed = true;
       }
@@ -299,12 +318,17 @@ function applyRanges(
       current.min === current.dataMin && current.max === current.rangeMax;
     const noRealRangeYet = current.rangeMax - current.dataMin <= 1;
     if (untouched && noRealRangeYet && hi > lo) {
-      next[channel] = { min: lo, max: hi, rangeMax, dataMin };
+      next[channel] = { min: lo, max: hi, rangeMax, dataMin, measured: true };
       changed = true;
       continue;
     }
-    if (rangeMax === current.rangeMax && dataMin === current.dataMin) continue;
-    next[channel] = { ...current, rangeMax, dataMin };
+    if (
+      rangeMax === current.rangeMax &&
+      dataMin === current.dataMin &&
+      current.measured
+    )
+      continue;
+    next[channel] = { ...current, rangeMax, dataMin, measured: true };
     changed = true;
   }
 
@@ -663,6 +687,7 @@ export function ImageDisplayProvider({
       windowMin: activeWindow.min,
       windowMax: activeWindow.max,
       windowRangeMax: activeWindow.rangeMax,
+      windowIsMeasured: activeWindow.measured,
       fallbackWindow:
         state.channelWindows[FALLBACK_CHANNEL] ?? DEFAULT_CHANNEL_WINDOW,
       windowChannel,

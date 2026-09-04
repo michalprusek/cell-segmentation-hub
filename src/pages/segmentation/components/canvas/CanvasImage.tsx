@@ -1,6 +1,9 @@
 import React, { useContext, useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
-import { ImageDisplayContext } from '../../contexts/ImageDisplayContext';
+import {
+  FALLBACK_CHANNEL,
+  ImageDisplayContext,
+} from '../../contexts/ImageDisplayContext';
 import { decodeGrayPng, type DecodedGray } from '@/lib/png16';
 import { buildLut } from '@/lib/windowLevel';
 import { logger } from '@/lib/logger';
@@ -11,15 +14,22 @@ interface CanvasImageProps {
   width?: number;
   height?: number;
   loading?: boolean;
+  /** Identifies which image the window belongs to. A NEW key auto-fits the
+   *  window to the data; the same key keeps whatever the user set. It must NOT
+   *  be `src`: this component is also the single-channel VIDEO canvas, where
+   *  `src` changes on every frame, and keying on it would throw the user's
+   *  window away on each scrub. The video passes its container id, so one
+   *  window spans the whole video, exactly as the multi-channel canvas does. */
+  windowKey?: string | null;
   onLoad?: (width: number, height: number) => void;
 }
 
 /**
- * Optional consumer of ImageDisplayContext. For standalone (non-video)
- * images the editor never wraps in the provider, so we read the raw
- * context value (null when unwrapped) and fall back to the identity
- * filter. The full ``useImageDisplay`` hook throws when unwrapped, so
- * we go straight to ``useContext`` here.
+ * Optional consumer of ImageDisplayContext. The editor wraps both modes in the
+ * provider, but this component is also rendered bare in tests, so we read the
+ * raw context value (null when unwrapped) and fall back to the identity
+ * filter. The full ``useImageDisplay`` hook throws when unwrapped, so we go
+ * straight to ``useContext`` here.
  */
 function useDisplayFilter(): { filter: string } {
   const ctx = useContext(ImageDisplayContext);
@@ -29,6 +39,13 @@ function useDisplayFilter(): { filter: string } {
     filter: `brightness(${brightness / 100}) contrast(${contrast / 100})`,
   };
 }
+
+/** The still-image window is the same machinery the video path uses, parked on
+ *  the no-channel fallback key the context already reserves for exactly this.
+ *  A separate window state for standalone images would be a second source of
+ *  truth for one number, and the Min/Max sliders would then edit whichever the
+ *  sidebar happened to be wired to. */
+const STILL_IMAGE_WINDOW_CHANNEL = FALLBACK_CHANNEL;
 
 /**
  * Komponenta pro zobrazení podkladového obrázku na plátně.
@@ -56,11 +73,28 @@ const CanvasImage = ({
   width,
   height,
   loading = true,
+  windowKey,
   onLoad,
 }: CanvasImageProps) => {
   const { filter } = useDisplayFilter();
+  const ctx = useContext(ImageDisplayContext);
   const [deep, setDeep] = useState<DecodedGray | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  // The window this canvas paints through. Null when the provider is absent
+  // (tests render the component bare), which falls back to the data range.
+  const onFallbackWindow = ctx?.windowChannel === STILL_IMAGE_WINDOW_CHANNEL;
+  const windowMin = onFallbackWindow ? ctx?.windowMin : undefined;
+  const windowMax = onFallbackWindow ? ctx?.windowMax : undefined;
+
+  // Held in a ref so reporting the range does not put `ctx` in the probe
+  // effect's deps — the context value changes on every slider drag, and a
+  // re-fetch per drag would be a network request per pixel of slider travel.
+  const reportRangeRef = useRef(ctx?.reportChannelRanges);
+  reportRangeRef.current = ctx?.reportChannelRanges;
+  // Same reason as above: the key must not re-run the fetch when it changes.
+  const keyRef = useRef(windowKey);
+  keyRef.current = windowKey;
 
   // Probe the source once per src. A miss (not a greyscale PNG, 8-bit, or a
   // fetch failure) leaves `deep` null and the <img> below renders exactly as
@@ -76,6 +110,18 @@ const CanvasImage = ({
         const decoded = await decodeGrayPng(await res.blob());
         if (cancelled || !decoded || decoded.bitDepth <= 8) return;
         setDeep(decoded);
+        // Hand the sample range to the shared window state. `windowKey` is
+        // the "container": a different image auto-fits, the same one keeps
+        // whatever the user set. Same contract the video frames use.
+        reportRangeRef.current?.(
+          {
+            [STILL_IMAGE_WINDOW_CHANNEL]: {
+              min: decoded.min,
+              max: decoded.max,
+            },
+          },
+          keyRef.current ?? src
+        );
         onLoad?.(decoded.width, decoded.height);
       } catch (err) {
         // Never block the picture on this: the <img> path still runs.
@@ -95,12 +141,12 @@ const CanvasImage = ({
     if (!c2d) return;
     canvas.width = deep.width;
     canvas.height = deep.height;
-    // Auto-contrast on the frame's own min..max. There is no min/max control
-    // for a standalone image — ImageDisplayContext carries only brightness and
-    // contrast, and those still apply as a CSS filter on this canvas — so the
-    // window has to come from the data, which is also what makes a dim 16-bit
-    // image visible without the user doing anything.
-    const lut = buildLut(deep.min, deep.max, deep.max);
+    // The user's window when the sliders have one, otherwise the frame's own
+    // min..max — ImageJ's behaviour on opening a 16-bit image, and what makes
+    // a dim one visible before anybody touches anything.
+    const lo = windowMin ?? deep.min;
+    const hi = windowMax ?? deep.max;
+    const lut = buildLut(lo, hi, deep.max);
     const maxIdx = lut.length - 1;
     const out = c2d.createImageData(deep.width, deep.height);
     const px = out.data;
@@ -113,7 +159,7 @@ const CanvasImage = ({
       px[o + 3] = 255;
     }
     c2d.putImageData(out, 0, 0);
-  }, [deep]);
+  }, [deep, windowMin, windowMax]);
 
   const handleLoad = (event: React.SyntheticEvent<HTMLImageElement>) => {
     const img = event.currentTarget;

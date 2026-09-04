@@ -100,6 +100,7 @@ export default function VideoFrameImage({
   return (
     <CanvasImage
       src={src}
+      windowKey={containerId ?? src}
       width={width}
       height={height}
       alt={alt}

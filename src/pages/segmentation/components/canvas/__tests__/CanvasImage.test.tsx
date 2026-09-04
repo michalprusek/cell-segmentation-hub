@@ -169,3 +169,125 @@ describe('CanvasImage', () => {
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+// The 16-bit window
+//
+// A 16-bit image is decoded here and painted through a window/level LUT, and
+// the sliders that drive that window live in the sidebar. These cover the two
+// halves of that wiring: which window the canvas paints through, and which key
+// the reported range is filed under.
+// ---------------------------------------------------------------------------
+
+describe('CanvasImage 16-bit window', () => {
+  const deep = {
+    width: 2,
+    height: 1,
+    bitDepth: 16,
+    min: 1000,
+    max: 5000,
+    data: new Uint16Array([1000, 5000]),
+  };
+
+  beforeEach(() => {
+    vi.resetModules();
+    vi.clearAllMocks();
+  });
+
+  async function renderDeep(
+    ctx: Partial<Record<string, unknown>> | null,
+    props: Record<string, unknown> = {}
+  ) {
+    vi.doMock('@/lib/png16', () => ({
+      decodeGrayPng: vi.fn().mockResolvedValue(deep),
+    }));
+    const realLut =
+      await vi.importActual<typeof import('@/lib/windowLevel')>(
+        '@/lib/windowLevel'
+      );
+    const buildLut = vi.fn(realLut.buildLut);
+    vi.doMock('@/lib/windowLevel', () => ({ ...realLut, buildLut }));
+    const png16 = await import('@/lib/png16');
+    const { ImageDisplayContext } =
+      await import('../../../contexts/ImageDisplayContext');
+    const Comp = (await import('../CanvasImage')).default;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: true, blob: async () => new Blob() })
+    );
+    const el = <Comp src="/images/deep.png" {...props} />;
+    const r = render(
+      ctx ? (
+        <ImageDisplayContext.Provider value={ctx as never}>
+          {el}
+        </ImageDisplayContext.Provider>
+      ) : (
+        el
+      )
+    );
+    // Let the decode promise settle.
+    await new Promise(resolve => setTimeout(resolve, 0));
+    return { ...r, png16, buildLut };
+  }
+
+  it('files the decoded range under the fallback channel, keyed by windowKey', async () => {
+    const reportChannelRanges = vi.fn();
+    await renderDeep(
+      { reportChannelRanges, windowChannel: '' },
+      { windowKey: 'container-42' }
+    );
+
+    expect(reportChannelRanges).toHaveBeenCalledWith(
+      { '': { min: 1000, max: 5000 } },
+      // The CONTAINER, never the frame URL: this component is also the
+      // single-channel video canvas, and keying on `src` would drop the
+      // user's window on every scrub.
+      'container-42'
+    );
+  });
+
+  it('does not touch the window when the provider is absent', async () => {
+    // Rendered bare (as the tests above do) it must still paint, not crash.
+    const { container } = await renderDeep(null);
+    expect(container.querySelector('canvas, img')).toBeTruthy();
+  });
+
+  it('paints through the window the sliders set, not the data range', async () => {
+    // The reserve 16 bits buy is worth nothing without a control that spends
+    // it; this is the half that spends it.
+    const { buildLut } = await renderDeep({
+      reportChannelRanges: vi.fn(),
+      windowChannel: '',
+      windowMin: 2000,
+      windowMax: 3000,
+    });
+
+    expect(buildLut).toHaveBeenCalledWith(2000, 3000, deep.max);
+  });
+
+  it('auto-fits to the data when no window has been set', async () => {
+    // ImageJ's behaviour on opening a 16-bit image, and what makes a dim one
+    // visible before anybody touches anything.
+    const { buildLut } = await renderDeep({
+      reportChannelRanges: vi.fn(),
+      windowChannel: '',
+      windowMin: undefined,
+      windowMax: undefined,
+    });
+
+    expect(buildLut).toHaveBeenCalledWith(deep.min, deep.max, deep.max);
+  });
+
+  it('ignores a window that belongs to another channel', async () => {
+    // In a multi-channel video the sliders may be editing a named channel;
+    // that window is not this canvas's to paint through.
+    const { buildLut } = await renderDeep({
+      reportChannelRanges: vi.fn(),
+      windowChannel: 'DAPI',
+      windowMin: 2000,
+      windowMax: 3000,
+    });
+
+    expect(buildLut).toHaveBeenCalledWith(deep.min, deep.max, deep.max);
+  });
+});
