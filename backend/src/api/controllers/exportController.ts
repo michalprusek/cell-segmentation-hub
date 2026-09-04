@@ -6,11 +6,8 @@ import { logger } from '../../utils/logger';
 import * as path from 'path';
 import { promises as fs } from 'fs';
 import { AuthRequest } from '../../types/auth';
-import {
-  issueDownloadToken,
-  verifyDownloadToken,
-  InvalidDownloadTokenError,
-} from '../../services/export/downloadTokenService';
+import { issueDownloadToken } from '../../services/export/downloadTokenService';
+import { resolveDownloadToken } from '../../services/export/downloadTokenAuth';
 
 const CTX = 'ExportController';
 
@@ -184,66 +181,63 @@ export class ExportController {
       }
 
       // Two auth modes are accepted on this endpoint:
-      //   1) Standard JWT (Authorization header) — when called from XHR
+      //   1) The session cookie — when called from XHR
       //   2) Short-lived signed download token in ?token= — when triggered
-      //      via a native browser download (<a href>), which cannot send
-      //      custom headers. This bypasses the axios blob path so very
-      //      large exports stream directly to disk without exhausting
+      //      via a native browser download (<a href>), which cannot attach
+      //      the session's credential. This bypasses the axios blob path so
+      //      very large exports stream directly to disk without exhausting
       //      browser memory or hitting axios timeouts.
+      //
+      // `resolveDownloadToken` is the SAME function this route's
+      // `downloadTokenAuth` middleware uses to decide whether the session
+      // middleware runs, so the router and this controller cannot drift on
+      // what counts as a token. Every branch below reads the VERIFIED result,
+      // never `req.query`.
       let userId: string | undefined = req.user?.id;
-      const queryToken =
-        typeof req.query.token === 'string' ? req.query.token : undefined;
+      const auth = resolveDownloadToken(req.query.token);
 
-      if (queryToken) {
-        try {
-          const payload = verifyDownloadToken(queryToken);
-          if (payload.jobId !== jobId || payload.projectId !== projectId) {
-            // A valid signature over the WRONG resource — someone editing a
-            // forwarded URL. The token still names its subject, so this row
-            // has an actor.
-            void recordExportEvent({
-              kind: 'project',
-              event: 'denied',
-              userId: payload.userId,
-              jobId,
-              projectId,
-              detail: 'token-resource-mismatch',
-            });
-            ResponseHelper.forbidden(
-              res,
-              'Token does not match resource',
-              CTX
-            );
-            return;
-          }
-          userId = payload.userId;
-        } catch (err) {
-          if (err instanceof InvalidDownloadTokenError) {
-            // Expired or tampered. No verified subject to name — a forwarded
-            // link retried after it lapsed lands here, which is exactly the
-            // event worth having a row for.
-            void recordExportEvent({
-              kind: 'project',
-              event: 'denied',
-              userId: req.user?.id ?? null,
-              jobId,
-              projectId,
-              detail: `invalid-token: ${err.message}`,
-            });
-            ResponseHelper.unauthorized(
-              res,
-              `Invalid download token: ${err.message}`,
-              CTX
-            );
-            return;
-          }
-          throw err;
+      if (auth.mode === 'invalid') {
+        // Expired or tampered. No verified subject to name — a forwarded
+        // link retried after it lapsed lands here, which is exactly the
+        // event worth having a row for.
+        void recordExportEvent({
+          kind: 'project',
+          event: 'denied',
+          userId: req.user?.id ?? null,
+          jobId,
+          projectId,
+          detail: `invalid-token: ${auth.reason}`,
+        });
+        ResponseHelper.unauthorized(
+          res,
+          `Invalid download token: ${auth.reason}`,
+          CTX
+        );
+        return;
+      }
+      if (auth.mode === 'token') {
+        const { payload } = auth;
+        if (payload.jobId !== jobId || payload.projectId !== projectId) {
+          // A valid signature over the WRONG resource — someone editing a
+          // forwarded URL. The token still names its subject, so this row
+          // has an actor.
+          void recordExportEvent({
+            kind: 'project',
+            event: 'denied',
+            userId: payload.userId,
+            jobId,
+            projectId,
+            detail: 'token-resource-mismatch',
+          });
+          ResponseHelper.forbidden(res, 'Token does not match resource', CTX);
+          return;
         }
+        userId = payload.userId;
       }
 
       // No audit row here, and the guard is a backstop rather than a path: a
       // request with no `?token=` never reaches this controller, because
-      // `optionalJwtAuth` hands it to the standard `authenticate` middleware,
+      // `downloadTokenAuth` hands it to the standard `authenticate` middleware,
       // which 401s first. An anonymous hit on a download URL is therefore an
       // ordinary unauthenticated API call, not an export event — the denials
       // worth a row are the two above, where the caller HAD a link.
@@ -323,7 +317,7 @@ export class ExportController {
         jobId,
         projectId,
         fileSizeBytes: fileSize,
-        detail: queryToken ? 'token' : 'jwt',
+        detail: auth.mode === 'token' ? 'token' : 'jwt',
       });
 
       res.setHeader('Content-Type', 'application/zip');

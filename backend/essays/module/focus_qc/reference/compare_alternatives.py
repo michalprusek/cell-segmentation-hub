@@ -15,7 +15,7 @@ from pathlib import Path
 import numpy as np
 from scipy import ndimage as ndi
 
-from focus_qc.metrics import POLARITY, focus_score
+from focus_qc.metrics import focus_score
 from focus_qc.zstack import IN_FOCUS, OUT_OF_FOCUS, iter_stack_planes, label_planes, pooled
 from focus_qc.detect import ChannelSpec
 

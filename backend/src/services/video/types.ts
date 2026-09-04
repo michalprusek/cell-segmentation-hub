@@ -23,8 +23,35 @@
  */
 export const CHANNEL_NAME_RE = /^[A-Za-z0-9_-]{1,64}$/;
 
+/**
+ * The gate. Call THIS, not `CHANNEL_NAME_RE.test` — the regex is only half of
+ * the rule.
+ *
+ * A channel name is not just a path segment: half a dozen places use it as a
+ * COMPUTED PROPERTY NAME on a plain object — `mtMetricsExporter`'s sparse-fill
+ * map, `staticFrameChannels`' anchor and sparse maps, `ChannelOverlayList`'s
+ * coverage map. `CHANNEL_NAME_RE` happily accepts `__proto__`, and
+ * `map[name] = v` with that name is a [[Set]]: it re-points the map's
+ * prototype instead of adding a key, so the map silently reads back empty
+ * (CWE-1321). `mtMetricsWide` already defends itself with
+ * `Object.create(null)`; the others do not, and requiring every future
+ * consumer to remember is the same read-gate/write-gate drift the regex above
+ * was made shared to prevent. So the name is rejected here, once, for every
+ * caller.
+ *
+ * Any `Object.prototype` member goes, not just `__proto__` — `toString` and
+ * friends shadow methods on those same maps. Checked against the prototype
+ * rather than a list, so nothing has to be remembered. Measured against
+ * production on 2026-09-04: none of the 27 distinct channel names in use is
+ * affected (they include `488_nm` and `c1`, which is why the character class
+ * itself must stay permissive).
+ */
 export function isSafeChannelName(name: unknown): name is string {
-  return typeof name === 'string' && CHANNEL_NAME_RE.test(name);
+  return (
+    typeof name === 'string' &&
+    CHANNEL_NAME_RE.test(name) &&
+    !Object.hasOwn(Object.prototype, name)
+  );
 }
 
 /**

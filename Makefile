@@ -246,7 +246,15 @@ restart-backend-utia:
 	@echo "✅ Backend restarted with UTIA config"
 	@echo "Test connection: curl http://localhost:3001/api/test-email/test-connection"
 
-# Run unit tests with UI in Docker
+# The Python suites that need no GPU, in the same throwaway python:3.10-slim
+# CI uses. This is step 7 of `make ci`.
+#
+# These four paths must stay identical to the `python-tests` job in
+# .github/workflows/ci.yml -- this target exists to reproduce that job locally,
+# and a target that runs a SUBSET is worse than none: it reports green on a
+# break CI will catch. focus_qc was missing here until 2026-09-04, and it is
+# the one path that pins the focus descriptor's constants and its 1.97x IRM
+# separation margin.
 test-py:
 	@echo "🐍 Python suites CI also runs (no GPU needed)"
 	@docker run --rm -v "$$PWD":/w -w /w python:3.10-slim sh -c '\
@@ -254,7 +262,8 @@ test-py:
 	  python -m pytest -q -p no:cacheprovider \
 	    backend/src/services/video/pythonHelpers/tests \
 	    backend/essays/tests \
-	    backend/essays/module/tests'
+	    backend/essays/module/tests \
+	    backend/essays/module/focus_qc/tests'
 
 # The ML suite cannot run in CI: models/__init__ imports mamba_ssm -> Triton,
 # which raises "0 active drivers" at import time without a CUDA driver. So it
