@@ -84,6 +84,15 @@ export interface Polygon {
    *  `mtTypeLabels` palette). Preserved so the editor + exports can resolve the
    *  class name/colour. Microtubule projects only. */
   mtType?: string;
+  /** The MODEL's semantic class for this shape — `spheroid`, `sperm`, `wound`,
+   *  `microcapsule`, `membrane`, ... — as emitted by `model_loader.py`. Not to
+   *  be confused with `partClass`, which names a part WITHIN one detection.
+   *
+   *  Deliberately an open string, not a union: the classes are model-defined
+   *  and a closed union here would silently strip the next model's class, which
+   *  is exactly the failure `partClass` documents two fields up. The frontend
+   *  twins type it the same way. */
+  class?: string;
 }
 
 /**
@@ -146,6 +155,13 @@ export const OPTIONAL_POLYGON_FIELDS: readonly OptionalPolygonField[] = [
     key: 'complete',
     coerce: value => (typeof value === 'boolean' ? value : undefined),
   },
+  // Preserve the model's own class. Losing it is not a cosmetic label loss:
+  // `metricsCalculator` separates a microcapsule's membrane from the capsule
+  // on exactly this field, so a stripped `class` turns each membrane into a
+  // measured object and doubles every microcapsule row in the export. It was
+  // stripped on the READ path until 2026-09-04 — the DB kept it, the editor
+  // never saw it, and the next manual save persisted the loss.
+  { key: 'class', coerce: coerceNonEmptyString },
   // Preserve the user-assigned microtubule type-label id (resolved to a class
   // name/colour via the project's mtTypeLabels palette).
   { key: 'mtType', coerce: coerceNonEmptyString },
