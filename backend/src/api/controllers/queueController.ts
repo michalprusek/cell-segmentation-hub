@@ -213,8 +213,13 @@ class QueueController {
         return;
       }
 
-      // Verify project ownership or sharing access
-      const user = await prisma.user.findUnique({ where: { id: userId } });
+      // Verify project ownership or sharing access. `select` matters: only
+      // `email` is read below, and the default shape ships the whole User row
+      // -- password hash, reset token, verification token -- on every call.
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { email: true },
+      });
       if (!user) {
         ResponseHelper.unauthorized(res, 'Uživatel nenalezen');
         return;
@@ -242,6 +247,7 @@ class QueueController {
             },
           ],
         },
+        select: { id: true },
       });
 
       if (!project) {
@@ -329,8 +335,13 @@ class QueueController {
         return;
       }
 
-      // Verify project ownership or sharing access
-      const user = await prisma.user.findUnique({ where: { id: userId } });
+      // Verify project ownership or sharing access. `select` matters: only
+      // `email` is read below, and the default shape ships the whole User row
+      // -- password hash, reset token, verification token -- on every call.
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { email: true },
+      });
       if (!user) {
         ResponseHelper.unauthorized(res, 'Uživatel nenalezen');
         return;
@@ -358,6 +369,7 @@ class QueueController {
             },
           ],
         },
+        select: { id: true },
       });
 
       if (!project) {
@@ -403,8 +415,13 @@ class QueueController {
         return;
       }
 
-      // Verify project ownership or sharing access
-      const user = await prisma.user.findUnique({ where: { id: userId } });
+      // Verify project ownership or sharing access. `select` matters: only
+      // `email` is read below, and the default shape ships the whole User row
+      // -- password hash, reset token, verification token -- on every call.
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { email: true },
+      });
       if (!user) {
         ResponseHelper.unauthorized(res, 'Uživatel nenalezen');
         return;
@@ -432,6 +449,7 @@ class QueueController {
             },
           ],
         },
+        select: { id: true },
       });
 
       if (!project) {
