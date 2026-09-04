@@ -17,6 +17,7 @@ import {
 } from '../types/websocket';
 import * as UserService from './userService';
 import { resolveSegmentationSource } from './video/types';
+import { convertImageForDisplay } from './video/pythonExtractor';
 
 async function pathExists(p: string): Promise<boolean> {
   try {
@@ -1506,7 +1507,55 @@ export class ImageService {
       // TIFF whose StripByteCounts overstates the bytes actually present
       // then decodes *successfully* to a silently-wrong (black) image
       // instead of throwing, and that bad PNG would get cached forever.
-      const convertedBuffer = await sharp(originalBuffer, {
+      // Route anything deeper than 8 bits through the Python helper.
+      //
+      // sharp destroys a high-bit-depth TIFF while DECODING it, not while
+      // encoding: measured on a real production file (uint16, values
+      // 237..3853, 3525 distinct levels) it reads the image as 8-bit by
+      // shifting right 8, so what reached the browser had a range of 2..12
+      // and TWO grey levels — an essentially black picture. Four sharp
+      // configurations were tried, including `toColourspace('grey16')`; none
+      // helps, because by then the data is already gone. The helper
+      // round-trips the same file bit-exactly and is the encoder the video
+      // frame extractors already use, so a still image and a video frame from
+      // the same microscope now come out identical.
+      //
+      // 8-bit sources keep the sharp path: it is in-process, and there is
+      // nothing to preserve.
+      const probe = await sharp(originalBuffer, { failOn: 'error' }).metadata();
+      let convertedBuffer: Buffer;
+      if (probe.depth && probe.depth !== 'uchar') {
+        await fs.mkdir(path.dirname(convertedPath), { recursive: true });
+        const result = await convertImageForDisplay(
+          this.localPathFor(image.originalPath),
+          convertedPath
+        );
+        if (!result.ok) {
+          throw new Error(
+            `Lossless conversion failed: ${result.error ?? 'unknown error'}`
+          );
+        }
+        if (result.lossless === false) {
+          logger.warn(
+            'Display conversion rescaled a float image; values are relative',
+            'ImageService',
+            { imageId }
+          );
+        }
+        convertedBuffer = await fs.readFile(convertedPath);
+        logger.info('Image converted losslessly for display', 'ImageService', {
+          imageId,
+          depth: probe.depth,
+          mode: result.mode,
+        });
+        return {
+          buffer: convertedBuffer,
+          mimeType: 'image/png',
+          filename: image.name.replace(/\.[^.]+$/, '.png'),
+        };
+      }
+
+      convertedBuffer = await sharp(originalBuffer, {
         failOn: 'error',
       })
         .png({
@@ -1658,15 +1707,20 @@ export class ImageService {
     }
   }
 
+  /** Absolute path of a stored file, for the one case that needs a PATH
+   *  rather than a buffer: the Python converter reads the source itself, so
+   *  a 3 GB TIFF never has to travel through Node's heap. Local storage only,
+   *  which is the only provider `getImageBuffer` supports either. */
+  private localPathFor(imagePath: string): string {
+    return path.join(process.env.UPLOAD_DIR || './uploads', imagePath);
+  }
+
   private async getImageBuffer(imagePath: string): Promise<Buffer> {
     const storage = getStorageProvider();
 
     if (storage instanceof LocalStorageProvider) {
       // For local storage, read file directly
-      const fullPath = path.join(
-        process.env.UPLOAD_DIR || './uploads',
-        imagePath
-      );
+      const fullPath = this.localPathFor(imagePath);
       try {
         return await fs.readFile(fullPath);
       } catch (err) {

@@ -207,3 +207,133 @@ describe('vertex drag', () => {
     expect(state.isPanning).toBe(false);
   });
 });
+
+/** A mousedown on the shape's CONTOUR — the outline, not a vertex. */
+const downOnContour = (clientX: number, clientY: number) =>
+  ({
+    button: 0,
+    clientX,
+    clientY,
+    shiftKey: false,
+    altKey: false,
+    target: { dataset: { polygonId: 'poly-1', polygonContour: 'true' } },
+    preventDefault: vi.fn(),
+    stopPropagation: vi.fn(),
+  }) as unknown as React.MouseEvent<HTMLDivElement>;
+
+describe('dragging the contour translates the whole shape', () => {
+  let state: InteractionState;
+  let polygons: Polygon[];
+  let updatePolygons: ReturnType<typeof vi.fn>;
+  let onPolygonSelection: ReturnType<typeof vi.fn>;
+
+  const setup = (
+    mode: EditMode = EditMode.EditVertices,
+    selected: string | null = 'poly-1'
+  ) => {
+    state = { ...baseState };
+    polygons = [polygon];
+    updatePolygons = vi.fn((next: Polygon[]) => {
+      polygons = next;
+    });
+    onPolygonSelection = vi.fn();
+    const { result, rerender } = renderHook(() =>
+      useAdvancedInteractions({
+        editMode: mode,
+        interactionState: state,
+        transform,
+        canvasRef: { current: document.createElement('div') },
+        selectedPolygonId: selected,
+        tempPoints: [],
+        cursorPosition: null,
+        onPolygonSelection,
+        setEditMode: vi.fn(),
+        setInteractionState: vi.fn((s: InteractionState) => {
+          state = s;
+        }),
+        setTempPoints: vi.fn(),
+        setHoveredVertex: vi.fn(),
+        setHoveredJoinTarget: vi.fn(),
+        setVertexDragState: vi.fn(),
+        updatePolygons,
+        getPolygons: () => polygons,
+      })
+    );
+    return { result, rerender };
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('moves every point by the same delta', () => {
+    const { result, rerender } = setup();
+    act(() => result.current.handleMouseDown(downOnContour(150, 120)));
+    rerender();
+    act(() => result.current.handleMouseUp(at('mouseup', 190, 145)));
+
+    // grabbed at (150,120), released at (190,145) -> +40, +25 on every point
+    expect(polygons[0].points).toEqual([
+      { x: 140, y: 125 },
+      { x: 240, y: 125 },
+      { x: 240, y: 225 },
+    ]);
+  });
+
+  it('keeps the shape rigid — no point moves relative to another', () => {
+    const { result, rerender } = setup();
+    const before = polygon.points.map(p => ({ ...p }));
+    act(() => result.current.handleMouseDown(downOnContour(101, 99)));
+    rerender();
+    act(() => result.current.handleMouseUp(at('mouseup', 37, 402)));
+
+    const after = polygons[0].points;
+    const dx = after[0].x - before[0].x;
+    const dy = after[0].y - before[0].y;
+    for (let i = 1; i < after.length; i++) {
+      expect(after[i].x - before[i].x).toBeCloseTo(dx, 6);
+      expect(after[i].y - before[i].y).toBeCloseTo(dy, 6);
+    }
+  });
+
+  it('selects a shape that was not selected, so the first drag works', () => {
+    const { result } = setup(EditMode.EditVertices, null);
+    act(() => result.current.handleMouseDown(downOnContour(150, 120)));
+    expect(onPolygonSelection).toHaveBeenCalledWith('poly-1');
+  });
+
+  it('does nothing outside EditVertices, where a drag means pan', () => {
+    // In View mode a drag pans the canvas and a click selects. Silently
+    // turning that into a shape move would be a trap.
+    const { result, rerender } = setup(EditMode.View);
+    act(() => result.current.handleMouseDown(downOnContour(150, 120)));
+    rerender();
+    // The drag must not even START: asserting only on the committed points
+    // hides the case where View-mode mousedown happens to bail out later for
+    // an unrelated reason, which is exactly what an early version of this
+    // test did — the mode guard could be deleted and it still passed.
+    expect(state.isDraggingVertex).toBe(false);
+    act(() => result.current.handleMouseUp(at('mouseup', 190, 145)));
+    expect(polygons[0].points).toEqual(polygon.points);
+  });
+
+  it('a vertex still wins over the outline it sits on', () => {
+    // The vertex branch runs first, so grabbing a point moves that point
+    // rather than dragging the whole shape out from under it.
+    const { result, rerender } = setup();
+    act(() => result.current.handleMouseDown(downOnVertex(100, 100, 0)));
+    rerender();
+    act(() => result.current.handleMouseUp(at('mouseup', 150, 150)));
+    expect(polygons[0].points[1]).toEqual({ x: 200, y: 100 });
+    expect(polygons[0].points[2]).toEqual({ x: 200, y: 200 });
+  });
+
+  it('leaving the canvas does not commit a translation either', () => {
+    const { result, rerender } = setup();
+    act(() => result.current.handleMouseDown(downOnContour(150, 120)));
+    rerender();
+    act(() => result.current.handleMouseUp(at('mouseleave', -900, -900)));
+    expect(updatePolygons).not.toHaveBeenCalled();
+    expect(polygons[0].points).toEqual(polygon.points);
+  });
+});
