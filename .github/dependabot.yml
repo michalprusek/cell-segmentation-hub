@@ -97,10 +97,16 @@ updates:
       #                       torch means recompiling both kernels, re-pairing
       #                       torchvision, and re-verifying all 7 models.
       #  transformers         pinned at 5.5.4, and only MINOR/MAJOR are
-      #                       ignored -- patches still flow. 5.16.1 renames the
+      #                       ignored -- patches still flow. 5.9.0 renames the
       #                       SegFormer module layout so our checkpoint stops
-      #                       loading; 5.5.4 and 5.6.0 are bit-identical to the
-      #                       old 4.57.1.
+      #                       loading (bisected 2026-09-04: 5.6.2 / 5.7.0 /
+      #                       5.8.1 clean and bit-identical, 5.9.0 and every
+      #                       release above it broken), and 5.10.x will not
+      #                       even import a model on torch 2.6.0. That is why
+      #                       GHSA-xrqw-3rrv-vx5w, whose fix lands in 5.10.0,
+      #                       cannot be taken -- see the CEILING note in
+      #                       backend/segmentation/requirements.txt. Do not
+      #                       close that alert by moving the pin.
       #
       #                       READ THIS BEFORE MERGING A TRANSFORMERS PR, patch
       #                       included: CI cannot verify this dependency. The

@@ -71,12 +71,12 @@ export function setupRoutes(app: Express): void {
   // enters them first it 401s on any request without an Authorization
   // header — even ones that were meant for the public export download.
   // Registering exportRoutes first lets Express match the download route
-  // there and run its optionalJwtAuth (which honours ?token=) before the
+  // there and run its downloadTokenAuth (which honours ?token=) before the
   // project router's blanket auth.
   app.use('/api', exportRoutes); // Export routes
   app.use('/api', sharingRoutes); // Sharing routes
   // Automated Essays (batch MT assay). Registered here (before the blanket-auth
-  // project routers) so its download route's optionalJwtAuth ?token= path is
+  // project routers) so its download route's downloadTokenAuth ?token= path is
   // reached first, matching the export-download precedent above.
   app.use('/api', essaysRoutes);
   app.use('/api/projects', projectRoutes);

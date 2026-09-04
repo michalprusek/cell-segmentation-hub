@@ -532,4 +532,28 @@ const MicrotubuleInstancePanel: React.FC<MicrotubuleInstancePanelProps> = ({
   );
 };
 
-export default MicrotubuleInstancePanel;
+/**
+ * Memoised with React's DEFAULT (shallow) comparator, deliberately: it compares
+ * every prop by construction, so it cannot go stale the way a hand-written
+ * comparator does when a prop is added — the repo's recurring `CanvasPolygon`
+ * footgun. Context updates (`useLanguage` here) still propagate through a memo,
+ * so translations are unaffected.
+ *
+ * It matters because `SegmentationEditorLayout` is deliberately NOT memoised
+ * while the editor's `transform` is React state that `handlePan` writes on every
+ * mousemove of a pan and the wheel zoom writes on a 16 ms throttle. So the whole
+ * layout re-renders continuously while the user drags the canvas, and without
+ * this the panel re-derived every row each time.
+ *
+ * Measured on the production-maximum frame (311 polylines / 2299 points, from
+ * 3000 sampled microtubule frames): 6531 `calculatePolylineLength` calls over 21
+ * renders where 311 would do — 18 971 over 61 renders, i.e. one second of pan.
+ * `useMtTypeLabels` memoises `labelById`/`colorById`, so the palette props are
+ * stable too.
+ *
+ * The memo hits because every prop the layout passes is reference-stable across
+ * a pan: `usePolygonHandlers` wraps its handlers in `useCallback([])`,
+ * `frameHiddenIds` is a `useMemo`, and `editor.polygons` is replaced by
+ * `setPolygons`, never mutated.
+ */
+export default React.memo(MicrotubuleInstancePanel);

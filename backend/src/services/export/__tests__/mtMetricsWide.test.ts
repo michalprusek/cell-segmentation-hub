@@ -255,8 +255,10 @@ describe('pivotMTMetricsWide — real two-channel rows', () => {
   });
 
   it('handles a channel literally named __proto__', () => {
-    // CHANNEL_NAME_RE accepts it, and a user can name an added channel freely.
-    // On a plain object the assignment would set the prototype, not a key.
+    // `isSafeChannelName` now rejects it at the gate, so a stored name can no
+    // longer be this — but `pivotMTMetricsWide` is a pure function over rows
+    // it does not validate, and on a plain object the assignment would set the
+    // prototype, not a key. The `Object.create(null)` stays, and so does this.
     const input = rows().map(r =>
       r.channel === 'TIRF_488' ? { ...r, channel: '__proto__' } : r
     );

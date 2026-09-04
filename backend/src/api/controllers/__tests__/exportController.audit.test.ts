@@ -141,7 +141,7 @@ describe('export download auditing', () => {
   });
 
   it('records nothing for a request with no credential at all', async () => {
-    // NOT a gap. `optionalJwtAuth` only defers to this controller when a
+    // NOT a gap. `downloadTokenAuth` only defers to this controller when a
     // `?token=` is present; without one the standard `authenticate` middleware
     // 401s first, so an anonymous hit on a download URL never gets here. This
     // harness mounts its own auth, so the guard below is reachable in the test
