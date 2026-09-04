@@ -501,3 +501,145 @@ def test_the_band_math_is_the_shared_module_not_a_local_copy():
     assert mt._polyline_length is shared.polyline_length
     assert mt._fill_convex_polygon is shared.fill_convex_polygon
     assert mt._dilate is shared.dilate
+
+
+# --- the composite ROI is traced on the ring's BOUNDING BOX -------------------
+#
+# A ring is a sliver: on production container 4972cad8 frame 0 (1476x1924, 59
+# real polylines) the median ring is 4 437 px, 0.16 % of the frame. Until
+# 2026-09-04 every step of the encoder was linear in the whole frame — the
+# uint8 copy, the `sum`, a 22.7 MB float64 pad per polyline, and marching
+# squares over all of it. Windowing them cut those 59 rings from 2 177 ms to
+# 121 ms (17.9x) with all 59 `.roi` blobs byte-identical.
+#
+# The identity is exact by construction (a window containing every set pixel
+# contains every 0.5 iso-crossing; the crossings are half-integers; the integer
+# origin adds losslessly in float64) — but the OFFSET is the thing a bug lands
+# on, and an offset bug is silent: the ROI still rasterises to a ring, just in
+# the wrong place. Hence a byte comparison against the un-windowed encoder
+# rather than a shape assertion.
+
+def _vicinity_composite_roi_bytes_reference(vicinity, name, stroke_color, position):
+    """The pre-2026-09-04 body, verbatim: traced on the whole frame."""
+    import struct
+
+    from skimage import measure
+
+    mask = np.ascontiguousarray(vicinity.astype(np.uint8))
+    if mask.sum() == 0:
+        return None
+    contours = measure.find_contours(np.pad(mask, 1).astype(np.float64), 0.5)
+
+    path = []
+    for c in contours:
+        pts = np.column_stack((c[:, 1] - 0.5, c[:, 0] - 0.5))
+        if len(pts) > 1 and np.allclose(pts[0], pts[-1]):
+            pts = pts[:-1]
+        if len(pts) < 3:
+            continue
+        prev = np.roll(pts, 1, axis=0)
+        nxt = np.roll(pts, -1, axis=0)
+        cross = ((pts[:, 0] - prev[:, 0]) * (nxt[:, 1] - prev[:, 1])
+                 - (pts[:, 1] - prev[:, 1]) * (nxt[:, 0] - prev[:, 0]))
+        pts = pts[np.abs(cross) > 1e-9]
+        if len(pts) < 3:
+            continue
+        path.extend((0.0, float(pts[0, 0]), float(pts[0, 1])))
+        for q in pts[1:]:
+            path.extend((1.0, float(q[0]), float(q[1])))
+        path.append(4.0)
+    if not path:
+        return None
+    multi = np.asarray(path, dtype=np.float32)
+
+    ys, xs = np.nonzero(mask)
+    roi = roifile.ImagejRoi(
+        roitype=roifile.ROI_TYPE.RECT,
+        name=name,
+        left=int(xs.min()),
+        top=int(ys.min()),
+        right=int(xs.max()) + 1,
+        bottom=int(ys.max()) + 1,
+        n_coordinates=0,
+        shape_roi_size=int(multi.size),
+        multi_coordinates=multi,
+    )
+    if stroke_color is not None:
+        roi.stroke_color = struct.pack(">I", int(stroke_color) & 0xFFFFFFFF)
+    if position is not None and position > 0:
+        roi.position = int(position)
+    return roi.tobytes()
+
+
+def _assert_roi_bytes_identical(mask, what):
+    got = _vicinity_composite_roi_bytes(mask, "mt_bg", 0xFF00FF00, 3)
+    want = _vicinity_composite_roi_bytes_reference(mask, "mt_bg", 0xFF00FF00, 3)
+    assert got == want, f"{what}: windowed ROI differs from the full-frame trace"
+    return got
+
+
+def test_composite_roi_is_byte_identical_to_the_full_frame_trace():
+    """An annulus far from the origin: a dropped window offset shifts every
+    vertex by (x0, y0) and would be invisible to a shape-only assertion."""
+    h, w = 220, 260
+    yy, xx = np.mgrid[0:h, 0:w]
+    r = np.hypot(yy - 150, xx - 190)
+    mask = ((r <= 26) & (r >= 11))
+    blob = _assert_roi_bytes_identical(mask, "offset annulus")
+    assert blob and len(blob) > 64
+
+
+def test_composite_roi_identical_for_rings_touching_every_border():
+    """A ring against a frame edge is the case the 1-px pad exists for, and the
+    window's own border is not the frame's — so the pad has to be applied to the
+    WINDOW, and the unpad has to survive the origin shift."""
+    h, w = 90, 110
+    for (cy, cx) in ((0, 0), (0, w - 1), (h - 1, 0), (h - 1, w - 1),
+                     (0, w // 2), (h // 2, 0), (h - 1, w // 2), (h // 2, w - 1)):
+        yy, xx = np.mgrid[0:h, 0:w]
+        r = np.hypot(yy - cy, xx - cx)
+        mask = (r <= 20) & (r >= 9)
+        _assert_roi_bytes_identical(mask, f"ring at ({cy},{cx})")
+
+
+def test_composite_roi_identical_for_a_disconnected_ring():
+    """Two separate blobs: the window spans both, so the contour scan order —
+    which fixes the order of the MOVETO subpaths in the encoded path — must not
+    change."""
+    h, w = 140, 180
+    mask = np.zeros((h, w), dtype=bool)
+    yy, xx = np.mgrid[0:h, 0:w]
+    mask |= (np.hypot(yy - 30, xx - 30) <= 14) & (np.hypot(yy - 30, xx - 30) >= 6)
+    mask |= (np.hypot(yy - 105, xx - 150) <= 18) & (np.hypot(yy - 105, xx - 150) >= 7)
+    _assert_roi_bytes_identical(mask, "two rings")
+
+
+def test_composite_roi_identical_on_random_sparse_masks():
+    rng = np.random.default_rng(20260904)
+    h, w = 70, 95
+    for _ in range(25):
+        mask = np.zeros((h, w), dtype=bool)
+        y0 = int(rng.integers(0, h - 12))
+        x0 = int(rng.integers(0, w - 12))
+        patch = rng.random((12, 12)) < 0.55
+        mask[y0:y0 + 12, x0:x0 + 12] = patch
+        if not mask.any():
+            continue
+        _assert_roi_bytes_identical(mask, f"random at ({y0},{x0})")
+
+
+def test_composite_roi_bounding_rectangle_is_the_tight_one():
+    """The ROI header's rect is `np.nonzero(mask).min()/.max()+1` in frame
+    coordinates. It is now read off `mask_bbox` instead, and those must be the
+    same four integers — ImageJ positions the ROI from them."""
+    h, w = 80, 95
+    mask = np.zeros((h, w), dtype=bool)
+    mask[13:41, 22:70] = True
+    mask[20:34, 30:60] = False
+    roi = roifile.ImagejRoi.frombytes(
+        _vicinity_composite_roi_bytes(mask, "bg", None, None)
+    )
+    ys, xs = np.nonzero(mask)
+    assert (roi.top, roi.left, roi.bottom, roi.right) == (
+        int(ys.min()), int(xs.min()), int(ys.max()) + 1, int(xs.max()) + 1
+    )

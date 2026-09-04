@@ -6,6 +6,7 @@ import {
   RequestHandler,
 } from 'express';
 import { logger } from '../../utils/logger';
+import adminRoutes from './adminRoutes';
 import authRoutes from './authRoutes';
 import projectRoutes from './projectRoutes';
 import imageRoutes from './imageRoutes';
@@ -61,6 +62,10 @@ export function setupRoutes(app: Express): void {
   // Registrace routes
   app.use('/api/health', healthRoutes);
   app.use('/api/auth', authRoutes);
+  // Admin support surface: the registered-user list plus the impersonation
+  // start/stop transitions. Every route inside is behind `authenticate`, and
+  // all but the stop transition behind `requireAdmin` as well.
+  app.use('/api/admin', adminRoutes);
 
   app.use('/api/users', userRoutes);
   // IMPORTANT: exportRoutes and sharingRoutes must be registered BEFORE
@@ -179,6 +184,28 @@ function registerKnownRoutes(): void {
     path: '/api/auth/logout',
     method: 'POST',
     description: 'Odhlášení uživatele',
+    authenticated: true,
+  });
+
+  // Admin endpoints
+  registerRoute({
+    path: '/api/admin/users',
+    method: 'GET',
+    description: 'Seznam registrovaných uživatelů (administrátor)',
+    authenticated: true,
+  });
+
+  registerRoute({
+    path: '/api/admin/impersonate/:userId',
+    method: 'POST',
+    description: 'Přihlášení za vybraného uživatele (administrátor)',
+    authenticated: true,
+  });
+
+  registerRoute({
+    path: '/api/admin/impersonate/stop',
+    method: 'POST',
+    description: 'Ukončení impersonace a návrat k účtu administrátora',
     authenticated: true,
   });
 

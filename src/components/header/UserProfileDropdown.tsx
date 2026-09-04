@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   FlaskConical,
   Loader2,
+  ShieldCheck,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -28,7 +29,7 @@ interface UserProfileDropdownProps {
 
 const UserProfileDropdown = ({ username }: UserProfileDropdownProps) => {
   const navigate = useNavigate();
-  const { signOut, user: _user, profile } = useAuth();
+  const { signOut, user: _user, profile, isAdmin } = useAuth();
   const { t } = useLanguage();
 
   // Use avatar from AuthContext profile (updated by refreshProfile)
@@ -108,6 +109,21 @@ const UserProfileDropdown = ({ username }: UserProfileDropdownProps) => {
           <FlaskConical className="mr-2 h-4 w-4" />
           <span>{t('automatedEssays.navLabel')}</span>
         </DropdownMenuItem>
+        {/* Admin-only entry point. `isAdmin` comes from the server's profile
+            response and only decides what to RENDER — /admin/users is gated
+            again by AdminRoute, and every admin endpoint by requireAdmin. */}
+        {isAdmin && (
+          <>
+            <DropdownMenuSeparator className="dark:bg-gray-700" />
+            <DropdownMenuItem
+              onClick={() => navigate('/admin/users')}
+              className="dark:text-gray-300 dark:hover:bg-gray-700"
+            >
+              <ShieldCheck className="mr-2 h-4 w-4" />
+              <span>{t('admin.navLabel')}</span>
+            </DropdownMenuItem>
+          </>
+        )}
         <DropdownMenuSeparator className="dark:bg-gray-700" />
         <DropdownMenuItem
           onSelect={e => {

@@ -239,7 +239,8 @@ def _make_scorer(linker, prob, p, is_gap_link: bool):
 def instance_a(mask: np.ndarray, kappa_max: float, params: dict | None = None,
                channels: np.ndarray | None = None,
                prob: np.ndarray | None = None,
-               linker=None) -> tuple[list[np.ndarray], list[np.ndarray]]:
+               linker=None,
+               return_masks: bool = True) -> tuple[list[np.ndarray], list[np.ndarray]]:
     """Instance-segment a binary foreground mask. Returns ``(polylines, masks)``.
 
     ``channels`` (K, H, W) enables the orientation-agreement term; ``prob`` (H, W) enables the
@@ -249,6 +250,17 @@ def instance_a(mask: np.ndarray, kappa_max: float, params: dict | None = None,
     ``linker`` (a :class:`instance.linker.Linker`) replaces the hand-crafted pairing cost with
     a learned one, leaving the hard curvature bound and the global matching untouched. Passing
     None keeps the geometric behaviour exactly, so the learned cost is its own ablation.
+
+    ``return_masks=False`` returns ``(polylines, [])`` and skips
+    :func:`instance.oracle.oracle_instance_masks` entirely. Both production
+    callers reach this through ``wrapper.predict`` and neither reads the masks
+    — they read ``centerlines_rc`` and ``prob`` — so building them is work whose
+    result is discarded. It is not free work: one full-frame boolean mask per
+    polyline, measured on a REAL production frame (container 4972cad8, frame 0
+    IRM at the 1.5x working scale, 2214x2886) at 60 masks / 0.38 GB / 0.133 s,
+    and on the 2048^2 essays wells at 2.84 GB for a dense position — allocated
+    beside a CUDA forward pass under a 12 GiB container cap. Default True so the
+    documented ``(polylines, masks)`` contract and its tests are unchanged.
     """
     p = {**default_params(), **(params or {})}
     mask = np.asarray(mask, dtype=bool)
@@ -289,6 +301,8 @@ def instance_a(mask: np.ndarray, kappa_max: float, params: dict | None = None,
         if total_length(poly) >= p["min_length"]:
             polylines.append(poly)
 
+    if not return_masks:
+        return polylines, []
     masks = oracle_instance_masks(polylines, mask.shape,
                                   half_width=p["half_width"], up=1.0)
     return polylines, masks

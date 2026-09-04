@@ -11,6 +11,8 @@ import { ThemeProvider } from '@/contexts/ThemeContext';
 import { ModelProvider } from '@/contexts/ModelContext';
 import WebSocketProvider from '@/contexts/WebSocketContext';
 import ProtectedRoute from '@/components/ProtectedRoute';
+import AdminRoute from '@/components/AdminRoute';
+import ImpersonationBanner from '@/components/admin/ImpersonationBanner';
 import { logger } from '@/lib/logger';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import { ToastEventProvider } from '@/components/AuthToastProvider';
@@ -81,6 +83,10 @@ const AutomatedEssays = lazyWithRetry(
   () => import('./pages/AutomatedEssays'),
   'AutomatedEssays'
 );
+const AdminUsers = lazyWithRetry(
+  () => import('./pages/admin/AdminUsers'),
+  'AdminUsers'
+);
 
 // Create a client for React Query
 const queryClient = new QueryClient({
@@ -128,6 +134,14 @@ const App = () => (
                           <FloatingUploadProgress />
                         </ErrorBoundary>
                         <div className="app-container animate-fade-in">
+                          {/* Above <Routes>, inside LanguageProvider: it must
+                              be on EVERY page (impersonation is not scoped to
+                              one route) and it needs t(). Sticky rather than
+                              fixed, so it pushes the page down instead of
+                              covering each page's own header. */}
+                          <ErrorBoundary fallback={null}>
+                            <ImpersonationBanner />
+                          </ErrorBoundary>
                           <ErrorBoundary>
                             <Routes>
                               <Route
@@ -353,6 +367,21 @@ const App = () => (
                                       <AutomatedEssays />
                                     </Suspense>
                                   </ProtectedRoute>
+                                }
+                              />
+
+                              <Route
+                                path="/admin/users"
+                                element={
+                                  <AdminRoute>
+                                    <Suspense
+                                      fallback={
+                                        <PageLoadingFallback type="dashboard" />
+                                      }
+                                    >
+                                      <AdminUsers />
+                                    </Suspense>
+                                  </AdminRoute>
                                 }
                               />
 

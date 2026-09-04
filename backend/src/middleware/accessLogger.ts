@@ -183,9 +183,23 @@ function getClientIP(req: Request): string {
 }
 
 /**
- * Extract username from authenticated request
+ * Extract username from authenticated request.
+ *
+ * During impersonation `req.user` is the TARGET, because that is what makes
+ * every ownership check work — which means an unqualified `req.user.email`
+ * here would attribute the admin's actions to a user who never made them, in
+ * the one log this project keeps "for IT security requirements". The real
+ * actor is on `req.impersonator`, and it wins.
+ *
+ * The composed form is `admin@x(as:user@y)`: one whitespace-free token, so
+ * the space-separated log format is unchanged and `grep 'as:user@y'` still
+ * finds every request made on that account by anyone.
  */
 function getUsername(req: AuthRequest): string {
+  const impersonatorEmail = req.impersonator?.email;
+  if (impersonatorEmail && req.user?.email) {
+    return `${impersonatorEmail}(as:${req.user.email})`;
+  }
   if (req.user?.email) {
     return req.user.email;
   }

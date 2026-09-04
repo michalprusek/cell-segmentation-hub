@@ -35,6 +35,42 @@ export interface Profile {
   createdAt: string;
   updatedAt: string;
   user?: User;
+  /**
+   * Platform administrator. Comes from `GET /auth/profile`, which is the one
+   * call the SPA makes on every cold load — so the admin entry point can be
+   * rendered without a second round-trip.
+   *
+   * This is a RENDERING hint and nothing more. Every admin endpoint re-checks
+   * the flag server-side (`requireAdmin`), so flipping it in devtools changes
+   * what the menu shows and nothing else.
+   */
+  isAdmin?: boolean;
+  /**
+   * Present only while an admin is acting AS this user. The rest of the app
+   * sees the impersonated user everywhere — that is the point — so this is
+   * the only signal that the session is not what it looks like, and it is
+   * what drives the banner.
+   */
+  impersonatedBy?: { id: string; email: string } | null;
+}
+
+/** One row of `GET /api/admin/users`. */
+export interface AdminUserSummary {
+  id: string;
+  email: string;
+  username: string | null;
+  emailVerified: boolean;
+  isAdmin: boolean;
+  createdAt: string;
+  projectCount: number;
+}
+
+export interface AdminUserListResult {
+  users: AdminUserSummary[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
 }
 
 export interface ApiError {

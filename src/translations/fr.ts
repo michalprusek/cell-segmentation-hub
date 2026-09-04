@@ -3111,4 +3111,32 @@ export default {
       delete: 'Supprimer le polygone',
     },
   },
+  admin: {
+    navLabel: 'Administration',
+    usersTitle: 'Utilisateurs inscrits',
+    usersDescription:
+      "Choisissez un utilisateur pour vous connecter à sa place, à des fins de débogage et d'assistance. Chaque session est consignée dans le journal d'audit.",
+    searchPlaceholder: "Rechercher par e-mail ou nom d'utilisateur",
+    columnUsername: "Nom d'utilisateur",
+    columnProjects: 'Projets',
+    columnRegistered: 'Inscription',
+    badgeAdmin: 'Administrateur',
+    logInAs: 'Se connecter en tant que',
+    cannotImpersonateSelf: "C'est votre propre compte.",
+    cannotImpersonateAdmin:
+      "Impossible de se connecter en tant qu'un autre administrateur.",
+    impersonateFailed: 'Impossible de se connecter en tant que cet utilisateur.',
+    loadUsersFailed: "La liste des utilisateurs n'a pas pu être chargée.",
+    noUsersFound: 'Aucun utilisateur ne correspond à cette recherche.',
+    pageOf: 'Page {{page}} sur {{total}}',
+    nextPage: 'Suivant',
+    notAuthorizedTitle: 'Accès administrateur requis',
+    notAuthorizedDescription:
+      'Cette page est réservée aux administrateurs de la plateforme.',
+    impersonationBannerTitle: "Session d'assistance.",
+    impersonationBannerViewing: 'Vous consultez le compte de',
+    impersonationBannerSignedInAs: '— vous êtes connecté en tant que',
+    returnToUserList: 'Revenir à la liste des utilisateurs',
+    stopImpersonationFailed: "La session d'assistance n'a pas pu être terminée.",
+  },
 };

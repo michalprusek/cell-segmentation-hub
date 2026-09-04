@@ -307,11 +307,42 @@ export async function refreshToken(
       throw ApiError.unauthorized('Uživatel nenalezen');
     }
 
+    // The payload is rebuilt from the DB row, so anything that lives only in
+    // the old access token is GONE here — which is exactly why the
+    // impersonation is carried on the Redis refresh record and read back off
+    // the rotation result. Without this the frontend's 13-minute proactive
+    // refresh would drop the admin into the target's account with no banner
+    // and no way back.
+    let impersonation:
+      | { impersonatorId: string; impersonationSessionId: string }
+      | undefined;
+    if (rotated.impersonatorId && rotated.impersonationSessionId) {
+      // Re-checked on every refresh, not just at the start: revoking the admin
+      // flag must end the impersonated session rather than let it run for the
+      // remaining 30 days of the refresh TTL. A 401 here is the right outcome
+      // — the client signs out, which is where a de-admined operator belongs.
+      const impersonator = await prisma.user.findUnique({
+        where: { id: rotated.impersonatorId },
+        select: { id: true, isAdmin: true },
+      });
+      if (!impersonator?.isAdmin) {
+        await sessionService.deleteRefreshToken(rotated.token);
+        throw ApiError.unauthorized(
+          'Impersonace byla ukončena: účet již nemá práva administrátora'
+        );
+      }
+      impersonation = {
+        impersonatorId: rotated.impersonatorId,
+        impersonationSessionId: rotated.impersonationSessionId,
+      };
+    }
+
     const { accessToken } = generateTokenPair(
       {
         userId: user.id,
         email: user.email,
         emailVerified: user.emailVerified,
+        ...(impersonation ?? {}),
       },
       true
     );
