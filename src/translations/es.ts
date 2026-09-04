@@ -257,6 +257,9 @@ export default {
     createProjectDesc:
       'Añade un nuevo proyecto para organizar tus imágenes de microscopía y tus análisis.',
     projectType: 'Tipo de proyecto',
+    renameProject: 'Renombrar proyecto',
+    projectRenamed: 'Proyecto renombrado',
+    projectRenameFailed: 'No se pudo renombrar el proyecto',
     projectTypeUpdated: 'Tipo de proyecto actualizado',
     failedToUpdateProject: 'Error al actualizar el proyecto',
     changeProjectType: 'Cambiar tipo de proyecto',

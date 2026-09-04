@@ -1,9 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
-import { ArrowLeft, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Pencil } from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -37,6 +37,9 @@ const PROJECT_TYPE_BADGE: Record<ProjectType, string> = {
 
 interface ProjectHeaderProps {
   projectTitle: string;
+  /** Rename the project. Omitted when the viewer may not rename it (a shared
+   *  project is read-only for the annotator), which also hides the control. */
+  onTitleChange?: (title: string) => void | Promise<void>;
   imagesCount: number;
   loading: boolean;
   projectType?: ProjectType;
@@ -51,6 +54,7 @@ interface ProjectHeaderProps {
 
 const ProjectHeader = ({
   projectTitle,
+  onTitleChange,
   imagesCount,
   loading,
   projectType,
@@ -58,6 +62,32 @@ const ProjectHeader = ({
   verified,
   onVerifiedChange,
 }: ProjectHeaderProps) => {
+  // Inline rename, following the same gesture the microtubule panel uses:
+  // Enter or blur commits, Escape cancels.
+  const [renaming, setRenaming] = useState(false);
+  const [titleDraft, setTitleDraft] = useState(projectTitle);
+
+  // No effect syncs the draft to `projectTitle`: `startRename` is the only way
+  // into the editor and it seeds the draft itself, so an effect would be dead
+  // code. That also means a refetch landing mid-edit cannot wipe what the user
+  // has typed.
+  const startRename = () => {
+    setTitleDraft(projectTitle);
+    setRenaming(true);
+  };
+
+  const commitRename = () => {
+    setRenaming(false);
+    const next = titleDraft.trim();
+    // An empty name is not a rename, and neither is renaming to what it
+    // already is — both would be a pointless PUT and a misleading toast.
+    if (!next || next === projectTitle) {
+      setTitleDraft(projectTitle);
+      return;
+    }
+    void onTitleChange?.(next);
+  };
+
   const navigate = useNavigate();
   const { t } = useLanguage();
 
@@ -86,9 +116,56 @@ const ProjectHeader = ({
                 floor it would shrink to nothing and the controls would stay
                 crushed on line one instead of moving to line two. */}
             <div className="min-w-[10rem] flex-1">
-              <h1 className="text-lg sm:text-xl font-semibold dark:text-white truncate">
-                {projectTitle}
-              </h1>
+              {renaming ? (
+                <input
+                  autoFocus
+                  type="text"
+                  value={titleDraft}
+                  maxLength={255}
+                  aria-label={t('projects.renameProject') as string}
+                  data-testid="project-title-input"
+                  onChange={e => setTitleDraft(e.target.value)}
+                  onBlur={commitRename}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      commitRename();
+                    } else if (e.key === 'Escape') {
+                      e.preventDefault();
+                      setRenaming(false);
+                    }
+                  }}
+                  className="w-full rounded border border-gray-300 bg-white px-2 py-0.5 text-lg font-semibold dark:border-gray-600 dark:bg-gray-800 dark:text-white sm:text-xl"
+                />
+              ) : (
+                <div className="flex items-center gap-1.5">
+                  <h1
+                    className="truncate text-lg font-semibold dark:text-white sm:text-xl"
+                    // Double-click is the discoverable-by-habit gesture; the
+                    // pencil is the discoverable-by-sight one. Both, because
+                    // neither alone is obvious to every user.
+                    onDoubleClick={onTitleChange ? startRename : undefined}
+                    title={
+                      onTitleChange
+                        ? (t('projects.renameProject') as string)
+                        : undefined
+                    }
+                  >
+                    {projectTitle}
+                  </h1>
+                  {onTitleChange && (
+                    <button
+                      type="button"
+                      onClick={startRename}
+                      aria-label={t('projects.renameProject') as string}
+                      data-testid="project-title-edit"
+                      className="flex-shrink-0 rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-gray-700 dark:hover:text-gray-200"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+              )}
               <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
                 {loading
                   ? t('common.loading')

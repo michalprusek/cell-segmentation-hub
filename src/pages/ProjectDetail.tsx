@@ -102,6 +102,7 @@ const ProjectDetail = () => {
   // Segmentation editor loads full polygon data independently when opened.
   const {
     projectTitle,
+    setProjectTitle,
     projectType,
     setProjectType,
     projectVerified,
@@ -112,6 +113,27 @@ const ProjectDetail = () => {
     updateImages,
     refreshImageSegmentation,
   } = useProjectData(id, user?.id);
+
+  const handleProjectTitleChange = useCallback(
+    async (nextTitle: string) => {
+      if (!id) return;
+      // Optimistic, for the same reason the type change is: the header is the
+      // thing the user just edited, so it must not sit showing the old name
+      // for the round-trip. Put the old one back if the server refuses.
+      const previousTitle = projectTitle;
+      setProjectTitle(nextTitle);
+      try {
+        // The client takes `name` and maps it to the backend's `title`.
+        await apiClient.updateProject(id, { name: nextTitle });
+        toast.success(t('projects.projectRenamed'));
+      } catch (err) {
+        setProjectTitle(previousTitle);
+        logger.error('Failed to rename project', err);
+        toast.error(t('projects.projectRenameFailed'));
+      }
+    },
+    [id, projectTitle, setProjectTitle, t]
+  );
 
   const handleProjectTypeChange = useCallback(
     async (newType: import('@/types').ProjectType) => {
@@ -1694,6 +1716,7 @@ const ProjectDetail = () => {
     >
       <ProjectHeader
         projectTitle={projectTitle}
+        onTitleChange={handleProjectTitleChange}
         imagesCount={filteredImages.length}
         loading={loading}
         projectType={projectType}
