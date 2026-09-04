@@ -10,7 +10,9 @@
  *     detected tracks drawn on top (when ``includeSegmentedImages``).
  *   - ``kymographs/velocity_metrics.xlsx`` — one worksheet per fluorescent
  *     channel (channel = motor/protein, e.g. one sheet for kinesin), one row
- *     per detected trajectory (when ``includeVelocityMetrics``).
+ *     per detected trajectory, plus a ``<channel> segments`` sheet with one row
+ *     per motion/pause phase of each trajectory (when
+ *     ``includeVelocityMetrics``).
  *
  * Reuses the same ``kymographService`` sampling, detection and calibration path
  * as the editor modal — no drift between what the user sees and what ships in
@@ -274,6 +276,36 @@ const VELOCITY_HEADER = [
   'frame_interval_ms',
 ];
 
+/** One segment row, in the column order of ``SEGMENT_HEADER``. */
+type SegmentRow = Array<string | number | boolean | null>;
+
+/** Per-phase columns. The identity trio (video, microtubule, track) is the same
+ *  as the trajectory sheet's, so a segment can always be traced back to the
+ *  trajectory it was cut from, and `segment` numbers the phases within that
+ *  trajectory in time order. The statistics are the trajectory ones measured
+ *  over the phase: `kind` says whether the particle was running or paused,
+ *  `velocity_*` is the fitted slope over the phase, `run_length_um` its
+ *  distance and `run_time_s` its duration. */
+const SEGMENT_HEADER = [
+  'video',
+  'microtubule',
+  'track',
+  'segment',
+  'kind',
+  'direction',
+  'start_frame',
+  'end_frame',
+  'run_time_s',
+  'run_length_um',
+  'velocity_um_s',
+  'velocity_px_frame',
+  'intensity_signal',
+  'intensity_background',
+  'intensity_minus_background',
+  'pixel_size_um',
+  'frame_interval_ms',
+];
+
 /** Excel worksheet names must be ≤31 chars, non-blank, unique, and free of
  *  ``* ? : \ / [ ]``. Sanitise the channel name and de-duplicate against the
  *  names already used so two channels that collide after truncation stay
@@ -297,7 +329,8 @@ function safeSheetName(channel: string, used: Set<string>): string {
  *  sorted channel order for deterministic, reproducible workbooks. */
 async function writeVelocityWorkbook(
   filePath: string,
-  rowsByChannel: Map<string, VelocityRow[]>
+  rowsByChannel: Map<string, VelocityRow[]>,
+  segmentsByChannel?: Map<string, SegmentRow[]>
 ): Promise<void> {
   type ExcelJsDefault = typeof import('exceljs');
   const excelMod = (await import('exceljs')) as unknown as {
@@ -311,6 +344,20 @@ async function writeVelocityWorkbook(
     const sheet = workbook.addWorksheet(safeSheetName(channel, used));
     sheet.addRow(VELOCITY_HEADER);
     for (const row of rowsByChannel.get(channel) ?? []) {
+      sheet.addRow(row);
+    }
+  }
+  // The per-phase breakdown goes in its own sheets rather than replacing the
+  // trajectory ones: a trajectory row is still the unit for "how fast does this
+  // motor go overall", and anything already reading this workbook keeps
+  // working. `safeSheetName` gets the suffix folded in so a long channel name
+  // cannot collide with its own trajectory sheet after truncation.
+  for (const channel of [...(segmentsByChannel?.keys() ?? [])].sort()) {
+    const sheet = workbook.addWorksheet(
+      safeSheetName(`${channel} segments`, used)
+    );
+    sheet.addRow(SEGMENT_HEADER);
+    for (const row of segmentsByChannel?.get(channel) ?? []) {
       sheet.addRow(row);
     }
   }
@@ -722,6 +769,7 @@ export async function exportMicrotubuleKymographs(
     // EMPTY array = the job ran and detected nothing, which still gives the
     // channel a (header-only) worksheet.
     const rowSlots: Array<VelocityRow[] | undefined> = new Array(jobs.length);
+    const segmentSlots: Array<SegmentRow[] | undefined> = new Array(jobs.length);
 
     // Files actually written, as distinct from jobs dispatched. The two differ
     // whenever `includeSegmentedImages` is off: every kymograph is still
@@ -786,6 +834,29 @@ export async function exportMicrotubuleKymographs(
           if (options.includeVelocityMetrics && result.tracks) {
             // One row per trajectory (no per-run breakdown), parked in this
             // job's slot so the worksheet order follows the job list.
+            // One row per motion/pause phase, carrying the same identity trio
+            // so a segment can be traced back to its trajectory.
+            segmentSlots[jobIndex] = result.tracks.flatMap((tr, ti) =>
+              (tr.phases ?? []).map((ph, pi) => [
+                job.videoName,
+                job.polylineId,
+                ti + 1,
+                pi + 1,
+                ph.kind,
+                ph.direction,
+                ph.startFrame,
+                ph.endFrame,
+                ph.durationS,
+                ph.displacementUm,
+                ph.velocityUmPerSec,
+                ph.velocityPxPerFrame,
+                ph.intensitySignal,
+                ph.intensityBackground,
+                ph.intensityMinusBackground,
+                result.pixelSizeUm,
+                result.frameIntervalMs,
+              ])
+            );
             rowSlots[jobIndex] = result.tracks.map((tr, ti) => [
               job.videoName,
               job.polylineId,
@@ -833,6 +904,20 @@ export async function exportMicrotubuleKymographs(
       }
     }
 
+    const segmentsByChannel = new Map<string, SegmentRow[]>();
+    for (let i = 0; i < jobs.length; i++) {
+      const rows = segmentSlots[i];
+      if (!rows || rows.length === 0) {
+        continue;
+      }
+      const existing = segmentsByChannel.get(jobs[i].sourceChannel);
+      if (existing) {
+        existing.push(...rows);
+      } else {
+        segmentsByChannel.set(jobs[i].sourceChannel, [...rows]);
+      }
+    }
+
     const velocityRowCount = [...rowsByChannel.values()].reduce(
       (n, rows) => n + rows.length,
       0
@@ -842,7 +927,8 @@ export async function exportMicrotubuleKymographs(
     if (wroteWorkbook) {
       await writeVelocityWorkbook(
         path.join(outDir, 'velocity_metrics.xlsx'),
-        rowsByChannel
+        rowsByChannel,
+        segmentsByChannel
       );
     }
 
