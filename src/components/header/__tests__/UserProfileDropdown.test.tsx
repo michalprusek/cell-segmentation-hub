@@ -16,6 +16,11 @@ vi.mock('sonner', () => ({
 const mockSignOut = vi.fn().mockResolvedValue(undefined);
 const mockNavigate = vi.fn();
 
+// Mutable rather than a fixed literal so the admin-entry block below can flip
+// it without replacing the whole mock implementation (which the avatar test's
+// `mockReturnValueOnce` relies on staying in place).
+let authIsAdmin = false;
+
 vi.mock('@/contexts/useAuth', () => ({
   useAuth: vi.fn(() => ({
     signOut: mockSignOut,
@@ -23,6 +28,7 @@ vi.mock('@/contexts/useAuth', () => ({
     profile: { avatarUrl: null },
     isAuthenticated: false,
     isLoading: false,
+    isAdmin: authIsAdmin,
   })),
 }));
 
@@ -58,6 +64,7 @@ describe('UserProfileDropdown', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockSignOut.mockResolvedValue(undefined);
+    authIsAdmin = false;
   });
 
   it('renders the username in the trigger button', () => {
@@ -137,5 +144,57 @@ describe('UserProfileDropdown', () => {
     const avatarImg = screen.getByRole('img');
     expect(avatarImg).toHaveAttribute('src', 'https://example.com/avatar.jpg');
     expect(avatarImg).toHaveAttribute('alt', 'testuser');
+  });
+});
+
+/**
+ * The admin entry.
+ *
+ * Worth testing in both directions because either failure is silent: a missing
+ * gate shows "Administration" to every user (who then hits a 403 page and
+ * files a bug), and a broken flag hides the maintainer's only entry point.
+ */
+describe('UserProfileDropdown — admin entry', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    authIsAdmin = false;
+  });
+
+  it('hides it from a non-admin', async () => {
+    const user = userEvent.setup();
+    renderDropdown();
+    await user.click(screen.getByRole('button'));
+
+    expect(
+      screen.queryByRole('menuitem', { name: /admin\.navLabel/i })
+    ).not.toBeInTheDocument();
+    // The ordinary items ARE there, so an absent admin item means the gate
+    // worked rather than that the menu failed to open.
+    expect(
+      screen.getByRole('menuitem', { name: /settings/i })
+    ).toBeInTheDocument();
+  });
+
+  it('shows it to an admin', async () => {
+    authIsAdmin = true;
+    const user = userEvent.setup();
+    renderDropdown();
+    await user.click(screen.getByRole('button'));
+
+    expect(
+      screen.getByRole('menuitem', { name: /admin\.navLabel/i })
+    ).toBeInTheDocument();
+  });
+
+  it('navigates to the user list', async () => {
+    authIsAdmin = true;
+    const user = userEvent.setup();
+    renderDropdown();
+    await user.click(screen.getByRole('button'));
+    await user.click(
+      screen.getByRole('menuitem', { name: /admin\.navLabel/i })
+    );
+
+    expect(mockNavigate).toHaveBeenCalledWith('/admin/users');
   });
 });

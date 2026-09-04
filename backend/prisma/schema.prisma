@@ -13,6 +13,12 @@ model User {
   email              String              @unique
   password           String
   emailVerified      Boolean             @default(false)
+  /// Platform administrator. A single boolean rather than a role enum
+  /// because there is exactly one privilege in this system — reach the
+  /// /api/admin routes — and no hierarchy to express. `authenticate`
+  /// re-reads this row on every request, so revoking the flag ends the
+  /// privilege immediately; no token has to expire first.
+  isAdmin            Boolean             @default(false)
   verificationToken  String?
   resetToken         String?
   resetTokenExpiry   DateTime?
@@ -30,6 +36,8 @@ model User {
   essayJobs          EssayJob[]
   segmenterDatasets  SegmenterDataset[]
   exportLogs         ExportLog[]
+  impersonationsMade ImpersonationLog[]  @relation("ImpersonationAdmin")
+  impersonationsOfMe ImpersonationLog[]  @relation("ImpersonationTarget")
 
   @@map("users")
 }
@@ -486,4 +494,61 @@ model SegmenterAnnotation {
   image       SegmenterImage @relation(fields: [imageId], references: [id], onDelete: Cascade)
 
   @@map("segmenter_annotations")
+}
+
+// ---------------------------------------------------------------------------
+// Impersonation audit log.
+//
+// An admin can mint a session for any non-admin account in order to reproduce
+// a bug the user is reporting. That is a support tool, not a back door, and
+// the difference between the two is entirely this table: without it, every
+// action taken during impersonation is indistinguishable from one the user
+// took themselves.
+//
+// The design follows `ExportLog` (see above) for the same reasons:
+//
+//   * append-only, one row per EVENT ("start" / "stop"), so there is no
+//     read-modify-write to lose a concurrent write and every row carries its
+//     own timestamp;
+//   * the actor FKs are nullable with `SetNull`, and both e-mails are
+//     denormalised at write time, so deleting either account leaves the record
+//     of what happened intact and still readable.
+// ---------------------------------------------------------------------------
+
+model ImpersonationLog {
+  id          String  @id @default(uuid())
+  /// "start" — a session was minted for `targetUser`.
+  /// "stop"  — the admin returned to their own session.
+  /// "denied" — an impersonation was refused; the most interesting rows in a
+  /// log whose purpose is attribution.
+  event       String
+  /// The real actor. Nullable + `SetNull` so deleting the admin account does
+  /// not erase the trail; `adminEmail` keeps the row readable afterwards.
+  adminId     String?
+  adminEmail  String?
+  /// Whose account was being acted as.
+  targetId    String?
+  targetEmail String?
+  /// Correlates the "start" row with its "stop" row. Generated at start and
+  /// carried in the impersonated session's JWT and refresh record.
+  sessionId   String
+  /// Client IP as `accessLogger` resolves it, plus the User-Agent — the same
+  /// two fields access.log carries, so a row here can be lined up with the
+  /// request log.
+  ip          String?
+  userAgent   String?
+  /// Free-form note: why the stop happened ("manual", "admin-revoked"), or a
+  /// refusal reason.
+  detail      String?
+
+  createdAt DateTime @default(now())
+
+  admin  User? @relation("ImpersonationAdmin", fields: [adminId], references: [id], onDelete: SetNull)
+  target User? @relation("ImpersonationTarget", fields: [targetId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt], map: "idx_impersonationlog_created")
+  @@index([adminId, createdAt], map: "idx_impersonationlog_admin_created")
+  @@index([targetId, createdAt], map: "idx_impersonationlog_target_created")
+  @@index([sessionId], map: "idx_impersonationlog_session")
+  @@map("impersonation_logs")
 }

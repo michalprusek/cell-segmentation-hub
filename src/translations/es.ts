@@ -3087,4 +3087,32 @@ export default {
       delete: 'Eliminar polígono',
     },
   },
+  admin: {
+    navLabel: 'Administración',
+    usersTitle: 'Usuarios registrados',
+    usersDescription:
+      'Elige un usuario para iniciar sesión como él, para depuración y soporte. Cada sesión queda registrada en el registro de auditoría.',
+    searchPlaceholder: 'Buscar por correo o nombre de usuario',
+    columnUsername: 'Nombre de usuario',
+    columnProjects: 'Proyectos',
+    columnRegistered: 'Registrado',
+    badgeAdmin: 'Administrador',
+    logInAs: 'Iniciar sesión como',
+    cannotImpersonateSelf: 'Esta es tu propia cuenta.',
+    cannotImpersonateAdmin:
+      'No se puede suplantar una cuenta de administrador.',
+    impersonateFailed: 'No se pudo iniciar sesión como este usuario.',
+    loadUsersFailed: 'No se pudo cargar la lista de usuarios.',
+    noUsersFound: 'Ningún usuario coincide con esta búsqueda.',
+    pageOf: 'Página {{page}} de {{total}}',
+    nextPage: 'Siguiente',
+    notAuthorizedTitle: 'Se requiere acceso de administrador',
+    notAuthorizedDescription:
+      'Esta página solo está disponible para los administradores de la plataforma.',
+    impersonationBannerTitle: 'Sesión de soporte.',
+    impersonationBannerViewing: 'Estás viendo la cuenta de',
+    impersonationBannerSignedInAs: '— has iniciado sesión como',
+    returnToUserList: 'Volver a la lista de usuarios',
+    stopImpersonationFailed: 'No se pudo finalizar la sesión de soporte.',
+  },
 };

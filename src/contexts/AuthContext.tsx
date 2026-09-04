@@ -381,12 +381,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // navigate, and module-level apiClient — no captured local state — so
   // stale-closure risk is bounded. A follow-up should wrap each callback
   // in useCallback so the dep list becomes complete.
+  // Both are derived from the profile the server returned, never from
+  // anything the client decided for itself. `isAdmin` only decides what to
+  // render; `impersonatedBy` is the single signal that `user`/`profile`
+  // describe someone the admin is acting AS rather than the person signed in.
+  const isAdmin = profile?.isAdmin === true;
+  const impersonatedBy = profile?.impersonatedBy ?? null;
+
   const value = useMemo(
     () => ({
       user,
       profile,
       loading,
       isAuthenticated,
+      isAdmin,
+      impersonatedBy,
       signIn,
       signUp,
       signOut,
@@ -394,7 +403,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       refreshProfile,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [user, profile, loading, isAuthenticated]
+    [user, profile, loading, isAuthenticated, isAdmin, impersonatedBy]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

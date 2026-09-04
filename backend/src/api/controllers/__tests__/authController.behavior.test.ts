@@ -334,7 +334,12 @@ describe('AuthController — extended behavioral', () => {
       const res = await request(app).get('/').expect(200);
 
       expect(res.body.success).toBe(true);
-      expect(res.body.data).toEqual(profile);
+      // The controller adds request-scoped impersonation state to whatever
+      // UserService returned. Null here because this request is an ordinary
+      // session; the SPA reads exactly this field to decide whether to render
+      // the impersonation banner, so it must be present on EVERY response and
+      // not only while impersonating.
+      expect(res.body.data).toEqual({ ...profile, impersonatedBy: null });
       expect(MockedUserService.getUserProfile).toHaveBeenCalledWith(USER.id);
     });
 

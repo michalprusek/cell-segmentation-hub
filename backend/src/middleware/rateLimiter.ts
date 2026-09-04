@@ -129,6 +129,42 @@ export const passwordResetRateLimiter = rateLimit({
 export const passwordResetLimiter = passwordResetRateLimiter;
 
 /**
+ * Rate limiter for the admin surface (`/api/admin`).
+ *
+ * Nothing limits a newly added route by default in this codebase — only
+ * register/login and password reset carry a limiter — so an admin endpoint
+ * that mints sessions has to bring its own. The key is `user:<id>` for an
+ * authenticated caller, which is what makes this useful here: a stolen admin
+ * session cannot be used to walk the whole user table or to enumerate ids
+ * through the impersonation endpoint at machine speed.
+ *
+ * 60/5min is generous for a human clicking through a support flow and
+ * useless for a script.
+ */
+export const adminRateLimiter = createRateLimiter({
+  windowMs: 5 * 60 * 1000,
+  max: 60,
+  message: 'Too many admin requests, please try again later',
+  skipSuccessfulRequests: false,
+});
+
+export const adminLimiter = adminRateLimiter;
+
+/**
+ * Stricter limiter for the two endpoints that actually mint a session.
+ * Separate from `adminLimiter` so browsing the user list cannot exhaust the
+ * budget for getting back OUT of an impersonated session.
+ */
+export const impersonationRateLimiter = createRateLimiter({
+  windowMs: 5 * 60 * 1000,
+  max: 20,
+  message: 'Too many impersonation requests, please try again later',
+  skipSuccessfulRequests: false,
+});
+
+export const impersonationLimiter = impersonationRateLimiter;
+
+/**
  * General API rate limiter
  */
 export const apiRateLimiter = createRateLimiter({

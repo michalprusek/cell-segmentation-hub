@@ -17,6 +17,14 @@ export interface UserProfile {
   firstName?: string;
   lastName?: string;
   isEmailVerified: boolean;
+  /**
+   * Platform administrator. Carried on the profile because `/auth/profile` is
+   * the one call the SPA makes on every cold load, and the admin entry point
+   * has to be renderable from it without a second round-trip. It is a HINT
+   * for rendering only — every admin route re-checks the flag server-side
+   * (`requireAdmin`), so flipping it in devtools buys nothing.
+   */
+  isAdmin: boolean;
   language: string;
   theme: string;
   avatarUrl?: string | null;
@@ -78,6 +86,7 @@ export async function getUserProfile(
       firstName: user.profile?.title?.split(' ')[0],
       lastName: user.profile?.title?.split(' ').slice(1).join(' '),
       isEmailVerified: user.emailVerified,
+      isAdmin: user.isAdmin,
       // Fallback for a legacy row with no profile at all. English, not
       // Czech — the client treats whatever this endpoint returns as an
       // explicit preference and pins it, so a Czech fallback silently
