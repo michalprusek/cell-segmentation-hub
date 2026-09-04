@@ -275,22 +275,39 @@ describe('VertexContextMenu', () => {
       expect(screen.getByTestId('context-menu')).toBeInTheDocument();
     });
   });
-  describe('Performance', () => {
-    it('handles rapid re-renders efficiently', () => {
-      const { rerender } = render(<VertexContextMenu {...defaultProps} />);
-      const startTime = performance.now();
-      // Simulate rapid prop changes
-      for (let i = 0; i < 10; i++) {
+  describe('Re-render correctness', () => {
+    // Was 'handles rapid re-renders efficiently', whose only assertion was
+    // `expect(totalTime).toBeLessThan(2000)` after 10 rerenders. Two problems:
+    // the ceiling is ~1000x the real cost so it can never fail, and the props
+    // it swept (vertexIndex, polygonId) are destructured as `_vertexIndex` /
+    // `_polygonId` and never read — so nothing observable changed either way.
+    //
+    // The claim that actually matters on rerender is that the delete handler
+    // does not go stale: it is built with useCallback([onDelete]), so a wrong
+    // dependency list would keep invoking the FIRST onDelete and delete a
+    // vertex the user is no longer pointing at.
+    it('invokes the latest onDelete after repeated rerenders, not a stale one', () => {
+      const handlers = Array.from({ length: 10 }, () => vi.fn());
+
+      const { rerender } = render(
+        <VertexContextMenu {...defaultProps} onDelete={handlers[0]} />
+      );
+
+      for (let i = 1; i < handlers.length; i++) {
         rerender(
-          <VertexContextMenu
-            {...defaultProps}
-            vertexIndex={i}
-            polygonId={`polygon-${i}`}
-          />
+          <VertexContextMenu {...defaultProps} onDelete={handlers[i]} />
         );
       }
-      const totalTime = performance.now() - startTime;
-      expect(totalTime).toBeLessThan(2000); // load-tolerant ceiling: wall-clock budgets inflate under V8 coverage on CI
+
+      fireEvent.click(screen.getByTestId('context-menu-item'));
+
+      expect(handlers[handlers.length - 1]).toHaveBeenCalledTimes(1);
+      handlers.slice(0, -1).forEach((handler, i) => {
+        expect(
+          handler,
+          `handler ${i} should not have been called`
+        ).not.toHaveBeenCalled();
+      });
     });
     it('does not cause memory leaks with callback changes', () => {
       const { rerender } = render(<VertexContextMenu {...defaultProps} />);

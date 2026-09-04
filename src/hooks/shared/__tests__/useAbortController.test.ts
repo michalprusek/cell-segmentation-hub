@@ -288,3 +288,118 @@ describe('Race condition scenarios', () => {
     expect(prefetchSignal.aborted).toBe(true);
   });
 });
+
+/**
+ * Coverage for the two exports that had NO test at all until 2026-09-04:
+ * `resetController` and `areKeysAllAborted`. The global coverage gate hid the
+ * gap, and both encode a contract that the obvious implementation gets wrong:
+ *
+ *  - `abort(key)` deliberately KEEPS the aborted controller in the map (see the
+ *    comment in useAbortController.ts) so `isAborted(key)` keeps reporting the
+ *    abort. `resetController(key)` is therefore the only way to clear it.
+ *  - `areKeysAllAborted([...])` must return FALSE when nothing has started yet.
+ *    A bare `keys.every(...)` returns TRUE on an empty map, which would make
+ *    `useCoordinatedAbortController().areAllAborted()` claim a not-yet-started
+ *    batch was already cancelled.
+ */
+describe('resetController', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('drops a LIVE controller from the map without aborting its signal', () => {
+    // The in-flight request keyed to the old controller must NOT be cancelled by
+    // a reset — that is what distinguishes resetController from abort.
+    const { result } = renderHook(() => useAbortController('reset'));
+
+    const live = result.current.getController('load');
+    expect(live.signal.aborted).toBe(false);
+
+    act(() => {
+      result.current.resetController('load');
+    });
+
+    expect(live.signal.aborted).toBe(false);
+    expect(result.current.getController('load')).not.toBe(live);
+  });
+
+  it('only resets the key it is given', () => {
+    const { result } = renderHook(() => useAbortController('reset'));
+
+    const load = result.current.getController('load');
+    const prefetch = result.current.getController('prefetch');
+
+    act(() => {
+      result.current.resetController('load');
+    });
+
+    expect(result.current.getController('load')).not.toBe(load);
+    expect(result.current.getController('prefetch')).toBe(prefetch);
+  });
+});
+
+describe('areKeysAllAborted', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('returns false when NOTHING has started yet', () => {
+    // The regression this guards: `keys.every(...)` alone is vacuously true on
+    // an empty map, so a batch that had not begun would report "all cancelled".
+    const { result } = renderHook(() => useAbortController('coord'));
+
+    expect(result.current.areKeysAllAborted(['a', 'b'])).toBe(false);
+  });
+
+  it('returns false while at least one key is still live', () => {
+    const { result } = renderHook(() => useAbortController('coord'));
+
+    result.current.getController('a');
+    result.current.getController('b');
+    act(() => {
+      result.current.abort('a');
+    });
+
+    expect(result.current.areKeysAllAborted(['a', 'b'])).toBe(false);
+  });
+
+  it('returns true once every key with a controller is aborted', () => {
+    const { result } = renderHook(() => useAbortController('coord'));
+
+    result.current.getController('a');
+    result.current.getController('b');
+    act(() => {
+      result.current.abort('a');
+      result.current.abort('b');
+    });
+
+    expect(result.current.areKeysAllAborted(['a', 'b'])).toBe(true);
+  });
+
+  it('treats a key that was never created as NOT aborted', () => {
+    // 'b' has no controller: the batch is partially started, so it is not done.
+    const { result } = renderHook(() => useAbortController('coord'));
+
+    result.current.getController('a');
+    act(() => {
+      result.current.abort('a');
+    });
+
+    expect(result.current.areKeysAllAborted(['a', 'b'])).toBe(false);
+  });
+
+  it('goes back to false after the aborted key is reset', () => {
+    const { result } = renderHook(() => useAbortController('coord'));
+
+    result.current.getController('a');
+    act(() => {
+      result.current.abort('a');
+    });
+    expect(result.current.areKeysAllAborted(['a'])).toBe(true);
+
+    act(() => {
+      result.current.resetController('a');
+    });
+    expect(result.current.areKeysAllAborted(['a'])).toBe(false);
+  });
+});

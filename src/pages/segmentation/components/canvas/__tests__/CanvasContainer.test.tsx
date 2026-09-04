@@ -345,11 +345,14 @@ describe('CanvasContainer', () => {
     });
   });
 
-  describe('Performance', () => {
-    it('handles rapid re-renders efficiently', () => {
+  // Was `describe('Performance')`, both tests asserting only a 2000ms ceiling
+  // on a jsdom render that costs single-digit milliseconds. Such a ceiling can
+  // only fail on a hang, which the test timeout already catches, and jsdom's
+  // performance.now() resolves to a whole millisecond anyway.
+  describe('Re-render and large child sets', () => {
+    it('reflects the final editMode after 20 alternating re-renders', () => {
       const { rerender } = render(<CanvasContainer {...defaultProps} />);
 
-      const startTime = performance.now();
       for (let i = 0; i < 20; i++) {
         rerender(
           <CanvasContainer
@@ -358,27 +361,31 @@ describe('CanvasContainer', () => {
           />
         );
       }
-      const totalTime = performance.now() - startTime;
 
-      expect(totalTime).toBeLessThan(2000); // load-tolerant ceiling: wall-clock budgets inflate under V8 coverage on CI
+      // i ends at 19 (odd) → EditVertices. The claim worth making about
+      // repeated re-renders is that the last one wins, not that they were fast.
+      const content = screen.getByTestId('canvas-content');
+      const container = content.parentElement!;
+      expect(container).toHaveAttribute(
+        'data-edit-mode',
+        String(EditMode.EditVertices)
+      );
     });
 
-    it('handles many child elements efficiently', () => {
+    it('renders all 100 children', () => {
       const manyChildren = Array.from({ length: 100 }, (_, i) => (
         <div key={i} data-testid={`child-${i}`}>
           Child {i}
         </div>
       ));
 
-      const startTime = performance.now();
       render(
         <CanvasContainer {...defaultProps}>{manyChildren}</CanvasContainer>
       );
-      const renderTime = performance.now() - startTime;
 
-      expect(renderTime).toBeLessThan(2000); // load-tolerant ceiling
       expect(screen.getByTestId('child-0')).toBeInTheDocument();
       expect(screen.getByTestId('child-99')).toBeInTheDocument();
+      expect(screen.getAllByTestId(/^child-\d+$/)).toHaveLength(100);
     });
   });
 

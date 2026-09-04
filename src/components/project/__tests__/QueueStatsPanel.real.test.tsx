@@ -2,7 +2,8 @@
  * QueueStatsPanel (real component) — behavioral unit tests
  *
  * Tests the ACTUAL component at src/components/project/QueueStatsPanel.tsx,
- * not the mock version in QueueStatsPanel.cancel.test.tsx.
+ * not a mock. (It once said "not the mock version in QueueStatsPanel.cancel.test.tsx"
+ * — that shadow suite was deleted on 2026-09-04.)
  *
  * Covered behaviours:
  *  - Connected / disconnected badge

@@ -42,7 +42,7 @@ vi.mock('../components/canvas/PolygonVertices', () => ({
   ),
 }));
 
-vi.mock('../../context-menu/PolygonContextMenu', () => ({
+vi.mock('../components/context-menu/PolygonContextMenu', () => ({
   default: ({ children, polygonId }: any) => (
     <g>
       {children}

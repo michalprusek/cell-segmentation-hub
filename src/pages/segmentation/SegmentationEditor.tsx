@@ -188,6 +188,18 @@ const SegmentationEditor = () => {
       currentIndex + 1, // Next image
     ].filter(idx => idx >= 0 && idx < projectImages.length);
 
+    // Ownership of the deferred prefetch below. This effect used to return no
+    // cleanup at all, so the 500ms setTimeout outlived the component: it fired
+    // after unmount and called refreshImageSegmentation, which under test is a
+    // vi.fn() returning undefined — hence
+    // "TypeError: Cannot read properties of undefined (reading 'catch')"
+    // attributed to whichever test file the scheduler happened to be running.
+    // The abort signal alone could not cover this: the timer is scheduled
+    // AFTER an await, so on a fast unmount the effect is torn down before the
+    // timer even exists and there is nothing for a signal check to protect.
+    let cancelled = false;
+    let prefetchTimer: ReturnType<typeof setTimeout> | undefined;
+
     // Prefetch with priority: current first, then adjacent
     const prefetchWithPriority = async () => {
       try {
@@ -219,9 +231,18 @@ const SegmentationEditor = () => {
           await refreshImageSegmentation(currentImage.id);
         }
 
+        // The effect may have been torn down while the await above was in
+        // flight; scheduling a timer now would leak one the cleanup can never
+        // see, because cleanup already ran.
+        if (cancelled) return;
+
         // Then prefetch adjacent images in background
-        setTimeout(() => {
-          if (signal.aborted || imageId !== currentImageIdRef.current) {
+        prefetchTimer = setTimeout(() => {
+          if (
+            cancelled ||
+            signal.aborted ||
+            imageId !== currentImageIdRef.current
+          ) {
             return; // Don't prefetch if cancelled or image changed
           }
 
@@ -254,6 +275,14 @@ const SegmentationEditor = () => {
     };
 
     prefetchWithPriority();
+
+    return () => {
+      cancelled = true;
+      if (prefetchTimer !== undefined) {
+        clearTimeout(prefetchTimer);
+        prefetchTimer = undefined;
+      }
+    };
   }, [imageId, projectImages, refreshImageSegmentation, getSignal]);
 
   // Calculate canvas dimensions dynamically based on container and image

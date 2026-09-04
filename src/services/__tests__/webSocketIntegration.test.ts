@@ -744,17 +744,10 @@ describe('WebSocket Integration Tests', () => {
 
       vi.clearAllMocks();
 
-      // Reconnect and measure performance
-      const startTime = performance.now();
       mockSocket.__triggerConnect();
-      const endTime = performance.now();
 
       // All messages should be flushed
       expect(mockSocket.emit).toHaveBeenCalledTimes(500);
-
-      // Load-tolerant ceiling (wall-clock perf flakes under parallel load);
-      // the emit count above is the meaningful assertion.
-      expect(endTime - startTime).toBeLessThan(2500);
     });
   });
 });

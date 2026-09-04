@@ -407,30 +407,80 @@ describe('CanvasVertex', () => {
       expect(renderCount).toBe(2);
     });
 
-    it('handles rapid prop changes efficiently', () => {
-      const { rerender } = render(
+    // Was `expect(totalTime).toBeLessThan(2000)` and nothing else — a ceiling
+    // ~400x the real cost, which cannot fail short of a hang (and a hang trips
+    // the test timeout instead). The claim worth making about 50 rapid prop
+    // changes is not that they were fast but that the LAST one won: this is a
+    // React.memo component with a hand-written comparator, and a comparator
+    // that misses a prop leaves the vertex rendered at a stale position for the
+    // rest of the drag. That is failure pattern #5 in CLAUDE.md.
+    it('renders the final position after 50 rapid prop changes', () => {
+      const { container, rerender } = render(
         <svg>
           <CanvasVertex {...defaultProps} />
         </svg>
       );
 
-      const startTime = performance.now();
-
-      // Simulate rapid position updates (e.g., during dragging)
+      // ONLY `point` varies. The first version of this test also swept
+      // dragOffset, and a mutation that made the comparator ignore `point`
+      // survived it — the changing offset re-rendered the component anyway.
       for (let i = 0; i < 50; i++) {
         rerender(
           <svg>
             <CanvasVertex
               {...defaultProps}
               point={{ x: 100 + i, y: 150 + i }}
-              dragOffset={{ x: i, y: i }}
             />
           </svg>
         );
       }
 
-      const totalTime = performance.now() - startTime;
-      expect(totalTime).toBeLessThan(2000); // load-tolerant ceiling: wall-clock budgets inflate under V8 coverage on CI
+      // i ends at 49, and defaultProps has isDragging=false / no dragOffset,
+      // so the vertex sits at the raw point.
+      const circle = container.querySelector('circle');
+      expect(circle).not.toBeNull();
+      expect(circle).toHaveAttribute('cx', '149');
+      expect(circle).toHaveAttribute('cy', '199');
+    });
+
+    it('applies the final dragOffset when ONLY dragOffset changes', () => {
+      // `point` is held FIXED here on purpose. The first version of this test
+      // varied point and dragOffset together, and a mutation that made the memo
+      // comparator ignore dragOffset entirely (`const sameDragOffset = true`)
+      // survived it — the changing `point` re-rendered the component anyway, so
+      // the offset was never the reason anything updated. Varying exactly one
+      // thing is what makes the fixture discriminate.
+      const FIXED_POINT = { x: 100, y: 150 };
+
+      const { container, rerender } = render(
+        <svg>
+          <CanvasVertex
+            {...defaultProps}
+            point={FIXED_POINT}
+            isDragging
+            dragOffset={{ x: 0, y: 0 }}
+          />
+        </svg>
+      );
+
+      for (let i = 1; i <= 50; i++) {
+        rerender(
+          <svg>
+            <CanvasVertex
+              {...defaultProps}
+              point={FIXED_POINT}
+              isDragging
+              dragOffset={{ x: i, y: 2 * i }}
+            />
+          </svg>
+        );
+      }
+
+      const circle = container.querySelector('circle');
+      expect(circle).not.toBeNull();
+      // point (100, 150) + final offset (50, 100)
+      expect(circle).toHaveAttribute('cx', '150');
+      expect(circle).toHaveAttribute('cy', '250');
     });
 
     it('optimizes drag offset comparisons', () => {

@@ -6,10 +6,16 @@ import { render } from '@/test/utils/test-utils';
 import SpermInstancePanel from '../SpermInstancePanel';
 import { Polygon } from '@/lib/segmentation';
 
-// calculatePolylineLength is a pure util used for display; stub it
-vi.mock('../utils/metricCalculations', () => ({
-  calculatePolylineLength: vi.fn(() => 42.5),
-}));
+// NOTE: there used to be a vi.mock of "../utils/metricCalculations" here
+// stubbing calculatePolylineLength to 42.5. From this file's directory that
+// specifier resolves to components/utils/metricCalculations, which does not
+// exist — the real module is at pages/segmentation/utils/metricCalculations —
+// so the mock never applied and the real util has always run. Nothing in this
+// file asserted on 42.5 either, so the mock was inert as well as broken.
+// Removed rather than repaired: calculatePolylineLength is a deterministic
+// pure function and running the real one is strictly better coverage.
+// (The sibling MicrotubuleInstancePanel.test.tsx already mocks by the '@/'
+// path for exactly this reason.)
 
 function makePolyline(overrides: Partial<Polygon> = {}): Polygon {
   return {

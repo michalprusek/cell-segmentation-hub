@@ -4,7 +4,6 @@ import { calculatePolygonArea } from '@/lib/polygonGeometry';
 import {
   createTestPolygons,
   createTestPolygonObjects,
-  measurePerformance,
 } from '@/test-utils/polygonTestUtils';
 import type { Point, Polygon } from '@/lib/segmentation';
 
@@ -271,33 +270,71 @@ describe('Polygon Slicing', () => {
     });
   });
 
-  describe('Performance Tests', () => {
-    it('should slice large polygons efficiently', async () => {
+  describe('large polygon (analytic ground truth)', () => {
+    it('splits a regular 20-gon into two exactly equal halves', () => {
       const largePolygon: Polygon = {
         id: 'large',
         points: testPolygons.large,
         type: 'external',
       };
 
-      const performance = await measurePerformance(() => {
-        slicePolygon(largePolygon, { x: -500, y: 0 }, { x: 500, y: 0 });
-      }, 50);
+      // Was `expect(performance.averageTime).toBeLessThan(10)` over 50
+      // iterations. testPolygons.large is a 20-point polygon and jsdom's
+      // performance.now() resolves to a whole millisecond, so averageTime was 0
+      // and the ceiling could not fail. Assert the RESULT instead.
+      //
+      // The fixture is a regular 20-gon of circumradius 1000 with vertices at
+      // angles k*18deg, so k=0 and k=10 sit exactly on the y=0 axis: slicing
+      // along it splits the polygon through two opposite vertices into two
+      // halves of exactly equal area.
+      const result = slicePolygon(
+        largePolygon,
+        { x: -500, y: 0 },
+        { x: 500, y: 0 }
+      );
 
-      expect(performance.averageTime).toBeLessThan(10); // Should be reasonably fast
+      expect(result).not.toBeNull();
+      const [top, bottom] = result!;
+      const totalArea = 0.5 * 20 * 1000 * 1000 * Math.sin((2 * Math.PI) / 20);
+
+      expect(calculatePolygonArea(top.points)).toBeCloseTo(totalArea / 2, 6);
+      expect(calculatePolygonArea(bottom.points)).toBeCloseTo(totalArea / 2, 6);
+      // The two halves must account for the whole original — no area created
+      // or destroyed by the cut.
+      expect(
+        calculatePolygonArea(top.points) + calculatePolygonArea(bottom.points)
+      ).toBeCloseTo(totalArea, 6);
     });
 
-    it('should validate slice lines efficiently', async () => {
+    it('accepts a spanning slice line and rejects one that misses', () => {
       const largePolygon: Polygon = {
         id: 'large',
         points: testPolygons.large,
         type: 'external',
       };
 
-      const performance = await measurePerformance(() => {
-        validateSliceLine(largePolygon, { x: -500, y: 0 }, { x: 500, y: 0 });
-      }, 100);
+      // Same story as above: assert the verdict, not the clock.
+      // y=200 deliberately, NOT y=0: the 20-gon has vertices at angles k*18deg,
+      // so k=0 and k=10 lie exactly ON y=0 and a cut there is the degenerate
+      // through-a-vertex case this file already documents as either-outcome.
+      // y=200 crosses two edges cleanly.
+      const spanning = validateSliceLine(
+        largePolygon,
+        { x: -2000, y: 200 },
+        { x: 2000, y: 200 }
+      );
+      expect(spanning.isValid).toBe(true);
+      expect(spanning.intersectionCount).toBe(2);
 
-      expect(performance.averageTime).toBeLessThan(5); // Should be fast
+      // And the discriminating counter-case: a line that misses the polygon
+      // entirely must be rejected. Without this the test passes against a
+      // `validateSliceLine` that returns `{ isValid: true }` unconditionally.
+      const missing = validateSliceLine(
+        largePolygon,
+        { x: -5000, y: 4000 },
+        { x: 5000, y: 4000 }
+      );
+      expect(missing.isValid).toBe(false);
     });
   });
 
@@ -457,22 +494,28 @@ describe('Polygon Slicing', () => {
         type: 'external',
       };
 
-      // This should complete without hanging
-      const startTime = Date.now();
+      // The old assertion here was `expect(endTime - startTime)
+      // .toBeLessThan(1000)`. A genuine infinite loop does not take 1001 ms, it
+      // never returns — the test times out and the ceiling is never evaluated.
+      // So the wall clock proved nothing that reaching the next line does not
+      // already prove. The real claim is that it TERMINATES with a correct
+      // split, so assert that.
       const result = slicePolygon(
         problematicPolygon,
         { x: -10, y: 50 },
         { x: 110, y: 50 }
       );
-      const endTime = Date.now();
 
-      expect(endTime - startTime).toBeLessThan(1000); // Should complete within 1 second
-
-      if (result) {
-        const [polygon1, polygon2] = result;
-        expect(polygon1.points.length).toBeGreaterThanOrEqual(3);
-        expect(polygon2.points.length).toBeGreaterThanOrEqual(3);
-      }
+      // Unconditional: the old `if (result)` meant a regression to null made
+      // the test pass with zero assertions. A horizontal cut across the middle
+      // of a square must always succeed.
+      expect(result).not.toBeNull();
+      const [polygon1, polygon2] = result!;
+      expect(polygon1.points.length).toBeGreaterThanOrEqual(3);
+      expect(polygon2.points.length).toBeGreaterThanOrEqual(3);
+      // testPolygons.square is 100x100, cut at y=50 → two 100x50 halves.
+      expect(calculatePolygonArea(polygon1.points)).toBeCloseTo(5000, 6);
+      expect(calculatePolygonArea(polygon2.points)).toBeCloseTo(5000, 6);
     });
 
     it('should handle identical start and end points', () => {

@@ -487,3 +487,102 @@ describe('PolygonVertices', () => {
     });
   });
 });
+
+/**
+ * Regression: non-finite vertex coordinates (2026-09-04).
+ *
+ * CanvasPolygon filters non-finite points out of the PATH but hands
+ * PolygonVertices the RAW points array, so a NaN or ±Infinity coordinate used
+ * to reach the DOM as <circle cx="NaN"> / <circle cy="Infinity">. Those are
+ * invalid SVG attribute values: the browser discards the circle, so the vertex
+ * handle silently disappears and the user cannot grab it.
+ *
+ * Found by strengthening PolygonDataEdgeCases.test.tsx, whose 28 tests — one of
+ * them named "should handle points with NaN coordinates" — all asserted
+ * `expect(container).toBeTruthy()` and so stayed green with the bug live.
+ *
+ * The filter must run HERE and not upstream: `originalIndex` is what
+ * onDeleteVertex / onDuplicateVertex index into, so dropping points before the
+ * index is attached would delete the wrong vertex.
+ */
+describe('non-finite coordinates', () => {
+  const NON_FINITE_POINTS: Point[] = [
+    { x: 0, y: 0 }, // 0 — valid
+    { x: NaN, y: 10 }, // 1 — NaN x
+    { x: 20, y: NaN }, // 2 — NaN y
+    { x: Infinity, y: 30 }, // 3 — +Infinity x
+    { x: 40, y: -Infinity }, // 4 — -Infinity y
+    { x: 50, y: 50 }, // 5 — valid
+  ];
+
+  it('never emits a non-finite cx/cy into the DOM', () => {
+    const { container } = render(
+      <svg>
+        <PolygonVertices {...DEFAULT_PROPS} points={NON_FINITE_POINTS} />
+      </svg>
+    );
+
+    const circles = Array.from(container.querySelectorAll('circle'));
+    expect(circles.length).toBeGreaterThan(0);
+
+    circles.forEach(circle => {
+      const cx = circle.getAttribute('cx');
+      const cy = circle.getAttribute('cy');
+      expect(Number.isFinite(Number(cx)), `cx="${cx}"`).toBe(true);
+      expect(Number.isFinite(Number(cy)), `cy="${cy}"`).toBe(true);
+    });
+  });
+
+  it('renders only the finite vertices', () => {
+    const { container } = render(
+      <svg>
+        <PolygonVertices {...DEFAULT_PROPS} points={NON_FINITE_POINTS} />
+      </svg>
+    );
+
+    expect(container.querySelectorAll('circle')).toHaveLength(2);
+  });
+
+  it('keeps originalIndex aligned with the polygon points array', () => {
+    // The whole reason the filter lives in this component: index 5 must still
+    // report 5, not 1, or onDeleteVertex removes the wrong point.
+    render(
+      <svg>
+        <PolygonVertices {...DEFAULT_PROPS} points={NON_FINITE_POINTS} />
+      </svg>
+    );
+
+    expect(screen.getByTestId('vertex-0')).toBeInTheDocument();
+    expect(screen.getByTestId('vertex-5')).toBeInTheDocument();
+    expect(screen.queryByTestId('vertex-1')).toBeNull();
+    expect(screen.queryByTestId('vertex-2')).toBeNull();
+    expect(screen.queryByTestId('vertex-3')).toBeNull();
+    expect(screen.queryByTestId('vertex-4')).toBeNull();
+
+    // ...and the start-point flag still keys on the ORIGINAL index.
+    expect(screen.getByTestId('vertex-0')).toHaveAttribute(
+      'data-is-start-point',
+      'true'
+    );
+    expect(screen.getByTestId('vertex-5')).toHaveAttribute(
+      'data-is-start-point',
+      'false'
+    );
+  });
+
+  it('renders nothing when every point is non-finite', () => {
+    const { container } = render(
+      <svg>
+        <PolygonVertices
+          {...DEFAULT_PROPS}
+          points={[
+            { x: NaN, y: NaN },
+            { x: Infinity, y: 1 },
+          ]}
+        />
+      </svg>
+    );
+
+    expect(container.querySelectorAll('circle')).toHaveLength(0);
+  });
+});

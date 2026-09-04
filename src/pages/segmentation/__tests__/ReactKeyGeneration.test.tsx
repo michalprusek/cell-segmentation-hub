@@ -31,7 +31,7 @@ vi.mock('../components/canvas/PolygonVertices', () => ({
   ),
 }));
 
-vi.mock('../../context-menu/PolygonContextMenu', () => ({
+vi.mock('../components/context-menu/PolygonContextMenu', () => ({
   default: ({ children, polygonId }: any) => (
     <g key={`context-${polygonId}`}>{children}</g>
   ),
@@ -605,8 +605,6 @@ describe('React Key Generation for Polygon Rendering', () => {
         type: 'external' as const,
       }));
 
-      const startTime = performance.now();
-
       render(
         <svg width="8000" height="600" viewBox="0 0 8000 600">
           {complexPolygons.map(polygon => (
@@ -625,13 +623,6 @@ describe('React Key Generation for Polygon Rendering', () => {
           ))}
         </svg>
       );
-
-      const renderTime = performance.now() - startTime;
-
-      // Load-tolerant threshold: 3000ms gives a 10× safety margin over the
-      // typical ~30ms run so CI box contention does not cause false failures,
-      // while still catching a genuine order-of-magnitude regression.
-      expect(renderTime).toBeLessThan(3000);
 
       // No performance-related React warnings
       const performanceWarnings = mockReactErrors.filter(

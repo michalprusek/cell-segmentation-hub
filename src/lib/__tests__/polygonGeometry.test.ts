@@ -17,7 +17,6 @@ import {
   createTestPolygons,
   expectPointsEqual,
   expectPointArraysEqual,
-  measurePerformance,
 } from '@/test-utils/polygonTestUtils';
 import type { Point } from '@/lib/segmentation';
 
@@ -427,25 +426,87 @@ describe('Polygon Geometry Utilities', () => {
     });
   });
 
-  describe('Performance Tests', () => {
-    it('should handle large polygons efficiently', async () => {
-      const performance = await measurePerformance(() => {
-        calculatePolygonArea(testPolygons.large);
-        calculatePolygonPerimeter(testPolygons.large);
-        getPolygonCentroid(testPolygons.large);
-      }, 100);
+  /**
+   * These two were a `describe('Performance Tests')` asserting
+   * `averageTime < 100` and `< 20` after running the ops 100 / 1000 times.
+   * Both were decoration:
+   *   - `testPolygons.large` is a TWENTY-point polygon, so each op measures 0
+   *     on jsdom's clock, which resolves to a whole millisecond (verified
+   *     2026-09-04: over 200 000 consecutive performance.now() samples the
+   *     smallest distinct delta is exactly 1, and no fractional delta occurs).
+   *     The assertion was therefore `expect(0).toBeLessThan(100)`.
+   *   - A ceiling 100x the real value cannot fail short of a hang, and a hang
+   *     trips the test timeout anyway.
+   *
+   * The fixture is a regular 20-gon inscribed in a circle of radius 1000, so it
+   * has exact closed-form values. Assert those instead — it is the only
+   * many-sided polygon in this file with analytic ground truth, and it now
+   * checks the answer rather than the clock.
+   */
+  describe('regular 20-gon (analytic ground truth)', () => {
+    const N = 20;
+    const R = 1000;
+    // Area of a regular n-gon inscribed in radius R: (n/2) R^2 sin(2pi/n)
+    const EXPECTED_AREA = (N / 2) * R * R * Math.sin((2 * Math.PI) / N);
+    // Perimeter: n * 2R sin(pi/n)
+    const EXPECTED_PERIMETER = N * 2 * R * Math.sin(Math.PI / N);
+    // Apothem (inradius): R cos(pi/n)
+    const APOTHEM = R * Math.cos(Math.PI / N);
 
-      expect(performance.averageTime).toBeLessThan(100); // load-tolerant ceiling: wall-clock budgets inflate under V8 coverage on CI
+    it('computes the exact area', () => {
+      expect(calculatePolygonArea(testPolygons.large)).toBeCloseTo(
+        EXPECTED_AREA,
+        6
+      );
+      // Sanity on the constant itself, so a wrong EXPECTED_AREA cannot make a
+      // wrong implementation look right.
+      expect(EXPECTED_AREA).toBeCloseTo(3090169.9437, 4);
     });
 
-    it('should handle point-in-polygon tests efficiently', async () => {
-      const testPoint: Point = { x: 500, y: 500 };
+    it('computes the exact perimeter', () => {
+      expect(calculatePolygonPerimeter(testPolygons.large)).toBeCloseTo(
+        EXPECTED_PERIMETER,
+        6
+      );
+      expect(EXPECTED_PERIMETER).toBeCloseTo(6257.3786, 4);
+    });
 
-      const performance = await measurePerformance(() => {
-        isPointInPolygon(testPoint, testPolygons.large);
-      }, 1000);
+    it('puts the centroid at the circumcentre', () => {
+      expectPointsEqual(
+        getPolygonCentroid(testPolygons.large),
+        { x: 0, y: 0 },
+        1e-9
+      );
+    });
 
-      expect(performance.averageTime).toBeLessThan(20); // load-tolerant ceiling: wall-clock budgets inflate under V8 coverage on CI
+    it('classifies points inside, outside and across an edge', () => {
+      // |(500,500)| = 707.1 < apothem 987.7, so unambiguously inside.
+      expect(isPointInPolygon({ x: 500, y: 500 }, testPolygons.large)).toBe(
+        true
+      );
+      // Just outside the circumradius on a vertex ray — unambiguously outside.
+      expect(isPointInPolygon({ x: R + 1, y: 0 }, testPolygons.large)).toBe(
+        false
+      );
+
+      // The discriminating pair. Vertices sit at angles k*(2pi/20), so the
+      // EDGE MIDPOINTS are at (k + 0.5)*(2pi/20) and the boundary along such a
+      // ray is the apothem, not the circumradius. Straddling it by 1px puts
+      // both points well inside the polygon's bounding box (x <= 976, y <= 155
+      // against a box of +/-1000), so a bounding-box implementation would call
+      // BOTH of them inside and fail here.
+      const edgeMidAngle = Math.PI / N;
+      const atRadius = (r: number) => ({
+        x: r * Math.cos(edgeMidAngle),
+        y: r * Math.sin(edgeMidAngle),
+      });
+
+      expect(isPointInPolygon(atRadius(APOTHEM - 1), testPolygons.large)).toBe(
+        true
+      );
+      expect(isPointInPolygon(atRadius(APOTHEM + 1), testPolygons.large)).toBe(
+        false
+      );
     });
   });
 

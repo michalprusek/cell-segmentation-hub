@@ -483,9 +483,15 @@ export const useEnhancedSegmentationEditor = ({
 
   // Auto-reset view when opening image from gallery
   useEffect(() => {
+    // Handle is stored (and cleared below) rather than fired and forgotten.
+    // This effect returned no cleanup at all, so the deferred setTransform
+    // could land after unmount — the same shape as the prefetch-timer leak
+    // fixed in SegmentationEditor.tsx on 2026-09-04.
+    let resetTimer: ReturnType<typeof setTimeout> | undefined;
+
     if (isFromGallery && imageId && hasInitialized.current) {
       // Defer transform calculation to prevent blocking navigation
-      setTimeout(() => {
+      resetTimer = setTimeout(() => {
         // Calculate and apply reset transform
         const newTransform = calculateCenteringTransform(
           imageWidth,
@@ -503,6 +509,12 @@ export const useEnhancedSegmentationEditor = ({
         }
       }, 0); // Defer to next tick
     }
+
+    return () => {
+      if (resetTimer !== undefined) {
+        clearTimeout(resetTimer);
+      }
+    };
   }, [
     isFromGallery,
     imageId,
