@@ -52,4 +52,9 @@ export interface VertexDragState {
   vertexIndex: number | null;
   dragOffset?: { x: number; y: number };
   originalPosition?: { x: number; y: number };
+  /** What the drag moves. 'vertex' moves the single point at `vertexIndex`;
+   *  'translate' moves the whole shape and ignores `vertexIndex`. One state
+   *  for both, so the live preview, the commit and undo all follow one path
+   *  — the alternative was a parallel drag state that could disagree. */
+  mode?: 'vertex' | 'translate';
 }

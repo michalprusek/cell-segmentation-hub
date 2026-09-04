@@ -158,19 +158,23 @@ const CanvasPolygon = React.memo(
         return '';
       }
 
-      const dragActive =
+      const onThisShape =
         !!vertexDragState?.isDragging &&
         vertexDragState.polygonId === id &&
-        vertexDragState.vertexIndex !== null &&
         !!vertexDragState.dragOffset;
-      const dragIdx = dragActive ? vertexDragState.vertexIndex : -1;
-      const dragOffsetX = dragActive ? vertexDragState.dragOffset!.x : 0;
-      const dragOffsetY = dragActive ? vertexDragState.dragOffset!.y : 0;
+      // A whole-shape translate moves EVERY point by the same delta; a vertex
+      // drag moves exactly one. Same state, same offset, one branch apart.
+      const translating = onThisShape && vertexDragState!.mode === 'translate';
+      const dragActive =
+        onThisShape && !translating && vertexDragState!.vertexIndex !== null;
+      const dragIdx = dragActive ? vertexDragState!.vertexIndex : -1;
+      const dragOffsetX = onThisShape ? vertexDragState!.dragOffset!.x : 0;
+      const dragOffsetY = onThisShape ? vertexDragState!.dragOffset!.y : 0;
 
       const parts = new Array<string>(validPoints.length);
       for (let i = 0; i < validPoints.length; i++) {
         const p = validPoints[i];
-        if (i === dragIdx) {
+        if (translating || i === dragIdx) {
           parts[i] = `${p.x + dragOffsetX},${p.y + dragOffsetY}`;
         } else {
           parts[i] = `${p.x},${p.y}`;
@@ -480,7 +484,14 @@ const CanvasPolygon = React.memo(
               onDoubleClick={handleDoubleClick}
               vectorEffect="non-scaling-stroke"
               pointerEvents="stroke"
-              style={{ cursor: 'pointer' }}
+              // Marks this as the shape's CONTOUR for the canvas mousedown
+              // handler. It reads `data-polygon-id` with no
+              // `data-vertex-index` as "grabbed the outline, not a point",
+              // which is the gesture that translates the whole shape — the
+              // same dataset channel the vertices already use.
+              data-polygon-id={id}
+              data-polygon-contour="true"
+              style={{ cursor: 'move' }}
             />
           )}
 
@@ -523,6 +534,11 @@ const CanvasPolygon = React.memo(
             filter={pathFilter}
             vectorEffect="non-scaling-stroke"
             pointerEvents={isPolyline ? 'stroke' : 'all'}
+            // A polygon's own path is its contour AND its interior; a
+            // polyline's is stroke-only. Either way this is "the shape, not a
+            // vertex", which is what the translate gesture keys on.
+            data-polygon-id={id}
+            data-polygon-contour="true"
           />
 
           {/* Polyline endpoint markers — render ONLY when no draggable
@@ -600,16 +616,24 @@ const CanvasPolygon = React.memo(
           return point.x === nextPoint.x && point.y === nextPoint.y;
         }));
 
-    // Check if drag offset changed
+    // Check if the drag changed. The OFFSET alone is not enough: the same
+    // (0, 0) offset means "one vertex has just been grabbed" or "the whole
+    // shape has just been grabbed" depending on `mode`, and the two draw
+    // differently. Comparing only the offset would skip that first paint.
     const sameDragOffset =
-      (!prevProps.vertexDragState?.dragOffset &&
+      prevProps.vertexDragState?.mode === nextProps.vertexDragState?.mode &&
+      prevProps.vertexDragState?.polygonId ===
+        nextProps.vertexDragState?.polygonId &&
+      prevProps.vertexDragState?.vertexIndex ===
+        nextProps.vertexDragState?.vertexIndex &&
+      ((!prevProps.vertexDragState?.dragOffset &&
         !nextProps.vertexDragState?.dragOffset) ||
-      (prevProps.vertexDragState?.dragOffset &&
-        nextProps.vertexDragState?.dragOffset &&
-        prevProps.vertexDragState.dragOffset.x ===
-          nextProps.vertexDragState.dragOffset.x &&
-        prevProps.vertexDragState.dragOffset.y ===
-          nextProps.vertexDragState.dragOffset.y);
+        (prevProps.vertexDragState?.dragOffset &&
+          nextProps.vertexDragState?.dragOffset &&
+          prevProps.vertexDragState.dragOffset.x ===
+            nextProps.vertexDragState.dragOffset.x &&
+          prevProps.vertexDragState.dragOffset.y ===
+            nextProps.vertexDragState.dragOffset.y));
 
     return (
       prevProps.polygon.id === nextProps.polygon.id &&
