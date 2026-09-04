@@ -299,9 +299,9 @@ einops>=0.7.0
 # below (`>=4.25.1`). Nothing else in this file names it, so unpinned it would
 # float on its own schedule.
 onnx==1.22.0
-ml_dtypes==0.5.4
+ml_dtypes==0.6.0
 onnx2torch==1.5.15
-protobuf==7.36.0
+protobuf==7.36.1
 
 # Prometheus metrics
 prometheus-fastapi-instrumentator==8.1.0
