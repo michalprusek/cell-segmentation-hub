@@ -25,7 +25,12 @@ vi.mock('socket.io', () => ({
     return mockIo;
   }),
 }));
-vi.mock('jsonwebtoken', () => jwtMock);
+// websocketService does `import jwt from 'jsonwebtoken'` — a DEFAULT import.
+// A factory returning the bare `{ verify }` namespace leaves that default
+// `undefined`, so `jwt.verify(...)` throws a TypeError, the middleware's catch
+// turns it into 'Authentication failed', and the "rejects an invalid JWT" test
+// passes without the mock ever being consulted. Export the default too.
+vi.mock('jsonwebtoken', () => ({ ...jwtMock, default: jwtMock }));
 vi.mock('../../utils/logger');
 // websocketService imports authCookies, which imports config. Stub config so
 // the real config (which calls process.exit on a missing test env) is skipped
@@ -255,12 +260,18 @@ describe('WebSocketService - Core Unit Tests', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // SKIPPED: these two auth-middleware tests assert on a specific
-  // io.use(...) middleware shape that diverges from the production
-  // setupAuthentication implementation. Migration didn't break them —
-  // they were drifting before. Re-enable after auditing the live
-  // middleware against the test expectations.
-  describe.skip('Authentication middleware', () => {
+  // The handshake gate. Skipped from the Jest -> vitest migration until
+  // 2026-09-04 with a note saying they "diverge from the production
+  // setupAuthentication implementation" and to re-enable after an audit.
+  // The audit: they do not diverge. The bodies were already rewritten for the
+  // httpOnly-cookie handshake (2026-05-30) and match `setupMiddleware` in
+  // websocketService.ts message for message — no cookie ->
+  // 'Authentication token required', a throwing jwt.verify -> the catch's
+  // 'Authentication failed', an unknown userId -> 'Invalid authentication
+  // token', a good token -> next() with no argument and the identity stamped
+  // onto the socket. Only the `.skip` was left behind, so the one security
+  // boundary on the WebSocket had no test at all for three months.
+  describe('Authentication middleware', () => {
     it('rejects socket when no token provided', async () => {
       // Extract the middleware callback installed on io.use
       expect(io.use).toHaveBeenCalled();

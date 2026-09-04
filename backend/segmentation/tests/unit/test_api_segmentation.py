@@ -18,11 +18,37 @@ Actual API surface (verified against the running app):
 """
 import pytest
 import io
+from pathlib import Path
 from PIL import Image
 from fastapi.testclient import TestClient
 from httpx import AsyncClient
 
 from api.main import app
+
+#: The HRNet checkpoint every test that actually SEGMENTS below needs. It is
+#: untracked (791 MB) and staged by `make download-weights`, so a fresh clone or
+#: a git worktree does not have it — and without this guard those tests do not
+#: skip, they FAIL, with the route's own 500 and a "Model weights not found"
+#: line in the captured log. Seven of them did. A run that means "this checkout
+#: has no weights" then reads as "the segmentation endpoint is broken", which is
+#: how a genuinely red ML suite ends up being ignored.
+#:
+#: The validation-only tests in this class (unknown model, missing file, bad
+#: threshold) are NOT marked: they are rejected before any model is loaded and
+#: are worth keeping runnable everywhere.
+#: RELATIVE, resolved against the cwd, because that is what
+#: ``ModelLoader.AVAILABLE_MODELS['hrnet']['pretrained_path']`` —
+#: ``'weights/hrnet_best_model.pth'`` — is, and torch.load opens it from
+#: wherever the process is. An absolute ``/app/...`` would match the loader
+#: only under ``make test-ml``'s ``-w /app`` and would otherwise skip these
+#: tests on a box that DOES have the weights, which is the same
+#: "green and tested nothing" outcome the guard is here to remove.
+_HRNET_CHECKPOINT = Path.cwd() / "weights" / "hrnet_best_model.pth"
+requires_hrnet = pytest.mark.skipif(
+    not _HRNET_CHECKPOINT.exists(),
+    reason=f"HRNet checkpoint not staged at {_HRNET_CHECKPOINT} "
+    "(make download-weights)",
+)
 
 
 def _make_jpeg_bytes(width: int = 256, height: int = 256) -> bytes:
@@ -77,6 +103,7 @@ class TestSegmentationEndpoints:
         assert isinstance(data["models"], dict)
         assert "hrnet" in data["models"]
 
+    @requires_hrnet
     @pytest.mark.asyncio
     async def test_segment_image_success(self, async_client: AsyncClient, sample_image_bytes: bytes):
         """Test successful image segmentation.
@@ -135,6 +162,7 @@ class TestSegmentationEndpoints:
         result = response.json()
         assert "detail" in result
 
+    @requires_hrnet
     @pytest.mark.asyncio
     async def test_segment_image_large_file(self, async_client: AsyncClient):
         """Test segmentation with a large image file (5000×5000).
@@ -152,6 +180,7 @@ class TestSegmentationEndpoints:
         # Accept success or rejection — we just need it not to crash the server
         assert response.status_code in (200, 400, 413)
 
+    @requires_hrnet
     def test_segment_image_missing_model_parameter(self, client: TestClient, sample_image_bytes: bytes):
         """Test segmentation without model name uses the default model (hrnet).
 
@@ -205,6 +234,7 @@ class TestSegmentationEndpoints:
         result = response.json()
         assert "detail" in result
 
+    @requires_hrnet
     @pytest.mark.asyncio
     async def test_segment_with_postprocessing_options(self, async_client: AsyncClient, sample_image_bytes: bytes):
         """Test segmentation with optional threshold parameter."""
@@ -220,6 +250,7 @@ class TestSegmentationEndpoints:
         result = response.json()
         assert "polygons" in result
 
+    @requires_hrnet
     @pytest.mark.asyncio
     async def test_segment_with_custom_parameters(self, async_client: AsyncClient, sample_image_bytes: bytes):
         """Test segmentation with a non-default model selection."""
@@ -259,6 +290,7 @@ class TestSegmentationEndpoints:
         # All should be 200 — no in-process rate limiter
         assert all(sc == 200 for sc in status_codes)
 
+    @requires_hrnet
     @pytest.mark.asyncio
     async def test_concurrent_segmentation_requests(self, async_client: AsyncClient, sample_image_bytes: bytes):
         """Test handling of concurrent segmentation requests."""
@@ -277,27 +309,45 @@ class TestSegmentationEndpoints:
         # All should succeed
         assert all(status == 200 for status in results)
 
+    @requires_hrnet
     @pytest.mark.slow
     @pytest.mark.integration
     @pytest.mark.asyncio
-    async def test_segmentation_performance(self, async_client: AsyncClient, sample_image_bytes: bytes):
-        """Test segmentation performance (integration test)."""
-        import time
+    async def test_reported_processing_time_is_bounded_by_the_round_trip(
+        self, async_client: AsyncClient, sample_image_bytes: bytes
+    ):
+        """``processing_time`` on the wire is a real, seconds-valued duration.
 
-        start_time = time.time()
+        Renamed from ``test_segmentation_performance``, which asserted
+        ``wall_clock < 60.0`` on an HRNet call that takes ~0.2 s on this card —
+        a 300x margin, inside a pytest timeout that would have fired anyway,
+        and green through any regression short of a hang. It could not measure
+        performance and its other two assertions duplicated
+        ``test_segment_image_success``.
+
+        What the clock can settle here is a UNIT question, and it is the one
+        that has bitten this field before: the server reports the time it spent
+        segmenting, so that number must be positive and must not exceed the
+        round trip the caller just measured. Reporting milliseconds in a field
+        the frontend renders as seconds would fail this on any real image; a
+        `time.time()`/`perf_counter()` mix-up would too.
+        """
+        import time
 
         files = {"file": ("test.jpg", io.BytesIO(sample_image_bytes), "image/jpeg")}
         data = {"model": "hrnet"}
 
+        start_time = time.perf_counter()
         response = await async_client.post("/api/v1/segment", files=files, data=data)
-
-        end_time = time.time()
-        processing_time = end_time - start_time
+        round_trip = time.perf_counter() - start_time
 
         assert response.status_code == 200
-        # Should complete within reasonable time
-        assert processing_time < 60.0  # 60 seconds max
-
         result = response.json()
         assert "polygons" in result
-        assert "processing_time" in result
+        reported = result["processing_time"]
+        assert isinstance(reported, (int, float))
+        assert reported > 0.0, "a completed segmentation took no measurable time"
+        assert reported <= round_trip, (
+            f"server reported {reported} s of processing inside a "
+            f"{round_trip:.3f} s round trip — wrong unit, or the wrong clock"
+        )

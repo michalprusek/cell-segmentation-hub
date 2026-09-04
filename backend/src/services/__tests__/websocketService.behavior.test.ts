@@ -54,7 +54,13 @@ const { prismaMock, jwtMock, makeIo } = vi.hoisted(() => {
 vi.mock('socket.io', () => ({
   Server: vi.fn(),
 }));
-vi.mock('jsonwebtoken', () => jwtMock);
+// websocketService does `import jwt from 'jsonwebtoken'` — a DEFAULT import.
+// A factory returning the bare `{ verify }` namespace leaves that default
+// `undefined`, so `jwt.verify(...)` throws a TypeError and the middleware's
+// catch turns it into 'Authentication failed' — the same string the
+// verify-throws test expects, which is how that test passed without the mock
+// ever being consulted. Export the default too.
+vi.mock('jsonwebtoken', () => ({ ...jwtMock, default: jwtMock }));
 vi.mock('../../utils/logger');
 vi.mock('../../utils/config', () => ({
   config: {
@@ -78,6 +84,7 @@ vi.mock('../exportService', () => ({
 import { Server as SocketIOServer } from 'socket.io';
 import { WebSocketService } from '../websocketService';
 import { WebSocketEvent } from '../../types/websocket';
+import { logger } from '../../utils/logger';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -377,49 +384,98 @@ describe('WebSocketService – behavior coverage', () => {
   // ── createDataSummary() — exercised through emitToUser ─────────────────────
 
   describe('createDataSummary (via emitToUser)', () => {
-    // These tests verify that emitToUser does not crash for various data shapes,
-    // which exercises all branches in the private createDataSummary method.
+    // `createDataSummary` exists so the debug log carries the SHAPE of a
+    // payload and not the payload — the events it summarises carry user
+    // e-mail addresses, project names and file names. So the summary is the
+    // contract, and these tests used to be seven
+    // `expect(() => svc.emitToUser(...)).not.toThrow()` calls: each built a
+    // `roomEmit` mock it never looked at, and each would pass just as well if
+    // the method logged the whole object verbatim.
 
-    it('handles null data', () => {
+    /** The `dataSummary` the debug log carried, and what reached the socket. */
+    function emitAndCapture(data: unknown): {
+      summary: Record<string, unknown>;
+      emitted: unknown[];
+    } {
       const roomEmit = vi.fn();
       io.to.mockReturnValue({ emit: roomEmit });
-      expect(() => svc.emitToUser('u', 'ev', null)).not.toThrow();
+      svc.emitToUser('u', 'ev', data as never);
+      const debug = vi.mocked(logger.debug).mock.calls.at(-1);
+      expect(debug?.[0]).toBe('Custom event emitted to user');
+      return {
+        summary: (debug?.[2] as { dataSummary: Record<string, unknown> })
+          .dataSummary,
+        emitted: roomEmit.mock.calls[0],
+      };
+    }
+
+    it('summarises null and undefined by type, keeping the value', () => {
+      expect(emitAndCapture(null).summary).toEqual({
+        type: 'object',
+        value: null,
+      });
+      expect(emitAndCapture(undefined).summary).toEqual({
+        type: 'undefined',
+        value: undefined,
+      });
     });
 
-    it('handles undefined data', () => {
-      const roomEmit = vi.fn();
-      io.to.mockReturnValue({ emit: roomEmit });
-      expect(() => svc.emitToUser('u', 'ev', undefined)).not.toThrow();
+    it('keeps a short string whole and truncates a long one to 50 + ellipsis', () => {
+      expect(emitAndCapture('short').summary).toEqual({
+        type: 'string',
+        length: 5,
+        preview: 'short',
+      });
+      // Exactly 50 is NOT truncated; 51 is. The boundary is where a
+      // `>=` would silently differ from the `>` the code has.
+      expect(emitAndCapture('y'.repeat(50)).summary).toEqual({
+        type: 'string',
+        length: 50,
+        preview: 'y'.repeat(50),
+      });
+      expect(emitAndCapture('x'.repeat(100)).summary).toEqual({
+        type: 'string',
+        length: 100,
+        preview: `${'x'.repeat(50)}...`,
+      });
     });
 
-    it('handles short string data (≤50 chars)', () => {
-      const roomEmit = vi.fn();
-      io.to.mockReturnValue({ emit: roomEmit });
-      expect(() => svc.emitToUser('u', 'ev', 'short')).not.toThrow();
+    it('summarises an array by length only — never its elements', () => {
+      expect(emitAndCapture(['secret@example.com', 'b', 'c']).summary).toEqual({
+        type: 'array',
+        length: 3,
+      });
     });
 
-    it('handles long string data (>50 chars — triggers preview truncation)', () => {
-      const roomEmit = vi.fn();
-      io.to.mockReturnValue({ emit: roomEmit });
-      expect(() => svc.emitToUser('u', 'ev', 'x'.repeat(100))).not.toThrow();
+    it('summarises an object by key COUNT and the first five key NAMES', () => {
+      const summary = emitAndCapture({
+        a: 'secret@example.com',
+        b: 2,
+        c: 3,
+        d: 4,
+        e: 5,
+        f: 6,
+      }).summary;
+      expect(summary).toEqual({
+        type: 'object',
+        keys: 6,
+        keyNames: ['a', 'b', 'c', 'd', 'e'], // sliced at five
+      });
+      // The point of the whole helper: no value ever reaches the log.
+      expect(JSON.stringify(summary)).not.toContain('secret@example.com');
     });
 
-    it('handles array data', () => {
-      const roomEmit = vi.fn();
-      io.to.mockReturnValue({ emit: roomEmit });
-      expect(() => svc.emitToUser('u', 'ev', [1, 2, 3])).not.toThrow();
+    it('falls back to type + value for a primitive that is not a string', () => {
+      expect(emitAndCapture(42).summary).toEqual({ type: 'number', value: 42 });
+      expect(emitAndCapture(true).summary).toEqual({
+        type: 'boolean',
+        value: true,
+      });
     });
 
-    it('handles object data', () => {
-      const roomEmit = vi.fn();
-      io.to.mockReturnValue({ emit: roomEmit });
-      expect(() => svc.emitToUser('u', 'ev', { a: 1, b: 2 })).not.toThrow();
-    });
-
-    it('handles numeric data (primitive fallback branch)', () => {
-      const roomEmit = vi.fn();
-      io.to.mockReturnValue({ emit: roomEmit });
-      expect(() => svc.emitToUser('u', 'ev', 42)).not.toThrow();
+    it('sends the ORIGINAL payload to the socket, not the summary', () => {
+      const payload = { a: 1, b: 2 };
+      expect(emitAndCapture(payload).emitted).toEqual(['ev', payload]);
     });
   });
 

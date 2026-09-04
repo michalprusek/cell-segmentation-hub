@@ -82,6 +82,206 @@ def test_diagonal_band_area_matches_length_times_thickness():
     assert abs(area - length * 5) < length, f"area {area} vs ~{length*5:.0f}"
 
 
+# --- the joint wedge (ImageJ's ``rightTurn``) --------------------------------
+#
+# Everything above this line walks a STRAIGHT line, and so did every other test
+# of this geometry in the repository: the essays parity fixture's two
+# centerlines are ``[[46,20],[46,45],[46,69]]`` (collinear — its interior vertex
+# makes a degenerate wedge) and ``[[56,20],[56,69]]``. So the branch that places
+# the filler triangle at an interior corner had no test at all, on either side
+# of the shared module.
+#
+# Measured 2026-09-04: flipping the sign of ``turn`` in ``rasterize_band`` —
+# which sends every wedge to the INNER side of every corner, the side the two
+# quadrilaterals already cover — left this file, the essays parity suite and
+# `test_mt_metrics_normalize/sparse` all green. The only casualty anywhere was
+# `test_kymograph_velocity.py::test_detect_tracks_emits_exactly_the_wire_keys`,
+# and only incidentally: the intensities moved enough that one trajectory
+# gained a `phases` key. That is not a guard on band geometry, it is a wire
+# shape assertion that happened to be downstream.
+#
+# So the wedge is pinned against a reference here. It is the pre-2026-09-01
+# scalar construction, written out segment by segment and corner by corner, and
+# it deliberately reuses `fill_convex_polygon` for the rasterising step: the
+# fill is already covered (`test_batched_fill_equals_filling_one_polygon_at_a_time`
+# and the exact areas above), and isolating the part that is NOT covered — which
+# quadrilaterals and triangles get built — is the point.
+
+
+def _reference_rasterize_band(points, h, w, thickness):
+    """``rasterize_band``'s geometry, one polygon at a time.
+
+    Bit-identical to the vectorised form rather than merely close: the
+    expressions and their groupings are the ones that form documents (``a +
+    (-b)`` is exactly ``a - b`` in IEEE, which is what lets the two ``rightTurn``
+    branches below collapse into a single signed expression there).
+    """
+    band = np.zeros((h, w), dtype=np.uint8)
+    n = int(points.shape[0])
+    if points.ndim != 2 or points.shape[1] != 2 or n < 2:
+        return band
+    pts = np.asarray(points, dtype=np.float64)
+    radius = max(int(thickness), 1) / 2.0
+
+    # Unit tangent per segment; a repeated vertex gives (0, 0), as the loop did.
+    tangents = []
+    for i in range(n - 1):
+        dx = pts[i + 1, 0] - pts[i, 0]
+        dy = pts[i + 1, 1] - pts[i, 1]
+        length = float(np.hypot(dx, dy))
+        tangents.append((dx / length, dy / length) if length > 0 else (0.0, 0.0))
+
+    # One offset quadrilateral per segment, with butt caps on the two ends.
+    for i in range(n - 1):
+        tx, ty = tangents[i]
+        ax, ay = float(pts[i, 0]), float(pts[i, 1])
+        bx, by = float(pts[i + 1, 0]), float(pts[i + 1, 1])
+        if i == 0:
+            ax = pts[0, 0] - 0.5 * tx
+            ay = pts[0, 1] - 0.5 * ty
+        if i == n - 2:
+            bx = pts[-1, 0] + 0.5 * tx
+            by = pts[-1, 1] + 0.5 * ty
+        rx, ry = radius * tx, radius * ty
+        mt_measure.fill_convex_polygon(band, np.array([
+            [ax + ry, ay - rx],
+            [ax - ry, ay + rx],
+            [bx - ry, by + rx],
+            [bx + ry, by - rx],
+        ]))
+
+    # The outer wedge at each interior joint.
+    for j in range(1, n - 1):
+        t0x, t0y = tangents[j - 1]
+        t1x, t1y = tangents[j]
+        jx, jy = float(pts[j, 0]), float(pts[j, 1])
+        r0x, r0y = radius * t0x, radius * t0y
+        r1x, r1y = radius * t1x, radius * t1y
+        if (t1x * t0y) > (t0x * t1y):  # ImageJ's rightTurn
+            tri = [[jx + (0.5 * (r0y + r1y)), jy - (0.5 * (r0x + r1x))],
+                   [jx - r0y, jy + r0x],
+                   [jx - r1y, jy + r1x]]
+        else:
+            tri = [[jx - (0.5 * (r0y + r1y)), jy + (0.5 * (r0x + r1x))],
+                   [jx + r0y, jy - r0x],
+                   [jx + r1y, jy - r1x]]
+        mt_measure.fill_convex_polygon(band, np.array(tri))
+    return band
+
+
+def _bent_polylines(rng, n):
+    """Polylines with real corners, of both handednesses and every sharpness.
+
+    A random walk would be dominated by shallow turns; the wedge only differs
+    measurably from the quadrilaterals at a sharp one, so the turn angle is
+    drawn across the whole range and its SIGN is drawn independently — a corpus
+    of same-handed corners cannot tell a sign error from a missing branch.
+    """
+    out = []
+    for _ in range(n):
+        k = int(rng.integers(3, 8))
+        x, y = rng.uniform(25, 95, 2)
+        heading = rng.uniform(0, 2 * np.pi)
+        pts = [[x, y]]
+        for _ in range(k - 1):
+            heading += rng.choice([-1.0, 1.0]) * rng.uniform(0.15, 2.9)
+            step = rng.uniform(6.0, 30.0)
+            x += step * np.cos(heading)
+            y += step * np.sin(heading)
+            pts.append([x, y])
+        out.append(np.asarray(pts, np.float32))
+    return out
+
+
+def test_joint_wedges_match_the_per_corner_construction():
+    """Every corner of 400 bent polylines, at five stroke widths."""
+    rng = np.random.default_rng(20260904)
+    polylines = _bent_polylines(rng, 400)
+    h = w = 128
+    compared = 0
+    for pts in polylines:
+        for thickness in (1, 2, 5, 8, 13):
+            got = mt_measure.rasterize_band(pts, h, w, thickness)
+            want = _reference_rasterize_band(pts, h, w, thickness)
+            assert np.array_equal(got, want), (
+                f"thickness {thickness} on {pts.tolist()}"
+            )
+            compared += 1
+    assert compared == len(polylines) * 5
+
+
+def test_the_corpus_actually_contains_corners_of_both_handedness():
+    """Otherwise the test above is a straight-line test with extra steps."""
+    rng = np.random.default_rng(20260904)
+    left = right = 0
+    for pts in _bent_polylines(rng, 400):
+        d = np.diff(np.asarray(pts, np.float64), axis=0)
+        cross = d[:-1, 0] * d[1:, 1] - d[:-1, 1] * d[1:, 0]
+        right += int((cross < 0).sum())
+        left += int((cross > 0).sum())
+    assert left > 100 and right > 100, f"left {left}, right {right}"
+
+
+def _one_4connected_region(mask):
+    """True when the set bits of ``mask`` form a single 4-connected blob."""
+    ys, xs = np.nonzero(mask)
+    if ys.size == 0:
+        return False
+    seen = {(int(ys[0]), int(xs[0]))}
+    stack = [(int(ys[0]), int(xs[0]))]
+    while stack:
+        y, x = stack.pop()
+        for ny, nx in ((y - 1, x), (y + 1, x), (y, x - 1), (y, x + 1)):
+            if (ny, nx) in seen:
+                continue
+            if 0 <= ny < mask.shape[0] and 0 <= nx < mask.shape[1] and mask[ny, nx]:
+                seen.add((ny, nx))
+                stack.append((ny, nx))
+    return len(seen) == int(ys.size)
+
+
+def test_a_wedge_fills_the_notch_outside_a_right_angle():
+    """A readable statement of what the sign of ``turn`` decides.
+
+    A band that turns right-then-down leaves an unfilled notch OUTSIDE the
+    elbow — up and to the right of the vertex — because each segment's
+    quadrilateral stops square at the vertex. The filler triangle exists to
+    close it, and closing it means a SOLID triangular staircase against the
+    corner, not a few pixels near it.
+
+    Both halves of that matter, and only together. Measured with the sign of
+    ``turn`` flipped, the misplaced triangle still pokes two pixels into the
+    outer quadrant — so "the extra pixels are outside the elbow" passes on a
+    band whose notch is wide open. What it cannot do is fill: those two pixels
+    are diagonal neighbours with a hole between them, where the correct wedge
+    is six pixels in one connected staircase.
+    """
+    h = w = 160
+    corner = np.asarray([[20, 60], [80, 60], [80, 120]], np.float32)
+    thickness = 9
+    band = mt_measure.rasterize_band(corner, h, w, thickness)
+
+    # The same polyline as two independent straight bands: no joint filler.
+    # (Each gets its own 0.5 px butt caps, so this is a strict SUPERSET of the
+    # two quadrilaterals inside the real band — which can only make the wedge
+    # measured below smaller, never larger.)
+    quads_only = np.zeros((h, w), np.uint8)
+    for seg in (corner[:2], corner[1:]):
+        quads_only |= mt_measure.rasterize_band(seg, h, w, thickness)
+
+    wedge = (band > 0) & ~(quads_only > 0)
+    ys, xs = np.nonzero(wedge)
+    assert ys.size > 0, "the joint contributed no pixels at all"
+    assert xs.min() >= 80 and ys.max() <= 60, (
+        f"wedge spans x[{xs.min()},{xs.max()}] y[{ys.min()},{ys.max()}]; "
+        "the outer notch is x>=80, y<=60"
+    )
+    assert _one_4connected_region(wedge), (
+        "the wedge is not a filled region: "
+        f"{sorted(zip(ys.tolist(), xs.tolist()))}"
+    )
+
+
 # --- the vectorised fill (2026-09-01) ----------------------------------------
 #
 # `rasterize_band` builds every segment quadrilateral and joint triangle at once

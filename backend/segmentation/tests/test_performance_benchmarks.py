@@ -503,73 +503,27 @@ class TestPerformanceBenchmarks:
         if memory_samples:
             print(f"Memory range: {min(s['allocated_memory_gb'] for s in memory_samples):.1f}-{max(s['allocated_memory_gb'] for s in memory_samples):.1f} GB")
 
-    def test_connection_pool_stability(self):
-        """Test database connection pool stability under concurrent load"""
-        config = BenchmarkConfig(concurrent_users=8, images_per_user=10)  # Higher load
-
-        # Simulate database operations with connection pool
-        def simulate_database_operation(operation_id: int):
-            """Simulate a database operation requiring a connection"""
-            connection_acquired = self.db_pool.acquire_connection()
-
-            if not connection_acquired:
-                return {'operation_id': operation_id, 'success': False, 'error': 'Connection pool exhausted'}
-
-            try:
-                # Simulate database query time
-                query_time = np.random.normal(0.05, 0.02)  # 50ms ± 20ms
-                time.sleep(max(0.01, query_time))
-
-                # Small chance of deadlock simulation
-                if np.random.random() < 0.02:  # 2% chance
-                    self.db_pool.simulate_deadlock()
-                    return {'operation_id': operation_id, 'success': False, 'error': 'Deadlock detected'}
-
-                return {'operation_id': operation_id, 'success': True, 'response_time': query_time}
-
-            finally:
-                self.db_pool.release_connection()
-
-        # Run concurrent database operations
-        total_operations = config.concurrent_users * config.images_per_user
-        start_time = time.time()
-
-        with ThreadPoolExecutor(max_workers=config.concurrent_users) as executor:
-            futures = [executor.submit(simulate_database_operation, i) for i in range(total_operations)]
-            results = [f.result() for f in as_completed(futures)]
-
-        end_time = time.time()
-        total_time = end_time - start_time
-
-        # Analyze connection pool performance
-        successful_operations = [r for r in results if r['success']]
-        failed_operations = [r for r in results if not r['success']]
-
-        success_rate = len(successful_operations) / len(results)
-        peak_utilization = self.db_pool.get_peak_utilization()
-        deadlock_count = self.db_pool.deadlock_count
-
-        # Performance assertions
-        assert success_rate >= 0.95, f"Success rate {success_rate:.2%} below 95%"
-        assert peak_utilization <= 100, f"Connection pool over-utilized: {peak_utilization:.1f}%"
-        assert deadlock_count <= total_operations * 0.05, f"Too many deadlocks: {deadlock_count}"
-
-        # Response time analysis
-        if successful_operations:
-            response_times = [op['response_time'] for op in successful_operations if 'response_time' in op]
-            if response_times:
-                avg_response_time = sum(response_times) / len(response_times)
-                max_response_time = max(response_times)
-
-                assert avg_response_time < 0.1, f"Average response time {avg_response_time:.3f}s too slow"
-                assert max_response_time < 0.5, f"Max response time {max_response_time:.3f}s too slow"
-
-        self.performance_metrics.connection_pool_utilization = peak_utilization
-
-        print(f"Connection Pool Stability Results:")
-        print(f"Operations: {len(results)}, Success rate: {success_rate:.2%}")
-        print(f"Peak utilization: {peak_utilization:.1f}%, Deadlocks: {deadlock_count}")
-        print(f"Total time: {total_time:.2f}s")
+    # REMOVED 2026-09-04: `test_connection_pool_stability` and
+    # `test_database_deadlock_prevention`.
+    #
+    # Both simulated a database, and this service has none — there is no
+    # sqlite3, psycopg, prisma or DATABASE_URL anywhere under `api/`, `ml/` or
+    # `services/`. The subject was `DatabaseConnectionPool`, a class defined
+    # further up THIS file, driven by `time.sleep(np.random.normal(...))` and an
+    # unseeded 2%/5% coin flip for "deadlocks". So the assertions were about
+    # numpy's RNG: `avg_response_time < 0.1` on samples drawn from
+    # `N(0.05, 0.02)` cannot fail, and `peak_utilization <= 100` is arithmetic.
+    #
+    # They also flaked by construction. `success_rate >= 0.95` over 80
+    # operations that each fail with p = 0.02 is Binomial(80, 0.02) >= 5, about
+    # 1 run in 70 — which is how this was found: two full-suite runs an hour
+    # apart, 657 passed then 656 passed with `test_connection_pool_stability`
+    # red and nothing between them but a docstring. A test that cannot fail for
+    # a real reason and can fail for an unreal one is worse than no test.
+    #
+    # `DatabaseConnectionPool` itself is kept: `test_realistic_production_load_simulation`
+    # still uses it as a load-shaping prop, which is honest as long as nothing
+    # asserts on it.
 
 
 @pytest.mark.failure_scenarios
@@ -903,89 +857,6 @@ class TestFailureScenarios:
         print(f"Timeout Handling Results:")
         print(f"Successful: {len(successful_requests)}, Timeouts: {len(timeout_requests)}, Other failures: {len(other_failures)}")
         print(f"Total time: {total_time:.1f}s, Timeout recoveries: {self.failure_metrics['timeout_recoveries']}")
-
-    def test_database_deadlock_prevention(self):
-        """Test database deadlock prevention during concurrent operations"""
-        # Simulate database operations that could cause deadlocks
-        db_operations_log = []
-        deadlock_simulation_count = 0
-
-        def simulate_database_transaction(operation_id: int, operation_type: str):
-            """Simulate database transaction that might deadlock"""
-            nonlocal deadlock_simulation_count
-
-            # Simulate different types of database operations
-            operation_time = np.random.exponential(0.05)  # Average 50ms
-
-            # Small chance of deadlock
-            if np.random.random() < 0.05:  # 5% chance
-                deadlock_simulation_count += 1
-                time.sleep(operation_time)
-                raise sqlite3.OperationalError("database is locked")
-
-            # Simulate transaction
-            time.sleep(operation_time)
-
-            db_operations_log.append({
-                'operation_id': operation_id,
-                'operation_type': operation_type,
-                'timestamp': time.time(),
-                'duration': operation_time
-            })
-
-            return {'success': True, 'operation_id': operation_id}
-
-        # Run concurrent database operations
-        operation_types = ['insert_queue', 'update_status', 'delete_completed', 'query_stats']
-        total_operations = 100
-
-        def run_db_operation(op_id):
-            op_type = np.random.choice(operation_types)
-            max_retries = 3
-
-            for attempt in range(max_retries):
-                try:
-                    return simulate_database_transaction(op_id, op_type)
-                except sqlite3.OperationalError as e:
-                    if "database is locked" in str(e) and attempt < max_retries - 1:
-                        # Retry with exponential backoff
-                        retry_delay = 0.01 * (2 ** attempt) + np.random.uniform(0, 0.01)
-                        time.sleep(retry_delay)
-                        continue
-                    else:
-                        self.failure_metrics['connection_failures'] += 1
-                        return {'success': False, 'operation_id': op_id, 'error': str(e)}
-
-            return {'success': False, 'operation_id': op_id, 'error': 'Max retries exceeded'}
-
-        # Execute concurrent database operations
-        start_time = time.time()
-
-        with ThreadPoolExecutor(max_workers=8) as executor:  # High concurrency for deadlock testing
-            futures = [executor.submit(run_db_operation, i) for i in range(total_operations)]
-            results = [f.result() for f in as_completed(futures)]
-
-        total_time = time.time() - start_time
-
-        # Analyze deadlock prevention
-        successful_operations = [r for r in results if r['success']]
-        failed_operations = [r for r in results if not r['success']]
-
-        success_rate = len(successful_operations) / len(results)
-
-        # Deadlock prevention assertions
-        assert success_rate >= 0.9, f"Success rate {success_rate:.2%} indicates deadlock prevention issues"
-        assert deadlock_simulation_count > 0, "No deadlock scenarios were simulated"
-        assert len(failed_operations) <= deadlock_simulation_count * 0.5, "Too many operations failed despite retry mechanisms"
-
-        # Performance should not be severely impacted
-        avg_operation_time = total_time / total_operations
-        assert avg_operation_time < 0.5, f"Average operation time {avg_operation_time:.3f}s too slow (deadlock impact)"
-
-        print(f"Database Deadlock Prevention Results:")
-        print(f"Operations: {total_operations}, Success rate: {success_rate:.2%}")
-        print(f"Deadlock simulations: {deadlock_simulation_count}, Connection failures: {self.failure_metrics['connection_failures']}")
-        print(f"Average operation time: {avg_operation_time:.3f}s")
 
 
 @pytest.mark.integration
