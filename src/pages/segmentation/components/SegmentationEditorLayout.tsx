@@ -390,7 +390,7 @@ const SegmentationEditorLayout: React.FC<SegmentationEditorLayoutProps> = ({
                   onMouseDown={editor.handleMouseDown}
                   onMouseMove={editor.handleMouseMove}
                   onMouseUp={editor.handleMouseUp}
-                  onDoubleClick={editor.handleCreatePolylineDoubleClick}
+                  onDoubleClick={editor.handleCanvasDoubleClick}
                   loading={projectLoading}
                   // Legacy compatibility props
                   slicingMode={legacyModes.slicingMode}

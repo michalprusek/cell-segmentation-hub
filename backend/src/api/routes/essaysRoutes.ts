@@ -1,5 +1,6 @@
 import express, { Request, Response, NextFunction } from 'express';
 import { authenticate } from '../../middleware/auth';
+import { downloadTokenAuth } from '../../middleware/downloadAuth';
 import { validationResult, param } from 'express-validator';
 import { EssaysController } from '../controllers/essaysController';
 import { uploadEssaysFiles, handleUploadError } from '../../middleware/upload';
@@ -51,23 +52,12 @@ router.post(
 );
 
 // Download the result zip. Accepts EITHER the session cookie OR a ?token= (a
-// native <a href> download cannot carry the cookie's auth), so the auth check is
-// delegated to the controller when a token is present.
-const optionalJwtAuth = (
-  req: Request,
-  res: Response,
-  next: NextFunction
-): void => {
-  if (typeof req.query.token === 'string' && req.query.token.length > 0) {
-    next();
-    return;
-  }
-  authenticate(req, res, next);
-};
-
+// native <a href> download cannot carry the cookie's auth). `downloadTokenAuth`
+// is shared with the export download so the two routers, and the controllers
+// behind them, cannot drift on what counts as a token.
 router.get(
   '/essays/jobs/:jobId/download',
-  optionalJwtAuth,
+  downloadTokenAuth,
   [param('jobId').isUUID()],
   validateRequest,
   essaysController.downloadJob

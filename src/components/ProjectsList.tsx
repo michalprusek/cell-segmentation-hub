@@ -49,6 +49,10 @@ export interface ProjectsListProps {
   /** Per-project move trigger. When undefined, project menu hides "Move to…". */
   onRequestProjectMove?: (projectId: string) => void;
   hasAnyFolder?: boolean;
+  /** Folder the dashboard is currently showing, or null at the root. Threaded
+   *  down to the create cards so a project created from inside a folder is
+   *  filed there instead of at the root. */
+  folderId?: string | null;
   /** Folder operations. When undefined, folder cards are not interactive. */
   onOpenFolder?: (folderId: string) => void;
   onRenameFolder?: (folderId: string, currentName: string) => void;
@@ -68,6 +72,7 @@ const ProjectsList = ({
   onProjectUpdate,
   onRequestProjectMove,
   hasAnyFolder,
+  folderId = null,
   onOpenFolder,
   onRenameFolder,
   onMoveFolder,
@@ -185,6 +190,7 @@ const ProjectsList = ({
           <NewProjectCard
             isOpen={newProjectDialogOpen}
             onOpenChange={setNewProjectDialogOpen}
+            folderId={folderId}
           />
         )}
       </div>
@@ -239,7 +245,11 @@ const ProjectsList = ({
   ));
 
   const allItems = showCreateCard
-    ? [...folderCards, ...projectItems, <NewProjectCard key="new-project" />]
+    ? [
+        ...folderCards,
+        ...projectItems,
+        <NewProjectCard key="new-project" folderId={folderId} />,
+      ]
     : [...folderCards, ...projectItems];
 
   return <ProjectsGrid>{allItems}</ProjectsGrid>;

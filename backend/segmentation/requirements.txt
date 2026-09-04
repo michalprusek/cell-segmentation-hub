@@ -17,6 +17,21 @@
 # not the 4.14 Dependabot offered, and pip fails the build outright rather
 # than resolving around it. Check `requires_dist` for a numpy bound before
 # raising any of the numeric pins below.
+#
+# Re-measured 2026-09-04 against PyPI metadata, because the ceiling is easy to
+# mistake for a stale opinion and Dependabot re-proposes both every week:
+#
+#   opencv-python-headless 4.11.0.86  numpy>=1.21.2 ; python_version >= "3.10"
+#   opencv-python-headless 4.12.0.88  numpy>=2,<2.3 ; python_version >= "3.9"
+#   opencv-python-headless 4.14.0.94  numpy>=2      ; python_version >= "3.9"
+#   ml_dtypes              0.5.4      numpy>=1.21.2 ; python_version >= "3.10"
+#   ml_dtypes              0.6.0      numpy>=2.0.0
+#
+# 4.12.0.88's release notes say why: "Packages for Python 3.9+ are built with
+# Numpy 2.x." So the wall is at opencv 4.12, not 4.14 -- there is no
+# intermediate version to land on -- and it is a BUILD property of the wheel,
+# not a bound someone can be talked out of. Both stay where they are until
+# torch moves, which is what mamba-ssm and causal-conv1d gate.
 
 # Core dependencies
 # fastapi / starlette / prometheus-fastapi-instrumentator move as ONE set.
@@ -59,7 +74,7 @@
 fastapi==0.141.1
 starlette==1.6.0
 uvicorn==0.52.4
-pydantic==2.13.4
+pydantic==2.13.5
 # requests 2.33.0 fixes CVE-2024-47081 (.netrc credential leak),
 # CVE-2026-25645 (insecure temp file reuse in extract_zipped_paths), and the
 # later session-redirect advisory.
@@ -100,7 +115,16 @@ roifile==2025.12.12
 matplotlib==3.10.9
 # Sperm model dependencies (Mask2Former + graph assembly)
 # ConvNeXtV2 backbone is implemented in pure PyTorch (no HF/timm needed)
-networkx>=3.0
+#
+# 3.4.2 is the LAST networkx release that installs on Python 3.10 -- 3.5 and
+# every release after it declare `requires_python >=3.11`. So on this image the
+# floor and the ceiling are the same number, and raising the floor to it simply
+# says out loud what pip already resolves (the running ml container: 3.4.2).
+# The whole surface this repo uses is core and unchanged in 3.4: nx.Graph /
+# nx.DiGraph, max_weight_matching + single_source_dijkstra_path_length +
+# shortest_path (microtubule instancing) and network_simplex (sperm graph
+# assembly). Nothing here touches an API 3.4 removed.
+networkx>=3.4.2
 
 # segmentation_models_pytorch serves two models: the wound-healing model
 # (MiT-B5 encoder) and the microcapsule student U-Net (timm-mobilenetv3_small_100
@@ -200,16 +224,39 @@ segmentation-models-pytorch==0.5.0
 # probe — both checkpoints AND `import models.mamba_unet` — before crossing a
 # minor, and note that CI cannot do it for you: the weights are not in the repo.
 transformers==5.5.4
-tifffile>=2024.1.30
+# Keep this floor identical to backend/essays/module/requirements.txt (the
+# `pins` job in .github/workflows/ci.yml enforces it). Neither floor changes
+# what pip resolves: tifffile 2025.5.21 and everything after it declare
+# `requires_python >=3.11`, so on this python:3.10 image 2025.5.10 is BOTH the
+# newest installable release and what the running ml container holds -- the
+# floor cannot reach it and the ceiling cannot be raised without moving the
+# base image. The floor is still worth stating, because the essays file is
+# DOCUMENTATION of the stack it inherits and a floor only one of the two
+# carries is a claim about a build nobody performs.
+tifffile>=2024.12.12
 # tifffile decodes Deflate natively but delegates LZW (and JPEG, PackBits, LZMA...)
 # to imagecodecs, which was NOT installed. LZW is the DEFAULT TIFF compression that
 # both ImageJ and NIS-Elements offer, so /api/v1/frap/targets rejected a perfectly
 # ordinary frame from the microscope with "Unreadable TIFF: <COMPRESSION.LZW: 5>
 # requires the 'imagecodecs' package" -- a 400 blaming the operator's file for a
 # missing server package. Verified in the shipped image before adding this.
-imagecodecs>=2024.1.1
+#
+# The floor is raised to the oldest release this stack was actually exercised
+# against; py3.10 again caps the top, since imagecodecs 2025.8.2 and later
+# declare `requires_python >=3.11`, so the resolve lands on 2025.3.30 -- again
+# the newest installable release and exactly what the ml container holds.
+# LZW delegation is the ONLY reason this line exists, so it is what a bump has
+# to be checked against, not the import: writing an LZW TIFF with tifffile and
+# reading it back bit-identically is the test, and it was run at 2025.3.30 for
+# uint8 and uint16, 2-D and 3-D.
+imagecodecs>=2024.12.30
 nd2>=0.10.0
-huggingface_hub>=0.20
+# transformers 5.5.4 already demands `huggingface-hub >=1.5.0,<2.0`, so the old
+# `>=0.20` floor was three majors below anything installable and documented a
+# resolve that could not happen. 1.29.0 is what the running ml container holds.
+# The <2.0 ceiling stays where it belongs -- on transformers, which owns it.
+# Keep identical to backend/essays/module/requirements.txt.
+huggingface_hub>=1.29.0
 
 # Mamba-UNet dependency. einops is a pure-Python runtime dep of mamba_ssm and is
 # safe to build in the slim wheel-builder. The CUDA-compiled kernels themselves
