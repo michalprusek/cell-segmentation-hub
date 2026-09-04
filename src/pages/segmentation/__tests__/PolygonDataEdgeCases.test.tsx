@@ -32,11 +32,12 @@ vi.mock('../components/canvas/PolygonVertices', () => ({
   default: ({ polygonId, points, onVertexClick }: any) => (
     <g data-testid={`vertices-${polygonId}`}>
       {points?.map((point: any, index: number) => {
-        if (
-          !point ||
-          typeof point.x !== 'number' ||
-          typeof point.y !== 'number'
-        ) {
+        // Number.isFinite, matching the real PolygonVertices guard. A `typeof
+        // === 'number'` check alone lets NaN and ±Infinity through, and this
+        // stand-in would then emit the very `cx="NaN"` the real component was
+        // fixed to stop emitting — a mock that is more permissive than the
+        // thing it replaces can only manufacture false failures.
+        if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) {
           return null;
         }
         return (
@@ -54,7 +55,7 @@ vi.mock('../components/canvas/PolygonVertices', () => ({
   ),
 }));
 
-vi.mock('../../context-menu/PolygonContextMenu', () => ({
+vi.mock('../components/context-menu/PolygonContextMenu', () => ({
   default: ({ children, polygonId }: any) => (
     <g>
       {children}
@@ -136,6 +137,56 @@ describe('Polygon Data Edge Cases and Invalid Data Handling', () => {
     }
   };
 
+  /**
+   * The claim this whole file exists to make: malformed input must never reach
+   * the SVG as a non-finite coordinate.
+   *
+   * Every test below asserted `expect(container).toBeTruthy()` until
+   * 2026-09-04. That asserts nothing — RTL's container div is truthy before
+   * the component renders anything into it. Proof: deleting CanvasPolygon's
+   * NaN filter outright left all 28 tests here green, alongside the 93 in
+   * CanvasPolygon.test.tsx, CanvasPolygonSimple.test.tsx and
+   * PolygonPerformanceRegression.test.tsx.
+   *
+   * An invalid `d` is not degraded gracefully by SVG: the renderer stops at
+   * the first malformed token, so one bad coordinate erases the whole shape.
+   * That is the regression worth guarding, so assert it directly.
+   */
+  const GEOMETRY_ATTRIBUTES = [
+    'd',
+    'points',
+    'cx',
+    'cy',
+    'r',
+    'x',
+    'y',
+    'x1',
+    'y1',
+    'x2',
+    'y2',
+    'width',
+    'height',
+  ];
+
+  const expectNoCorruptGeometry = (container: HTMLElement | undefined) => {
+    expect(container).toBeTruthy();
+
+    const shapes = (container as HTMLElement).querySelectorAll(
+      'path, circle, rect, line, polyline, polygon, ellipse'
+    );
+
+    shapes.forEach(shape => {
+      GEOMETRY_ATTRIBUTES.forEach(attribute => {
+        const value = shape.getAttribute(attribute);
+        if (value === null) return;
+        expect(
+          value,
+          `<${shape.tagName.toLowerCase()} ${attribute}="${value}"> reached the DOM`
+        ).not.toMatch(/NaN|Infinity|undefined|null/);
+      });
+    });
+  };
+
   describe('Malformed Polygon Objects', () => {
     it('should handle completely null polygon', () => {
       const result = renderPolygonSafely(null);
@@ -203,7 +254,7 @@ describe('Polygon Data Edge Cases and Invalid Data Handling', () => {
 
       const { container } = renderPolygonSafely(emptyPointsPolygon);
 
-      expect(container).toBeTruthy();
+      expectNoCorruptGeometry(container);
     });
 
     it('should handle insufficient points (less than 3)', () => {
@@ -218,7 +269,7 @@ describe('Polygon Data Edge Cases and Invalid Data Handling', () => {
 
       const { container } = renderPolygonSafely(insufficientPointsPolygon);
 
-      expect(container).toBeTruthy();
+      expectNoCorruptGeometry(container);
     });
 
     it('should handle points with NaN coordinates', () => {
@@ -235,7 +286,7 @@ describe('Polygon Data Edge Cases and Invalid Data Handling', () => {
 
       const { container } = renderPolygonSafely(nanPointsPolygon);
 
-      expect(container).toBeTruthy();
+      expectNoCorruptGeometry(container);
     });
 
     it('should handle points with Infinity coordinates', () => {
@@ -252,7 +303,7 @@ describe('Polygon Data Edge Cases and Invalid Data Handling', () => {
 
       const { container } = renderPolygonSafely(infinityPointsPolygon);
 
-      expect(container).toBeTruthy();
+      expectNoCorruptGeometry(container);
     });
 
     it('should handle points with missing coordinates', () => {
@@ -269,7 +320,7 @@ describe('Polygon Data Edge Cases and Invalid Data Handling', () => {
 
       const { container } = renderPolygonSafely(missingCoordsPolygon);
 
-      expect(container).toBeTruthy();
+      expectNoCorruptGeometry(container);
     });
 
     it('should handle points with wrong coordinate types', () => {
@@ -286,7 +337,7 @@ describe('Polygon Data Edge Cases and Invalid Data Handling', () => {
 
       const { container } = renderPolygonSafely(wrongCoordTypesPolygon);
 
-      expect(container).toBeTruthy();
+      expectNoCorruptGeometry(container);
     });
 
     it('should handle null/undefined points in array', () => {
@@ -304,7 +355,7 @@ describe('Polygon Data Edge Cases and Invalid Data Handling', () => {
 
       const { container } = renderPolygonSafely(nullPointsPolygon);
 
-      expect(container).toBeTruthy();
+      expectNoCorruptGeometry(container);
     });
   });
 
@@ -326,7 +377,7 @@ describe('Polygon Data Edge Cases and Invalid Data Handling', () => {
 
       const { container } = renderPolygonSafely(largeCoordinatesPolygon);
 
-      expect(container).toBeTruthy();
+      expectNoCorruptGeometry(container);
       // May log performance warning for large coordinates
     });
 
@@ -347,7 +398,7 @@ describe('Polygon Data Edge Cases and Invalid Data Handling', () => {
 
       const { container } = renderPolygonSafely(smallCoordinatesPolygon);
 
-      expect(container).toBeTruthy();
+      expectNoCorruptGeometry(container);
     });
 
     it('should handle zero-area polygons (all points same)', () => {
@@ -364,7 +415,7 @@ describe('Polygon Data Edge Cases and Invalid Data Handling', () => {
 
       const { container } = renderPolygonSafely(zeroAreaPolygon);
 
-      expect(container).toBeTruthy();
+      expectNoCorruptGeometry(container);
     });
 
     it('should handle extremely many points', () => {
@@ -384,7 +435,7 @@ describe('Polygon Data Edge Cases and Invalid Data Handling', () => {
       const { container } = renderPolygonSafely(manyPointsPolygon);
       const renderTime = performance.now() - startTime;
 
-      expect(container).toBeTruthy();
+      expectNoCorruptGeometry(container);
 
       // Performance check - render should complete in reasonable time
       expect(renderTime).toBeDefined();
@@ -406,7 +457,7 @@ describe('Polygon Data Edge Cases and Invalid Data Handling', () => {
 
       const { container } = renderPolygonSafely(invalidTypePolygon);
 
-      expect(container).toBeTruthy();
+      expectNoCorruptGeometry(container);
     });
 
     it('should handle numeric polygon type', () => {
@@ -423,7 +474,7 @@ describe('Polygon Data Edge Cases and Invalid Data Handling', () => {
 
       const { container } = renderPolygonSafely(numericTypePolygon);
 
-      expect(container).toBeTruthy();
+      expectNoCorruptGeometry(container);
     });
 
     it('should handle missing confidence values gracefully', () => {
@@ -441,7 +492,7 @@ describe('Polygon Data Edge Cases and Invalid Data Handling', () => {
 
       const { container } = renderPolygonSafely(noConfidencePolygon);
 
-      expect(container).toBeTruthy();
+      expectNoCorruptGeometry(container);
       expect(screen.getByTestId('no-confidence')).toBeInTheDocument();
     });
 
@@ -460,7 +511,7 @@ describe('Polygon Data Edge Cases and Invalid Data Handling', () => {
 
       const { container } = renderPolygonSafely(invalidConfidencePolygon);
 
-      expect(container).toBeTruthy();
+      expectNoCorruptGeometry(container);
     });
   });
 
@@ -482,7 +533,7 @@ describe('Polygon Data Edge Cases and Invalid Data Handling', () => {
 
       const { container } = renderPolygonSafely(circularPolygon);
 
-      expect(container).toBeTruthy();
+      expectNoCorruptGeometry(container);
     });
 
     it('should handle deep nested objects in polygon properties', () => {
@@ -511,7 +562,7 @@ describe('Polygon Data Edge Cases and Invalid Data Handling', () => {
 
       const { container } = renderPolygonSafely(deepNestedPolygon);
 
-      expect(container).toBeTruthy();
+      expectNoCorruptGeometry(container);
     });
 
     it('should handle massive string IDs', () => {
@@ -528,7 +579,7 @@ describe('Polygon Data Edge Cases and Invalid Data Handling', () => {
 
       const { container } = renderPolygonSafely(massiveIdPolygon);
 
-      expect(container).toBeTruthy();
+      expectNoCorruptGeometry(container);
     });
   });
 
@@ -661,7 +712,7 @@ describe('Polygon Data Edge Cases and Invalid Data Handling', () => {
 
       const { container } = renderPolygonSafely(minimalPolygon);
 
-      expect(container).toBeTruthy();
+      expectNoCorruptGeometry(container);
       // Should log warnings about missing required fields
     });
 
@@ -786,7 +837,7 @@ describe('Polygon Data Edge Cases and Invalid Data Handling', () => {
       expect(screen.getByTestId('valid-2')).toBeInTheDocument();
 
       // Application should remain stable
-      expect(container).toBeTruthy();
+      expectNoCorruptGeometry(container);
     });
   });
 });

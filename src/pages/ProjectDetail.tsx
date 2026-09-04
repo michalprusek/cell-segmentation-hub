@@ -1006,6 +1006,18 @@ const ProjectDetail = () => {
       if (safetyTimeoutRef.current) {
         clearTimeout(safetyTimeoutRef.current);
       }
+
+      // Clear the batched segmentation-refresh timeout. This one was missing:
+      // the other three refs were cleared here but refreshBatchTimeoutRef was
+      // only ever cleared on the RESCHEDULE path (see the clearTimeout just
+      // above where it is set), so a 2s timer survived unmount and then called
+      // refreshImageSegmentationRef.current(id).catch(...). Same shape as the
+      // leak fixed in SegmentationEditor.tsx on 2026-09-04, which produced
+      // "TypeError: Cannot read properties of undefined (reading 'catch')"
+      // blamed on whichever test file happened to be running at the time.
+      if (refreshBatchTimeoutRef.current) {
+        clearTimeout(refreshBatchTimeoutRef.current);
+      }
     };
   }, []);
 

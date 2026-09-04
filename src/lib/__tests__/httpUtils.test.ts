@@ -32,7 +32,11 @@ describe('HTTP Utils', () => {
       });
       (global.fetch as any).mockResolvedValue(mockResponse);
 
-      const result = await fetchWithRetry('https://api.example.com/test');
+      const result = await fetchWithRetry(
+        'https://api.example.com/test',
+        {},
+        { delay: 0 }
+      );
 
       expect(global.fetch).toHaveBeenCalledTimes(1);
       expect(global.fetch).toHaveBeenCalledWith(
@@ -67,7 +71,11 @@ describe('HTTP Utils', () => {
         .mockRejectedValueOnce(networkError)
         .mockResolvedValue(createResponse('success', { status: 200 }));
 
-      const result = await fetchWithRetry('https://api.example.com/test');
+      const result = await fetchWithRetry(
+        'https://api.example.com/test',
+        {},
+        { delay: 0 }
+      );
 
       expect(global.fetch).toHaveBeenCalledTimes(3);
       expect(result.status).toBe(200);
@@ -91,7 +99,11 @@ describe('HTTP Utils', () => {
           createResponse('success', { status: 200, statusText: 'OK' })
         );
 
-      const result = await fetchWithRetry('https://api.example.com/test');
+      const result = await fetchWithRetry(
+        'https://api.example.com/test',
+        {},
+        { delay: 0 }
+      );
 
       expect(global.fetch).toHaveBeenCalledTimes(3);
       expect(result.status).toBe(200);
@@ -102,7 +114,11 @@ describe('HTTP Utils', () => {
       (global.fetch as any).mockRejectedValue(networkError);
 
       await expect(
-        fetchWithRetry('https://api.example.com/test', {}, { retries: 2 })
+        fetchWithRetry(
+          'https://api.example.com/test',
+          {},
+          { retries: 2, delay: 0 }
+        )
       ).rejects.toThrow('Network error');
 
       expect(global.fetch).toHaveBeenCalledTimes(3); // Initial + 2 retries
@@ -113,7 +129,11 @@ describe('HTTP Utils', () => {
       (global.fetch as any).mockRejectedValue(networkError);
 
       await expect(
-        fetchWithRetry('https://api.example.com/test', {}, { retries: 1 })
+        fetchWithRetry(
+          'https://api.example.com/test',
+          {},
+          { retries: 1, delay: 0 }
+        )
       ).rejects.toThrow('Network error');
 
       expect(global.fetch).toHaveBeenCalledTimes(2); // Initial + 1 retry
@@ -124,93 +144,103 @@ describe('HTTP Utils', () => {
       (global.fetch as any).mockRejectedValue(networkError);
 
       await expect(
-        fetchWithRetry('https://api.example.com/test', {}, { retries: 0 })
+        fetchWithRetry(
+          'https://api.example.com/test',
+          {},
+          { retries: 0, delay: 0 }
+        )
       ).rejects.toThrow('Network error');
 
       expect(global.fetch).toHaveBeenCalledTimes(1); // Only initial attempt
     });
 
-    test('should use exponential backoff by default', async () => {
-      const networkError = new Error('Network error');
-      (global.fetch as any).mockRejectedValue(networkError);
-
-      const start = Date.now();
-
+    // ── retry SCHEDULE, asserted exactly ────────────────────────────────────
+    //
+    // These tests used to assert a wall-clock window (`elapsed > 200 &&
+    // elapsed < 2500`). That window cannot tell exponential backoff from a
+    // constant delay: with delay=100 / retries=2 the real schedule is
+    // 100 + 150 = 250 ms and a constant-delay regression gives 100 + 100 =
+    // 200 ms, still inside the window. Proven by mutation on 2026-09-04 —
+    // replacing `delay * Math.pow(backoff, attempt)` with a bare `delay` left
+    // all 29 tests in this file green, three of them named after the backoff.
+    //
+    // Spying on setTimeout asserts the exact sequence of requested delays
+    // instead: deterministic, discriminates every backoff value, and sleeps
+    // ~50 ms across all five tests where the old ones slept ~700 ms.
+    const captureRetryDelays = async (
+      retryOptions: Parameters<typeof fetchWithRetry>[2]
+    ): Promise<number[]> => {
+      const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout');
       try {
-        await fetchWithRetry(
-          'https://api.example.com/test',
-          {},
-          {
-            retries: 2,
-            delay: 100, // 100ms base delay
-          }
-        );
-      } catch (_e) {
-        // Expected to fail
+        await expect(
+          fetchWithRetry('https://api.example.com/test', {}, retryOptions)
+        ).rejects.toThrow();
+        return setTimeoutSpy.mock.calls.map(call => call[1] as number);
+      } finally {
+        setTimeoutSpy.mockRestore();
       }
+    };
 
-      const elapsed = Date.now() - start;
+    test('waits delay * backoff^attempt between retries (default backoff 1.5)', async () => {
+      (global.fetch as any).mockRejectedValue(new Error('Network error'));
 
-      // Should wait approximately: 100ms (first retry) + 150ms (second retry) = 250ms minimum
-      // Plus some tolerance for execution time
-      expect(elapsed).toBeGreaterThan(200);
-      expect(elapsed).toBeLessThan(2500); // load-tolerant ceiling: wall-clock budgets inflate under V8 coverage on CI
+      const delays = await captureRetryDelays({ retries: 2, delay: 20 });
+
+      // 20 * 1.5^0, then 20 * 1.5^1 — and no wait after the final attempt.
+      expect(delays).toEqual([20, 30]);
     });
 
-    test('should use custom delay and backoff', async () => {
-      const networkError = new Error('Network error');
-      (global.fetch as any).mockRejectedValue(networkError);
+    test('honours an explicit backoff multiplier', async () => {
+      (global.fetch as any).mockRejectedValue(new Error('Network error'));
 
-      const start = Date.now();
+      const delays = await captureRetryDelays({
+        retries: 3,
+        delay: 2,
+        backoff: 3.0,
+      });
 
-      try {
-        await fetchWithRetry(
-          'https://api.example.com/test',
-          {},
-          {
-            retries: 1,
-            delay: 200,
-            backoff: 2.0,
-          }
-        );
-      } catch (_e) {
-        // Expected to fail
-      }
-
-      const elapsed = Date.now() - start;
-
-      // Should wait approximately: 200ms (first retry)
-      expect(elapsed).toBeGreaterThan(150);
-      expect(elapsed).toBeLessThan(2500); // load-tolerant ceiling: wall-clock budgets inflate under V8 coverage on CI
-    });
-
-    test('should handle custom backoff calculation', async () => {
-      const networkError = new Error('Network error');
-      (global.fetch as any).mockRejectedValue(networkError);
-
-      try {
-        await fetchWithRetry(
-          'https://api.example.com/test',
-          {},
-          {
-            retries: 3,
-            delay: 10, // Very small delay for testing
-            backoff: 3.0, // High backoff multiplier
-          }
-        );
-      } catch (_e) {
-        // Expected to fail
-      }
-
-      // Should have made 4 attempts total (initial + 3 retries)
+      expect(delays).toEqual([2, 6, 18]);
+      // initial attempt + 3 retries
       expect(global.fetch).toHaveBeenCalledTimes(4);
+    });
+
+    test('a backoff of exactly 1 degrades to a constant delay', async () => {
+      // The discriminating case: this is what the old wall-clock window could
+      // not separate from the exponential one.
+      (global.fetch as any).mockRejectedValue(new Error('Network error'));
+
+      const delays = await captureRetryDelays({
+        retries: 2,
+        delay: 15,
+        backoff: 1,
+      });
+
+      expect(delays).toEqual([15, 15]);
+    });
+
+    test('a fractional backoff shortens each successive wait', async () => {
+      // Needs retries >= 2 to mean anything. The old test used retries: 1 with
+      // a comment claiming "second attempt should wait 100 * 0.5 = 50ms" — but
+      // `attempt` is 0 on the first retry, so its one and only wait was the
+      // full 100 ms. It never exercised the multiplier at all.
+      (global.fetch as any).mockRejectedValue(new Error('Network error'));
+
+      const delays = await captureRetryDelays({
+        retries: 3,
+        delay: 8,
+        backoff: 0.5,
+      });
+
+      expect(delays).toEqual([8, 4, 2]);
     });
 
     test('should handle non-Error exceptions', async () => {
       (global.fetch as any).mockRejectedValue('String error');
 
       await expect(
-        fetchWithRetry('https://api.example.com/test')
+        // delay: 0 — these five assert the ERROR MESSAGE, not the schedule, and
+        // the default 1000ms/1.5x backoff made each of them sleep 4.75s.
+        fetchWithRetry('https://api.example.com/test', {}, { delay: 0 })
       ).rejects.toThrow('String error');
     });
 
@@ -218,7 +248,9 @@ describe('HTTP Utils', () => {
       (global.fetch as any).mockRejectedValue(null);
 
       await expect(
-        fetchWithRetry('https://api.example.com/test')
+        // delay: 0 — these five assert the ERROR MESSAGE, not the schedule, and
+        // the default 1000ms/1.5x backoff made each of them sleep 4.75s.
+        fetchWithRetry('https://api.example.com/test', {}, { delay: 0 })
       ).rejects.toThrow('null');
     });
 
@@ -228,7 +260,9 @@ describe('HTTP Utils', () => {
       );
 
       await expect(
-        fetchWithRetry('https://api.example.com/test')
+        // delay: 0 — these five assert the ERROR MESSAGE, not the schedule, and
+        // the default 1000ms/1.5x backoff made each of them sleep 4.75s.
+        fetchWithRetry('https://api.example.com/test', {}, { delay: 0 })
       ).rejects.toThrow('HTTP 404: Not Found');
     });
 
@@ -238,7 +272,9 @@ describe('HTTP Utils', () => {
       );
 
       await expect(
-        fetchWithRetry('https://api.example.com/test')
+        // delay: 0 — these five assert the ERROR MESSAGE, not the schedule, and
+        // the default 1000ms/1.5x backoff made each of them sleep 4.75s.
+        fetchWithRetry('https://api.example.com/test', {}, { delay: 0 })
       ).rejects.toThrow('HTTP 500: ');
     });
 
@@ -250,7 +286,11 @@ describe('HTTP Utils', () => {
         const mockResponse = createResponse(body, { status: code });
         (global.fetch as any).mockResolvedValue(mockResponse);
 
-        const result = await fetchWithRetry('https://api.example.com/test');
+        const result = await fetchWithRetry(
+          'https://api.example.com/test',
+          {},
+          { delay: 0 }
+        );
 
         expect(global.fetch).toHaveBeenCalledTimes(1);
         expect(result.status).toBe(code);
@@ -270,7 +310,11 @@ describe('HTTP Utils', () => {
           .mockResolvedValueOnce(errorResponse)
           .mockResolvedValue(successResponse);
 
-        const result = await fetchWithRetry('https://api.example.com/test');
+        const result = await fetchWithRetry(
+          'https://api.example.com/test',
+          {},
+          { delay: 0 }
+        );
 
         // Should have retried once after getting non-ok status
         expect(global.fetch).toHaveBeenCalledTimes(2);
@@ -286,7 +330,11 @@ describe('HTTP Utils', () => {
           .mockResolvedValueOnce(createResponse('Error', { status: code }))
           .mockResolvedValue(createResponse('Success', { status: 200 }));
 
-        const result = await fetchWithRetry('https://api.example.com/test');
+        const result = await fetchWithRetry(
+          'https://api.example.com/test',
+          {},
+          { delay: 0 }
+        );
         expect(result.status).toBe(200);
         expect(global.fetch).toHaveBeenCalledTimes(2);
 
@@ -301,7 +349,9 @@ describe('HTTP Utils', () => {
       });
 
       await expect(
-        fetchWithRetry('https://api.example.com/test')
+        // delay: 0 — these five assert the ERROR MESSAGE, not the schedule, and
+        // the default 1000ms/1.5x backoff made each of them sleep 4.75s.
+        fetchWithRetry('https://api.example.com/test', {}, { delay: 0 })
       ).rejects.toThrow('undefined');
     });
 
@@ -309,7 +359,11 @@ describe('HTTP Utils', () => {
       const mockResponse = createResponse('success', { status: 200 });
       (global.fetch as any).mockResolvedValue(mockResponse);
 
-      const result = await fetchWithRetry('https://api.example.com/test');
+      const result = await fetchWithRetry(
+        'https://api.example.com/test',
+        {},
+        { delay: 0 }
+      );
 
       expect(result).toBe(mockResponse);
       expect(global.fetch).toHaveBeenCalledWith(
@@ -327,7 +381,11 @@ describe('HTTP Utils', () => {
         .mockResolvedValueOnce(createResponse('Server Error', { status: 500 }))
         .mockResolvedValue(createResponse('Success', { status: 200 }));
 
-      const result = await fetchWithRetry('https://api.example.com/test');
+      const result = await fetchWithRetry(
+        'https://api.example.com/test',
+        {},
+        { delay: 0 }
+      );
 
       expect(result.status).toBe(200);
       expect(global.fetch).toHaveBeenCalledTimes(3);
@@ -344,60 +402,31 @@ describe('HTTP Utils', () => {
         .mockRejectedValue(thirdError);
 
       await expect(
-        fetchWithRetry('https://api.example.com/test', {}, { retries: 2 })
+        fetchWithRetry(
+          'https://api.example.com/test',
+          {},
+          { retries: 2, delay: 0 }
+        )
       ).rejects.toThrow('Third error');
     });
 
-    test('should handle fractional backoff values', async () => {
-      const networkError = new Error('Network error');
-      (global.fetch as any).mockRejectedValue(networkError);
+    test('a zero delay schedules no waiting between attempts', async () => {
+      (global.fetch as any).mockRejectedValue(new Error('Network error'));
 
-      const start = Date.now();
-
+      const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout');
       try {
-        await fetchWithRetry(
-          'https://api.example.com/test',
-          {},
-          {
-            retries: 1,
-            delay: 100,
-            backoff: 0.5, // Fractional backoff should decrease wait time
-          }
-        );
-      } catch (_e) {
-        // Expected to fail
+        await expect(
+          fetchWithRetry(
+            'https://api.example.com/test',
+            {},
+            { retries: 2, delay: 0 }
+          )
+        ).rejects.toThrow();
+        expect(setTimeoutSpy.mock.calls.map(call => call[1])).toEqual([0, 0]);
+      } finally {
+        setTimeoutSpy.mockRestore();
       }
 
-      const elapsed = Date.now() - start;
-
-      // With backoff 0.5, second attempt should wait 100 * 0.5 = 50ms
-      expect(elapsed).toBeGreaterThan(40);
-      expect(elapsed).toBeLessThan(2000); // load-tolerant ceiling: wall-clock budgets inflate under V8 coverage on CI
-    });
-
-    test('should handle zero delay', async () => {
-      const networkError = new Error('Network error');
-      (global.fetch as any).mockRejectedValue(networkError);
-
-      const start = Date.now();
-
-      try {
-        await fetchWithRetry(
-          'https://api.example.com/test',
-          {},
-          {
-            retries: 2,
-            delay: 0,
-          }
-        );
-      } catch (_e) {
-        // Expected to fail
-      }
-
-      const elapsed = Date.now() - start;
-
-      // Should complete quickly with no delays
-      expect(elapsed).toBeLessThan(1000); // load-tolerant ceiling: wall-clock budgets inflate under V8 coverage on CI
       expect(global.fetch).toHaveBeenCalledTimes(3);
     });
   });

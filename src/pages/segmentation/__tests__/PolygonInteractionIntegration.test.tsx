@@ -11,7 +11,6 @@ import { shouldPreventCanvasDeselection } from '../config/modeConfig';
 import {
   createMockPolygon,
   createMockPolygons,
-  createPerformanceTestUtils,
 } from '@/test-utils/segmentationTestUtils';
 import type { Polygon } from '@/lib/segmentation';
 
@@ -379,26 +378,37 @@ describe('Polygon Interaction Integration Tests', () => {
     });
   });
 
-  describe('Performance Tests', () => {
-    it('should handle many polygons without performance degradation', async () => {
-      const { measureRenderTime } = createPerformanceTestUtils();
+  describe('Many polygons', () => {
+    it('renders every one of 100 polygons', () => {
+      // Was 'should handle many polygons without performance degradation',
+      // whose only assertion was `expect(averageTime).toBeLessThan(2000)` over
+      // 5 renders. jsdom's performance.now() resolves to a whole millisecond
+      // and the ceiling is ~100x the real cost, so it could not fail; nor did
+      // it check that anything actually rendered. A component that dropped
+      // every polygon after the first would have passed it — and been FASTER.
       const manyPolygons = createMockPolygons(100);
 
-      const { averageTime } = await measureRenderTime(() => {
-        render(
-          <MockSegmentationWorkflow
-            polygons={manyPolygons}
-            onPolygonsChange={mockOnPolygonsChange}
-            onModeChange={mockOnModeChange}
-          />
-        );
-      }, 5);
+      render(
+        <MockSegmentationWorkflow
+          polygons={manyPolygons}
+          onPolygonsChange={mockOnPolygonsChange}
+          onModeChange={mockOnModeChange}
+        />
+      );
 
-      // Should render many polygons quickly
-      expect(averageTime).toBeLessThan(2000); // load-tolerant ceiling: wall-clock budgets inflate under V8 coverage on CI
+      expect(screen.getByTestId('polygon-count')).toHaveTextContent('100');
+      manyPolygons.forEach(polygon => {
+        expect(
+          screen.getByTestId(`workflow-polygon-${polygon.id}`)
+        ).toBeInTheDocument();
+      });
     });
 
-    it('should handle rapid polygon selections efficiently', async () => {
+    it('ends on the last of 10 rapid selections', async () => {
+      // Was 'should handle rapid polygon selections efficiently' with a single
+      // 2000ms ceiling. It clicked 10 polygons and never checked that a single
+      // one got selected — a workflow that ignored every click would pass, and
+      // pass faster.
       const manyPolygons = createMockPolygons(50);
 
       render(
@@ -409,19 +419,19 @@ describe('Polygon Interaction Integration Tests', () => {
         />
       );
 
-      const startTime = performance.now();
-
-      // Rapidly select different polygons
       for (let i = 0; i < 10; i++) {
         const polygonId = manyPolygons[i * 5].id;
         const polygon = screen.getByTestId(`workflow-polygon-${polygonId}`);
         fireEvent.click(polygon.querySelector('path') || polygon);
       }
 
-      const selectionTime = performance.now() - startTime;
-
-      // 10 rapid selections should complete quickly
-      expect(selectionTime).toBeLessThan(2000); // load-tolerant ceiling: wall-clock budgets inflate under V8 coverage on CI
+      // The last click wins, and the selection is exclusive.
+      const lastId = manyPolygons[45].id;
+      expect(screen.getByTestId('selected-polygon')).toHaveTextContent(lastId);
+      expect(screen.getByTestId(`workflow-polygon-${lastId}`)).toHaveClass(
+        'selected'
+      );
+      expect(document.querySelectorAll('.polygon.selected')).toHaveLength(1);
     });
 
     it('should handle deletion of many polygons efficiently', async () => {

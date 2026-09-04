@@ -67,8 +67,6 @@ describe('WebSocket Performance Tests', () => {
       const listener = vi.fn();
       wsManager.on('segmentation-update', listener);
 
-      const startTime = performance.now();
-
       // Send 1000 rapid updates
       for (let i = 0; i < 1000; i++) {
         const update: SegmentationUpdate = {
@@ -80,11 +78,7 @@ describe('WebSocket Performance Tests', () => {
         testEnv.mockSocket.__simulateSegmentationUpdate(update);
       }
 
-      const endTime = performance.now();
-      const duration = endTime - startTime;
-
       expect(listener).toHaveBeenCalledTimes(1000);
-      expect(duration).toBeLessThan(2000); // load-tolerant ceiling: wall-clock budgets inflate under V8 coverage on CI
     }, 15000); // 15 second timeout
 
     it('should handle 500 rapid queue stats updates without memory leaks', async () => {
@@ -95,8 +89,6 @@ describe('WebSocket Performance Tests', () => {
 
       const listener = vi.fn();
       wsManager.on('queue-stats-update', listener);
-
-      const startTime = performance.now();
 
       // Send 500 queue updates
       for (let i = 0; i < 500; i++) {
@@ -109,10 +101,7 @@ describe('WebSocket Performance Tests', () => {
         testEnv.mockSocket.__simulateQueueStatsUpdate(stats);
       }
 
-      const endTime = performance.now();
-
       expect(listener).toHaveBeenCalledTimes(500);
-      expect(endTime - startTime).toBeLessThan(2000); // load-tolerant ceiling
 
       // Verify no memory leaks by checking listener cleanup
       wsManager.off('queue-stats-update', listener);
@@ -134,8 +123,6 @@ describe('WebSocket Performance Tests', () => {
         wsManager.on('segmentation-update', listener);
       }
 
-      const startTime = performance.now();
-
       // Send 100 updates to all listeners
       for (let i = 0; i < 100; i++) {
         const update = testEnv.createSegmentationUpdate({
@@ -145,14 +132,10 @@ describe('WebSocket Performance Tests', () => {
         testEnv.mockSocket.__simulateSegmentationUpdate(update);
       }
 
-      const endTime = performance.now();
-
       // Each listener should have been called 100 times
       listeners.forEach(listener => {
         expect(listener).toHaveBeenCalledTimes(100);
       });
-
-      expect(endTime - startTime).toBeLessThan(2000); // load-tolerant ceiling: wall-clock budgets inflate under V8 coverage on CI
     });
   });
 
@@ -160,7 +143,6 @@ describe('WebSocket Performance Tests', () => {
     it('should efficiently queue and flush 1000 messages', async () => {
       // Start disconnected
       const messages = [];
-      const startTime = performance.now();
 
       // Queue 1000 messages while disconnected
       for (let i = 0; i < 1000; i++) {
@@ -171,25 +153,17 @@ describe('WebSocket Performance Tests', () => {
         });
       }
 
-      const queueTime = performance.now();
-
       // Connect and flush queue
       const connectPromise = wsManager.connect(testEnv.user);
       testEnv.scenarios.simulateSuccessfulConnection();
       await connectPromise; // Wait for connection to complete
 
-      const flushTime = performance.now();
-
       // Verify all messages were emitted
       expect(testEnv.mockSocket.emit).toHaveBeenCalledTimes(1000);
-
-      expect(queueTime - startTime).toBeLessThan(50); // Queuing should be fast
-      expect(flushTime - queueTime).toBeLessThan(2000); // load-tolerant ceiling: wall-clock budgets inflate under V8 coverage on CI
     });
 
     it('should handle queue operations during rapid connect/disconnect cycles', async () => {
       const operations = [];
-      const startTime = performance.now();
 
       // Perform 50 rapid connect/disconnect cycles with message emissions
       for (let cycle = 0; cycle < 50; cycle++) {
@@ -209,38 +183,62 @@ describe('WebSocket Performance Tests', () => {
         operations.push('disconnect');
       }
 
-      const endTime = performance.now();
-
       expect(operations.length).toBe(300); // 50 cycles * (5 emits + 1 disconnect)
-      expect(endTime - startTime).toBeLessThan(2000); // load-tolerant ceiling: wall-clock budgets inflate under V8 coverage on CI
     });
   });
 
   describe('Memory Usage Optimization', () => {
-    it('should not accumulate memory with extensive listener registration/removal', () => {
-      const initialMemoryUsage = process.memoryUsage().heapUsed;
-      const listeners = [];
+    it('detaches every listener that off() is called for', async () => {
+      // Was 'should not accumulate memory with extensive listener
+      // registration/removal', asserting `heapUsed` grew by less than 20MB.
+      // Its own comment conceded "v8 GC is non-deterministic", which is exactly
+      // why the assertion was worthless: 1000 vi.fn() mocks are nowhere near
+      // 20MB, so it passed whether or not off() detached anything, and a real
+      // leak of 1000 closures would still have passed.
+      //
+      // The leak is OBSERVABLE without measuring the heap: a listener that was
+      // not detached still gets invoked. Assert that instead.
+      const connectPromise = wsManager.connect(testEnv.user);
+      testEnv.mockSocket.__simulateConnect();
+      await connectPromise;
 
-      // Create and register 1000 listeners
-      for (let i = 0; i < 1000; i++) {
-        const listener = vi.fn();
-        listeners.push(listener);
-        wsManager.on('segmentation-update', listener);
-      }
+      const listeners = Array.from({ length: 1000 }, () => vi.fn());
+      listeners.forEach(listener =>
+        wsManager.on('segmentation-update', listener)
+      );
 
-      const _afterRegistrationMemory = process.memoryUsage().heapUsed;
+      // Sanity: they really were attached, so the check below is meaningful.
+      testEnv.mockSocket.__simulateSegmentationUpdate({
+        imageId: 'image-attached',
+        projectId: 'leak-test',
+        status: 'processing',
+        timestamp: Date.now(),
+      });
+      listeners.forEach((listener, i) =>
+        expect(
+          listener,
+          `listener ${i} was never attached`
+        ).toHaveBeenCalledTimes(1)
+      );
 
-      // Remove all listeners
-      listeners.forEach(listener => {
-        wsManager.off('segmentation-update', listener);
+      listeners.forEach(listener =>
+        wsManager.off('segmentation-update', listener)
+      );
+
+      testEnv.mockSocket.__simulateSegmentationUpdate({
+        imageId: 'image-after-off',
+        projectId: 'leak-test',
+        status: 'completed',
+        timestamp: Date.now(),
       });
 
-      const afterRemovalMemory = process.memoryUsage().heapUsed;
-
-      // Memory after removal should be reasonable (within 20MB for 1000 vi.fn() mocks)
-      // v8 GC is non-deterministic; we just verify no unbounded growth
-      const memoryIncrease = afterRemovalMemory - initialMemoryUsage;
-      expect(memoryIncrease).toBeLessThan(20 * 1024 * 1024); // Less than 20MB increase
+      // Still exactly 1 — none of the 1000 survived off().
+      listeners.forEach((listener, i) =>
+        expect(
+          listener,
+          `listener ${i} is still attached`
+        ).toHaveBeenCalledTimes(1)
+      );
     });
 
     it('should properly clean up resources on repeated connect/disconnect', async () => {
@@ -288,8 +286,6 @@ describe('WebSocket Performance Tests', () => {
       wsManager.on('notification', notificationListener);
       wsManager.on('system-message', systemMessageListener);
 
-      const startTime = performance.now();
-
       // Send mixed high-frequency events
       for (let i = 0; i < 1000; i++) {
         const eventType = i % 4;
@@ -318,15 +314,11 @@ describe('WebSocket Performance Tests', () => {
         }
       }
 
-      const endTime = performance.now();
-
       // Verify all events were processed
       expect(segmentationListener).toHaveBeenCalledTimes(250);
       expect(queueStatsListener).toHaveBeenCalledTimes(250);
       expect(notificationListener).toHaveBeenCalledTimes(250);
       expect(systemMessageListener).toHaveBeenCalledTimes(250);
-
-      expect(endTime - startTime).toBeLessThan(2500); // load-tolerant ceiling
     });
 
     it('should handle rapid project room switching efficiently', async () => {
@@ -335,20 +327,14 @@ describe('WebSocket Performance Tests', () => {
       await testEnv.scenarios.simulateSuccessfulConnection();
       await connectPromise;
 
-      const startTime = performance.now();
-
       // Rapidly switch between 100 project rooms
       for (let i = 0; i < 100; i++) {
         wsManager.joinProject(`project-${i}`);
         wsManager.leaveProject(`project-${i}`);
       }
 
-      const endTime = performance.now();
-
       // Verify all operations were emitted
       expect(testEnv.mockSocket.emit).toHaveBeenCalledTimes(200); // 100 joins + 100 leaves
-
-      expect(endTime - startTime).toBeLessThan(2000); // load-tolerant ceiling
     });
 
     it('should maintain stability during extended operation simulation', async () => {
@@ -359,8 +345,6 @@ describe('WebSocket Performance Tests', () => {
 
       const segmentationListener = vi.fn();
       wsManager.on('segmentation-update', segmentationListener);
-
-      const startTime = performance.now();
 
       // Simulate 24 hours of processing (compressed into rapid events)
       // Assume 1 update every 10 seconds ≈ 8600 updates per day (86 batches × 100)
@@ -386,10 +370,7 @@ describe('WebSocket Performance Tests', () => {
         }
       }
 
-      const endTime = performance.now();
-
       expect(segmentationListener).toHaveBeenCalledTimes(totalUpdates);
-      expect(endTime - startTime).toBeLessThan(2000); // load-tolerant ceiling: wall-clock budgets inflate under V8 coverage on CI
 
       // Verify WebSocket manager is still in good state
       expect(wsManager.isConnected).toBe(true);

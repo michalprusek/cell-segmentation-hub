@@ -637,14 +637,22 @@ describe('CanvasPolygon', () => {
         })),
       });
 
-      const startTime = performance.now();
       renderPolygonInSvg(
         <CanvasPolygon {...defaultProps} polygon={complexPolygon} />
       );
-      const renderTime = performance.now() - startTime;
 
       expect(screen.getByTestId('complex-polygon')).toBeInTheDocument();
-      expect(renderTime).toBeLessThan(2000); // load-tolerant ceiling: wall-clock budgets inflate under V8 coverage on CI
+      // The `expect(renderTime).toBeLessThan(2000)` that used to sit here was
+      // dropped: it was a ceiling ~400x the real cost of one jsdom render, so
+      // it could only fail on a hang, which the test timeout already catches.
+      // Assert instead that all 100 vertices survived into the path — that is
+      // the claim "handles many vertices" is actually making.
+      const path = screen
+        .getByTestId('complex-polygon')
+        .querySelector('path[d]');
+      expect(path).not.toBeNull();
+      // 1 moveto + 99 lineto commands for a closed 100-gon.
+      expect(path!.getAttribute('d')!.match(/L/g)).toHaveLength(99);
     });
 
     it('updates efficiently when zoom changes', () => {
@@ -826,6 +834,109 @@ describe('CanvasPolygon', () => {
 
       const polygonElement = screen.getByTestId('test-polygon');
       expect(polygonElement).toBeInTheDocument();
+    });
+  });
+
+  /**
+   * Regression: the drag index is an index into the polygon's RAW points array,
+   * but the SVG path is built from the COMPACTED `validPoints`. When a
+   * non-finite point earlier in the array is filtered out, the two disagree, and
+   * dragging a vertex either moved the wrong path point or moved none while the
+   * handle followed the cursor.
+   *
+   * Found by code review of the Number.isFinite fix (2026-09-04), which made the
+   * misalignment reachable for ±Infinity as well as NaN.
+   */
+  describe('drag index vs filtered points', () => {
+    const dragOffset = { x: 100, y: 200 };
+
+    const renderWithDrag = (
+      points: { x: number; y: number }[],
+      vertexIndex: number
+    ) =>
+      renderPolygonInSvg(
+        <CanvasPolygon
+          {...defaultProps}
+          polygon={createMockPolygon({ id: 'drag-poly', points })}
+          vertexDragState={{
+            isDragging: true,
+            polygonId: 'drag-poly',
+            vertexIndex,
+            startPoint: null,
+            currentPoint: null,
+            dragOffset,
+          }}
+        />
+      );
+
+    const pathOf = (container: HTMLElement) =>
+      container
+        .querySelector('[data-testid="drag-poly"] path[d]')!
+        .getAttribute('d')!;
+
+    it('offsets the dragged point when nothing is filtered', () => {
+      // Control: with all points finite, raw index 2 == compacted index 2.
+      const { container } = renderWithDrag(
+        [
+          { x: 0, y: 0 },
+          { x: 10, y: 0 },
+          { x: 20, y: 0 },
+          { x: 30, y: 0 },
+        ],
+        2
+      );
+
+      expect(pathOf(container)).toBe('M0,0 L10,0 L120,200 L30,0 Z');
+    });
+
+    it('offsets the SAME point when an earlier point was filtered out', () => {
+      // Raw index 2 is still (20,0) even though raw index 1 is dropped, so the
+      // compacted array is [(0,0), (20,0), (30,0), (40,0)] and the dragged point
+      // sits at compacted index 1. Indexing the compacted array with the raw
+      // index would have moved (30,0) instead.
+      const { container } = renderWithDrag(
+        [
+          { x: 0, y: 0 },
+          { x: NaN, y: 0 },
+          { x: 20, y: 0 },
+          { x: 30, y: 0 },
+          { x: 40, y: 0 },
+        ],
+        2
+      );
+
+      expect(pathOf(container)).toBe('M0,0 L120,200 L30,0 L40,0 Z');
+    });
+
+    it('offsets the correct point when the filtered point is ±Infinity', () => {
+      const { container } = renderWithDrag(
+        [
+          { x: 0, y: 0 },
+          { x: Infinity, y: 0 },
+          { x: 20, y: 0 },
+          { x: 30, y: 0 },
+          { x: 40, y: 0 },
+        ],
+        3
+      );
+
+      // Raw index 3 is (30,0); it lands at compacted index 2.
+      expect(pathOf(container)).toBe('M0,0 L20,0 L130,200 L40,0 Z');
+    });
+
+    it('moves nothing when the dragged index was itself filtered out', () => {
+      // Raw index 1 is the NaN point, which never reaches the path at all.
+      const { container } = renderWithDrag(
+        [
+          { x: 0, y: 0 },
+          { x: NaN, y: 0 },
+          { x: 20, y: 0 },
+          { x: 30, y: 0 },
+        ],
+        1
+      );
+
+      expect(pathOf(container)).toBe('M0,0 L20,0 L30,0 Z');
     });
   });
 });

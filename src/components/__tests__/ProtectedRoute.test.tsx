@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { act, screen } from '@testing-library/react';
 import { render } from '@/test/utils/test-utils';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import React from 'react';
@@ -36,17 +36,53 @@ vi.mock('@/contexts/exports', async () => {
 // Mock components
 const MockProtectedComponent = () => <div>Protected Content</div>;
 
-// Helper: wait for the 200ms grace period to pass and React to re-render
-// Uses waitFor which polls, so this works with real timers.
-const GRACE_PERIOD_MS = 300; // slightly more than the 200ms grace period
+/**
+ * ProtectedRoute.tsx holds a deliberate 200ms `gracePeriod` timer before it
+ * will render children or redirect. Every test below has to get past it.
+ *
+ * This used to be done with `waitFor(..., { timeout: 300 })` — a wall-clock
+ * budget of 300ms against a component that is not allowed to answer for 200ms,
+ * leaving ~100ms of headroom for a full render. On a loaded box that lost:
+ * measured 4 failures in 5 runs on a clean tree.
+ *
+ * That is NOT a threshold to widen. Raising 300 to 1000 would leave a second
+ * hard-coded number to drift out of sync with `gracePeriod`, and would still be
+ * a coin flip under enough load. Use fake timers and step over the grace period
+ * deterministically instead: the test then does not depend on wall-clock at all.
+ */
+const GRACE_PERIOD_MS = 200; // MUST match the setTimeout in ProtectedRoute.tsx
+
+/**
+ * Advance past the grace period and flush the resulting React work.
+ *
+ * The first act() is load-bearing and easy to get wrong: React 18 runs passive
+ * effects asynchronously, so at the moment `render()` returns, the grace-period
+ * setTimeout does NOT exist yet (verified with vi.getTimerCount() — it reports
+ * 0 before this flush and 1 after). Advancing the clock first would therefore
+ * advance past nothing, and the component would sit in its loading state
+ * forever. Flush effects, THEN advance, THEN flush the resulting re-render.
+ */
+const advancePastGracePeriod = async () => {
+  // 1. let mount effects run, so the grace-period timer is actually scheduled
+  await act(async () => {});
+  // 2. step over it deterministically — no wall clock involved
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(GRACE_PERIOD_MS);
+  });
+};
 
 describe('ProtectedRoute', () => {
   beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     vi.clearAllMocks();
     mockAuth.user = null;
     mockAuth.loading = false;
     mockAuth.isAuthenticated = false;
     mockNavigate.mockReset();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('should render protected content when authenticated', async () => {
@@ -60,10 +96,8 @@ describe('ProtectedRoute', () => {
     );
 
     // Wait for grace period to expire
-    await waitFor(
-      () => expect(screen.getByText('Protected Content')).toBeInTheDocument(),
-      { timeout: GRACE_PERIOD_MS }
-    );
+    await advancePastGracePeriod();
+    expect(screen.getByText('Protected Content')).toBeInTheDocument();
   });
 
   it('should show redirecting message when not authenticated', async () => {
@@ -76,20 +110,15 @@ describe('ProtectedRoute', () => {
       </ProtectedRoute>
     );
 
-    await waitFor(
-      () =>
-        expect(
-          screen.getByText('Redirecting to sign-in...')
-        ).toBeInTheDocument(),
-      { timeout: GRACE_PERIOD_MS }
-    );
+    await advancePastGracePeriod();
+    expect(screen.getByText('Redirecting to sign-in...')).toBeInTheDocument();
 
-    await waitFor(() => {
-      expect(mockNavigate).toHaveBeenCalledWith(
-        '/sign-in?returnTo=%2Fprotected',
-        { replace: true }
-      );
-    });
+    expect(mockNavigate).toHaveBeenCalledWith(
+      '/sign-in?returnTo=%2Fprotected',
+      {
+        replace: true,
+      }
+    );
   });
 
   it('should show loading state when authentication is being checked', () => {
@@ -133,10 +162,8 @@ describe('ProtectedRoute', () => {
       </ProtectedRoute>
     );
 
-    await waitFor(
-      () => expect(screen.getByText('Child 1')).toBeInTheDocument(),
-      { timeout: GRACE_PERIOD_MS }
-    );
+    await advancePastGracePeriod();
+    expect(screen.getByText('Child 1')).toBeInTheDocument();
     expect(screen.getByText('Child 2')).toBeInTheDocument();
     expect(screen.getByText('Child 3')).toBeInTheDocument();
   });
@@ -151,17 +178,10 @@ describe('ProtectedRoute', () => {
       </ProtectedRoute>
     );
 
-    await waitFor(
-      () =>
-        expect(
-          screen.getByText('Redirecting to sign-in...')
-        ).toBeInTheDocument(),
-      { timeout: GRACE_PERIOD_MS }
-    );
+    await advancePastGracePeriod();
+    expect(screen.getByText('Redirecting to sign-in...')).toBeInTheDocument();
 
-    await waitFor(() => {
-      expect(mockNavigate).toHaveBeenCalled();
-    });
+    expect(mockNavigate).toHaveBeenCalled();
   });
 
   it('should handle authentication state transitions', async () => {
@@ -174,10 +194,8 @@ describe('ProtectedRoute', () => {
       </ProtectedRoute>
     );
 
-    await waitFor(
-      () => expect(screen.getByText('Protected Content')).toBeInTheDocument(),
-      { timeout: GRACE_PERIOD_MS }
-    );
+    await advancePastGracePeriod();
+    expect(screen.getByText('Protected Content')).toBeInTheDocument();
 
     // Simulate logout
     mockAuth.isAuthenticated = false;
@@ -202,14 +220,12 @@ describe('ProtectedRoute', () => {
       </ProtectedRoute>
     );
 
-    await waitFor(
-      () => {
-        expect(mockNavigate).toHaveBeenCalledWith(
-          '/sign-in?returnTo=%2Fprotected',
-          { replace: true }
-        );
-      },
-      { timeout: GRACE_PERIOD_MS }
+    await advancePastGracePeriod();
+    expect(mockNavigate).toHaveBeenCalledWith(
+      '/sign-in?returnTo=%2Fprotected',
+      {
+        replace: true,
+      }
     );
   });
 
@@ -223,16 +239,9 @@ describe('ProtectedRoute', () => {
       </ProtectedRoute>
     );
 
-    await waitFor(
-      () =>
-        expect(
-          screen.getByText('Redirecting to sign-in...')
-        ).toBeInTheDocument(),
-      { timeout: GRACE_PERIOD_MS }
-    );
+    await advancePastGracePeriod();
+    expect(screen.getByText('Redirecting to sign-in...')).toBeInTheDocument();
 
-    await waitFor(() => {
-      expect(mockNavigate).toHaveBeenCalled();
-    });
+    expect(mockNavigate).toHaveBeenCalled();
   });
 });

@@ -532,66 +532,6 @@ export const createWebSocketMocks = () => {
 };
 
 /**
- * Performance testing utilities for complex operations
- */
-export const createPerformanceTestUtils = () => {
-  const measureRenderTime = async (
-    renderOperation: () => void,
-    iterations: number = 10
-  ): Promise<{
-    averageTime: number;
-    minTime: number;
-    maxTime: number;
-    fps: number;
-  }> => {
-    const times: number[] = [];
-
-    for (let i = 0; i < iterations; i++) {
-      const start = performance.now();
-      renderOperation();
-      const end = performance.now();
-      times.push(end - start);
-    }
-
-    const averageTime = times.reduce((sum, time) => sum + time, 0) / iterations;
-    const minTime = Math.min(...times);
-    const maxTime = Math.max(...times);
-    const fps = 1000 / averageTime;
-
-    return { averageTime, minTime, maxTime, fps };
-  };
-
-  const measureMemoryUsage = (): {
-    usedJSHeapSize: number;
-    totalJSHeapSize: number;
-    jsHeapSizeLimit: number;
-  } => {
-    // Guard for non-Chrome browsers where performance.memory doesn't exist
-    if (typeof performance === 'undefined' || !('memory' in performance)) {
-      return {
-        usedJSHeapSize: 0,
-        totalJSHeapSize: 0,
-        jsHeapSizeLimit: 0,
-      };
-    }
-
-    // @ts-expect-error - performance.memory exists in Chrome
-    const memory = performance.memory;
-
-    return {
-      usedJSHeapSize: memory?.usedJSHeapSize || 0,
-      totalJSHeapSize: memory?.totalJSHeapSize || 0,
-      jsHeapSizeLimit: memory?.jsHeapSizeLimit || 0,
-    };
-  };
-
-  return {
-    measureRenderTime,
-    measureMemoryUsage,
-  };
-};
-
-/**
  * Mock error scenarios for testing error handling
  */
 export const createErrorScenarios = () => {

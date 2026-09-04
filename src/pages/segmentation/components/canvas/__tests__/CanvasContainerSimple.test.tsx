@@ -300,8 +300,6 @@ describe('CanvasContainer - Core Functionality', () => {
     it('handles multiple re-renders efficiently', () => {
       const { rerender } = render(<CanvasContainer {...defaultProps} />);
 
-      const startTime = performance.now();
-
       // Multiple re-renders with different props
       for (let i = 0; i < 10; i++) {
         const editModes = [
@@ -319,10 +317,17 @@ describe('CanvasContainer - Core Functionality', () => {
         );
       }
 
-      const totalTime = performance.now() - startTime;
-      // Verify that re-renders complete successfully
-      expect(Number.isFinite(totalTime)).toBe(true);
+      // `expect(Number.isFinite(totalTime)).toBe(true)` used to stand here. A
+      // subtraction of two performance.now() readings is finite by
+      // construction, so that assertion was a tautology. i ends at 9, so the
+      // last rerender used editModes[9 % 4] = editModes[1] = EditVertices with
+      // loading = (9 % 2 === 0) = false — assert it actually landed there.
       expect(screen.getByTestId('canvas-container')).toBeInTheDocument();
+      expect(screen.getByTestId('canvas-container')).toHaveAttribute(
+        'data-edit-mode',
+        String(EditMode.EditVertices)
+      );
+      expect(screen.queryByTestId('canvas-loading')).toBeNull();
     });
 
     it('handles missing optional props gracefully', () => {
