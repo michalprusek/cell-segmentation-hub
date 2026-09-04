@@ -3125,7 +3125,8 @@ export default {
     cannotImpersonateSelf: "C'est votre propre compte.",
     cannotImpersonateAdmin:
       "Impossible de se connecter en tant qu'un autre administrateur.",
-    impersonateFailed: 'Impossible de se connecter en tant que cet utilisateur.',
+    impersonateFailed:
+      'Impossible de se connecter en tant que cet utilisateur.',
     loadUsersFailed: "La liste des utilisateurs n'a pas pu être chargée.",
     noUsersFound: 'Aucun utilisateur ne correspond à cette recherche.',
     pageOf: 'Page {{page}} sur {{total}}',
@@ -3137,6 +3138,7 @@ export default {
     impersonationBannerViewing: 'Vous consultez le compte de',
     impersonationBannerSignedInAs: '— vous êtes connecté en tant que',
     returnToUserList: 'Revenir à la liste des utilisateurs',
-    stopImpersonationFailed: "La session d'assistance n'a pas pu être terminée.",
+    stopImpersonationFailed:
+      "La session d'assistance n'a pas pu être terminée.",
   },
 };
