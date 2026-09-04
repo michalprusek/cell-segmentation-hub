@@ -15,20 +15,22 @@ A comprehensive Docker optimization system has been implemented to solve disk sp
 ```bash
 make build
 docker compose build
-docker compose -f docker-compose.blue.yml build --no-cache
 ```
 
 **NEW Commands (Use These):**
 
 ```bash
-make build-optimized              # Replaces 'make build'
-make build-service SERVICE=frontend  # Build specific service
-make build-clean                 # Full rebuild without cache
-
-# Or use scripts directly:
-./scripts/smart-docker-build.sh --env blue
-./scripts/smart-docker-build.sh --service backend
+make build-optimized                 # Build every production image
+make build-service SERVICE=frontend  # Build a single service
+make build-clean                     # Full rebuild without cache
 ```
+
+> **`scripts/smart-docker-build.sh` no longer works.** Every environment it
+> can select names a Compose file that was deleted with blue-green on
+> 2026-05-15 (`--env blue` → `docker-compose.blue.yml`, `--env green` →
+> `docker-compose.green.yml`) or one that is not tracked (its `development`
+> default → `docker-compose.yml`). Use the `make` targets above, which drive
+> `docker-compose.production.yml` directly.
 
 ### 2. Cleanup Commands
 
@@ -45,21 +47,21 @@ make deep-clean          # Aggressive cleanup
 
 ### 3. Files Updated
 
-All docker-compose files now use optimized Dockerfiles automatically:
-
-- `docker-compose.yml` ✅ Updated
-- `docker-compose.blue.yml` ✅ Updated
-- `docker-compose.green.yml` ✅ Updated
+`docker-compose.production.yml` builds every service from the optimized
+Dockerfiles. It is the only Compose file that describes the running stack;
+`docker-compose.blue.yml` and `docker-compose.green.yml` were deleted with
+blue-green on 2026-05-15.
 
 ### 4. Deprecated Files
 
-These files are kept for reference but SHOULD NOT be used:
-
-- `docker/frontend.Dockerfile` → Use `docker/frontend.optimized.Dockerfile`
-- `docker/backend.Dockerfile` → Use `docker/backend.optimized.Dockerfile`
-- `docker/ml.Dockerfile` → Use `docker/ml.optimized.Dockerfile`
-- `docker/frontend.prod.Dockerfile` → Use `docker/frontend.optimized.Dockerfile`
-- `docker/backend.prod.Dockerfile` → Use `docker/backend.optimized.Dockerfile`
+Every Dockerfile earlier revisions of this page told you to migrate away
+from — `docker/frontend.Dockerfile`, `docker/backend.Dockerfile`,
+`docker/ml.Dockerfile`, `docker/frontend.prod.Dockerfile`,
+`docker/backend.prod.Dockerfile` — has since been deleted. `docker/` now holds
+`frontend.optimized.Dockerfile`, `backend.optimized.Dockerfile`,
+`ml.optimized.Dockerfile`, `ml-gpu.Dockerfile` and `essays.Dockerfile`, and
+`docker-compose.production.yml` already points at the right one per service.
+There is nothing left to migrate.
 
 ## Benefits of New System
 
@@ -94,24 +96,25 @@ make docker-usage
 # Build with optimization
 make build-optimized
 
-# Start services
-make up
+# Start services (no docker-compose.yml is tracked, so pass the production one)
+docker compose -f docker-compose.production.yml --env-file .env.production up -d
 ```
 
 ### Production Deployment
 
 ```bash
-# 1. Check active environment
-cat .active-environment
+# 1. Build the changed service
+make build-service SERVICE=backend
 
-# 2. Build for production
-./scripts/smart-docker-build.sh --env blue
-
-# 3. Verify sizes
+# 2. Verify sizes
 make docker-usage
 
-# 4. Deploy
-docker compose -f docker-compose.blue.yml up -d
+# 3. Recreate it (repeat per service)
+docker compose -f docker-compose.production.yml --env-file .env.production \
+  up -d --no-deps --force-recreate backend
+
+# 4. Flush nginx's upstream DNS cache after a backend recreate
+docker restart spheroseg-nginx
 ```
 
 ### When Low on Space

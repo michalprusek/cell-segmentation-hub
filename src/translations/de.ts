@@ -1134,13 +1134,13 @@ export default {
         clickVertexMt:
           'Klicken Sie auf ein Mikrotubulus-Ende, um es zu verlängern',
         addPointsMt:
-          'Klicken zum Hinzufügen von Punkten, dann Enter zum Abschließen',
+          'Klicken zum Hinzufügen von Punkten, dann Enter oder Doppelklick zum Abschließen',
         addPoints:
           'Klicken Sie, um Punkte hinzuzufügen, dann klicken Sie auf einen anderen Eckpunkt zum Abschließen. Klicken Sie direkt auf einen anderen Eckpunkt ohne Punkte hinzuzufügen, um alle Punkte dazwischen zu entfernen.',
         holdShift: 'SHIFT halten für automatisches Hinzufügen von Punkten',
         cancel: 'Drücken Sie ESC zum Abbrechen',
         joinHint:
-          'Klicke auf den Endpunkt einer anderen Polylinie derselben Klasse, um sie zu verbinden',
+          'Klicke auf den Endpunkt einer anderen Polylinie, um sie zu verbinden — die Labels müssen übereinstimmen, außer eine Seite hat keines',
       },
       editVertices: {
         selectPolygon:
@@ -1308,6 +1308,8 @@ export default {
       cannotDeleteVertex:
         'Kann Scheitelpunkt nicht löschen - Polygon benötigt mindestens 3 Punkte',
       vertexDeleted: 'Scheitelpunkt erfolgreich gelöscht',
+      joinClassMismatch:
+        'Diese Polylinien haben unterschiedliche Labels und können nicht verbunden werden',
       started: 'Segmentierung hat begonnen',
       completed: 'Segmentierung erfolgreich abgeschlossen',
       completedWithCount:
@@ -3111,5 +3113,33 @@ export default {
       changeClass: 'Klasse ändern',
       delete: 'Polygon löschen',
     },
+  },
+  admin: {
+    navLabel: 'Administration',
+    usersTitle: 'Registrierte Benutzer',
+    usersDescription:
+      'Wählen Sie einen Benutzer aus, um sich zur Fehlersuche und Unterstützung als dieser anzumelden. Jede Sitzung wird im Audit-Log festgehalten.',
+    searchPlaceholder: 'Nach E-Mail oder Benutzername suchen',
+    columnUsername: 'Benutzername',
+    columnProjects: 'Projekte',
+    columnRegistered: 'Registriert',
+    badgeAdmin: 'Administrator',
+    logInAs: 'Anmelden als',
+    cannotImpersonateSelf: 'Das ist Ihr eigenes Konto.',
+    cannotImpersonateAdmin:
+      'Administratorkonten können nicht übernommen werden.',
+    impersonateFailed: 'Anmeldung als dieser Benutzer nicht möglich.',
+    loadUsersFailed: 'Die Benutzerliste konnte nicht geladen werden.',
+    noUsersFound: 'Kein Benutzer entspricht dieser Suche.',
+    pageOf: 'Seite {{page}} von {{total}}',
+    nextPage: 'Weiter',
+    notAuthorizedTitle: 'Administratorrechte erforderlich',
+    notAuthorizedDescription:
+      'Diese Seite ist nur für Plattform-Administratoren verfügbar.',
+    impersonationBannerTitle: 'Support-Sitzung.',
+    impersonationBannerViewing: 'Sie sehen das Konto von',
+    impersonationBannerSignedInAs: '— angemeldet als',
+    returnToUserList: 'Zurück zur Benutzerliste',
+    stopImpersonationFailed: 'Die Support-Sitzung konnte nicht beendet werden.',
   },
 };

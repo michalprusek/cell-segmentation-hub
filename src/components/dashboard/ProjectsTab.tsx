@@ -14,6 +14,9 @@ interface ProjectsTabProps {
   onProjectUpdate?: (projectId: string, action: string) => void;
   onRequestProjectMove?: (projectId: string) => void;
   hasAnyFolder?: boolean;
+  /** Folder currently open on the dashboard (null at the root). Forwarded so
+   *  the in-grid and list-mode create cards file the new project here. */
+  folderId?: string | null;
   onOpenFolder?: (folderId: string) => void;
   onRenameFolder?: (folderId: string, currentName: string) => void;
   onMoveFolder?: (folderId: string) => void;
@@ -30,6 +33,7 @@ const ProjectsTab = ({
   onProjectUpdate,
   onRequestProjectMove,
   hasAnyFolder,
+  folderId,
   onOpenFolder,
   onRenameFolder,
   onMoveFolder,
@@ -47,6 +51,7 @@ const ProjectsTab = ({
       onProjectUpdate={onProjectUpdate}
       onRequestProjectMove={onRequestProjectMove}
       hasAnyFolder={hasAnyFolder}
+      folderId={folderId}
       onOpenFolder={onOpenFolder}
       onRenameFolder={onRenameFolder}
       onMoveFolder={onMoveFolder}

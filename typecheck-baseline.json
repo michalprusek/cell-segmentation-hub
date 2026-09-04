@@ -7,8 +7,8 @@
   "totals": {
     "tsconfig.app.json": 377,
     "tsconfig.node.json": 21,
-    "tsconfig.test.json": 1207,
-    "all": 1605
+    "tsconfig.test.json": 1210,
+    "all": 1608
   },
   "projects": {
     "tsconfig.app.json": {
@@ -402,7 +402,7 @@
         "TS2722: Cannot invoke an object which is possibly 'undefined'.": 8
       },
       "src/test-utils/test-components.tsx": {
-        "TS2322: Type '{ user: { id: string; email: string; name: string; }; profile: { id: string; userId: string; bio: string; avatarUrl: string; }; token: string; loading: boolean; isAuthenticated: boolean; signIn: Mock<Procedure>; signUp: Mock<...>; signOut: Mock<...>; deleteAccount: Mock<...>; refreshProfile: Mock<...>; }' is not assignable to type 'AuthContextType'.": 1
+        "TS2322: Type '<type elided by tsc>' is not assignable to type 'AuthContextType'.": 1
       },
       "src/test-utils/test-helpers.ts": {
         "TS2724: '\"@/pages/segmentation/types\"' has no exported member named '_EditMode'. Did you mean 'EditMode'?": 1
@@ -421,7 +421,7 @@
         "TS2339: Property '__REACT_DEVTOOLS_GLOBAL_HOOK__' does not exist on type 'Window & typeof globalThis'.": 1,
         "TS2739: Type 'Mock<Procedure>' is missing the following properties from type '{new (url: URL | string, protocols?: string | string[] | undefined): WebSocket; prototype: WebSocket; readonly CONNECTING: 0; readonly OPEN: 1; readonly CLOSING: 2; readonly CLOSED: 3; }': CONNECTING, OPEN, CLOSING, CLOSED": 1,
         "TS2739: Type '{ getItem: Mock<Procedure>; setItem: Mock<Procedure>; removeItem: Mock<Procedure>; clear: Mock<Procedure>; }' is missing the following properties from type 'Storage': length, key": 1,
-        "TS2739: Type '{getItem: Mock<\"system\" | (key: string) => \"en\" | null>; setItem: Mock<Procedure>; removeItem: Mock<Procedure>; clear: Mock<Procedure>; }' is missing the following properties from type 'Storage': length, key": 1
+        "TS2739: Type '{getItem: Mock<\"en\" | (key: string) => \"system\" | null>; setItem: Mock<Procedure>; removeItem: Mock<Procedure>; clear: Mock<Procedure>; }' is missing the following properties from type 'Storage': length, key": 1
       }
     },
     "tsconfig.node.json": {
@@ -445,11 +445,13 @@
     "tsconfig.test.json": {
       "src/App.tsx": {
         "TS2322: Type '{ children: Element; future: { v7_startTransition: boolean; v7_relativeSplatPath: boolean; }; }' is not assignable to type 'IntrinsicAttributes & BrowserRouterProps'.": 1,
+        "TS6307: File 'src/components/AdminRoute.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
         "TS6307: File 'src/components/AuthToastProvider.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
         "TS6307: File 'src/components/ErrorBoundary.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
         "TS6307: File 'src/components/FloatingUploadProgress.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
         "TS6307: File 'src/components/PageLoadingFallback.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
         "TS6307: File 'src/components/ProtectedRoute.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
+        "TS6307: File 'src/components/admin/ImpersonationBanner.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
         "TS6307: File 'src/components/ui/sonner.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
         "TS6307: File 'src/components/ui/tooltip.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
         "TS6307: File 'src/contexts/ModelContext.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
@@ -471,6 +473,7 @@
         "TS6307: File 'src/pages/SignIn.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
         "TS6307: File 'src/pages/SignUp.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
         "TS6307: File 'src/pages/TermsOfService.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
+        "TS6307: File 'src/pages/admin/AdminUsers.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
         "TS6307: File 'src/pages/export/ProjectExport.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
         "TS6307: File 'src/pages/segmentation/SegmentationEditor.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
         "TS6307: File 'src/pages/segmenter/SegmenterDashboard.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
@@ -823,8 +826,8 @@
         "TS2345: Argument of type '{}' is not assignable to parameter of type 'Profile'.": 1
       },
       "src/contexts/__tests__/WebSocketContext.test.tsx": {
-        "TS2740: Type '{ user: null; login: Mock<Procedure>; logout: Mock<Procedure>; register: Mock<Procedure>; updateProfile: Mock<Procedure>; isLoading: boolean; }' is missing the following properties from type 'AuthContextType': profile, loading, isAuthenticated, signIn, and 4 more.": 1,
-        "TS2740: Type '{ user: { id: string; name: string; }; login: Mock<Procedure>; logout: Mock<Procedure>; register: Mock<Procedure>; updateProfile: Mock<Procedure>; isLoading: boolean; }' is missing the following properties from type 'AuthContextType': profile, loading, isAuthenticated, signIn, and 4 more.": 2
+        "TS2740: Type '{ user: null; login: Mock<Procedure>; logout: Mock<Procedure>; register: Mock<Procedure>; updateProfile: Mock<Procedure>; isLoading: boolean; }' is missing the following properties from type 'AuthContextType': profile, loading, isAuthenticated, isAdmin, and 6 more.": 1,
+        "TS2740: Type '{ user: { id: string; name: string; }; login: Mock<Procedure>; logout: Mock<Procedure>; register: Mock<Procedure>; updateProfile: Mock<Procedure>; isLoading: boolean; }' is missing the following properties from type 'AuthContextType': profile, loading, isAuthenticated, isAdmin, and 6 more.": 2
       },
       "src/contexts/__tests__/translationLoader.test.ts": {
         "TS6307: File 'src/contexts/translationLoader.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
@@ -1667,7 +1670,7 @@
         "TS2722: Cannot invoke an object which is possibly 'undefined'.": 8
       },
       "src/test-utils/test-components.tsx": {
-        "TS2322: Type '{ user: { id: string; email: string; name: string; }; profile: { id: string; userId: string; bio: string; avatarUrl: string; }; token: string; loading: boolean; isAuthenticated: boolean; signIn: Mock<Procedure>; signUp: Mock<...>; signOut: Mock<...>; deleteAccount: Mock<...>; refreshProfile: Mock<...>; }' is not assignable to type 'AuthContextType'.": 1
+        "TS2322: Type '<type elided by tsc>' is not assignable to type 'AuthContextType'.": 1
       },
       "src/test-utils/test-helpers.ts": {
         "TS2724: '\"@/pages/segmentation/types\"' has no exported member named '_EditMode'. Did you mean 'EditMode'?": 1
@@ -1718,7 +1721,7 @@
         "TS2304: Cannot find name 'error'.": 2,
         "TS2322: Type 'string[]' is not assignable to type '(\"Alt\" | \"Control\" | \"ControlOrMeta\" | \"Meta\" | \"Shift\")[]'.": 1,
         "TS2349: This expression is not callable.": 5,
-        "TS2353: Object literal may only specify known properties, and 'modifiers' does not exist in type '{ force?: boolean | undefined; noWaitAfter?: boolean | undefined; scroll?: \"auto\" | \"none\" | undefined; signal?: AbortSignal | undefined; sourcePosition?: { x: number; y: number; } | undefined; steps?: number | undefined; targetPosition?: { ...; } | undefined; timeout?: number | undefined; trial?: boolean | undefine...'.": 1
+        "TS2353: Object literal may only specify known properties, and 'modifiers' does not exist in type '{ force?: boolean | undefined; noWaitAfter?: boolean | undefined; scroll?: \"none\" | \"auto\" | undefined; signal?: AbortSignal | undefined; sourcePosition?: { x: number; y: number; } | undefined; steps?: number | undefined; targetPosition?: { ...; } | undefined; timeout?: number | undefined; trial?: boolean | undefine...'.": 1
       },
       "tests/e2e/page-objects/SignInPage.ts": {
         "TS2550: Property 'any' does not exist on type 'PromiseConstructor'. Do you need to change your target library? Try changing the 'lib' compiler option to 'es2021' or later.": 1
@@ -1738,7 +1741,7 @@
       },
       "tests/e2e/segmentation-editor-enhanced.spec.ts": {
         "TS2353: Object literal may only specify known properties, and 'clickCount' does not exist in type '<type elided by tsc>'.": 1,
-        "TS2353: Object literal may only specify known properties, and 'modifiers' does not exist in type '{ force?: boolean | undefined; noWaitAfter?: boolean | undefined; scroll?: \"auto\" | \"none\" | undefined; signal?: AbortSignal | undefined; sourcePosition?: { x: number; y: number; } | undefined; steps?: number | undefined; targetPosition?: { ...; } | undefined; timeout?: number | undefined; trial?: boolean | undefine...'.": 1
+        "TS2353: Object literal may only specify known properties, and 'modifiers' does not exist in type '{ force?: boolean | undefined; noWaitAfter?: boolean | undefined; scroll?: \"none\" | \"auto\" | undefined; signal?: AbortSignal | undefined; sourcePosition?: { x: number; y: number; } | undefined; steps?: number | undefined; targetPosition?: { ...; } | undefined; timeout?: number | undefined; trial?: boolean | undefine...'.": 1
       },
       "tests/e2e/segmentation-workflow.spec.ts": {
         "TS2339: Property 'waitForDownload' does not exist on type 'Page'.": 1

@@ -8,7 +8,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import CanvasPolygon from '../CanvasPolygon';
 import { createMockPolygon } from '@/test-utils/segmentationTestUtils';
-import type { VertexDragState } from '@/pages/segmentation/types';
+import { EditMode, type VertexDragState } from '@/pages/segmentation/types';
 
 // Mock the heavy dependencies
 vi.mock('../PolygonVertices', () => ({
@@ -358,6 +358,68 @@ describe('CanvasPolygon', () => {
       expect(onEditPolygon).toHaveBeenCalledWith('test-polygon');
     });
 
+    // While the canvas is drawing, the double-click is the COMMIT gesture and
+    // the canvas owns it. This used to `stopPropagation()` unconditionally, so
+    // finishing a microtubule extension anywhere over an existing filament
+    // (the transparent hit stroke is 12x the rendered width, min 6 px) threw
+    // the extension away and jumped to EditVertices instead.
+    it.each([
+      ['CreatePolyline', EditMode.CreatePolyline],
+      ['AddPoints', EditMode.AddPoints],
+      ['CreatePolygon', EditMode.CreatePolygon],
+    ])(
+      'lets a double-click bubble to the canvas in %s mode',
+      (_name, editMode) => {
+        const onEditPolygon = vi.fn();
+        const onDoubleClick = vi.fn();
+        render(
+          <svg width="800" height="600" onDoubleClick={onDoubleClick}>
+            <CanvasPolygon
+              {...defaultProps}
+              editMode={editMode}
+              onEditPolygon={onEditPolygon}
+            />
+          </svg>
+        );
+
+        const pathElement = screen
+          .getByTestId('test-polygon')
+          .querySelector('path');
+        fireEvent.doubleClick(pathElement!);
+
+        expect(onEditPolygon).not.toHaveBeenCalled();
+        expect(onDoubleClick).toHaveBeenCalledTimes(1);
+      }
+    );
+
+    it.each([
+      ['View', EditMode.View],
+      ['EditVertices', EditMode.EditVertices],
+    ])(
+      'still edits the shape and stops propagation in %s mode',
+      (_name, editMode) => {
+        const onEditPolygon = vi.fn();
+        const onDoubleClick = vi.fn();
+        render(
+          <svg width="800" height="600" onDoubleClick={onDoubleClick}>
+            <CanvasPolygon
+              {...defaultProps}
+              editMode={editMode}
+              onEditPolygon={onEditPolygon}
+            />
+          </svg>
+        );
+
+        const pathElement = screen
+          .getByTestId('test-polygon')
+          .querySelector('path');
+        fireEvent.doubleClick(pathElement!);
+
+        expect(onEditPolygon).toHaveBeenCalledWith('test-polygon');
+        expect(onDoubleClick).not.toHaveBeenCalled();
+      }
+    );
+
     it('shows context menu on right-click', async () => {
       renderPolygonInSvg(<CanvasPolygon {...defaultProps} isSelected={true} />);
 
@@ -514,6 +576,41 @@ describe('CanvasPolygon', () => {
       rerender(<CanvasPolygon {...defaultProps} />);
 
       expect(screen.getByTestId('test-polygon')).toBeInTheDocument();
+    });
+
+    it('repaints when parent_id changes and nothing else does', () => {
+      // `isInternal = parent_id || type === 'internal'` drives the group class,
+      // the fill/stroke colour and the dash pattern. `type` was in the memo
+      // comparator and `parent_id` was not, so a polygon that gained a parent
+      // while keeping its id, points and type kept painting as external.
+      const orphan = createMockPolygon({
+        id: 'reparented',
+        points: [
+          { x: 10, y: 10 },
+          { x: 50, y: 10 },
+          { x: 50, y: 50 },
+        ],
+      });
+      const { rerender } = renderPolygonInSvg(
+        <CanvasPolygon {...defaultProps} polygon={orphan} />
+      );
+      expect(screen.getByTestId('reparented').getAttribute('class')).toContain(
+        'external'
+      );
+
+      // Same id, same points, same type — only the parent link differs.
+      rerender(
+        <svg width="800" height="600" viewBox="0 0 800 600">
+          <CanvasPolygon
+            {...defaultProps}
+            polygon={{ ...orphan, parent_id: 'outer-1' }}
+          />
+        </svg>
+      );
+
+      const cls = screen.getByTestId('reparented').getAttribute('class') ?? '';
+      expect(cls).toContain('internal');
+      expect(cls).not.toMatch(/\bexternal\b/);
     });
 
     it('handles viewport culling correctly', () => {

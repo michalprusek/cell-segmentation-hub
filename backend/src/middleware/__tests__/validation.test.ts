@@ -24,7 +24,12 @@ vi.mock('../../utils/logger', () => ({
 }));
 
 import { ResponseHelper } from '../../utils/response';
-import { validate, validateFile, validateFiles } from '../validation';
+import {
+  validate,
+  validateFile,
+  validateFiles,
+  validateParams,
+} from '../validation';
 
 // -------------------------------------------------------------------------
 // Helpers
@@ -132,8 +137,19 @@ describe('Validation Middleware', () => {
     });
 
     it('validates against the params target', () => {
-      const schema = z.object({ id: z.string().uuid() });
-      mockReq.params = { id: '123e4567-e89b-12d3-a456-426614174000' };
+      // Express always hands params over as strings, so the coercion is the
+      // whole reason the validated object is written back. Asserting on a
+      // pass-through uuid instead would hold just as well for a middleware
+      // that never touched req.params at all — checked by making the write
+      // skip the params target and watching this stay green.
+      const schema = z.object({
+        id: z.string().uuid(),
+        frameIndex: z.coerce.number().int(),
+      });
+      mockReq.params = {
+        id: '123e4567-e89b-12d3-a456-426614174000',
+        frameIndex: '12',
+      };
 
       validate(schema, 'params')(
         mockReq as Request,
@@ -142,6 +158,10 @@ describe('Validation Middleware', () => {
       );
 
       expect(mockNext).toHaveBeenCalled();
+      expect((mockReq as Request).params).toEqual({
+        id: '123e4567-e89b-12d3-a456-426614174000',
+        frameIndex: 12,
+      });
     });
 
     it('returns validation error when params fail schema', () => {
@@ -171,6 +191,76 @@ describe('Validation Middleware', () => {
 
       expect(ResponseHelper.internalError).toHaveBeenCalled();
       expect(mockNext).not.toHaveBeenCalled();
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // validateParams() — the wholesale replacement, which is a trap
+  // -----------------------------------------------------------------------
+  //
+  // `validate` REPLACES req[target] with the Zod result rather than merging
+  // into it, so `validateParams(schema)` deletes every route param the schema
+  // does not declare. On a two-param route that is a controller reading
+  // `undefined` off req.params with nothing anywhere reporting a problem —
+  // segmenterRoutes.ts carries a comment about being bitten by exactly this on
+  // `/datasets/:id/classes/:classId`.
+  //
+  // It had no test. The two ways it could plausibly be "fixed" — merging into
+  // the existing params, or validating a copy — both leave every other test in
+  // this file green, and both would quietly change what a dozen routes hand
+  // their controllers.
+  describe('validateParams', () => {
+    it('drops a route param the schema does not declare', () => {
+      const schema = z.object({ id: z.string().uuid() });
+      mockReq.params = {
+        id: '123e4567-e89b-12d3-a456-426614174000',
+        classId: 'cls-7',
+      };
+
+      validateParams(schema)(mockReq as Request, mockRes as Response, mockNext);
+
+      expect(mockNext).toHaveBeenCalled();
+      expect((mockReq as Request).params).toEqual({
+        id: '123e4567-e89b-12d3-a456-426614174000',
+      });
+      expect((mockReq as Request).params).not.toHaveProperty('classId');
+    });
+
+    it('keeps every param a schema covering the whole route declares', () => {
+      // The remedy for the case above: name both params. This is the shape the
+      // real /datasets/:id/classes/:classId schema has to have.
+      const schema = z.object({
+        id: z.string().uuid(),
+        classId: z.string().min(1),
+      });
+      mockReq.params = {
+        id: '123e4567-e89b-12d3-a456-426614174000',
+        classId: 'cls-7',
+      };
+
+      validateParams(schema)(mockReq as Request, mockRes as Response, mockNext);
+
+      expect(mockNext).toHaveBeenCalled();
+      expect((mockReq as Request).params).toEqual({
+        id: '123e4567-e89b-12d3-a456-426614174000',
+        classId: 'cls-7',
+      });
+    });
+
+    it('rejects instead of replacing when a declared param fails', () => {
+      const schema = z.object({ id: z.string().uuid() });
+      mockReq.params = { id: 'not-a-uuid', classId: 'cls-7' };
+
+      validateParams(schema)(mockReq as Request, mockRes as Response, mockNext);
+
+      expect(ResponseHelper.validationError).toHaveBeenCalled();
+      expect(mockNext).not.toHaveBeenCalled();
+      // req.params is left exactly as the router built it, so an error
+      // handler further down still sees what was asked for.
+      expect((mockReq as Request).params).toEqual({
+        id: 'not-a-uuid',
+        classId: 'cls-7',
+      });
     });
   });
 

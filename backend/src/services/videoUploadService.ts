@@ -405,7 +405,8 @@ async function finalizeContainer(params: {
     if (!isSafeChannelName(ch.name)) {
       throw new Error(
         `Extractor produced an invalid channel name: "${ch.name}" — must be ` +
-          '1-64 chars of [A-Za-z0-9_-]. Refusing to persist a container the ' +
+          '1-64 chars of [A-Za-z0-9_-] and not the name of an ' +
+          'Object.prototype member. Refusing to persist a container the ' +
           'read gate could never serve back.'
       );
     }

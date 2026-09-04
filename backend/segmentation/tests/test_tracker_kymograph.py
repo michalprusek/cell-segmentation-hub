@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import io
 import os
 import sys
 import tempfile
@@ -2537,3 +2538,161 @@ def test_kymograph_returns_motion_and_pause_phases(client, monkeypatch):
             p["t1"] - p["t0"] for p in phases if p["direction"] != 0
         )
         assert directed == pytest.approx(tracks[0]["total_run_time_frames"])
+
+
+# ---------------------------------------------------------------------------
+#  _render_profiles: one Figure, re-drawn — byte-identical to one per frame
+# ---------------------------------------------------------------------------
+#
+# `profiles` mode renders one matplotlib PNG per kymograph row. Measured on a
+# real 299 x 1251 kymograph (production container 4972cad8, polyline_39,
+# 488 nm) that was 120.9 s — six times the 19.9 s of decoding and sampling the
+# frames it plots — because every row rebuilt a Figure, an Axes and all their
+# ticks. Only the y data and the title change between rows, so the figure is
+# built once and re-drawn.
+#
+# The load-bearing part is `subplots_adjust` back to the rcParams defaults
+# before each `tight_layout`: `tight_layout` solves from the axes' CURRENT
+# position, so on a reused figure it starts from the previous row's answer and
+# is not idempotent. Without the reset, 1 of 30 real frames rendered a
+# different PNG.
+
+
+def _render_profiles_reference(kymo, frames, px_per_column):
+    """The pre-2026-09-04 body, verbatim: a fresh Figure per row."""
+    import matplotlib
+
+    matplotlib.use("Agg")
+    from matplotlib.figure import Figure
+
+    n_samples = int(kymo.shape[1])
+    x_px = np.arange(n_samples, dtype=np.float64) * float(px_per_column)
+    out = []
+    for i, row in enumerate(kymo):
+        fig = Figure(figsize=(6, 3), dpi=100)
+        ax = fig.subplots()
+        ax.plot(x_px, np.asarray(row, dtype=np.float64), color="#2563eb", linewidth=1.0)
+        ax.set_xlabel("Position along microtubule (px)")
+        ax.set_ylabel("Intensity")
+        ax.set_title(f"Frame {int(frames[i].frame)}")
+        ax.margins(x=0)
+        ax.grid(True, alpha=0.3)
+        fig.tight_layout()
+        buf = io.BytesIO()
+        fig.savefig(buf, format="png")
+        out.append(base64.b64encode(buf.getvalue()).decode("ascii"))
+    return out
+
+
+def _profile_frames(n, path):
+    return [
+        tracker_kymograph.KymographFrameInput(
+            frame=i,
+            image_path=str(path),
+            polyline_rc=[[0.0, 0.0], [1.0, 1.0]],
+        )
+        for i in range(n)
+    ]
+
+
+# Row upper bounds that make `tight_layout` non-idempotent on a reused figure.
+#
+# Finding these took a real kymograph. The first fixture written for this test
+# swung each row by a different DECADE, on the theory that wildly different tick
+# labels would stress the layout hardest — and the mutation (dropping the
+# subplotpars reset) SURVIVED it, along with alternating signs, 1e-5/1e5 swings
+# and matplotlib offset-text ranges. Rows 0-29 of a real 299 x 1251 kymograph
+# (production container 4972cad8, polyline_39, 488 nm) then discriminated
+# immediately: 1 of the 30 PNGs changed without the reset. The bounds below are
+# that kymograph's own rows 2 and 3, plus two neighbouring pairs from a sweep
+# that reproduces the same divergence — modest, MT-like intensity ranges, which
+# is what the layout is actually sensitive to.
+_PROFILE_LAYOUT_BOUNDS = [
+    (162.0, 356.1),   # real row 2
+    (158.9, 319.0),   # real row 3 — the one that changed
+    (160.0, 300.0),
+    (160.0, 330.0),
+]
+
+
+def _layout_stressing_kymograph(n_cols=1251):
+    rows = np.empty((len(_PROFILE_LAYOUT_BOUNDS), n_cols), dtype=np.float32)
+    ramp = np.linspace(0.0, 1.0, n_cols)
+    for i, (lo, hi) in enumerate(_PROFILE_LAYOUT_BOUNDS):
+        rows[i] = lo + ramp * (hi - lo)
+    return rows
+
+
+def test_reused_figure_renders_byte_identical_profile_pngs(tmp_path):
+    """The whole claim: one Figure re-drawn == one Figure per row, byte for byte.
+
+    See ``_PROFILE_LAYOUT_BOUNDS`` for why these particular ranges — a fixture
+    that does not make ``tight_layout`` re-solve cannot tell the two apart, and
+    three plausible ones did not.
+    """
+    pytest.importorskip("matplotlib")
+    kymo = _layout_stressing_kymograph()
+    frames = _profile_frames(kymo.shape[0], tmp_path / "unused.png")
+
+    got = tracker_kymograph._render_profiles(kymo, frames, 1.0)
+    want = _render_profiles_reference(kymo, frames, 1.0)
+    assert [p.frame for p in got] == list(range(kymo.shape[0]))
+    for i, (g, w) in enumerate(zip(got, want)):
+        assert g.png_base64 == w, f"frame {i} PNG differs from the per-figure render"
+
+
+def test_profile_fixture_can_actually_detect_a_stale_layout():
+    """Guards the guard: if this fixture ever stops making ``tight_layout``
+    re-solve, the test above would pass with the reset removed and would be
+    measuring nothing. So render it the WRONG way here and require a difference.
+    """
+    pytest.importorskip("matplotlib")
+    import matplotlib
+
+    matplotlib.use("Agg")
+    from matplotlib.figure import Figure
+
+    kymo = _layout_stressing_kymograph()
+    x_px = np.arange(kymo.shape[1], dtype=np.float64)
+    fig = Figure(figsize=(6, 3), dpi=100)
+    ax = fig.subplots()
+    (line,) = ax.plot(x_px, np.zeros(kymo.shape[1]), color="#2563eb", linewidth=1.0)
+    ax.set_xlabel("Position along microtubule (px)")
+    ax.set_ylabel("Intensity")
+    ax.margins(x=0)
+    ax.grid(True, alpha=0.3)
+    stale = []
+    for i, row in enumerate(kymo):
+        line.set_ydata(np.asarray(row, dtype=np.float64))
+        ax.relim()
+        ax.autoscale_view()
+        ax.set_title(f"Frame {i}")
+        # NO subplots_adjust reset — this is the mutant.
+        fig.tight_layout()
+        buf = io.BytesIO()
+        fig.savefig(buf, format="png")
+        stale.append(base64.b64encode(buf.getvalue()).decode("ascii"))
+
+    frames = _profile_frames(kymo.shape[0], Path("unused.png"))
+    reference = _render_profiles_reference(kymo, frames, 1.0)
+    assert any(a != b for a, b in zip(stale, reference)), (
+        "fixture no longer exercises tight_layout's non-idempotency; "
+        "the byte-identity test above would pass with the reset removed"
+    )
+
+
+def test_reused_figure_survives_a_constant_row_and_a_single_column(tmp_path):
+    """Autoscale on a flat row and a degenerate one-column kymograph — the two
+    shapes where `relim`/`autoscale_view` on a reused axes could diverge from a
+    fresh `ax.plot`."""
+    pytest.importorskip("matplotlib")
+    for kymo in (
+        np.full((3, 40), 7.0, dtype=np.float32),
+        np.array([[1.0], [2.0], [3.0]], dtype=np.float32),
+        np.zeros((2, 25), dtype=np.float32),
+    ):
+        frames = _profile_frames(kymo.shape[0], tmp_path / "unused.png")
+        got = tracker_kymograph._render_profiles(kymo, frames, 1.0)
+        want = _render_profiles_reference(kymo, frames, 1.0)
+        for g, w in zip(got, want):
+            assert g.png_base64 == w

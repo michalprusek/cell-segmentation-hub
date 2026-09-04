@@ -414,14 +414,28 @@ const CanvasPolygon = React.memo(
     const handleMouseEnter = useCallback(() => onHover?.(id), [onHover, id]);
     const handleMouseLeave = useCallback(() => onHover?.(null), [onHover]);
 
+    // Double-click-to-edit belongs to the shape ONLY when the canvas is not
+    // in the middle of drawing something. While drawing, this used to
+    // `stopPropagation()` unconditionally and jump to EditVertices on the
+    // shape under the cursor — in CreatePolyline / AddPoints that threw away
+    // the microtubule extension the double-click was meant to COMMIT, and in
+    // CreatePolygon it abandoned the in-progress polygon outright. The
+    // polyline hit stroke is 12x the rendered width (min 6 px), so a
+    // double-click "in open space" lands on it far more often than it looks.
+    const canvasOwnsDoubleClick =
+      editMode === EditMode.CreatePolyline ||
+      editMode === EditMode.AddPoints ||
+      editMode === EditMode.CreatePolygon;
+
     const handleDoubleClick = useCallback(
       (e: React.MouseEvent) => {
+        if (canvasOwnsDoubleClick) return; // let it bubble to CanvasContainer
         e.stopPropagation();
         if (onEditPolygon) {
           onEditPolygon(id);
         }
       },
-      [onEditPolygon, id]
+      [onEditPolygon, id, canvasOwnsDoubleClick]
     );
 
     const handleKeyDown = useCallback(
@@ -658,6 +672,14 @@ const CanvasPolygon = React.memo(
       prevProps.polygon.id === nextProps.polygon.id &&
       samePoints &&
       prevProps.polygon.type === nextProps.polygon.type &&
+      // `parent_id` is the OTHER half of `isInternal` (line 205), which drives
+      // the fill/stroke colour, the `.internal`/`.external` group class and the
+      // dash pattern. `type` was compared and this was not, so a polygon that
+      // gained or lost a parent while keeping its id, points and type kept
+      // painting as external. Narrow trigger (only a reload whose `parentIds`
+      // changed under an otherwise identical polygon reaches it), but a
+      // comparator term can only ever cause MORE re-renders, never a stale one.
+      prevProps.polygon.parent_id === nextProps.polygon.parent_id &&
       prevProps.polygon.geometry === nextProps.polygon.geometry &&
       prevProps.polygon.partClass === nextProps.polygon.partClass &&
       prevProps.polygon.class === nextProps.polygon.class &&

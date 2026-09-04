@@ -7,11 +7,37 @@ interface RefreshToken {
   userId: string;
   expiresAt: string;
   family: string;
+  /**
+   * Set only on an IMPERSONATED session: the admin who is really acting.
+   *
+   * This is the DURABLE copy of the impersonation, and it lives here rather
+   * than in the JWT for one specific reason. `authService.refreshToken`
+   * rebuilds the access-token payload from the database row, and the frontend
+   * refreshes proactively every 13 minutes — so a claim that exists only in
+   * the JWT is silently dropped on the first refresh and the admin is thrown
+   * back into the target's account with no way out. `family` was already
+   * carried across rotation for the same reason; these ride along with it.
+   */
+  impersonatorId?: string;
+  /** Correlates the impersonation's audit rows. See `ImpersonationLog`. */
+  impersonationSessionId?: string;
 }
 
 class SessionService {
   private readonly REFRESH_TOKEN_PREFIX = 'refresh:';
+  private readonly IMPERSONATION_INDEX_PREFIX = 'impersonation:';
   private readonly REFRESH_TOKEN_TTL = 60 * 60 * 24 * 30; // 30 days in seconds
+  /**
+   * Server-side lifetime of an IMPERSONATED session, in seconds.
+   *
+   * Shorter than the ordinary 30 days on purpose. An impersonated session is
+   * a debugging session, not a login: if the admin closes the tab without
+   * clicking "return", nothing revokes it, and at the normal TTL a live
+   * ticket into someone else's account would sit in Redis for a month. This
+   * is the SERVER-side bound — the cookie's own Max-Age was already 7 days,
+   * which bounds only the browser's copy and not a leaked one.
+   */
+  private readonly IMPERSONATION_TOKEN_TTL = 60 * 60 * 24; // 24 hours
 
   /**
    * Redis key for a refresh token: the prefix plus a SHA-256 of the token,
@@ -38,26 +64,64 @@ class SessionService {
     );
   }
 
+  /**
+   * Index from an impersonation session id to the refresh key that session
+   * currently uses.
+   *
+   * It exists so that "stop impersonating" can REVOKE the impersonated
+   * refresh token instead of merely replacing the browser's cookie. The stop
+   * endpoint lives under `/api/admin`, and the refresh cookie is path-scoped
+   * to `/api/auth`, so the server never receives the token it needs to delete
+   * — and putting a copy of the token in Redis is precisely what `keyFor`'s
+   * docstring says not to do. The index stores the KEY (a SHA-256 of the
+   * token), which is not a credential: it cannot be presented to anything.
+   *
+   * Kept in step with rotation because `rotateRefreshToken` passes the
+   * impersonation through to `storeRefreshToken`, which rewrites this entry.
+   */
+  private impersonationKeyFor(sessionId: string): string {
+    return this.IMPERSONATION_INDEX_PREFIX + sessionId;
+  }
+
   async storeRefreshToken(
     userId: string,
     token: string,
-    family?: string
+    family?: string,
+    impersonation?: {
+      impersonatorId: string;
+      impersonationSessionId: string;
+    }
   ): Promise<void> {
     const key = this.keyFor(token);
+    // An impersonated session gets the short TTL, and it survives rotation
+    // because `rotateRefreshToken` passes the impersonation back in — so a
+    // refresh cannot quietly promote a debugging session to a 30-day one.
+    const ttl = impersonation
+      ? this.IMPERSONATION_TOKEN_TTL
+      : this.REFRESH_TOKEN_TTL;
     const tokenData: RefreshToken = {
       userId,
-      expiresAt: new Date(
-        Date.now() + this.REFRESH_TOKEN_TTL * 1000
-      ).toISOString(),
+      expiresAt: new Date(Date.now() + ttl * 1000).toISOString(),
       family: family || crypto.randomBytes(16).toString('hex'),
+      ...(impersonation
+        ? {
+            impersonatorId: impersonation.impersonatorId,
+            impersonationSessionId: impersonation.impersonationSessionId,
+          }
+        : {}),
     };
 
     const result = await executeRedisCommand(async client => {
-      await client.setEx(
-        key,
-        this.REFRESH_TOKEN_TTL,
-        JSON.stringify(tokenData)
-      );
+      await client.setEx(key, ttl, JSON.stringify(tokenData));
+      if (impersonation) {
+        // Same TTL and same write, so the index cannot outlive or lag behind
+        // the token it points at. See `impersonationKeyFor`.
+        await client.setEx(
+          this.impersonationKeyFor(impersonation.impersonationSessionId),
+          ttl,
+          key
+        );
+      }
       return true;
     });
 
@@ -92,6 +156,34 @@ class SessionService {
     return tokenData;
   }
 
+  /**
+   * Revoke an impersonated session by its id, without ever holding the token.
+   *
+   * Called when the admin stops impersonating. Without it the impersonated
+   * refresh token would stay live in Redis for its full 7-day window after
+   * the operator believed they had ended the session — the browser's cookie
+   * is replaced, but a leaked copy would still work.
+   *
+   * Returns true when something was actually revoked. False is not an error:
+   * a session that already expired, or a Redis blip, both land here, and
+   * neither is a reason to refuse to hand the admin their own account back.
+   */
+  async revokeImpersonatedSession(sessionId: string): Promise<boolean> {
+    const indexKey = this.impersonationKeyFor(sessionId);
+
+    const result = await executeRedisCommand(async client => {
+      const refreshKey = await client.get(indexKey);
+      let deleted = 0;
+      if (refreshKey) {
+        deleted = await client.del(refreshKey);
+      }
+      await client.del(indexKey);
+      return deleted > 0;
+    });
+
+    return result === true;
+  }
+
   async deleteRefreshToken(token: string): Promise<boolean> {
     const key = this.keyFor(token);
 
@@ -113,13 +205,27 @@ class SessionService {
    * session is preserved across the outage. Both branches return null
    * to signal "not rotated".
    */
-  async rotateRefreshToken(
-    oldToken: string
-  ): Promise<{ token: string; userId: string } | null> {
+  async rotateRefreshToken(oldToken: string): Promise<{
+    token: string;
+    userId: string;
+    impersonatorId?: string;
+    impersonationSessionId?: string;
+  } | null> {
     const tokenData = await this.verifyRefreshToken(oldToken);
     if (!tokenData) {
       return null;
     }
+
+    // An impersonated session must survive rotation, or the 13-minute
+    // proactive refresh silently strands the admin inside the target's
+    // account. Carried through exactly like `family`.
+    const impersonation =
+      tokenData.impersonatorId && tokenData.impersonationSessionId
+        ? {
+            impersonatorId: tokenData.impersonatorId,
+            impersonationSessionId: tokenData.impersonationSessionId,
+          }
+        : undefined;
 
     await this.deleteRefreshToken(oldToken);
 
@@ -128,7 +234,8 @@ class SessionService {
       await this.storeRefreshToken(
         tokenData.userId,
         newToken,
-        tokenData.family
+        tokenData.family,
+        impersonation
       );
     } catch (err) {
       logger.error(
@@ -144,7 +251,8 @@ class SessionService {
         await this.storeRefreshToken(
           tokenData.userId,
           oldToken,
-          tokenData.family
+          tokenData.family,
+          impersonation
         );
       } catch {
         // Both writes failed; nothing more we can do here.
@@ -152,7 +260,11 @@ class SessionService {
       return null;
     }
 
-    return { token: newToken, userId: tokenData.userId };
+    return {
+      token: newToken,
+      userId: tokenData.userId,
+      ...(impersonation ?? {}),
+    };
   }
 }
 

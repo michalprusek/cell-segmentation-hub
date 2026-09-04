@@ -402,18 +402,20 @@ describe('Scale Conversion Integration Tests', () => {
         },
       }));
 
-      const startTime = Date.now();
       const metrics = await metricsCalculator.calculateAllMetrics(
         largeDataset as any,
         scale
       );
-      const endTime = Date.now();
-      const processingTime = endTime - startTime;
 
-      // Should process 5000 polygons in reasonable time
-      // Note: The metrics calculator returns individual polygon metrics, not per-image summaries
-      expect(metrics.length).toBe(5000); // One metric per polygon (100 images * 50 polygons each)
-      expect(processingTime).toBeLessThan(30000); // Less than 30 seconds
+      // There was an `expect(processingTime).toBeLessThan(30000)` here, and it
+      // could not fail: `testTimeout` is 30000 in backend/vitest.config.ts, so
+      // a call that took 30 s would abort the test as a timeout before the
+      // assertion ran. Any threshold at or above the suite timeout is dead
+      // code; below it, it would need a measured clean-vs-regressed
+      // distribution to defend. What the volume case is really for is that
+      // 5000 polygons all come back and all get the scale applied.
+      // Note: the calculator returns per-polygon metrics, not per-image ones.
+      expect(metrics.length).toBe(5000); // 100 images * 50 polygons each
 
       // Verify scale was applied
       metrics.forEach(metric => {

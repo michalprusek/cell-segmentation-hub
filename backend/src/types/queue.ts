@@ -393,6 +393,9 @@ export interface AuthenticatedRequest extends Request {
     id: string;
     email: string;
     emailVerified: boolean;
+    /** See the express augmentation in middleware/auth.ts; this local copy of
+     *  the shape has to track it or the interface stops extending Request. */
+    isAdmin: boolean;
     profile?: {
       id: string;
       userId: string;

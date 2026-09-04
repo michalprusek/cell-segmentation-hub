@@ -962,13 +962,14 @@ export default {
       addPoints: {
         clickVertex: 'Klikněte na jakýkoli vrchol pro zahájení přidávání bodů',
         clickVertexMt: 'Klikněte na konec mikrotubulu pro jeho prodloužení',
-        addPointsMt: 'Klikáním přidávejte body, poté ukončete stiskem Enter',
+        addPointsMt:
+          'Klikáním přidávejte body, poté ukončete stiskem Enter nebo dvojklikem',
         addPoints:
           'Klikněte pro přidání bodů, poté klikněte na jiný vrchol pro dokončení. Klikněte přímo na jiný vrchol bez přidávání bodů pro odstranění všech bodů mezi nimi.',
         holdShift: 'Držte SHIFT pro automatické přidávání bodů',
         cancel: 'Stiskněte ESC pro zrušení',
         joinHint:
-          'Kliknutím na koncový bod jiné polylinie stejné třídy je spojíte',
+          'Kliknutím na koncový bod jiné polylinie je spojíte — štítky se musí shodovat, pokud jedna strana není bez štítku',
       },
       editVertices: {
         selectPolygon: 'Klikněte na polygon pro jeho výběr k úpravě',
@@ -1270,6 +1271,7 @@ export default {
       cannotDeleteVertex:
         'Nelze smazat vrchol - polygon potřebuje alespoň 3 body',
       vertexDeleted: 'Vrchol byl úspěšně smazán',
+      joinClassMismatch: 'Tyto polylinie mají různé štítky a nelze je spojit',
       failed: 'Segmentace selhala',
       saved: 'Segmentace byla úspěšně uložena',
       started: 'Segmentace byla zahájena',
@@ -3057,5 +3059,32 @@ export default {
       changeClass: 'Změnit třídu',
       delete: 'Smazat polygon',
     },
+  },
+  admin: {
+    navLabel: 'Administrace',
+    usersTitle: 'Registrovaní uživatelé',
+    usersDescription:
+      'Vyberte uživatele, za kterého se chcete přihlásit kvůli ladění a podpoře. Každá relace se zapisuje do auditního logu.',
+    searchPlaceholder: 'Hledat podle e-mailu nebo jména',
+    columnUsername: 'Uživatelské jméno',
+    columnProjects: 'Projekty',
+    columnRegistered: 'Registrace',
+    badgeAdmin: 'Administrátor',
+    logInAs: 'Přihlásit se jako',
+    cannotImpersonateSelf: 'Toto je váš vlastní účet.',
+    cannotImpersonateAdmin: 'Za jiného administrátora se přihlásit nelze.',
+    impersonateFailed: 'Přihlášení za tohoto uživatele se nezdařilo.',
+    loadUsersFailed: 'Seznam uživatelů se nepodařilo načíst.',
+    noUsersFound: 'Hledání neodpovídá žádný uživatel.',
+    pageOf: 'Stránka {{page}} z {{total}}',
+    nextPage: 'Další',
+    notAuthorizedTitle: 'Vyžadována práva administrátora',
+    notAuthorizedDescription:
+      'Tato stránka je dostupná pouze administrátorům platformy.',
+    impersonationBannerTitle: 'Relace podpory.',
+    impersonationBannerViewing: 'Prohlížíte si účet uživatele',
+    impersonationBannerSignedInAs: '— přihlášeni jste jako',
+    returnToUserList: 'Zpět na seznam uživatelů',
+    stopImpersonationFailed: 'Relaci podpory se nepodařilo ukončit.',
   },
 };

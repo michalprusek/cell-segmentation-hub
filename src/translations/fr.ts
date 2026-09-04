@@ -1128,13 +1128,13 @@ export default {
         clickVertexMt:
           'Cliquez sur une extrémité du microtubule pour l’étendre',
         addPointsMt:
-          'Cliquez pour ajouter des points, puis appuyez sur Entrée pour terminer',
+          'Cliquez pour ajouter des points, puis appuyez sur Entrée ou double-cliquez pour terminer',
         addPoints:
           'Cliquez pour ajouter des points, puis cliquez sur un autre sommet pour terminer. Cliquez directement sur un autre sommet sans ajouter de points pour supprimer tous les points entre eux.',
         holdShift: 'Maintenez SHIFT pour ajouter automatiquement des points',
         cancel: 'Appuyez sur ESC pour annuler',
         joinHint:
-          'Cliquez sur l’extrémité d’une autre polyligne de la même classe pour les joindre',
+          'Cliquez sur l’extrémité d’une autre polyligne pour les joindre — les étiquettes doivent correspondre, sauf si l’une n’est pas étiquetée',
       },
       editVertices: {
         selectPolygon:
@@ -1301,6 +1301,8 @@ export default {
       cannotDeleteVertex:
         'Impossible de supprimer le sommet - le polygone a besoin d’au moins 3 points',
       vertexDeleted: 'Sommet supprimé avec succès',
+      joinClassMismatch:
+        'Ces polylignes ont des étiquettes différentes et ne peuvent pas être jointes',
       started: 'La segmentation a commencé',
       completed: 'Segmentation terminée avec succès',
       completedWithCount: 'Segmentation terminée ! {{count}} objets trouvés',
@@ -3108,5 +3110,35 @@ export default {
       changeClass: 'Changer de classe',
       delete: 'Supprimer le polygone',
     },
+  },
+  admin: {
+    navLabel: 'Administration',
+    usersTitle: 'Utilisateurs inscrits',
+    usersDescription:
+      "Choisissez un utilisateur pour vous connecter à sa place, à des fins de débogage et d'assistance. Chaque session est consignée dans le journal d'audit.",
+    searchPlaceholder: "Rechercher par e-mail ou nom d'utilisateur",
+    columnUsername: "Nom d'utilisateur",
+    columnProjects: 'Projets',
+    columnRegistered: 'Inscription',
+    badgeAdmin: 'Administrateur',
+    logInAs: 'Se connecter en tant que',
+    cannotImpersonateSelf: "C'est votre propre compte.",
+    cannotImpersonateAdmin:
+      "Impossible de se connecter en tant qu'un autre administrateur.",
+    impersonateFailed:
+      'Impossible de se connecter en tant que cet utilisateur.',
+    loadUsersFailed: "La liste des utilisateurs n'a pas pu être chargée.",
+    noUsersFound: 'Aucun utilisateur ne correspond à cette recherche.',
+    pageOf: 'Page {{page}} sur {{total}}',
+    nextPage: 'Suivant',
+    notAuthorizedTitle: 'Accès administrateur requis',
+    notAuthorizedDescription:
+      'Cette page est réservée aux administrateurs de la plateforme.',
+    impersonationBannerTitle: "Session d'assistance.",
+    impersonationBannerViewing: 'Vous consultez le compte de',
+    impersonationBannerSignedInAs: '— vous êtes connecté en tant que',
+    returnToUserList: 'Revenir à la liste des utilisateurs',
+    stopImpersonationFailed:
+      "La session d'assistance n'a pas pu être terminée.",
   },
 };

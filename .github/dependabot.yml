@@ -97,10 +97,16 @@ updates:
       #                       torch means recompiling both kernels, re-pairing
       #                       torchvision, and re-verifying all 7 models.
       #  transformers         pinned at 5.5.4, and only MINOR/MAJOR are
-      #                       ignored -- patches still flow. 5.16.1 renames the
+      #                       ignored -- patches still flow. 5.9.0 renames the
       #                       SegFormer module layout so our checkpoint stops
-      #                       loading; 5.5.4 and 5.6.0 are bit-identical to the
-      #                       old 4.57.1.
+      #                       loading (bisected 2026-09-04: 5.6.2 / 5.7.0 /
+      #                       5.8.1 clean and bit-identical, 5.9.0 and every
+      #                       release above it broken), and 5.10.x will not
+      #                       even import a model on torch 2.6.0. That is why
+      #                       GHSA-xrqw-3rrv-vx5w, whose fix lands in 5.10.0,
+      #                       cannot be taken -- see the CEILING note in
+      #                       backend/segmentation/requirements.txt. Do not
+      #                       close that alert by moving the pin.
       #
       #                       READ THIS BEFORE MERGING A TRANSFORMERS PR, patch
       #                       included: CI cannot verify this dependency. The
@@ -116,10 +122,25 @@ updates:
       #                       So the PR is a notification carrying a diff, not
       #                       an applied change, and suppressing it would cost
       #                       visibility without buying safety.
+      #  opencv-python-headless
+      #                       4.11.0.86 is the last release installable here.
+      #                       Measured 2026-09-04: 4.14.0.94 gives
+      #                       ResolutionImpossible against the numpy 1.26.4
+      #                       pin, and the real wall is 4.12 -- 4.12.0.88
+      #                       already requires numpy>=2,<2.3 ("Packages for
+      #                       Python 3.9+ are built with Numpy 2.x"). That is a
+      #                       WHEEL BUILD property, so there is no intermediate
+      #                       release to land on: it is blocked until numpy
+      #                       moves, which is blocked until torch moves. Unlike
+      #                       transformers, a PR here is not a useful
+      #                       notification -- it cannot even be installed to be
+      #                       evaluated -- so it is ignored outright rather
+      #                       than left to open. See #402 / #466.
       #  numpy                1.26.4 is what the pinned torch was built against.
       - dependency-name: torch
       - dependency-name: torchvision
       - dependency-name: numpy
+      - dependency-name: opencv-python-headless
       - dependency-name: transformers
         update-types:
           - version-update:semver-minor
@@ -145,6 +166,7 @@ updates:
       - dependency-name: torch
       - dependency-name: torchvision
       - dependency-name: numpy
+      - dependency-name: opencv-python-headless
       - dependency-name: transformers
         update-types:
           - version-update:semver-minor

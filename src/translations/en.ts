@@ -955,13 +955,14 @@ export default {
       addPoints: {
         clickVertex: 'Click on any vertex to start adding points',
         clickVertexMt: 'Click a microtubule endpoint to start extending it',
-        addPointsMt: 'Click to add points, then press Enter to finish',
+        addPointsMt:
+          'Click to add points, then press Enter or double-click to finish',
         addPoints:
           'Click to add points, then click on another vertex to complete. Click directly on another vertex without adding points to remove all points between them.',
         holdShift: 'Hold SHIFT to automatically add points',
         cancel: 'Press ESC to cancel',
         joinHint:
-          'Click another polyline endpoint of the same class to join them',
+          'Click another polyline endpoint to join them — labels must match, unless one side is unlabelled',
       },
       editVertices: {
         selectPolygon: 'Click on a polygon to select it for editing',
@@ -1269,6 +1270,8 @@ export default {
       cannotDeleteVertex:
         'Cannot delete vertex - polygon needs at least 3 points',
       vertexDeleted: 'Vertex deleted successfully',
+      joinClassMismatch:
+        'These polylines have different labels and cannot be joined',
       started: 'Segmentation has started',
       completed: 'Segmentation completed successfully',
       completedWithCount: 'Segmentation complete! Found {{count}} objects',
@@ -3107,5 +3110,32 @@ export default {
       changeClass: 'Change class',
       delete: 'Delete polygon',
     },
+  },
+  admin: {
+    navLabel: 'Administration',
+    usersTitle: 'Registered users',
+    usersDescription:
+      'Pick a user to sign in as, for debugging and support. Every session is recorded in the audit log.',
+    searchPlaceholder: 'Search by e-mail or username',
+    columnUsername: 'Username',
+    columnProjects: 'Projects',
+    columnRegistered: 'Registered',
+    badgeAdmin: 'Admin',
+    logInAs: 'Log in as',
+    cannotImpersonateSelf: 'This is your own account.',
+    cannotImpersonateAdmin: 'Administrator accounts cannot be impersonated.',
+    impersonateFailed: 'Could not sign in as this user.',
+    loadUsersFailed: 'Could not load the user list.',
+    noUsersFound: 'No users match this search.',
+    pageOf: 'Page {{page}} of {{total}}',
+    nextPage: 'Next',
+    notAuthorizedTitle: 'Administrator access required',
+    notAuthorizedDescription:
+      'This page is only available to platform administrators.',
+    impersonationBannerTitle: 'Support session.',
+    impersonationBannerViewing: 'You are viewing the account of',
+    impersonationBannerSignedInAs: '— signed in as',
+    returnToUserList: 'Return to user list',
+    stopImpersonationFailed: 'Could not end the support session.',
   },
 };

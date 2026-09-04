@@ -27,7 +27,7 @@ import { config } from '../utils/config';
 import { logger } from '../utils/logger';
 import {
   ChannelMeta,
-  CHANNEL_NAME_RE,
+  isSafeChannelName,
   defaultColorForWavelength,
 } from './video/types';
 import { isMicrotubuleProject } from '../types/validation';
@@ -455,7 +455,7 @@ export function slugifyChannelName(label: string): string {
     .replace(/[^A-Za-z0-9_-]+/g, '_')
     .slice(0, 64)
     .replace(/^_+|_+$/g, '');
-  if (!CHANNEL_NAME_RE.test(slug)) {
+  if (!isSafeChannelName(slug)) {
     throw new Error(
       'Channel name must contain at least one letter, digit, underscore or dash'
     );

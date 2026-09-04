@@ -1,6 +1,6 @@
 import { logger } from '@/lib/logger';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import apiClient from '@/lib/api';
 import { getErrorMessage } from '@/types';
 import { useLanguage } from '@/contexts/useLanguage';
@@ -20,6 +20,25 @@ const ProjectThumbnail = ({
 }: ProjectThumbnailProps) => {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const { t } = useLanguage();
+
+  // `onAccessError` is an OUTPUT of the fetch, never an input to it — but it
+  // used to sit in the effect's dependency array, and both call sites
+  // (`ProjectCard`, `ProjectListItem`) declare it as a plain inline function,
+  // so its identity changed on every render of the card. Any parent re-render
+  // therefore re-ran the effect and issued a fresh
+  // `GET /projects/<id>/images?limit=1`. Measured on production 2026-09-04:
+  // one click on the dashboard sort menu produced 5 duplicate requests for a
+  // single card (4 on the next click), and a dashboard page holds up to 10
+  // cards. Holding the callback in a ref keeps the latest function without
+  // making the fetch depend on its identity, and — unlike stabilising it at
+  // the two call sites — cannot be re-broken by a third caller. The ref is
+  // synced in a LAYOUT effect rather than during render (React documents a
+  // render-phase ref write as unsupported); it still lands before the passive
+  // effect below, so the fetch never reads a stale callback.
+  const onAccessErrorRef = useRef(onAccessError);
+  useLayoutEffect(() => {
+    onAccessErrorRef.current = onAccessError;
+  }, [onAccessError]);
 
   useEffect(() => {
     const fetchFirstImage = async () => {
@@ -55,7 +74,7 @@ const ProjectThumbnail = ({
                 `Access error for project ${projectId} thumbnail:`,
                 error
               );
-              onAccessError?.(projectId, error);
+              onAccessErrorRef.current?.(projectId, error);
             } else if (status === 404) {
               // Not found is expected for projects without images, don't log as error
               logger.debug(`No images found for project ${projectId}`);
@@ -83,7 +102,7 @@ const ProjectThumbnail = ({
     };
 
     fetchFirstImage();
-  }, [projectId, imageCount, onAccessError]);
+  }, [projectId, imageCount]);
 
   return (
     <img

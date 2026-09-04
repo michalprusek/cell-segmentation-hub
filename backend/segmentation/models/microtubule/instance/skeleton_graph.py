@@ -44,6 +44,60 @@ def _disk(radius: float) -> np.ndarray:
     return (yy ** 2 + xx ** 2) <= radius ** 2 + 1e-9
 
 
+def _dilate_sparse(mask: np.ndarray, structure: np.ndarray) -> np.ndarray:
+    """``ndimage.binary_dilation(mask, structure)`` for a mask that is SPARSE.
+
+    Dilation by a structuring element *is* the union of the element's set
+    offsets translated onto every set pixel — that is its definition, not an
+    approximation — so for a handful of set pixels it costs
+    ``O(|set| * |structure|)`` instead of ``O(H * W * |structure|)``.
+
+    Why it is worth the extra function: junction pixels are a few hundred in a
+    multi-megapixel frame, and scipy pays for the frame. Measured on a REAL
+    production frame (container 4972cad8, frame 0 IRM, 1476x1924 upscaled to
+    2214x2886 = 6.4 Mpx) with the shipped ``merge_radius`` 5.0 — **93** junction
+    pixels and an 81-cell disk — interleaved in one process, min of 3 rounds:
+    **0.337 s -> 0.012 s, 28x**, with ``np.array_equal`` True on the two
+    results. Standalone on a colder run it was 0.834 s -> 0.034 s, which is more
+    than ``skeletonize`` (0.145 s) and the neighbour-count ``convolve``
+    (0.154 s) together — this single call was the largest item in the
+    instancer. Whole-``instance_a`` effect, same interleaved harness: 1.557 s ->
+    0.810 s median, with the polylines bit-identical.
+
+    Requirements this relies on, all satisfied by :func:`_disk`: an
+    odd-sided, centre-origined structure (scipy's default ``origin=0`` puts the
+    origin at ``shape // 2``) and ``border_value=0`` (the default), which is
+    what dropping out-of-frame targets reproduces.
+
+    Falls back to scipy when the mask is NOT sparse. The index arrays this
+    builds are ``|set| * |structure|`` elements of ``intp``, so a dense junction
+    field would trade a bounded frame-sized pass for an unbounded allocation.
+    ``mask.size // 8`` bounds the temporaries at roughly twice the frame's own
+    byte count while leaving four orders of magnitude of headroom over anything
+    real (93 x 81 = 7 533 against a limit of 798 700 on the frame above); past
+    it, scipy's bounded pass is the better trade whether or not the scatter
+    would still be faster.
+    """
+    n_off = int(structure.sum())
+    rr, cc = np.nonzero(mask)
+    if rr.size == 0 or n_off == 0:
+        return np.zeros_like(mask, dtype=bool)
+    if rr.size * n_off > mask.size // 8:
+        return ndimage.binary_dilation(mask, structure=structure)
+
+    r0, c0 = (np.asarray(structure.shape) // 2)
+    off_r, off_c = np.nonzero(structure)
+    off_r = off_r.astype(np.intp) - int(r0)
+    off_c = off_c.astype(np.intp) - int(c0)
+
+    h, w = mask.shape
+    y = (rr[:, None].astype(np.intp) + off_r[None, :]).ravel()
+    x = (cc[:, None].astype(np.intp) + off_c[None, :]).ravel()
+    ok = (y >= 0) & (y < h) & (x >= 0) & (x < w)
+    out = np.zeros((h, w), dtype=bool)
+    out[y[ok], x[ok]] = True
+    return out
+
 
 def _group_coords_by_label(lab: np.ndarray, n_labels: int) -> list[np.ndarray]:
     """``[np.argwhere(lab == i) for i in range(n_labels + 1)]`` in one pass.
@@ -117,7 +171,11 @@ def build_arc_graph(mask: np.ndarray, merge_radius: float = 3.0,
     junction_labels = np.zeros(skel.shape, dtype=np.int32)
 
     if junction_px.any():
-        grown = ndimage.binary_dilation(junction_px, structure=_disk(merge_radius))
+        # Junction pixels are a sliver of the frame (93 of 6.4 M on a real
+        # production frame), so dilate them by scattering the disk onto each
+        # one rather than sweeping it over every pixel — see _dilate_sparse,
+        # which falls back to scipy if that ever stops being true.
+        grown = _dilate_sparse(junction_px, _disk(merge_radius))
         junction_labels, n_j = ndimage.label(grown & skel,
                                              structure=np.ones((3, 3), dtype=int))
         # Group the labelled pixels in ONE pass. The obvious loop tested
