@@ -22,7 +22,7 @@
 # against 9.1.1 on a real GPU -- see the note in
 # backend/requirements-pytest-ci.txt, and keep the two floors together.
 pytest>=9.1.1
-pytest-asyncio>=0.23
+pytest-asyncio>=1.4.0
 pytest-timeout>=2.2
 asgi-lifespan>=2.1
 # httpx MUST stay <0.28: starlette 0.27's TestClient passes app= to
