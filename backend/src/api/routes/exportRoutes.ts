@@ -1,5 +1,6 @@
 import express, { Request, Response, NextFunction } from 'express';
 import { authenticate } from '../../middleware/auth';
+import { downloadTokenAuth } from '../../middleware/downloadAuth';
 import { validationResult, body, param } from 'express-validator';
 import { ExportController } from '../controllers/exportController';
 
@@ -78,28 +79,14 @@ router.post(
 
 // Download export.
 //
-// This route accepts EITHER a JWT in the Authorization header (legacy XHR
-// path) OR a short-lived signed token in the ?token= query string (native
-// browser download path). The auth check is delegated to the controller so
-// the standard `authenticate` middleware does not block ?token= requests
-// (browsers cannot attach an Authorization header on <a href> downloads).
-const optionalJwtAuth = (
-  req: Request,
-  res: Response,
-  next: NextFunction
-): void => {
-  if (typeof req.query.token === 'string' && req.query.token.length > 0) {
-    // Token in query — controller will verify it.
-    next();
-    return;
-  }
-  // Otherwise fall through to the standard JWT middleware.
-  authenticate(req, res, next);
-};
-
+// This route accepts EITHER the session cookie OR a short-lived signed token
+// in the ?token= query string (native browser download path — a <a href>
+// download cannot attach the session's credential). `downloadTokenAuth` is
+// shared with the essays download so the two routers, and the controllers
+// behind them, cannot drift on what counts as a token.
 router.get(
   '/projects/:projectId/export/:jobId/download',
-  optionalJwtAuth,
+  downloadTokenAuth,
   [param('projectId').isUUID(), param('jobId').isUUID()],
   validateRequest,
   exportController.downloadExport
