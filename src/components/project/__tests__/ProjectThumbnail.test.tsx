@@ -1,5 +1,6 @@
+import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { act, screen, waitFor } from '@testing-library/react';
 import { render } from '@/test/utils/test-utils';
 import ProjectThumbnail from '@/components/project/ProjectThumbnail';
 
@@ -242,6 +243,95 @@ describe('ProjectThumbnail', () => {
       );
       await waitFor(() => expect(mockGetProjectImages).toHaveBeenCalled());
       expect(screen.getByRole('img')).toHaveAttribute('src', fallbackSrc);
+    });
+  });
+
+  // ── fetch churn ──────────────────────────────────────────────────────────
+
+  describe('fetch is driven by the project, not by the callback identity', () => {
+    it('does not refetch when the parent re-renders with a fresh onAccessError', async () => {
+      mockGetProjectImages.mockResolvedValue({
+        images: [],
+        total: 0,
+        page: 1,
+        totalPages: 1,
+      });
+
+      // Mirrors `ProjectCard` / `ProjectListItem`, which both declare
+      // `handleAccessError` as a plain inline function — so it is a NEW
+      // function object on every render of the card, exactly as in production.
+      let bump: (() => void) | undefined;
+      const Parent = () => {
+        const [tick, setTick] = React.useState(0);
+        bump = () => setTick(t => t + 1);
+        const handleAccessError = (_id: string, _error: unknown) => {};
+        return (
+          <div data-tick={tick}>
+            <ProjectThumbnail
+              projectId="proj-1"
+              fallbackSrc={fallbackSrc}
+              imageCount={3}
+              onAccessError={handleAccessError}
+            />
+          </div>
+        );
+      };
+
+      render(<Parent />);
+      await waitFor(() =>
+        expect(mockGetProjectImages).toHaveBeenCalledTimes(1)
+      );
+
+      for (let i = 0; i < 5; i++) {
+        act(() => {
+          bump?.();
+        });
+      }
+      await waitFor(() => expect(screen.getByRole('img')).toBeInTheDocument());
+
+      // Before the ref fix this was 6 — one request per parent render.
+      expect(mockGetProjectImages).toHaveBeenCalledTimes(1);
+    });
+
+    it('still reports an access error through the LATEST callback', async () => {
+      const first = vi.fn();
+      const second = vi.fn();
+      const err403 = { response: { status: 403 } };
+      // Never settles until we swap the callback, so the rejection is handled
+      // after the second render — proving the ref is read at call time.
+      let reject: ((e: unknown) => void) | undefined;
+      mockGetProjectImages.mockReturnValue(
+        new Promise((_res, rej) => {
+          reject = rej;
+        })
+      );
+
+      const { rerender } = render(
+        <ProjectThumbnail
+          projectId="proj-late"
+          fallbackSrc={fallbackSrc}
+          imageCount={1}
+          onAccessError={first}
+        />
+      );
+      rerender(
+        <ProjectThumbnail
+          projectId="proj-late"
+          fallbackSrc={fallbackSrc}
+          imageCount={1}
+          onAccessError={second}
+        />
+      );
+      await act(async () => {
+        reject?.(err403);
+      });
+
+      await waitFor(() =>
+        expect(second).toHaveBeenCalledWith('proj-late', err403)
+      );
+      expect(first).not.toHaveBeenCalled();
+      // The swap must not have re-issued the request either.
+      expect(mockGetProjectImages).toHaveBeenCalledTimes(1);
     });
   });
 
