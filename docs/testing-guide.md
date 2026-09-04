@@ -3,35 +3,64 @@
 What each suite covers, what state it is actually in, and when writing a test is
 worth it.
 
-> **Treat the test suite as partially broken.** A green run proves less here
-> than you would like. This page states the honest position rather than the
-> aspirational one.
+> **The suites are green and they gate merges** — but a green run still
+> proves less than you would like. This page states the honest position
+> rather than the aspirational one. Counts measured 2026-09-04; re-measure
+> before repeating them.
 
 ---
 
 ## The suites
 
-| Suite                        | Command                   | State                                                                                                                                                                                                                                       |
-| ---------------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Vitest** (frontend unit)   | `make ci-test`            | Substantial pre-existing failures from earlier refactors — WebSocket manager, ND2 helpers, legacy editor tests. Healthy tests exist but are mixed in, so a whole-suite run gives no clean signal. **Deliberately excluded from `make ci`.** |
-| **Playwright E2E**           | `make test-e2e`           | Present in `tests/e2e/`, run manually, not a merge gate.                                                                                                                                                                                    |
-| **Backend Jest**             | via the backend workspace | Not validated on every change.                                                                                                                                                                                                              |
-| **Python (GPU-free subset)** | `make test-py`            | **Runs in `make ci`.** This is a real gate.                                                                                                                                                                                                 |
-| **Python (full ML suite)**   | `make test-ml`            | Needs a GPU. Runs in a one-off container.                                                                                                                                                                                                   |
+| Suite                        | Command                     | State                                                                                                                               |
+| ---------------------------- | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| **Vitest** (frontend unit)   | `make ci-test`              | **5037 pass / 5037**, 275 files, ~2 min. Not in `make ci`, but the `frontend` CI job runs it with coverage and is a required check. |
+| **Vitest** (backend unit)    | in the container, see below | **3740 pass / 3744** (4 skipped), 179 files, ~27 s. Not Jest. The `backend` CI job runs it with coverage and is a required check.   |
+| **Playwright E2E**           | `make test-e2e`             | Present in `tests/e2e/`, run manually, not a merge gate.                                                                            |
+| **Python (GPU-free subset)** | `make test-py`              | **400 pass / 401** (1 skipped), ~26 s. Runs in `make ci` and in the `python-tests` CI job.                                          |
+| **Python (full ML suite)**   | `make test-ml`              | Needs a GPU. Runs in a one-off container.                                                                                           |
 
-`make ci` runs: frontend TypeScript, backend TypeScript, ESLint at zero
-warnings, i18n completeness across six locales, documentation link integrity,
-and `make test-py`. It takes
-about half a minute and is the check to run before opening a PR.
+**`make ci` is not the whole gate.** It runs frontend TypeScript, backend
+TypeScript, ESLint at zero warnings, i18n completeness across six locales,
+documentation link integrity, and `make test-py` — about half a minute, and
+the check to run before opening a PR. It does **not** run vitest; that happens
+in CI, where `.github/workflows/ci.yml` runs `npx vitest run --coverage` in
+both the `frontend` and `backend` jobs, each enforcing its `vitest.config.ts`
+coverage floor. The `main-protection` ruleset requires both contexts, so a
+red vitest run blocks the merge even though a green `make ci` said nothing
+about it.
 
 ```bash
-make ci                # the gate
-make ci-test           # Vitest — informational only
-make test-e2e          # Playwright
-make test-ml           # full Python suite, needs a GPU
-make test-coverage     # coverage report
+make ci                # the local pre-PR gate (no vitest)
+make ci-test           # frontend Vitest, the same run CI gates on
+make test-py           # the Python suite `make ci` step 7 runs
 make docs-links        # documentation link integrity
 ```
+
+`make test`, `make test-e2e`, `make test-coverage` and `make test-ml` all shell
+into a running container via `docker compose` with no `-f` argument, so on a
+fresh clone they fail before they test anything — the repository tracks no
+`docker-compose.yml`. Run those suites directly instead:
+
+```bash
+npx vitest run --coverage   # frontend, with the coverage floor CI enforces
+npx playwright test         # E2E
+```
+
+### Backend tests need the container
+
+Canvas ABI: the host's Node 22 against the image's Node 20.
+
+```bash
+docker run --rm --user root --entrypoint /bin/sh \
+  -v $PWD/backend:/app -v /app/node_modules -w /app \
+  cell-segmentation-hub-backend -c "npx vitest run <path>"
+```
+
+`--user root` is needed to read `.env`; `-v /app/node_modules` keeps the
+image's modules instead of the host's. Bind-mounting the whole `backend`
+directory is what makes it test the working tree — the image bakes `src`, so
+without the mount you are testing whatever was last built.
 
 ---
 

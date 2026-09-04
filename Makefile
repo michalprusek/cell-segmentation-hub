@@ -246,7 +246,15 @@ restart-backend-utia:
 	@echo "✅ Backend restarted with UTIA config"
 	@echo "Test connection: curl http://localhost:3001/api/test-email/test-connection"
 
-# Run unit tests with UI in Docker
+# The Python suites that need no GPU, in the same throwaway python:3.10-slim
+# CI uses. This is step 7 of `make ci`.
+#
+# These four paths must stay identical to the `python-tests` job in
+# .github/workflows/ci.yml -- this target exists to reproduce that job locally,
+# and a target that runs a SUBSET is worse than none: it reports green on a
+# break CI will catch. focus_qc was missing here until 2026-09-04, and it is
+# the one path that pins the focus descriptor's constants and its 1.97x IRM
+# separation margin.
 test-py:
 	@echo "🐍 Python suites CI also runs (no GPU needed)"
 	@docker run --rm -v "$$PWD":/w -w /w python:3.10-slim sh -c '\
@@ -254,7 +262,8 @@ test-py:
 	  python -m pytest -q -p no:cacheprovider \
 	    backend/src/services/video/pythonHelpers/tests \
 	    backend/essays/tests \
-	    backend/essays/module/tests'
+	    backend/essays/module/tests \
+	    backend/essays/module/focus_qc/tests'
 
 # The ML suite cannot run in CI: models/__init__ imports mamba_ssm -> Triton,
 # which raises "0 active drivers" at import time without a CUDA driver. So it
@@ -326,10 +335,12 @@ type-check:
 # because backend/src still carries pre-existing problems that would
 # otherwise block every commit. Regenerate with `npm run lint:backend:update`.
 #
-# Vitest is intentionally NOT in this target — the suite has ~31% pre-
-# existing failures from prior refactors (webSocketManager, ND2 helpers,
-# legacy editor tests). Including it here would render `make ci` unusable
-# until the suite is healed. Use `make ci-test` to run vitest separately.
+# Vitest is intentionally NOT in this target — it is minutes, not seconds,
+# and `make ci` exists to be the fast pre-PR gate. That does NOT make it
+# optional: .github/workflows/ci.yml runs it with a coverage floor in both
+# the `frontend` and `backend` jobs, and the `main-protection` ruleset
+# requires both contexts. Run `make ci-test` (frontend) and the container
+# invocation in docs/testing-guide.md (backend) before pushing.
 ci:
 	@echo "🔍 [1/7] TypeScript (frontend — baseline gate)"
 	@npm run type-check
@@ -353,11 +364,11 @@ ci:
 docs-links:
 	@node scripts/check-doc-links.cjs
 
-# Optional: run the Vitest suite. Currently has known pre-existing
-# failures (~31%). Use to investigate specific test files; don't treat
-# pass/fail as a gate until the suite is healed.
+# The frontend Vitest suite. NOT part of `make ci` (which is the ~30 s
+# type/lint/i18n gate), but this is the same run the required `frontend` CI
+# job performs with coverage, so a red run here blocks the merge.
 ci-test:
-	@echo "🧪 Vitest (informational — has known pre-existing failures)"
+	@echo "🧪 Vitest (frontend) — the same suite the required CI job gates on"
 	@NODE_OPTIONS="--max-old-space-size=8192" npx vitest run --reporter=default --pool=forks
 
 # Development environment

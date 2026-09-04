@@ -38,7 +38,7 @@ import { prisma } from '../db/prismaClient';
 import { config } from '../utils/config';
 import { logger } from '../utils/logger';
 import { cacheService, CacheService } from './cacheService';
-import { CHANNEL_NAME_RE } from './video/types';
+import { isSafeChannelName } from './video/types';
 
 /** Net-velocity cut-off (µm/s): trajectories slower than this are dropped as
  *  non-processive (oscillatory / static blobs are not directed transport).
@@ -808,7 +808,7 @@ async function planKymograph(
   // Defence in depth: reject any sourceChannel containing path separators
   // or other unsafe characters. The route layer also validates, but this
   // service is a public entry point for any future caller.
-  if (!CHANNEL_NAME_RE.test(sourceChannel)) {
+  if (!isSafeChannelName(sourceChannel)) {
     throw new Error('Invalid sourceChannel');
   }
   if (channelColor !== undefined && !HEX_COLOR_RE.test(channelColor)) {

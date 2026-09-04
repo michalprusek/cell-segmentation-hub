@@ -955,13 +955,14 @@ export default {
       addPoints: {
         clickVertex: 'Click on any vertex to start adding points',
         clickVertexMt: 'Click a microtubule endpoint to start extending it',
-        addPointsMt: 'Click to add points, then press Enter to finish',
+        addPointsMt:
+          'Click to add points, then press Enter or double-click to finish',
         addPoints:
           'Click to add points, then click on another vertex to complete. Click directly on another vertex without adding points to remove all points between them.',
         holdShift: 'Hold SHIFT to automatically add points',
         cancel: 'Press ESC to cancel',
         joinHint:
-          'Click another polyline endpoint of the same class to join them',
+          'Click another polyline endpoint to join them — labels must match, unless one side is unlabelled',
       },
       editVertices: {
         selectPolygon: 'Click on a polygon to select it for editing',
@@ -1269,6 +1270,8 @@ export default {
       cannotDeleteVertex:
         'Cannot delete vertex - polygon needs at least 3 points',
       vertexDeleted: 'Vertex deleted successfully',
+      joinClassMismatch:
+        'These polylines have different labels and cannot be joined',
       started: 'Segmentation has started',
       completed: 'Segmentation completed successfully',
       completedWithCount: 'Segmentation complete! Found {{count}} objects',

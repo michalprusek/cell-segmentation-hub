@@ -1047,12 +1047,13 @@ export default {
       addPoints: {
         clickVertex: '点击任意顶点开始添加点',
         clickVertexMt: '点击微管端点以开始延伸',
-        addPointsMt: '点击添加点，然后按 Enter 完成',
+        addPointsMt: '点击添加点，然后按 Enter 或双击完成',
         addPoints:
           '点击添加点，然后点击另一个顶点完成。直接点击另一个顶点而不添加点，可删除它们之间的所有点。',
         holdShift: '按住SHIFT自动添加点',
         cancel: '按ESC取消',
-        joinHint: '点击同类另一条折线的端点即可将它们连接',
+        joinHint:
+          '点击另一条折线的端点即可将它们连接 — 标签必须相同，除非其中一条尚未标注',
       },
       editVertices: {
         selectPolygon: '点击多边形选择要编辑的对象',
@@ -1204,6 +1205,7 @@ export default {
       deleted: '多边形已删除',
       cannotDeleteVertex: '无法删除顶点 - 多边形至少需要3个点',
       vertexDeleted: '顶点删除成功',
+      joinClassMismatch: '这两条折线的标签不同，无法连接',
       started: '分割已开始',
       completed: '分割成功完成',
       completedWithCount: '分割完成！找到 {{count}} 个对象',

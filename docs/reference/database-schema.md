@@ -4,7 +4,7 @@ PostgreSQL via Prisma. The schema of record is
 `backend/prisma/schema.prisma` — this page explains what each model is _for_ and
 flags the columns whose behaviour is not obvious from their name.
 
-Sixteen models. Every table name is snake_case; Prisma model names are
+Seventeen models. Every table name is snake_case; Prisma model names are
 PascalCase.
 
 ---

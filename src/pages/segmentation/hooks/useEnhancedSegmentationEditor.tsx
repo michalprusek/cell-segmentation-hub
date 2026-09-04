@@ -865,6 +865,16 @@ export const useEnhancedSegmentationEditor = ({
 
   // Ref to hold the polyline finalization callback (set after interactions hook)
   const polylineDoubleClickRef = useRef<(() => void) | null>(null);
+  /**
+   * The "commit the geometry I am drawing" gesture. Bound to BOTH the Enter
+   * key and the canvas double-click (`handleCanvasDoubleClick` below is this
+   * same function) so the two can never drift: they used to, and a
+   * double-click in AddPoints created a stray polyline while Enter did the
+   * elongation the user wanted (reported 2026-09-04).
+   *
+   * Mode-aware by design — CreatePolyline finalises the new polyline,
+   * AddPoints commits the elongation, everything else is a no-op.
+   */
   const handleEnterPolyline = useCallback(() => {
     // CreatePolyline mode: forward to the interactions-hook finaliser.
     if (editMode === EditMode.CreatePolyline) {
@@ -903,18 +913,44 @@ export const useEnhancedSegmentationEditor = ({
     // "Redraw arm from a pivot": the user Shift-clicked a vertex (the pivot)
     // and drew a new sequence. The arm running from the pivot toward the
     // endpoint the sequence aims at is discarded and replaced by the new
-    // points; the opposite arm and the pivot are kept. Direction is decided
-    // by which endpoint the END of the drawn sequence is nearest. When the
-    // pivot is that same endpoint this degenerates to a plain extension, and
-    // when no pivot was seeded (Shift-only flow) we fall back to the nearest
-    // endpoint so it still extends.
+    // points; the opposite arm and the pivot are kept.
     const far = newPts[newPts.length - 1];
     const d2 = (a: Point, b: Point) => (a.x - b.x) ** 2 + (a.y - b.y) ** 2;
-    const aimsTail = d2(far, pts[last]) <= d2(far, pts[0]);
-    let pivot = interactionState.addPointStartVertex?.vertexIndex;
-    if (pivot === undefined) {
-      pivot = aimsTail ? last : 0;
-    }
+    // Which endpoint the END of the drawn sequence is nearest. Only the
+    // tie-breaker for a MIDDLE pivot — see `aimsTail` below.
+    const farAimsTail = d2(far, pts[last]) <= d2(far, pts[0]);
+
+    // The anchor is only a pivot into THIS polyline, at an index it still
+    // has. Selection can move while `isAddingPoints` is set (sidebar click,
+    // a join) and a vertex can be deleted under it, and `pts.slice(0, pivot+1)`
+    // / `pts.slice(pivot)` with a foreign or out-of-range index truncates the
+    // polyline to an arbitrary prefix — or, past the end, to nothing at all.
+    // An unusable anchor falls back to the same nearest-endpoint default as
+    // "no anchor at all", which is a plain extension. `handleAddPointsClick`'s
+    // join branch already made the `polygonId` check; the commit path did not.
+    const anchor = interactionState.addPointStartVertex;
+    const anchorPivot =
+      anchor &&
+      anchor.polygonId === selectedPolygonId &&
+      anchor.vertexIndex >= 0 &&
+      anchor.vertexIndex <= last
+        ? anchor.vertexIndex
+        : undefined;
+    const pivot = anchorPivot ?? (farAimsTail ? last : 0);
+
+    // An ENDPOINT pivot decides the direction ITSELF; only a middle pivot
+    // asks where the drawn sequence points.
+    //
+    // Deciding both from `far` lets the two disagree, and the disagreement
+    // DELETES THE POLYLINE. The auto-anchor (`handleAddPointsClick`) picks the
+    // endpoint nearest the FIRST click, while `far` is the LAST drawn point:
+    // click just past the head of [(0,0),(5,5),(10,10)] and finish at (14,14)
+    // and you get pivot 0 with farAimsTail true, i.e.
+    // `pts.slice(0, 1) ++ newPts` — (5,5) and (10,10) are gone. Pivoting on an
+    // endpoint always means "extend from that end"; the arm running from it
+    // toward the other end is the whole filament.
+    const aimsTail =
+      pivot === 0 || pivot === last ? pivot === last : farAimsTail;
 
     const extended = aimsTail
       ? [...pts.slice(0, pivot + 1), ...newPts]
@@ -1150,6 +1186,22 @@ export const useEnhancedSegmentationEditor = ({
     [imageWidth, imageHeight, canvasWidth, canvasHeight]
   );
 
+  // Endpoint-join refused because the two polylines carry DIFFERENT labels.
+  // The refusal itself is intentional (a merge would have to discard one of
+  // the labels) but it used to be completely silent, which is why the whole
+  // feature read as broken. Defined here because `useAdvancedInteractions`
+  // has no access to `t`.
+  // The fixed `id` makes sonner REPLACE the previous one instead of stacking:
+  // while tracing past a differently-labelled endpoint, several consecutive
+  // clicks can land inside the same hit radius, and the user needs the reason
+  // once, not once per click. No `|| 'english fallback'` — `t()` returns the
+  // key itself on a miss, so such a fallback is unreachable dead code.
+  const handleJoinBlockedByClass = useCallback(() => {
+    toast.error(t('toast.segmentation.joinClassMismatch'), {
+      id: 'polyline-join-class-mismatch',
+    });
+  }, [t]);
+
   // Initialize advanced interactions after handlePan is defined
   const interactions = useAdvancedInteractions({
     editMode,
@@ -1164,6 +1216,7 @@ export const useEnhancedSegmentationEditor = ({
     activePartClassRef,
     activeInstanceIdRef,
     projectType,
+    onJoinBlockedByClass: handleJoinBlockedByClass,
     onPolygonSelection: polygonSelection.handlePolygonSelection, // Pass centralized selection handler
     setEditMode,
     setInteractionState,
@@ -1339,8 +1392,10 @@ export const useEnhancedSegmentationEditor = ({
     handleMouseDown: interactions.handleMouseDown,
     handleMouseMove: enhancedHandleMouseMove,
     handleMouseUp: interactions.handleMouseUp,
-    handleCreatePolylineDoubleClick:
-      interactions.handleCreatePolylineDoubleClick,
+    // Same function the Enter key runs — see `handleEnterPolyline`. Takes no
+    // arguments, so the React SyntheticEvent the canvas passes cannot be
+    // mistaken for a parameter.
+    handleCanvasDoubleClick: handleEnterPolyline,
 
     // Mode-specific handlers
     slicing,

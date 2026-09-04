@@ -19,9 +19,11 @@ name: CI
 # Regenerate the baseline with `npm run type-check:update` (reviewable: the
 # accepted errors show up as added lines in the diff).
 #
-# This check is NOT yet a required status check — to make it BLOCK merges, add
-# "CI / frontend" and "CI / backend" as required status checks in the repo's
-# branch-protection rules for main.
+# These checks ARE required. The repository ruleset `main-protection` lists the
+# contexts `frontend` and `backend` under required_status_checks with
+# strict_required_status_checks_policy, so a red run here blocks the merge —
+# even though `make ci` does not run vitest and will happily go green.
+# Inspect with: gh api /repos/:owner/:repo/rulesets
 #
 # ML/Python tests are intentionally omitted — they require a CUDA GPU (mamba/
 # Triton initialise at import) that GitHub-hosted runners do not provide. Run
@@ -150,23 +152,133 @@ jobs:
           sys.exit(1 if bad else 0)
           EOF
 
-      - name: ML and essays pins agree
+      # Three requirements files describe ONE stack, and two of them cannot fail
+      # a build when they are wrong:
+      #
+      #   backend/segmentation/requirements.txt   the only one that is built
+      #   backend/essays/module/requirements.txt  never pip-installed -- the
+      #                                           essays image is `FROM
+      #                                           ${ML_IMAGE}` (see the header
+      #                                           of docker/essays.Dockerfile)
+      #   backend/requirements-pytest-ci.txt      installed by python-tests
+      #                                           below, and its own header
+      #                                           says fastapi/starlette/
+      #                                           pydantic must match the ML
+      #                                           image or the essays tests
+      #                                           exercise a stack nothing runs
+      #
+      # REQUIRED is the presence half: the four packages the load-bearing-pins
+      # comment at the top of this job argues for by name must appear in BOTH
+      # the ml and the essays file, so deleting one is caught and not just
+      # disagreeing about one. Everything else is DERIVED -- any package named
+      # by two or more of the three files must carry the identical specifier,
+      # so a new shared pin is covered without anyone remembering to list it.
+      #
+      # The derived half is not hypothetical. On 2026-08-31 Dependabot opened
+      # #402, bumping opencv-python-headless 4.11.0.86 -> 4.14.0.94 in the
+      # ESSAYS file only. A hardcoded four would not have noticed, and nothing
+      # else could: that file has no build to fail. It would simply have
+      # documented a version that `pip install` cannot resolve at all, since
+      # opencv >=4.12 wheels are built against numpy 2.x and numpy is pinned
+      # 1.26.4. The same weekly stream hand-syncs pydantic across the ml file
+      # and requirements-pytest-ci.txt, which is why the third file is here.
+      #
+      # Specifiers are compared whole (`>=1.29.0`, not just `==`): the two
+      # files carry floors as well as pins, and a floor only one of them has is
+      # the same class of silent claim. Lines are parsed with PEP 508 rather
+      # than a regex so extras, spacing and env markers cannot make a shared
+      # pin silently vanish from the comparison -- an unparseable line is an
+      # error here, never a skip.
+      - name: ML, essays and CI-test pins agree
         run: |
-          set -euo pipefail
-          fail=0
-          for pkg in torch torchvision transformers numpy; do
-            ml=$(grep -iE "^${pkg}==" backend/segmentation/requirements.txt | head -1 || true)
-            es=$(grep -iE "^${pkg}==" backend/essays/module/requirements.txt | head -1 || true)
-            if [ -z "$ml" ] || [ -z "$es" ]; then
-              echo "::error::${pkg} pin missing (ml='${ml}' essays='${es}')"; fail=1; continue
-            fi
-            if [ "$ml" != "$es" ]; then
-              echo "::error::${pkg} pin drift -- ml='${ml}' essays='${es}'"; fail=1
-            else
-              echo "ok  ${ml}"
-            fi
-          done
-          exit $fail
+          pip install --quiet packaging
+          python - <<'EOF'
+          import re, sys
+          from packaging.requirements import Requirement
+
+          FILES = {
+              "ml": "backend/segmentation/requirements.txt",
+              "essays": "backend/essays/module/requirements.txt",
+              "pytest-ci": "backend/requirements-pytest-ci.txt",
+          }
+          # Must be PRESENT in both of these, not merely in agreement.
+          PRESENCE = ("ml", "essays")
+          REQUIRED = ("torch", "torchvision", "transformers", "numpy")
+
+          fail = 0
+
+          def canon(name):
+              # PEP 503: huggingface_hub and huggingface-hub are one project,
+              # and this repo spells some names both ways.
+              return re.sub(r"[-_.]+", "-", name).lower()
+
+          def parse(path):
+              global fail
+              out = {}
+              with open(path, encoding="utf-8") as fh:
+                  for lineno, raw in enumerate(fh, 1):
+                      line = raw.strip()
+                      # Blank, whole-line comment, or a pip option (-r, --index-url).
+                      if not line or line.startswith("#") or line.startswith("-"):
+                          continue
+                      # pip requires whitespace before an inline comment.
+                      line = re.split(r"\s+#", line, 1)[0].strip()
+                      if not line:
+                          continue
+                      try:
+                          req = Requirement(line)
+                      except Exception as exc:
+                          print("::error file=%s,line=%d::unparseable requirement %r (%s)"
+                                % (path, lineno, line, exc))
+                          fail = 1
+                          continue
+                      key = canon(req.name)
+                      spec = str(req.specifier)
+                      if not spec:
+                          # A bare name makes no claim, so it cannot disagree
+                          # with one. requirements-pytest-ci.txt leaves the
+                          # imaging libraries deliberately unpinned and says so
+                          # in its own header; that is a decision, not drift.
+                          continue
+                      if key in out:
+                          # pip refuses a file with two lines for one project
+                          # ("Double requirement given"), so this is a broken
+                          # file, not a style question. head -1 used to hide it.
+                          print("::error file=%s,line=%d::%s named twice (%r then %r)"
+                                % (path, lineno, key, out[key][0], spec))
+                          fail = 1
+                          continue
+                      out[key] = (spec, lineno)
+              return out
+
+          parsed = {tag: parse(path) for tag, path in FILES.items()}
+
+          for pkg in (canon(p) for p in REQUIRED):
+              missing = [t for t in PRESENCE if pkg not in parsed[t]]
+              if missing:
+                  print("::error::%s pin missing from %s" % (pkg, ", ".join(missing)))
+                  fail = 1
+
+          everywhere = sorted(set().union(*(set(p) for p in parsed.values())))
+          shared = [p for p in everywhere
+                    if sum(1 for t in parsed if p in parsed[t]) > 1]
+          if not shared:
+              print("::error::no shared requirements found -- the parser is broken")
+              fail = 1
+
+          for pkg in shared:
+              seen = {t: parsed[t][pkg][0] for t in parsed if pkg in parsed[t]}
+              if len(set(seen.values())) > 1:
+                  print("::error::%s specifier drift -- %s"
+                        % (pkg, "  ".join("%s=%s%s" % (t, pkg, s)
+                                          for t, s in sorted(seen.items()))))
+                  fail = 1
+              else:
+                  print("ok  %s%s  [%s]"
+                        % (pkg, list(seen.values())[0], ", ".join(sorted(seen))))
+
+          sys.exit(fail)
+          EOF
 
   python-tests:
     name: python-tests
@@ -179,7 +291,7 @@ jobs:
           # GITHUB_TOKEN in .git/config, readable by anything the suites run.
           persist-credentials: false
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.10'
           cache: pip

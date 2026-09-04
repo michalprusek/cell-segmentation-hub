@@ -1,23 +1,24 @@
 # Database backup
 
-Production runs PostgreSQL (`spheroseg_blue` on container `spheroseg-postgres`).
+Production runs PostgreSQL (database `spheroseg` on container `spheroseg-postgres`).
 This page covers the automated backup / retention strategy and how to restore.
 
 ## Status
 
-`scripts/backup-database.sh` exists and works (PostgreSQL `pg_dump` with
-gzip + integrity check + retention pruning), but historically nothing
-scheduled it. Two install paths are documented below — pick one.
+`scripts/backup-database.sh` (PostgreSQL `pg_dump` with gzip + integrity
+check + retention pruning) is scheduled by the systemd timer below, installed
+2026-08-26 and firing nightly. Two install paths are documented — systemd is
+the one in use.
 
 ## Layout
 
-| Path                                          | Purpose                                                                        | Owner  |
-| --------------------------------------------- | ------------------------------------------------------------------------------ | ------ |
-| `~/spheroseg-backups/`                        | Daily compressed dumps, named `postgres_spheroseg_blue_YYYYMMDD_HHMMSS.sql.gz` | `cvat` |
-| `~/spheroseg-backups/backup.log`              | Append-only log of each run                                                    | `cvat` |
-| `scripts/backup-database.sh`                  | The actual backup script (env-overridable)                                     | repo   |
-| `scripts/spheroseg-backup.service` + `.timer` | systemd units (oneshot daily)                                                  | repo   |
-| `scripts/install-backup-systemd.sh`           | Helper to install the units                                                    | repo   |
+| Path                                          | Purpose                                                                   | Owner  |
+| --------------------------------------------- | ------------------------------------------------------------------------- | ------ |
+| `~/spheroseg-backups/`                        | Daily compressed dumps, named `postgres_spheroseg_YYYYMMDD_HHMMSS.sql.gz` | `cvat` |
+| `~/spheroseg-backups/backup.log`              | Append-only log of each run                                               | `cvat` |
+| `scripts/backup-database.sh`                  | The actual backup script (env-overridable)                                | repo   |
+| `scripts/spheroseg-backup.service` + `.timer` | systemd units (oneshot daily)                                             | repo   |
+| `scripts/install-backup-systemd.sh`           | Helper to install the units                                               | repo   |
 
 `BACKUP_DIR`, `LOG_FILE`, and `RETENTION_DAYS` are env-overridable, so
 the script also works when invoked directly without root privileges.
@@ -71,14 +72,14 @@ stderr (which cron mails to root by default).
 
 ```bash
 # Pick the dump you want (latest example)
-LATEST=$(ls -t ~/spheroseg-backups/postgres_spheroseg_blue_*.sql.gz | head -1)
+LATEST=$(ls -t ~/spheroseg-backups/postgres_spheroseg_*.sql.gz | head -1)
 
 # Stop services that write to the DB so the restore is consistent
 docker compose -f docker-compose.production.yml stop backend ml
 
 # Drop + recreate the schema (SQL contains DROP TABLE/INDEX/etc.)
 gunzip -c "$LATEST" | docker exec -i spheroseg-postgres psql \
-    -U spheroseg -d spheroseg_blue
+    -U spheroseg -d spheroseg
 
 # Restart writers
 docker compose -f docker-compose.production.yml start backend ml

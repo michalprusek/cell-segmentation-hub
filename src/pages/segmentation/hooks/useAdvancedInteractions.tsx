@@ -17,7 +17,9 @@ import { vertexSpatialIndex } from '@/lib/rendering/VertexSpatialIndex';
 import { polylineSemanticsForProjectType } from '@/lib/polylineSemantics';
 import {
   findJoinTarget,
+  scanJoinTargets,
   joinPolylinePoints,
+  inheritJoinClass,
   nearestEndpoint,
   endpointPoint,
   type Endpoint,
@@ -43,6 +45,15 @@ interface UseAdvancedInteractionsProps {
   activeInstanceIdRef?: React.RefObject<string>;
   /** Gates the MT-specific Add-Points auto-anchor flow. */
   projectType?: ProjectType;
+  /**
+   * Called when an Add-Points click landed on a foreign polyline endpoint
+   * that is close enough to join but carries a DIFFERENT label. The editor
+   * turns it into a toast; this hook cannot call `t()` itself (it is not
+   * mounted under `LanguageProvider` in the hook tests, and composing the
+   * sentence here would be a hard-coded English string either way), so the
+   * message stays at the render layer.
+   */
+  onJoinBlockedByClass?: () => void;
 
   // State setters
   onPolygonSelection: (id: string | null) => void; // Centralized selection handler
@@ -85,6 +96,7 @@ export const useAdvancedInteractions = ({
   activePartClassRef,
   activeInstanceIdRef,
   projectType,
+  onJoinBlockedByClass,
   onPolygonSelection,
   setEditMode,
   setInteractionState,
@@ -265,11 +277,11 @@ export const useAdvancedInteractions = ({
         hitRadius
       );
 
-      // Join: clicking a same-class foreign polyline's endpoint merges it
+      // Join: clicking a compatible foreign polyline's endpoint merges it
       // into the selected polyline (A survives, B is dropped from this frame).
       // Prefer the join only when the foreign endpoint is at least as close
       // as A's own nearest vertex, so existing splice/extend keeps priority.
-      const joinTarget = findJoinTarget(
+      const { target: joinTarget, blockedByClass } = scanJoinTargets(
         polygons,
         selectedPolygon,
         imagePoint,
@@ -279,6 +291,13 @@ export const useAdvancedInteractions = ({
       const ownVertexDistSq = closestVertex
         ? closestVertex.distance ** 2
         : Infinity;
+      // A refused join used to be completely silent — no toast, no hover
+      // ring, the click just became a plain add-point — which is how the
+      // feature came to look broken. Say why, then fall through so the click
+      // still does its other job.
+      if (blockedByClass && blockedByClass.distanceSq <= ownVertexDistSq) {
+        onJoinBlockedByClass?.();
+      }
       if (joinTarget && joinTarget.distanceSq <= ownVertexDistSq) {
         const targetPolygon = polygons.find(p => p.id === joinTarget.polygonId);
         if (targetPolygon) {
@@ -317,11 +336,22 @@ export const useAdvancedInteractions = ({
             joinTarget.endpoint,
             bridge
           );
+          // A survives, so A's fields are the merged polyline's fields — but
+          // when A is the UNLABELLED side the label has to come across from
+          // B, or the join would quietly throw away a label the user had
+          // already assigned.
+          const classPatch = inheritJoinClass(
+            selectedPolygon,
+            targetPolygon,
+            projectType
+          );
           updatePolygons(
             polygons
               .filter(p => p.id !== targetPolygon.id)
               .map(p =>
-                p.id === selectedPolygonId ? { ...p, points: merged } : p
+                p.id === selectedPolygonId
+                  ? { ...p, ...classPatch, points: merged }
+                  : p
               )
           );
           setTempPoints([]);
@@ -434,6 +464,7 @@ export const useAdvancedInteractions = ({
       setInteractionState,
       setEditMode,
       projectType,
+      onJoinBlockedByClass,
     ]
   );
 
@@ -492,10 +523,23 @@ export const useAdvancedInteractions = ({
   );
 
   /**
-   * Handle Create Polyline double-click to finalize
+   * Finalize an in-progress CreatePolyline.
+   *
+   * The mode guard is load-bearing, not defensive. This used to be bound
+   * straight to the canvas `onDoubleClick` with no mode check at all, so a
+   * double-click ANYWHERE that had left ≥2 temp points behind appended a
+   * brand-new `geometry:'polyline'` — in AddPoints that produced Valerie's
+   * stray polygon instead of the elongation (reported 2026-09-04), and in
+   * CreatePolygon it turned the in-progress polygon into a polyline. The
+   * canvas now binds the mode-aware `handleCanvasDoubleClick`; this stays
+   * guarded so no future binding can re-introduce the same bug.
+   *
+   * No duplicate trailing point: `handleMouseDown` drops the second
+   * mousedown of a double-click (`e.detail > 1`), so `tempPoints` here holds
+   * exactly the points the user placed.
    */
   const handleCreatePolylineDoubleClick = useCallback(() => {
-    // No duplicate point: React 18 batching means both click setState calls share the same base snapshot
+    if (editMode !== EditMode.CreatePolyline) return;
     if (tempPoints.length >= 2) {
       const newPolyline = createPolygon(tempPoints);
       // A polyline is a generic labeling primitive; its identity fields follow
@@ -525,6 +569,7 @@ export const useAdvancedInteractions = ({
       setEditMode(EditMode.View);
     }
   }, [
+    editMode,
     tempPoints,
     getPolygons,
     updatePolygons,
@@ -774,6 +819,32 @@ export const useAdvancedInteractions = ({
           }
         }
 
+        // The SECOND mousedown of a physical double-click must not place a
+        // point WHERE THE DOUBLE-CLICK ITSELF COMMITS — counting it would
+        // leave a duplicate vertex at the finishing position. `detail` is the
+        // browser's own click counter and reads ≥2 exactly when a `dblclick`
+        // follows, so the two decisions can never disagree; a fast run of
+        // clicks at DIFFERENT positions stays at 1 and still places every one.
+        //
+        // The condition is "will a dblclick commit here", NOT the mode alone.
+        // `handleEnterPolyline` refuses AddPoints on a CLOSED polygon (that
+        // flow finishes by clicking a second vertex) and refuses
+        // CreatePolygon entirely (it closes by clicking its first point), so
+        // suppressing there would drop a vertex and commit nothing in its
+        // place — a silent loss, where the duplicate at least was visible and
+        // removable with the right-click step-undo. Slice is ungated for the
+        // same reason: its two clicks are the two ends of the cut.
+        //
+        // `getPolygons()` runs only on an actual repeat click in AddPoints.
+        const isRepeatClick =
+          e.detail > 1 &&
+          (editMode === EditMode.CreatePolyline ||
+            (editMode === EditMode.AddPoints &&
+              (() => {
+                const sel = getPolygons().find(p => p.id === selectedPolygonId);
+                return sel?.geometry === 'polyline' && sel.points.length >= 2;
+              })()));
+
         switch (editMode) {
           case EditMode.View:
             handleViewModeClick(imagePoint, e);
@@ -782,13 +853,13 @@ export const useAdvancedInteractions = ({
             handleCreatePolygonClick(imagePoint);
             break;
           case EditMode.CreatePolyline:
-            handleCreatePolylineClick(imagePoint);
+            if (!isRepeatClick) handleCreatePolylineClick(imagePoint);
             break;
           case EditMode.EditVertices:
             handleEditVerticesClick(imagePoint, e);
             break;
           case EditMode.AddPoints:
-            handleAddPointsClick(imagePoint);
+            if (!isRepeatClick) handleAddPointsClick(imagePoint);
             break;
           case EditMode.Slice:
             handleSliceClick(imagePoint);

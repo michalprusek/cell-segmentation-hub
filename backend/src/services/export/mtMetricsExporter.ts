@@ -32,7 +32,7 @@ import { prisma } from '../../db/prismaClient';
 import { getLabels as getMtTypeLabels } from '../mtTypeLabelService';
 import { config } from '../../utils/config';
 import { logger } from '../../utils/logger';
-import { CHANNEL_NAME_RE } from '../video/types';
+import { isSafeChannelName } from '../video/types';
 import {
   buildInstanceLabelMap,
   MICROTUBULE_LABEL_PREFIX,
@@ -564,7 +564,7 @@ export async function computeMTMetrics(
   // at upload), so it needs no re-check.
   if (!requestAllChannels) {
     for (const ch of options.channels) {
-      if (!CHANNEL_NAME_RE.test(ch)) {
+      if (!isSafeChannelName(ch)) {
         throw new Error(`Invalid channel name in MT metrics options: ${ch}`);
       }
     }
@@ -1105,9 +1105,12 @@ export function pivotMTMetricsWide(rows: readonly MTMetricsRow[]): {
         areaPx: row.areaPx,
         areaUm2: row.areaUm2,
         pixelCount: row.pixelCount,
-        // Null-prototype: channel names come from file metadata / user input
-        // and `CHANNEL_NAME_RE` happily accepts `__proto__`, which on a plain
-        // object would set the prototype instead of a key.
+        // Null-prototype, kept as belt and braces. `isSafeChannelName` now
+        // rejects `__proto__` (and every other `Object.prototype` member) at
+        // the gate, so a stored name can no longer reach here — but this map
+        // is keyed by a name that came from file metadata / user input, and on
+        // a plain object such a key would set the prototype instead of adding
+        // an entry.
         channels: Object.create(null) as MTMetricsWideRow['channels'],
       };
       byKey.set(key, wide);

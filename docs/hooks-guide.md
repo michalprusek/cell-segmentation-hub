@@ -10,33 +10,32 @@ This project uses comprehensive Git hooks to ensure code quality and prevent iss
 
 **Purpose**: Validates code quality before each commit
 
-**Checks performed:**
+**Checks performed** — the eleven numbered steps in the hook, in order:
 
-- ✅ Git status (merge conflicts, large files, sensitive files)
-- ✅ Code formatting (Prettier)
-- ✅ Linting (ESLint)
-- ✅ TypeScript type checking (frontend & backend)
-- ✅ Unit tests
-- ✅ Security audit
-- ✅ Code quality (console.log, debugger, TODOs)
-- ✅ Docker configuration validation
-- ✅ Dependencies validation
+1. Branch protection — direct commits to `main` are refused
+2. Merge conflict markers
+3. `debugger` / `console.log` (test files, logger files and comments excluded)
+4. TODO / FIXME comments (warning only)
+5. Potential secrets (currently disabled — too many false positives)
+6. Large files (> 1 MB)
+7. ESLint on staged **frontend** files, zero warnings, no auto-fix
+   - 7b. `scripts/eslint-baseline.mjs` — whole-tree baseline gate on
+     `backend/src`, because the root ESLint config ignores `backend/**`
+8. TypeScript, frontend and backend (`scripts/type-check-baseline.mjs`)
+9. Python files, if any changed
+10. `lint-staged` (Prettier, `scripts/code-quality-check.js`, madge,
+    `scripts/verify-shared-types.cjs`)
+11. Commit message format, when the message is already available
 
-**Configuration:**
+**It does not run unit tests, a security audit, or any Docker or dependency
+validation.** Those either live in the pre-push hook (below) or do not exist.
 
-```bash
-# Run with strict mode (blocks commit on errors)
-STRICT_MODE=true git commit -m "your message"
-
-# Disable auto-fix
-AUTO_FIX=false git commit -m "your message"
-
-# Skip tests (not recommended)
-SKIP_TESTS=true git commit -m "your message"
-
-# Disable Docker checks
-DOCKER_CHECKS=false git commit -m "your message"
-```
+**There is no hook configuration.** Earlier revisions of this page documented
+`STRICT_MODE`, `AUTO_FIX`, `SKIP_TESTS` and `DOCKER_CHECKS` environment
+variables and an `.env.hooks` file to hold them. No hook has ever read any of
+them — `grep -rniE 'STRICT_MODE|AUTO_FIX|SKIP_TESTS|DOCKER_CHECKS' .husky/`
+returns nothing — so setting one is a no-op and the full checks run anyway.
+To change what a hook does, edit the hook.
 
 ### 2. Pre-Merge Hook (`.husky/pre-merge`)
 
@@ -65,6 +64,21 @@ DOCKER_CHECKS=false git commit -m "your message"
 ./scripts/pre-merge-check.sh production
 ```
 
+### 2b. Pre-Push Hook (`.husky/pre-push`)
+
+**Purpose**: the heavier checks, too slow for every commit
+
+1. `npm audit` on frontend and backend dependencies
+2. Circular dependencies (`npx madge --circular src/`)
+3. Bundle size, if a build output is present
+4. Test coverage
+5. Documentation check
+
+Only step 2 blocks unconditionally — a circular import is a hard `exit 1`.
+Steps 1 and 4 prompt interactively and continue on their own in a
+non-interactive shell, so in CI-like conditions treat their output as
+advisory. The merge gate is `.github/workflows/ci.yml`, not this hook.
+
 ### 3. Commit Message Hook (`.husky/commit-msg`)
 
 **Purpose**: Ensures commit messages follow conventional commits format
@@ -92,12 +106,19 @@ git commit -m "docs: update API documentation"
 ## GitHub Actions Integration
 
 The chronically-failing pre-merge / CI-CD / quality-gates workflows were
-removed (see `chore(ci): remove broken workflows, add nightly drift`).
-The active CI surface is now intentionally minimal — the pre-commit hook
-and `make ci` are the real gates.
+removed in PR #161 (see `chore(ci): remove broken workflows, add nightly
+drift`). The surface that remains is intentionally minimal, but one of the
+three workflows **is** a blocking gate.
 
 ### Active workflows
 
+- **`.github/workflows/ci.yml`** — the merge gate. Four jobs: `frontend`
+  (TypeScript baseline, ESLint at zero warnings, i18n across six locales,
+  Vitest with a coverage floor), `backend` (TypeScript, ESLint baseline gate,
+  Vitest with a coverage floor), `pins` (Python undefined names, parse check,
+  ML/essays pin agreement) and `python-tests`. The repository's
+  `main-protection` ruleset requires the `frontend` and `backend` contexts,
+  so those two block the merge.
 - **`.github/workflows/codeql.yml`** — passive security scanning. Results
   appear in the repo's Security tab, never blocks PRs.
 - **`.github/workflows/nightly-drift.yml`** — daily cron on `main`.
@@ -108,12 +129,12 @@ and `make ci` are the real gates.
 ### Local equivalent
 
 ```bash
-make ci   # Runs the same checks the nightly job runs
+make ci        # TypeScript + ESLint + i18n + doc links + Python, ~30 s
+npx vitest run # what `make ci` leaves out and CI gates on
 ```
 
-This mirrors what `pre-merge-checks.yml` used to do, minus the broken
-Docker / performance / integration jobs that never delivered useful
-signal.
+`make ci` is fast because it skips the unit suites. Running it green is not
+the same as passing CI.
 
 ## Installation & Setup
 
@@ -149,30 +170,25 @@ rm -rf node_modules package-lock.json
 npm install
 ```
 
-#### Docker tests failing
+#### Docker services needed by a check
 
 ```bash
-# Ensure Docker services are running
-docker compose -f docker-compose.staging.yml up -d
-
-# Check service health
-docker compose -f docker-compose.staging.yml ps
+# There is no staging compose file; use the production one locally
+docker compose -f docker-compose.production.yml --env-file .env.production up -d
+docker compose -f docker-compose.production.yml ps
 ```
 
-## Bypassing Hooks (Emergency Only)
+## Bypassing Hooks
 
-⚠️ **WARNING**: Bypassing hooks should only be done in emergencies
+**Don't.** `git commit --no-verify` is not an accepted escape hatch in this
+project — the hooks are what keep `main` releasable, and the failures they
+catch (a hard backend ESLint error, a `console.log`, a direct commit to
+`main`) are exactly the ones that reach production otherwise. If a hook is
+wrong, fix the hook in its own commit.
 
-```bash
-# Bypass pre-commit hook
-git commit --no-verify -m "emergency fix"
-
-# Bypass with environment variable
-STRICT_MODE=false git commit -m "allow with warnings"
-
-# Skip specific checks
-SKIP_TESTS=true DOCKER_CHECKS=false git commit -m "quick fix"
-```
+The environment variables earlier revisions of this page offered as a softer
+bypass (`STRICT_MODE`, `SKIP_TESTS`, `DOCKER_CHECKS`) were never implemented;
+setting them changes nothing.
 
 ## Best Practices
 
@@ -207,24 +223,6 @@ SKIP_TESTS=true DOCKER_CHECKS=false git commit -m "quick fix"
    ```
 
 ## Hook Configuration
-
-### Environment Variables
-
-Create `.env.hooks` file for persistent configuration:
-
-```bash
-# .env.hooks
-STRICT_MODE=true        # Enforce all checks
-AUTO_FIX=true          # Auto-fix formatting/linting
-DOCKER_CHECKS=true     # Run Docker validations
-SKIP_TESTS=false       # Never skip tests
-```
-
-Load in your shell:
-
-```bash
-source .env.hooks
-```
 
 ### Custom Configuration
 
@@ -268,11 +266,9 @@ For issues or questions:
 # Normal commit
 git commit -m "feat: add new feature"
 
-# Commit with warnings allowed
-STRICT_MODE=false git commit -m "fix: urgent patch"
-
-# Skip tests (development only)
-SKIP_TESTS=true git commit -m "wip: work in progress"
+# The local gate, before opening a PR
+make ci
+npx vitest run
 
 # Full pre-merge validation
 ./scripts/pre-merge-check.sh
