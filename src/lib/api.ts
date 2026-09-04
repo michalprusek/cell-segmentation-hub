@@ -6,6 +6,8 @@ import {
   type ProjectType,
   type ProjectImage,
   type SegmentationStatus,
+  type AdminUserListResult,
+  type User,
 } from '@/types';
 import { logger } from '@/lib/logger';
 import config from '@/lib/config';
@@ -2214,6 +2216,49 @@ class ApiClient {
     averageImageSizeMB: number;
   }> {
     const response = await this.instance.get('/auth/storage-stats');
+    return this.extractData(response);
+  }
+
+  // ── Admin support surface ────────────────────────────────────────────────
+  //
+  // All three are server-gated: `requireAdmin` re-reads the `users` row on
+  // every request, so nothing here depends on the client believing it is an
+  // admin. The impersonation calls carry no token — the server swaps the
+  // httpOnly cookies, exactly like /auth/login.
+
+  /** One page of registered users. Admin-only. */
+  async listAdminUsers(params?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+  }): Promise<AdminUserListResult> {
+    const response = await this.instance.get('/admin/users', { params });
+    return this.extractData(response);
+  }
+
+  /**
+   * Start acting as `userId`. On success the browser's auth cookies belong to
+   * the TARGET, so every subsequent request is theirs — which is why callers
+   * must reload the app rather than update React state: the React Query cache,
+   * the WebSocket subscription and every context still hold the admin's data.
+   */
+  async impersonateUser(userId: string): Promise<{
+    user: User;
+    impersonatedBy: { id: string; email: string };
+  }> {
+    const response = await this.instance.post(
+      `/admin/impersonate/${encodeURIComponent(userId)}`
+    );
+    return this.extractData(response);
+  }
+
+  /**
+   * Return to the admin's own account. Not gated on `requireAdmin` server-side
+   * — the live session is the target's — but it needs the signed impersonation
+   * claim, so a user who was never impersonated gets a 400.
+   */
+  async stopImpersonation(): Promise<{ user: User }> {
+    const response = await this.instance.post('/admin/impersonate/stop');
     return this.extractData(response);
   }
 

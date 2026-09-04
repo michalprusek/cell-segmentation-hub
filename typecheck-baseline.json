@@ -7,8 +7,8 @@
   "totals": {
     "tsconfig.app.json": 399,
     "tsconfig.node.json": 21,
-    "tsconfig.test.json": 1229,
-    "all": 1649
+    "tsconfig.test.json": 1232,
+    "all": 1652
   },
   "projects": {
     "tsconfig.app.json": {
@@ -456,11 +456,13 @@
     "tsconfig.test.json": {
       "src/App.tsx": {
         "TS2322: Type '{ children: Element; future: { v7_startTransition: boolean; v7_relativeSplatPath: boolean; }; }' is not assignable to type 'IntrinsicAttributes & BrowserRouterProps'.": 1,
+        "TS6307: File 'src/components/AdminRoute.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
         "TS6307: File 'src/components/AuthToastProvider.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
         "TS6307: File 'src/components/ErrorBoundary.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
         "TS6307: File 'src/components/FloatingUploadProgress.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
         "TS6307: File 'src/components/PageLoadingFallback.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
         "TS6307: File 'src/components/ProtectedRoute.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
+        "TS6307: File 'src/components/admin/ImpersonationBanner.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
         "TS6307: File 'src/components/ui/sonner.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
         "TS6307: File 'src/components/ui/tooltip.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
         "TS6307: File 'src/contexts/ModelContext.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
@@ -482,6 +484,7 @@
         "TS6307: File 'src/pages/SignIn.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
         "TS6307: File 'src/pages/SignUp.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
         "TS6307: File 'src/pages/TermsOfService.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
+        "TS6307: File 'src/pages/admin/AdminUsers.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
         "TS6307: File 'src/pages/export/ProjectExport.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
         "TS6307: File 'src/pages/segmentation/SegmentationEditor.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
         "TS6307: File 'src/pages/segmenter/SegmenterDashboard.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,

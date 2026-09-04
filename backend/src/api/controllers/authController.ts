@@ -639,9 +639,19 @@ export const getProfile = asyncHandler(async (req: Request, res: Response) => {
       return ResponseHelper.notFound(res, 'Profil uživatele nebyl nalezen');
     }
 
+    // Impersonation is REQUEST state, not user state, so it is attached here
+    // rather than inside UserService (which only has a userId). The SPA needs
+    // it on the same call it already makes on every cold load, or a page
+    // reload mid-impersonation would render as the target with no banner —
+    // exactly the situation the banner exists to prevent.
     return ResponseHelper.success(
       res,
-      profile,
+      {
+        ...profile,
+        impersonatedBy: req.impersonator
+          ? { id: req.impersonator.id, email: req.impersonator.email }
+          : null,
+      },
       'Profil uživatele úspěšně načten'
     );
   } catch (error) {

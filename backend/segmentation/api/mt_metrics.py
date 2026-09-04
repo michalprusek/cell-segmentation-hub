@@ -27,10 +27,12 @@ stays the single source of truth.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import re
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Dict, List, Literal, Optional
 
@@ -58,6 +60,51 @@ from ._log_safe import scrub  # noqa: E402
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+# One slot, on purpose — the same arrangement `/kymograph` uses, for the same
+# reason and with the same trade-off.
+#
+# Both handlers below are fully blocking: an ND2 decode, per-frame geometry, and
+# either NumPy statistics or a marching-squares trace. As `async def` they ran
+# ON THE EVENT LOOP, and uvicorn serves this container with `--workers 1`, so
+# for the whole of a real export — a measured 24m32s for 299 frames x 153
+# polylines x 2 channels — nothing else in the ML service could be answered:
+# not `/segment`, not `/track`, not `/kymograph`, and not the `GET /health` the
+# compose healthcheck polls every 30 s with a 10 s timeout. The container is
+# marked unhealthy while it is doing exactly what it was asked to do.
+#
+# `def` instead of `async def` would fix that by handing them to Starlette's
+# 40-slot threadpool, and that is the wrong fix here: `_load_volume` holds the
+# entire video (3.4 GB for the real 300-frame 2-channel container 4972cad8) and
+# `frame_geometry` holds one full-frame mask per polyline, so forty concurrent
+# exports would multiply both against this service's 12 GiB cgroup limit, on a
+# box and a card shared with the essays worker.
+#
+# A one-worker executor keeps the concurrency the event loop was providing
+# BETWEEN THESE TWO — exactly one export's geometry in flight — and gives back
+# the only thing the event loop should never have been holding: the ability to
+# answer anything else. They share one executor because they are two phases of
+# ONE export and must not run at the same time as each other either;
+# `exportService.mlRequestGate` already serialises them from the Node side, and
+# this makes that hold even if two exports overlap.
+#
+# What it DOES change is that another endpoint can now start during an export
+# instead of waiting for the loop. That is the point, and the peak it costs is
+# small: `/kymograph` already had its own one-slot executor and its own decode
+# pool (four frames of ~11 MB), and `/segment`'s heaviest resident model is
+# 1.7 GiB, against `_load_volume`'s 3.4 GB and a 12 GiB limit. The alternative
+# — a single executor shared across every heavy endpoint — would restore the
+# old serialisation wholesale, including the part of it that was the bug.
+#
+# Verified against a real uvicorn `--workers 1` server with the 59 real
+# polylines of 4972cad8 frame 0 repeated to 236, polling GET /health throughout:
+#
+#                    request    /health probes    worst /health latency
+#   before             9.9 s                 2                  9.84 s
+#   after              1.5 s                25                  0.02 s
+_MT_METRICS_EXECUTOR = ThreadPoolExecutor(
+    max_workers=1, thread_name_prefix="mt-metrics"
+)
 
 # Storage root that the ML container may access. Matches the volume mount in
 # docker-compose (./backend/uploads → /app/uploads) and the UPLOAD_DIR env
@@ -567,6 +614,14 @@ def _emit_channel_rows(
 
 @router.post("/mt-metrics", response_model=MTMetricsResponse)
 async def mt_metrics(req: MTMetricsRequest) -> MTMetricsResponse:
+    """Thin async wrapper: the work runs on ``_MT_METRICS_EXECUTOR`` so the
+    event loop stays free. See ``_mt_metrics_sync`` for the body."""
+    return await asyncio.get_running_loop().run_in_executor(
+        _MT_METRICS_EXECUTOR, _mt_metrics_sync, req
+    )
+
+
+def _mt_metrics_sync(req: MTMetricsRequest) -> MTMetricsResponse:
     """Compute per-MT-per-channel intensity metrics for one video.
 
     Algorithm per frame:
@@ -650,12 +705,26 @@ async def mt_metrics(req: MTMetricsRequest) -> MTMetricsResponse:
                 pix += int(plane.size)
                 covered += 1
         else:
-            # Dense: unchanged from before sparse channels existed, deliberately
-            # kept as one reduction so a dense container's totals stay
-            # bit-identical.
-            chan = volume[:, ci].astype(np.float64)
-            pix = int(chan.size)
-            total = float(chan.sum())
+            # Dense: still ONE reduction, but without materialising a float64
+            # COPY of the whole channel first. `astype(np.float64)` on
+            # `volume[:, ci]` allocated T*H*W*8 bytes, and on the real
+            # production container behind 4972cad8 — (300, 2, 1476, 1924)
+            # uint16, so `volume` itself is already 3.4 GB — that copy is
+            # **6.8 GB per channel**, against this service's 12 GiB cgroup
+            # limit. Passing `dtype=` accumulates in float64 without the copy.
+            # Measured over the first 40 frames of that file: 0.41 s and a
+            # 909 MB peak allocation become 0.09 s and 0.13 MB, per channel,
+            # with the total EQUAL (`==`, not `approx`) on both channels.
+            #
+            # Bit-identical, and provably rather than incidentally: the planes
+            # are uint16, so every partial sum is an EXACT integer in float64
+            # regardless of summation order — the ceiling here is
+            # 300 * 2.84e6 * 65535 ~ 5.6e13, two orders of magnitude under
+            # 2^53. (`np.sum` already used pairwise summation on the copy; the
+            # dtype= form uses the same pairwise kernel on the same values.)
+            plane_px = int(volume.shape[2]) * int(volume.shape[3])
+            pix = plane_px * int(T)
+            total = float(np.sum(volume[:, ci], dtype=np.float64))
             covered = int(T)
         channel_summaries.append(MTChannelSummary(
             channel=name,
@@ -883,23 +952,63 @@ def _vicinity_composite_roi_bytes(
     on real frames). Collinear vertices are dropped so the path stays compact.
     Returns None for an empty mask (no ring — the metrics side reports null
     background for the same case).
+
+    EVERY step here runs on the ring's BOUNDING BOX, not on the frame. A ring is
+    a sliver — measured on frame 0 of production container 4972cad8 (1476x1924,
+    59 real polylines) the median ring is 4 437 px, 0.16 % of the frame — and
+    every step used to be linear in the whole frame: the ``uint8`` copy, the
+    ``sum``, a **22.7 MB float64 pad** per polyline, and marching squares over
+    all of it. Interleaved in one process, those 59 rings cost **2 703 ms
+    un-windowed against 143 ms windowed (18.9x)**, with all 59 ``.roi`` blobs
+    BYTE-IDENTICAL.
+
+    ``imagejRoiEncoder.ts`` calls this endpoint "intrinsically cheap" because it
+    reads no raster; that was measuring the wrong axis. Scaling the per-ring
+    cost above to the export ``mlRequestBudget.ts`` records as real — 299 frames
+    at ~2.08 MP, 153 polylines per frame — puts the un-windowed trace at roughly
+    1 500 s against the 2 333 s timeout that caller computes for it, while it
+    also queues behind a ~1 472 s ``/mt-metrics`` on the same single worker.
+    Exceeding it is not an error the user sees: ``fetchMtBackgroundRois``
+    catches, logs, and ships the degraded wide-stroke band instead of the exact
+    composite ROI. Windowed, the same work is ~80 s.
+
+    It is exact rather than close: a window containing every set pixel contains
+    every 0.5 iso-crossing (a crossing needs a set pixel on one side), the
+    crossings sit at exactly-representable half-integers, and adding the
+    integer window origin in float64 is lossless — so marching squares sees the
+    identical local neighbourhoods in the identical scan order and the vertex
+    coordinates come out bit-for-bit the same.
+
+    The lossless step is worth spelling out: on a 0/1 mask every 0.5 crossing is
+    the midpoint of a 0-1 pair, i.e. an exact multiple of 0.5, so both
+    ``c_frame - 0.5`` and ``(c_window - 0.5) + origin`` are exactly
+    representable at these magnitudes and are the SAME double. That is also what
+    keeps the collinearity ``cross`` below identical — it is built from
+    differences of those exact half-integers, which are themselves exact, so
+    shifting the coordinates cannot round a vertex into or out of the path.
     """
     import struct
     import roifile
     from skimage import measure
 
-    mask = np.ascontiguousarray(vicinity.astype(np.uint8))
-    if mask.sum() == 0:
+    bbox = mt_measure.mask_bbox(
+        vicinity if vicinity.dtype == bool else vicinity.astype(bool)
+    )
+    if bbox is None:
         return None
-    # Pad by 1 so a ring touching the frame border still traces a closed contour;
-    # the pad is removed again by the -1 below.
+    wy0, wy1, wx0, wx1 = bbox
+    mask = np.ascontiguousarray(vicinity[wy0:wy1, wx0:wx1].astype(np.uint8))
+    # Pad by 1 so a ring touching the window border still traces a closed
+    # contour; the pad is removed again by the -1 folded into the shift below.
     contours = measure.find_contours(np.pad(mask, 1).astype(np.float64), 0.5)
 
     path: List[float] = []
     for c in contours:
-        # c is (row, col) on the padded grid. Unpad (-1) and shift +0.5 so the
-        # edge crossings land on ImageJ pixel corners: (x, y) = (col-0.5, row-0.5).
-        pts = np.column_stack((c[:, 1] - 0.5, c[:, 0] - 0.5))
+        # c is (row, col) on the padded WINDOW grid. Unpad (-1), shift +0.5 so
+        # the edge crossings land on ImageJ pixel corners, then add the window
+        # origin back so the path is in FRAME coordinates:
+        # (x, y) = (col - 0.5 + wx0, row - 0.5 + wy0).
+        pts = np.column_stack((c[:, 1] - 0.5 + wx0, c[:, 0] - 0.5 + wy0))
         if len(pts) > 1 and np.allclose(pts[0], pts[-1]):
             pts = pts[:-1]  # find_contours repeats the first point to close
         if len(pts) < 3:
@@ -920,14 +1029,17 @@ def _vicinity_composite_roi_bytes(
         return None
     multi = np.asarray(path, dtype=np.float32)
 
-    ys, xs = np.nonzero(mask)
+    # The bounding rectangle IS the window: `mask_bbox` above is the tight box
+    # of the set pixels, so `np.nonzero(mask).min()/.max()+1` in frame
+    # coordinates are exactly (wx0, wy0, wx1, wy1) — the same four integers,
+    # without a second full-frame index materialisation.
     roi = roifile.ImagejRoi(
         roitype=roifile.ROI_TYPE.RECT,
         name=name,
-        left=int(xs.min()),
-        top=int(ys.min()),
-        right=int(xs.max()) + 1,
-        bottom=int(ys.max()) + 1,
+        left=int(wx0),
+        top=int(wy0),
+        right=int(wx1),
+        bottom=int(wy1),
         n_coordinates=0,
         shape_roi_size=int(multi.size),
         multi_coordinates=multi,
@@ -944,11 +1056,27 @@ def _vicinity_composite_roi_bytes(
 async def mt_background_rois(
     req: MTBackgroundRoisRequest,
 ) -> MTBackgroundRoisResponse:
+    """Thin async wrapper onto ``_MT_METRICS_EXECUTOR``; body below."""
+    return await asyncio.get_running_loop().run_in_executor(
+        _MT_METRICS_EXECUTOR, _mt_background_rois_sync, req
+    )
+
+
+def _mt_background_rois_sync(
+    req: MTBackgroundRoisRequest,
+) -> MTBackgroundRoisResponse:
     """Per-MT background composite ROIs for the ImageJ export.
 
     Mirrors the metrics endpoint's geometry step (exact-thickness bands →
     signal union → per-MT vicinity ring) and encodes each ring as an ImageJ
-    COMPOSITE ROI. Geometry-only (no raster read), so it is cheap.
+    COMPOSITE ROI.
+
+    It reads no raster, which used to be written down here as "so it is cheap".
+    That was measuring the wrong axis: the geometry it does read is
+    ``frame_geometry``'s full-frame masks, one per polyline, and until
+    2026-09-04 every ring was traced across the entire frame. On 59 real
+    polylines of one production frame that was 2 703 ms; windowed to each ring's
+    bounding box it is 143 ms. See ``_vicinity_composite_roi_bytes``.
     """
     import base64
 

@@ -82,6 +82,8 @@ const mockAuthValue = {
   token: 'test-token',
   loading: false,
   isAuthenticated: true,
+  isAdmin: false,
+  impersonatedBy: null,
   signIn: vi.fn(),
   signUp: vi.fn(),
   signOut: vi.fn(),
