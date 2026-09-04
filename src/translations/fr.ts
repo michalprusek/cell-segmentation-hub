@@ -488,6 +488,9 @@ export default {
         extractingFrames: 'Extraction des images {{current}}/{{total}}',
         extractingFramesPct: 'Extraction des images ({{percent}} %)',
         correctingDrift: 'Correction de la dérive',
+        correctingDriftPosition:
+          'Correction de la dérive (position {{index}}/{{total}})',
+        position: 'Position {{index}}/{{total}}',
         generatingThumbnail: 'Génération de la vignette',
         persistingPositions: 'Enregistrement des positions',
         videoReady: 'Vidéo prête',

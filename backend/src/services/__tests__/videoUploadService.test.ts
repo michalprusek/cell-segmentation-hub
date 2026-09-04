@@ -1064,4 +1064,59 @@ describe('videoUploadService — sparse channels', () => {
       'frame-2': 'frame-0',
     });
   });
+
+  // ---------------------------------------------------------------------
+  // Every phase must name itself with a TRANSLATION KEY
+  //
+  // The server cannot know the browser's locale, so a phase reported with
+  // only an English sentence reaches the upload card in English whatever the
+  // user chose. Four nested `reportProgress` calls were missed on the first
+  // pass at this and shipped "Correcting stage drift" onto a Czech UI —
+  // caught in a browser, not by a test, which is why this exists.
+  //
+  // It reads the source because the alternative is a real 300-frame video:
+  // the calls it guards are inside extraction and drift-correction
+  // callbacks that only fire on one.
+  // ---------------------------------------------------------------------
+  it('reports every progress phase with a translation key, not just English', async () => {
+    // `fs/promises` is mocked for this suite, so reach past the mock.
+    const fsp = await vi.importActual<typeof import('fs/promises')>(
+      'fs/promises'
+    );
+    const src = await fsp.readFile(
+      new URL('../videoUploadService.ts', import.meta.url),
+      'utf-8'
+    );
+
+    const unkeyed: string[] = [];
+    let searchFrom = 0;
+    let calls = 0;
+    for (;;) {
+      const at = src.indexOf('reportProgress(', searchFrom);
+      if (at === -1) break;
+      searchFrom = at + 1;
+      // Skip the definition itself.
+      if (src.slice(Math.max(0, at - 30), at).includes('const ')) continue;
+      calls += 1;
+      let depth = 0;
+      let end = at;
+      for (let i = src.indexOf('(', at); i < src.length; i++) {
+        if (src[i] === '(') depth += 1;
+        else if (src[i] === ')') {
+          depth -= 1;
+          if (depth === 0) {
+            end = i;
+            break;
+          }
+        }
+      }
+      const body = src.slice(at, end + 1);
+      if (!body.includes('images.upload.op.')) {
+        unkeyed.push(body.replace(/\s+/g, ' ').slice(0, 90));
+      }
+    }
+
+    expect(calls).toBeGreaterThan(5); // the scan found the calls at all
+    expect(unkeyed).toEqual([]);
+  });
 });

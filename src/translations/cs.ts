@@ -486,6 +486,9 @@ export default {
         extractingFrames: 'Extrahování snímků {{current}}/{{total}}',
         extractingFramesPct: 'Extrahování snímků ({{percent}} %)',
         correctingDrift: 'Korekce posunu snímku',
+        correctingDriftPosition:
+          'Korekce posunu snímku (pozice {{index}}/{{total}})',
+        position: 'Pozice {{index}}/{{total}}',
         generatingThumbnail: 'Generování náhledu',
         persistingPositions: 'Ukládání pozic',
         videoReady: 'Video připraveno',

@@ -486,6 +486,9 @@ export default {
         extractingFrames: 'Extrayendo fotogramas {{current}}/{{total}}',
         extractingFramesPct: 'Extrayendo fotogramas ({{percent}} %)',
         correctingDrift: 'Corrigiendo la deriva',
+        correctingDriftPosition:
+          'Corrigiendo la deriva (posición {{index}}/{{total}})',
+        position: 'Posición {{index}}/{{total}}',
         generatingThumbnail: 'Generando miniatura',
         persistingPositions: 'Guardando posiciones',
         videoReady: 'Vídeo listo',

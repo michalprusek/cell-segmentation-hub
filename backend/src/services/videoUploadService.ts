@@ -642,7 +642,8 @@ export async function uploadVideoFromFile(options: {
           reportProgress(
             'persisting',
             0.8 + p.progress * 0.15,
-            'Correcting stage drift'
+            'Correcting stage drift',
+            'images.upload.op.correctingDrift'
           )
         );
       }
@@ -775,13 +776,17 @@ export async function uploadVideoFromFile(options: {
         reportProgress(
           'persisting',
           0.85 + (i / positions.length) * 0.14,
-          `Correcting stage drift (position ${i + 1}/${positions.length})`
+          `Correcting stage drift (position ${i + 1}/${positions.length})`,
+          'images.upload.op.correctingDriftPosition',
+          { index: i + 1, total: positions.length }
         );
         await correctDriftForContainer(cBaseDir, pos.result.channels, dp =>
           reportProgress(
             'persisting',
             0.85 + ((i + dp.progress) / positions.length) * 0.14,
-            `Correcting stage drift (position ${i + 1}/${positions.length})`
+            `Correcting stage drift (position ${i + 1}/${positions.length})`,
+            'images.upload.op.correctingDriftPosition',
+            { index: i + 1, total: positions.length }
           )
         );
       }
@@ -804,7 +809,9 @@ export async function uploadVideoFromFile(options: {
       reportProgress(
         'persisting',
         0.85 + ((i + 1) / positions.length) * 0.14,
-        `Position ${i + 1}/${positions.length}`
+        `Position ${i + 1}/${positions.length}`,
+        'images.upload.op.position',
+        { index: i + 1, total: positions.length }
       );
     }
 

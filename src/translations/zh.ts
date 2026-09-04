@@ -451,6 +451,8 @@ export default {
         extractingFrames: '正在提取帧 {{current}}/{{total}}',
         extractingFramesPct: '正在提取帧（{{percent}}%）',
         correctingDrift: '正在校正漂移',
+        correctingDriftPosition: '正在校正漂移（位置 {{index}}/{{total}}）',
+        position: '位置 {{index}}/{{total}}',
         generatingThumbnail: '正在生成缩略图',
         persistingPositions: '正在保存位置',
         videoReady: '视频已就绪',
