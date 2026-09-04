@@ -30,12 +30,25 @@
 # Everything else is left unpinned: these are the imaging libraries the helper
 # modules use, and the tests assert on behaviour that is stable across their
 # versions. If one of them ever breaks a test, pin it here with the reason.
-pytest>=7.4
+#
+# pytest: the floor tracks backend/segmentation/requirements-test.txt. Raising
+# it from >=7.4 changes nothing about what CI installs -- an unbounded floor
+# already resolved to the newest release -- so the floor is a STATEMENT, and it
+# is only worth making if someone checked. 9.1.1 was checked on 2026-09-04
+# against ALL FOUR paths the python-tests job runs, focus_qc included:
+# 532 passed, 1 skipped. pytest 8 and 9 each dropped deprecated APIs and these
+# suites use none of them (no nose-style `setup`/`teardown` methods, no
+# `pytest.warns(None)`, no bare `yield` tests).
+#
+# Count the paths against .github/workflows/ci.yml before trusting that number:
+# `make test-py` ran only three of the four until the same day, so a focus_qc
+# break was reproducible in CI and not locally.
+pytest>=9.1.1
 
 # essays_api is a FastAPI app; its tests import it directly.
 fastapi==0.141.1
 starlette==1.6.0
-pydantic==2.13.4
+pydantic==2.13.5
 
 # The video helpers: TIFF/ND2 decoding, PNG writing, the resampling and
 # morphology used by channel registration and the playback proxy.

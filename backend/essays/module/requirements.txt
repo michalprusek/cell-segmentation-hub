@@ -17,6 +17,22 @@
 # not the 4.14 Dependabot offered, and pip fails the build outright rather
 # than resolving around it. Check `requires_dist` for a numpy bound before
 # raising any of the numeric pins below.
+#
+# That ceiling bites HARDER in this file than in the ml one, and in a way that
+# is easy to miss. This file is never pip-installed (docker/essays.Dockerfile
+# is `FROM ${ML_IMAGE}`), so bumping a pin here cannot fail a build -- it can
+# only make the file describe a stack that does not exist. Dependabot proposed
+# exactly that on 2026-08-31 (#402: opencv 4.11.0.86 -> 4.14.0.94 HERE ONLY),
+# and it would have been green everywhere while claiming a version that
+# `pip install` cannot even resolve against numpy 1.26.4. The `pins` job in
+# .github/workflows/ci.yml is what catches it: every requirement this file
+# shares with backend/segmentation/requirements.txt must carry the IDENTICAL
+# specifier, floors (`>=`) as well as pins (`==`). So bump the two together or
+# not at all.
+#
+# What that job does NOT do is resolve either file, so a bump applied to BOTH
+# still reaches `make build-service SERVICE=ml` before it fails. Check
+# `requires_dist` yourself before raising anything numeric.
 
 # Microtubule v7 standalone inference — pinned to the versions the
 # cell-segmentation-hub ML service runs in production (Python 3.10).
@@ -42,7 +58,11 @@
 torch==2.6.0
 torchvision==0.21.0
 transformers==5.5.4
-huggingface_hub>=0.20
+# transformers 5.5.4 already demands `huggingface-hub >=1.5.0,<2.0`, so the old
+# `>=0.20` floor was three majors below anything installable. 1.29.0 is what the
+# ml image this worker is built FROM actually carries. Keep identical to
+# backend/segmentation/requirements.txt.
+huggingface_hub>=1.29.0
 
 # --- Numerics / classical CV (PySOAX postprocessing) ---
 numpy==1.26.4
@@ -52,5 +72,5 @@ opencv-python-headless==4.11.0.86
 
 # --- Image I/O ---
 Pillow==12.3.0
-tifffile>=2024.1.30   # multi-page TIFF microscopy stacks
+tifffile>=2024.12.12  # multi-page TIFF microscopy stacks
 nd2>=0.10.0           # Nikon NIS-Elements .nd2 (optional input format)
