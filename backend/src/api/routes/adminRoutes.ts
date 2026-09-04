@@ -15,6 +15,21 @@ const router = Router();
 router.use(authenticate);
 
 /**
+ * ORDER: both limiters run BEFORE `requireAdmin`, so a REFUSED request still
+ * consumes the budget.
+ *
+ * With the limiter behind the gate, only callers who already passed it are
+ * throttled — which is backwards. The traffic most worth slowing is exactly
+ * the traffic that gets a 403: an ordinary compromised account walking user
+ * ids through `/impersonate/:userId` would otherwise get unlimited attempts,
+ * each one free.
+ *
+ * They are keyed `user:<id>` (see `generateRateLimitKey`), so one caller's
+ * probing cannot exhaust anybody else's budget.
+ */
+router.use('/impersonate', impersonationLimiter);
+
+/**
  * Ending an impersonation is the ONE admin route an impersonated session must
  * be able to reach — the live session belongs to the (non-admin) target, so
  * `requireAdmin` would make the exit unreachable. The controller instead
@@ -22,23 +37,19 @@ router.use(authenticate);
  * cannot be forged by a user who was never impersonated.
  *
  * Declared BEFORE `/impersonate/:userId`, or Express matches that first and
- * hands the handler `userId === 'stop'`.
+ * hands the handler `userId === 'stop'`. It is also declared before
+ * `adminLimiter` below, so browsing the user list can never exhaust the
+ * budget for getting back OUT of an impersonated session.
  */
-router.post(
-  '/impersonate/stop',
-  impersonationLimiter,
-  adminController.stopImpersonation
-);
+router.post('/impersonate/stop', adminController.stopImpersonation);
+
+router.use(adminLimiter);
 
 // Everything past here is admin-only AND refused to an impersonated session.
 router.use(requireAdmin);
 
-router.get('/users', adminLimiter, adminController.listUsers);
+router.get('/users', adminController.listUsers);
 
-router.post(
-  '/impersonate/:userId',
-  impersonationLimiter,
-  adminController.impersonate
-);
+router.post('/impersonate/:userId', adminController.impersonate);
 
 export default router;

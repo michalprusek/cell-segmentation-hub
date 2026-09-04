@@ -27,6 +27,17 @@ class SessionService {
   private readonly REFRESH_TOKEN_PREFIX = 'refresh:';
   private readonly IMPERSONATION_INDEX_PREFIX = 'impersonation:';
   private readonly REFRESH_TOKEN_TTL = 60 * 60 * 24 * 30; // 30 days in seconds
+  /**
+   * Server-side lifetime of an IMPERSONATED session, in seconds.
+   *
+   * Shorter than the ordinary 30 days on purpose. An impersonated session is
+   * a debugging session, not a login: if the admin closes the tab without
+   * clicking "return", nothing revokes it, and at the normal TTL a live
+   * ticket into someone else's account would sit in Redis for a month. This
+   * is the SERVER-side bound — the cookie's own Max-Age was already 7 days,
+   * which bounds only the browser's copy and not a leaked one.
+   */
+  private readonly IMPERSONATION_TOKEN_TTL = 60 * 60 * 24; // 24 hours
 
   /**
    * Redis key for a refresh token: the prefix plus a SHA-256 of the token,
@@ -82,11 +93,15 @@ class SessionService {
     }
   ): Promise<void> {
     const key = this.keyFor(token);
+    // An impersonated session gets the short TTL, and it survives rotation
+    // because `rotateRefreshToken` passes the impersonation back in — so a
+    // refresh cannot quietly promote a debugging session to a 30-day one.
+    const ttl = impersonation
+      ? this.IMPERSONATION_TOKEN_TTL
+      : this.REFRESH_TOKEN_TTL;
     const tokenData: RefreshToken = {
       userId,
-      expiresAt: new Date(
-        Date.now() + this.REFRESH_TOKEN_TTL * 1000
-      ).toISOString(),
+      expiresAt: new Date(Date.now() + ttl * 1000).toISOString(),
       family: family || crypto.randomBytes(16).toString('hex'),
       ...(impersonation
         ? {
@@ -97,17 +112,13 @@ class SessionService {
     };
 
     const result = await executeRedisCommand(async client => {
-      await client.setEx(
-        key,
-        this.REFRESH_TOKEN_TTL,
-        JSON.stringify(tokenData)
-      );
+      await client.setEx(key, ttl, JSON.stringify(tokenData));
       if (impersonation) {
         // Same TTL and same write, so the index cannot outlive or lag behind
         // the token it points at. See `impersonationKeyFor`.
         await client.setEx(
           this.impersonationKeyFor(impersonation.impersonationSessionId),
-          this.REFRESH_TOKEN_TTL,
+          ttl,
           key
         );
       }

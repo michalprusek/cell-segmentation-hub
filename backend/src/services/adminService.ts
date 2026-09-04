@@ -156,15 +156,28 @@ export async function startImpersonation(
 ): Promise<ImpersonationTokens> {
   const sessionId = crypto.randomUUID();
 
-  const deny = (detail: string, error: ApiError): never => {
+  /**
+   * Record the refusal and throw.
+   *
+   * `targetExists` is not a nicety: `impersonation_logs.targetId` has a
+   * foreign key to `users(id)`, so writing an id that does not exist raises
+   * P2003 — which `recordImpersonationEvent` swallows by design, taking the
+   * whole row with it. The id-probing case is the one this log most wants to
+   * capture, so an unresolved target goes in `detail` as free text instead.
+   */
+  const deny = (
+    detail: string,
+    error: ApiError,
+    { targetExists }: { targetExists: boolean } = { targetExists: true }
+  ): never => {
     void recordImpersonationEvent({
       event: 'denied',
       adminId: admin.id,
-      targetId: targetUserId,
+      targetId: targetExists ? targetUserId : null,
       sessionId,
       ip: origin.ip,
       userAgent: origin.userAgent,
-      detail,
+      detail: targetExists ? detail : `${detail}: ${targetUserId}`,
     });
     throw error;
   };
@@ -182,10 +195,9 @@ export async function startImpersonation(
   });
 
   if (!target) {
-    return deny(
-      'target-not-found',
-      ApiError.notFound('Uživatel nenalezen')
-    );
+    return deny('target-not-found', ApiError.notFound('Uživatel nenalezen'), {
+      targetExists: false,
+    });
   }
 
   if (target.isAdmin) {
@@ -203,8 +215,11 @@ export async function startImpersonation(
       impersonatorId: admin.id,
       impersonationSessionId: sessionId,
     },
-    // No rememberMe: an impersonated session gets the SHORT refresh window
-    // (7d, not 30d). It is a debugging session, not a login.
+    // No rememberMe: the refresh COOKIE gets the short Max-Age (7d, not 30d).
+    // The server-side lifetime is bounded separately and much harder —
+    // `storeRefreshToken` gives an impersonated record 24 hours (see
+    // `IMPERSONATION_TOKEN_TTL`), because a cookie Max-Age bounds only the
+    // browser's copy and not a leaked one.
     false
   );
 
@@ -289,11 +304,6 @@ export async function stopImpersonation(
     );
   }
 
-  // Kill the impersonated refresh token server-side, not just the browser's
-  // copy of it. Best-effort by design (see `revokeImpersonatedSession`): a
-  // Redis blip must not strand the admin inside the user's account.
-  await sessionService.revokeImpersonatedSession(impersonator.sessionId);
-
   const { accessToken, refreshToken } = generateTokenPair(
     {
       userId: admin.id,
@@ -303,7 +313,17 @@ export async function stopImpersonation(
     false
   );
 
+  // ORDER MATTERS. The replacement session is minted and stored FIRST,
+  // because that write throws when Redis rejects it. Revoking before it would
+  // delete the session the browser is still using while the controller bails
+  // out with a 500 before it can set new cookies — signing the operator out
+  // entirely rather than leaving them where they were.
   await sessionService.storeRefreshToken(admin.id, refreshToken);
+
+  // Only now kill the impersonated refresh token server-side, so a leaked
+  // copy stops working rather than merely being replaced in the browser.
+  // Best-effort (see `revokeImpersonatedSession`).
+  await sessionService.revokeImpersonatedSession(impersonator.sessionId);
 
   void recordImpersonationEvent({
     event: 'stop',

@@ -91,19 +91,24 @@ async function seedDatabase(): Promise<void> {
       });
       logger.info('Admin user created', 'Seed', { email: adminEmail });
     } else {
-      // Grant the flag to a pre-existing row too. The account long predates
-      // `isAdmin`, so without this branch every deployment that was seeded
-      // before 2026-09-04 would keep an "admin" with no admin rights.
+      // Deliberately does NOT grant the flag to a pre-existing row. Sign-up
+      // on this deployment is open and unverified, so an account already
+      // registered under ADMIN_EMAIL was not necessarily created by the
+      // operator — and re-running the seed is not a decision to promote
+      // whoever got there first. That is the same reason the migration
+      // grants nothing. Promotion is one explicit command:
+      //
+      //   npx tsx src/db/grantAdmin.ts <email>
+      logger.info('Admin user already exists', 'Seed', {
+        email: adminEmail,
+        isAdmin: existingAdmin.isAdmin,
+      });
       if (!existingAdmin.isAdmin) {
-        await prisma.user.update({
-          where: { id: existingAdmin.id },
-          data: { isAdmin: true },
-        });
-        logger.info('Admin flag granted to existing user', 'Seed', {
-          email: adminEmail,
-        });
+        logger.warn(
+          `${adminEmail} exists but is NOT an administrator. Seeding will not promote an account it did not create; run "npx tsx src/db/grantAdmin.ts ${adminEmail}" if that is what you want.`,
+          'Seed'
+        );
       }
-      logger.info('Admin user already exists', 'Seed', { email: adminEmail });
     }
 
     // Create test user

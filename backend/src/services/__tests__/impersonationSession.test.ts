@@ -45,21 +45,47 @@ vi.mock('../../utils/config', () => ({
 // In-memory Redis. `executeRedisCommand` swallows errors and returns its
 // fallback, so the double must behave like the real client for the code under
 // test to mean anything.
-const { store, mockExecuteRedisCommand } = vi.hoisted(() => {
-  const store = new Map<string, string>();
-  const client = {
-    setEx: async (k: string, _ttl: number, v: string) => {
-      store.set(k, v);
-      return 'OK';
-    },
-    get: async (k: string) => store.get(k) ?? null,
-    del: async (k: string) => (store.delete(k) ? 1 : 0),
-  };
-  const mockExecuteRedisCommand = vi.fn(
-    async (fn: (c: typeof client) => Promise<unknown>) => fn(client)
-  );
-  return { store, mockExecuteRedisCommand };
-});
+const {
+  store,
+  ttls,
+  failWrites,
+  mockExecuteRedisCommand,
+  realExecuteRedisCommand,
+} = vi.hoisted(() => {
+    const store = new Map<string, string>();
+    const ttls = new Map<string, number>();
+    // Writes can be failed independently of reads and deletes. That
+    // asymmetry is the point: a Redis double that fails EVERYTHING cannot
+    // tell "revoke, then fail to mint" apart from "fail to mint, then never
+    // revoke", because the revoke fails too.
+    const failWrites = { on: false };
+    const client = {
+      setEx: async (k: string, ttl: number, v: string) => {
+        if (failWrites.on) {
+          throw new Error('redis write failed');
+        }
+        store.set(k, v);
+        ttls.set(k, ttl);
+        return 'OK';
+      },
+      get: async (k: string) => store.get(k) ?? null,
+      del: async (k: string) => {
+        ttls.delete(k);
+        return store.delete(k) ? 1 : 0;
+      },
+    };
+    const realExecuteRedisCommand = async (
+      fn: (c: typeof client) => Promise<unknown>
+    ) => fn(client);
+    const mockExecuteRedisCommand = vi.fn(realExecuteRedisCommand);
+    return {
+      store,
+      ttls,
+      failWrites,
+      mockExecuteRedisCommand,
+      realExecuteRedisCommand,
+    };
+  });
 
 vi.mock('../../config/redis', () => ({
   executeRedisCommand: mockExecuteRedisCommand,
@@ -120,6 +146,9 @@ describe('an impersonated session survives token rotation', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     store.clear();
+    ttls.clear();
+    mockExecuteRedisCommand.mockImplementation(realExecuteRedisCommand);
+    failWrites.on = false;
     prismaMock.impersonationLog.create.mockResolvedValue({});
   });
 
@@ -166,6 +195,38 @@ describe('an impersonated session survives token rotation', () => {
     }
   });
 
+  it('bounds an impersonated session server-side, and keeps that bound across rotation', async () => {
+    // A cookie Max-Age bounds only the browser's copy. If the admin closes
+    // the tab without clicking "return", nothing revokes the session — so at
+    // the ordinary 30-day TTL a live ticket into someone else's account would
+    // sit in Redis for a month.
+    rows(ADMIN, TARGET);
+    const started = await adminService.startImpersonation(
+      { id: ADMIN.id, email: ADMIN.email },
+      TARGET.id
+    );
+
+    const DAY = 60 * 60 * 24;
+    const impersonatedTtls = [...ttls.values()];
+    expect(impersonatedTtls).not.toHaveLength(0);
+    for (const ttl of impersonatedTtls) {
+      expect(ttl).toBeLessThanOrEqual(DAY);
+    }
+
+    // A refresh must not quietly promote it to a 30-day session.
+    ttls.clear();
+    await authService.refreshToken({ refreshToken: started.refreshToken });
+    for (const ttl of ttls.values()) {
+      expect(ttl).toBeLessThanOrEqual(DAY);
+    }
+  });
+
+  it('leaves an ORDINARY session on the full 30-day TTL', async () => {
+    rows(TARGET);
+    await sessionService.storeRefreshToken(TARGET.id, 'plain-token');
+    expect([...ttls.values()]).toEqual([60 * 60 * 24 * 30]);
+  });
+
   it('leaves an ordinary session with no impersonator claim at all', async () => {
     rows(TARGET);
     await sessionService.storeRefreshToken(TARGET.id, 'plain-token');
@@ -204,6 +265,9 @@ describe('revoking an impersonated session without holding its token', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     store.clear();
+    ttls.clear();
+    mockExecuteRedisCommand.mockImplementation(realExecuteRedisCommand);
+    failWrites.on = false;
     prismaMock.impersonationLog.create.mockResolvedValue({});
   });
 
@@ -268,6 +332,34 @@ describe('revoking an impersonated session without holding its token', () => {
     expect([...store.keys()].some(k => k.startsWith('impersonation:'))).toBe(
       false
     );
+  });
+
+  it('mints the replacement admin session BEFORE revoking the old one', async () => {
+    // A Redis outage during stop must leave the admin where they were, not
+    // sign them out: revoking first would delete the session the browser is
+    // still using while the controller bails out before setting new cookies.
+    rows(ADMIN, TARGET);
+    const started = await adminService.startImpersonation(
+      { id: ADMIN.id, email: ADMIN.email },
+      TARGET.id
+    );
+
+    // Reads and DELETES keep working; only writes fail. Revoking first would
+    // therefore succeed, and the mint that follows would throw — leaving the
+    // admin holding a cookie whose server-side session has just been deleted.
+    failWrites.on = true;
+
+    await expect(
+      adminService.stopImpersonation(
+        { id: ADMIN.id, sessionId: started.sessionId },
+        { id: TARGET.id, email: TARGET.email }
+      )
+    ).rejects.toThrow();
+
+    failWrites.on = false;
+    expect(
+      await sessionService.verifyRefreshToken(started.refreshToken)
+    ).not.toBeNull();
   });
 
   it('never stores the refresh token itself in the index', async () => {

@@ -301,7 +301,7 @@ describe('admin routes — the real middleware chain', () => {
       );
     });
 
-    it('404s an unknown target and records the refusal', async () => {
+    it('404s an unknown target and records the refusal with a NULL targetId', async () => {
       usersById(ADMIN);
 
       const res = await request(app)
@@ -310,14 +310,16 @@ describe('admin routes — the real middleware chain', () => {
 
       expect(res.status).toBe(404);
       await flushAudit();
-      expect(prisma.impersonationLog.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({
-            event: 'denied',
-            detail: 'target-not-found',
-          }),
-        })
-      );
+
+      // `impersonation_logs.targetId` has an FK to users(id). Writing the
+      // probed id there raises P2003, which the audit service swallows by
+      // design — losing the whole row, and this is precisely the row the log
+      // exists for. The id goes in `detail` as free text instead.
+      const { data } = vi.mocked(prisma.impersonationLog.create).mock
+        .calls[0][0] as { data: Record<string, unknown> };
+      expect(data.event).toBe('denied');
+      expect(data.targetId).toBeNull();
+      expect(data.detail).toBe('target-not-found: nope');
     });
 
     it('refuses self-impersonation', async () => {
@@ -414,6 +416,52 @@ describe('admin routes — the real middleware chain', () => {
 
     expect(res.status).toBe(400);
     expect(sessionService.storeRefreshToken).not.toHaveBeenCalled();
+  });
+
+  it('rejects an impersonation token that carries no session id', async () => {
+    // The two claims are minted together. A token with only `impersonatorId`
+    // would produce a session that `revokeImpersonatedSession` cannot address
+    // and whose audit rows cannot be correlated — live, but untraceable.
+    usersById(USER, ADMIN);
+    const token = generateAccessToken({
+      userId: USER.id,
+      email: USER.email,
+      emailVerified: true,
+      impersonatorId: ADMIN.id,
+    });
+
+    const res = await request(app)
+      .post('/api/admin/impersonate/stop')
+      .set('Cookie', [`access_token=${token}`]);
+
+    expect(res.status).toBe(401);
+    expect(sessionService.revokeImpersonatedSession).not.toHaveBeenCalled();
+  });
+
+  it('spends the impersonation budget on REFUSED requests too', async () => {
+    // The limiter sits in front of `requireAdmin` on purpose: throttling only
+    // callers who already passed the gate leaves an ordinary compromised
+    // account free to walk user ids one 403 at a time.
+    const prober = {
+      id: 'prober-1',
+      email: 'prober@example.com',
+      emailVerified: true,
+      isAdmin: false,
+      profile: null,
+    };
+    usersById(prober);
+    const cookie = [`access_token=${tokenFor(prober)}`];
+
+    const statuses: number[] = [];
+    for (let i = 0; i < 21; i++) {
+      const res = await request(app)
+        .post('/api/admin/impersonate/some-id')
+        .set('Cookie', cookie);
+      statuses.push(res.status);
+    }
+
+    expect(statuses[0]).toBe(403);
+    expect(statuses.at(-1)).toBe(429);
   });
 
   it('routes /impersonate/stop to the stop handler, not to :userId', async () => {

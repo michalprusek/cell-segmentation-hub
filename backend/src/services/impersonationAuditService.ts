@@ -34,9 +34,17 @@ export type ImpersonationEvent =
   /** The admin returned to their own session. */
   | 'stop'
   /**
-   * An impersonation was REFUSED — a non-admin hitting the endpoint, an
-   * attempt at another admin, an unknown target. The most interesting rows in
-   * a log whose purpose is attribution: without them a probe leaves no trace.
+   * An impersonation was REFUSED inside `startImpersonation` — an attempt at
+   * another admin, an unknown target, or the admin's own account. The most
+   * interesting rows in a log whose purpose is attribution: without them a
+   * probe for valid user ids leaves no trace.
+   *
+   * NOT every refusal reaches here. A caller who is not an admin at all is
+   * turned away by `requireAdmin` one layer earlier, before any service code
+   * runs; that refusal is a `logger.warn`, not a row. Recording it would mean
+   * a database write on every 403 of the whole admin surface, including
+   * ordinary 403s from a stale tab. Read this table as "what admins did",
+   * and access.log as "who knocked".
    */
   | 'denied';
 

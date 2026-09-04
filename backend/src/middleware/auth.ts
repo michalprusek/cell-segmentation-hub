@@ -138,10 +138,24 @@ export const authenticate = async (
         return;
       }
 
+      // The two claims are minted together and must arrive together. Falling
+      // back to '' would be worse than rejecting: `revokeImpersonatedSession('')`
+      // silently deletes nothing, and every audit row would be written with an
+      // empty `sessionId`, so start and stop could no longer be correlated —
+      // a session that is live but unaddressable and untraceable.
+      if (!payload.impersonationSessionId) {
+        logger.warn(
+          `Impersonation token for ${impersonator.email} carries no session id; rejecting`,
+          'Auth'
+        );
+        ResponseHelper.unauthorized(res, 'Neplatný token', 'Auth');
+        return;
+      }
+
       req.impersonator = {
         id: impersonator.id,
         email: impersonator.email,
-        sessionId: payload.impersonationSessionId ?? '',
+        sessionId: payload.impersonationSessionId,
       };
     }
 
@@ -222,6 +236,14 @@ export const requireAdmin = (
   }
 
   if (!req.user.isAdmin) {
+    // Logged, not written to `impersonation_logs`: that table records what
+    // admins DID, and a row per 403 would mean a database write on every
+    // stale tab hitting the admin surface. access.log already carries the
+    // request; this line names the reason.
+    logger.warn(
+      `Admin route refused for non-admin account ${req.user.email}`,
+      'Auth'
+    );
     ResponseHelper.forbidden(res, 'Vyžadována práva administrátora', 'Auth');
     return;
   }
@@ -361,13 +383,15 @@ export const optionalAuthenticate = async (
           where: { id: payload.impersonatorId },
           select: { id: true, email: true, isAdmin: true },
         });
-        if (!impersonator?.isAdmin) {
+        // Same pairing rule as `authenticate`; here the contract is "continue
+        // without a user", so a malformed impersonation degrades to anonymous.
+        if (!impersonator?.isAdmin || !payload.impersonationSessionId) {
           return next();
         }
         req.impersonator = {
           id: impersonator.id,
           email: impersonator.email,
-          sessionId: payload.impersonationSessionId ?? '',
+          sessionId: payload.impersonationSessionId,
         };
       }
 
