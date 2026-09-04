@@ -130,8 +130,9 @@ Six locales — English, Czech, Spanish, German, French, Chinese — in
   chunk splitting behave differently from the dev server, and removing a
   dependency that is still named in `vite.config.ts`'s `manualChunks` fails only
   here.
-- The Vitest suite has substantial pre-existing failures and is **not** a gate.
-  See [Testing guide](../testing-guide.md).
+- The Vitest suite is green and **is** a gate — but in CI, not in `make ci`.
+  `.github/workflows/ci.yml` runs it with coverage in the required `frontend`
+  job. See [Testing guide](../testing-guide.md).
 
 ## Related
 

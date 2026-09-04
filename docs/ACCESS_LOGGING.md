@@ -14,10 +14,14 @@ Aplikace SpheroSeg (spherosegapp.utia.cas.cz) nyní implementuje kompletní syst
 
 ## Umístění log souborů
 
-### Produkční prostředí (Blue)
+### Produkční prostředí
+
+Jediný stack (blue-green byl odstraněn 2026-05-15). Cesty odpovídají mountům
+v `docker-compose.production.yml` (`./logs/backend:/app/logs`,
+`./logs/nginx:/var/log/nginx`):
 
 ```
-/home/cvat/cell-segmentation-hub/logs/blue/
+/home/cvat/cell-segmentation-hub/logs/
 ├── backend/
 │   └── access.log          # Backend access log s autentizovanými uživateli
 └── nginx/
@@ -25,22 +29,11 @@ Aplikace SpheroSeg (spherosegapp.utia.cas.cz) nyní implementuje kompletní syst
     └── error.log            # Nginx error log
 ```
 
-### Staging prostředí (Green)
-
-```
-/home/cvat/cell-segmentation-hub/logs/green/
-├── backend/
-│   └── access.log
-└── nginx/
-    ├── access.log
-    └── error.log
-```
-
 ## Formát logů
 
 ### Backend Access Log
 
-**Umístění**: `/logs/{environment}/backend/access.log`
+**Umístění**: `/logs/backend/access.log`
 
 **Formát**:
 
@@ -127,12 +120,12 @@ crontab -e
 
 ```bash
 # Adresáře logů
-drwxrwxr-x cvat cvat /logs/blue/backend/
-drwxrwxr-x cvat cvat /logs/blue/nginx/
+drwxrwxr-x cvat cvat /logs/backend/
+drwxrwxr-x cvat cvat /logs/nginx/
 
 # Log soubory
--rw-rw-r-- cvat cvat /logs/blue/backend/access.log
--rw-rw-r-- cvat cvat /logs/blue/nginx/access.log
+-rw-rw-r-- cvat cvat /logs/backend/access.log
+-rw-rw-r-- cvat cvat /logs/nginx/access.log
 ```
 
 ### Doporučení
@@ -148,13 +141,13 @@ drwxrwxr-x cvat cvat /logs/blue/nginx/
 
 ```bash
 # Sledování backend access logu v reálném čase
-tail -f /home/cvat/cell-segmentation-hub/logs/blue/backend/access.log
+tail -f /home/cvat/cell-segmentation-hub/logs/backend/access.log
 
 # Sledování nginx access logu
-tail -f /home/cvat/cell-segmentation-hub/logs/blue/nginx/access.log
+tail -f /home/cvat/cell-segmentation-hub/logs/nginx/access.log
 
 # Zobrazení posledních 100 záznamů
-tail -n 100 /home/cvat/cell-segmentation-hub/logs/blue/backend/access.log
+tail -n 100 /home/cvat/cell-segmentation-hub/logs/backend/access.log
 ```
 
 ### Užitečné příkazy pro analýzu
@@ -162,35 +155,35 @@ tail -n 100 /home/cvat/cell-segmentation-hub/logs/blue/backend/access.log
 #### Top 10 IP adres podle počtu požadavků
 
 ```bash
-awk '{print $2}' /home/cvat/cell-segmentation-hub/logs/blue/backend/access.log | \
+awk '{print $2}' /home/cvat/cell-segmentation-hub/logs/backend/access.log | \
   sort | uniq -c | sort -rn | head -10
 ```
 
 #### Všichni přihlášení uživatelé za dnešek
 
 ```bash
-grep "$(date +%Y-%m-%d)" /home/cvat/cell-segmentation-hub/logs/blue/backend/access.log | \
+grep "$(date +%Y-%m-%d)" /home/cvat/cell-segmentation-hub/logs/backend/access.log | \
   awk '{print $3}' | grep -v "anonymous" | sort -u
 ```
 
 #### Počet požadavků podle uživatele
 
 ```bash
-awk '{print $3}' /home/cvat/cell-segmentation-hub/logs/blue/backend/access.log | \
+awk '{print $3}' /home/cvat/cell-segmentation-hub/logs/backend/access.log | \
   sort | uniq -c | sort -rn
 ```
 
 #### Chybové požadavky (4xx, 5xx)
 
 ```bash
-awk '$5 >= 400 {print}' /home/cvat/cell-segmentation-hub/logs/blue/backend/access.log
+awk '$5 >= 400 {print}' /home/cvat/cell-segmentation-hub/logs/backend/access.log
 ```
 
 #### Průměrná doba zpracování požadavků
 
 ```bash
 awk '{gsub(/ms/, "", $6); sum+=$6; count++} END {print "Average:", sum/count, "ms"}' \
-  /home/cvat/cell-segmentation-hub/logs/blue/backend/access.log
+  /home/cvat/cell-segmentation-hub/logs/backend/access.log
 ```
 
 ## Technická implementace
@@ -210,7 +203,7 @@ Zachycuje každý HTTP požadavek a loguje:
 
 ### Nginx Access Logger
 
-**Konfigurace**: `/docker/nginx/nginx.blue.conf`
+**Konfigurace**: `/docker/nginx/nginx.production.conf`
 
 Používá vlastní log formát `access_audit`:
 
@@ -220,43 +213,36 @@ Používá vlastní log formát `access_audit`:
 
 ### Docker Volume Mounts
 
-**Backend** (`docker-compose.blue.yml`):
+**Backend** (`docker-compose.production.yml`):
 
 ```yaml
 volumes:
-  - ./logs/blue/backend:/app/logs
+  - ./logs/backend:/app/logs
 ```
 
-**Nginx** (`docker-compose.blue.yml`):
+**Nginx** (`docker-compose.production.yml`):
 
 ```yaml
 volumes:
-  - ./logs/blue/nginx:/var/log/nginx
+  - ./logs/nginx:/var/log/nginx
 ```
 
 ## Aktivace logování
 
-### Pro blue prostředí (produkce)
-
 ```bash
 # 1. Restart backend pro aktivaci middleware
-docker restart blue-backend
+docker restart spheroseg-backend
 
 # 2. Reload nginx pro novou konfiguraci
-docker exec nginx-blue nginx -s reload
+docker exec spheroseg-nginx nginx -s reload
 
 # 3. Ověření, že logy se zapisují
-tail -f /home/cvat/cell-segmentation-hub/logs/blue/backend/access.log
+tail -f /home/cvat/cell-segmentation-hub/logs/backend/access.log
 ```
 
-### Pro green prostředí (staging)
-
-```bash
-# Stejný postup s green kontejnery
-docker restart green-backend
-docker exec nginx-green nginx -s reload
-tail -f /home/cvat/cell-segmentation-hub/logs/green/backend/access.log
-```
+> Pozor: `nginx -s reload` nestačí, pokud se změnil bind-mountnutý config
+> soubor — `sed -i` přepíše inode a běžící kontejner drží ten starý. V tom
+> případě `docker compose ... up -d --no-deps --force-recreate nginx`.
 
 ## Řešení problémů
 
@@ -265,27 +251,27 @@ tail -f /home/cvat/cell-segmentation-hub/logs/green/backend/access.log
 1. **Zkontrolujte oprávnění**:
 
 ```bash
-ls -la /home/cvat/cell-segmentation-hub/logs/blue/backend/
+ls -la /home/cvat/cell-segmentation-hub/logs/backend/
 # Mělo by být: -rw-rw-r-- cvat cvat
 ```
 
 2. **Zkontrolujte, zda adresář existuje**:
 
 ```bash
-ls -la /home/cvat/cell-segmentation-hub/logs/blue/
+ls -la /home/cvat/cell-segmentation-hub/logs/
 ```
 
 3. **Zkontrolujte volume mount v kontejneru**:
 
 ```bash
-docker exec blue-backend ls -la /app/logs/
+docker exec spheroseg-backend ls -la /app/logs/
 # Měl by existovat access.log soubor
 ```
 
 4. **Zkontrolujte logy aplikace**:
 
 ```bash
-docker logs blue-backend | grep -i "access"
+docker logs spheroseg-backend | grep -i "access"
 ```
 
 ### Log rotace nefunguje
@@ -314,8 +300,8 @@ cat /home/cvat/cell-segmentation-hub/logs/.logrotate-backend.state
 1. **Zkontrolujte velikost logů**:
 
 ```bash
-du -sh /home/cvat/cell-segmentation-hub/logs/blue/backend/
-du -sh /home/cvat/cell-segmentation-hub/logs/blue/nginx/
+du -sh /home/cvat/cell-segmentation-hub/logs/backend/
+du -sh /home/cvat/cell-segmentation-hub/logs/nginx/
 ```
 
 2. **Ručně archivujte staré logy**:

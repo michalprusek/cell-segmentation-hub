@@ -39,30 +39,17 @@ Intelligent Docker cleanup script with configurable aggressiveness:
 ./scripts/docker-build-optimizer.sh --max-cache 5 --keep-images 1
 ```
 
-#### `scripts/smart-docker-build.sh`
+#### `scripts/smart-docker-build.sh` (dead — do not use)
 
-Intelligent build script with automatic pre-cleanup:
+> **`scripts/smart-docker-build.sh` no longer works.** Every environment it
+> can select names a Compose file that was deleted with blue-green on
+> 2026-05-15 (`--env blue` → `docker-compose.blue.yml`, `--env green` →
+> `docker-compose.green.yml`) or one that is not tracked (its `development`
+> default → `docker-compose.yml`). Use the `make` targets below, which drive
+> `docker-compose.production.yml` directly.
 
-- Automatically cleans before building to prevent space issues
-- Supports parallel builds for faster execution
-- Environment-aware (development, blue, green)
-- Service-specific optimization
-
-**Usage:**
-
-```bash
-# Build all services with optimization
-./scripts/smart-docker-build.sh
-
-# Build specific environment
-./scripts/smart-docker-build.sh --env blue
-
-# Build specific service
-./scripts/smart-docker-build.sh --service frontend
-
-# Clean build without cache
-./scripts/smart-docker-build.sh --no-cache
-```
+Use `make build-optimized`, `make build-service SERVICE=<name>` and
+`make build-clean` instead.
 
 #### `scripts/docker-monitor.sh`
 
@@ -175,8 +162,8 @@ make docker-usage
 # 2. Build with optimization
 make build-optimized
 
-# 3. Start services
-make up
+# 3. Start services (no docker-compose.yml is tracked, so pass the production one)
+docker compose -f docker-compose.production.yml --env-file .env.production up -d
 
 # 4. Monitor if needed
 ./scripts/docker-monitor.sh
@@ -188,14 +175,16 @@ make up
 # 1. Clean aggressive before deployment
 make deep-clean
 
-# 2. Build specific environment
-./scripts/smart-docker-build.sh --env blue
+# 2. Build the changed service
+make build-service SERVICE=backend
 
 # 3. Verify sizes
 ./scripts/docker-monitor.sh --sizes
 
-# 4. Deploy
-docker compose -f docker-compose.blue.yml up -d
+# 4. Recreate it, then flush nginx's upstream DNS cache
+docker compose -f docker-compose.production.yml --env-file .env.production \
+  up -d --no-deps --force-recreate backend
+docker restart spheroseg-nginx
 ```
 
 ### Emergency Cleanup
@@ -211,8 +200,7 @@ docker system prune -af --volumes
 1. **Regular Cleanup**: Run `make optimize-storage` weekly
 2. **Monitor Builds**: Check sizes after major changes
 3. **Use Optimized Dockerfiles**: Prefer `.optimized.Dockerfile` variants
-4. **Environment Isolation**: Keep blue/green builds separate
-5. **Cache Management**: Don't exceed 10GB build cache
+4. **Cache Management**: Don't exceed 10GB build cache
 
 ## Troubleshooting
 
