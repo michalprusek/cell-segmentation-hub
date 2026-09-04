@@ -91,6 +91,9 @@ SIGMA_BG = 8.0              # px, coarse scale subtracted to reject broad ramps
 MIN_RADIUS = 40.0           # px, below this a capsule is not worth measuring
 TRACE_SLOPE = 0.23          # max radial px per arc px for the inner contour
 TRACE_PENALTY = 0.7         # movement cost, as a fraction of the median edge
+LEVEL_WINDOW = (0.012, 4.0) # pass-2 search window around the pass-1 contour
+LEVEL_GAP = (0.017, 6.0)    # keep the local core/shell medians off the edge
+LEVEL_BASELINE = (0.028, 10.0)  # thickness of each local baseline band
 _NEG = -1e18                # DP stand-in for "impossible", safe to add up
 
 # Feature values for a capsule the method cannot read.  Both are pushed well
@@ -494,6 +497,90 @@ def _trace_path(E, smax, lam):
     return path
 
 
+def _snap_to_level(img, cap, angs, r0, rout):
+    """Move the contour onto a LOCAL intensity level set -- an isoline.
+
+    Pass 1 maximises edge evidence, which answers "which boundary" but not
+    "where exactly on it". The gradient maximum is only at a fixed intensity
+    for a symmetric edge; where the transition is asymmetric, or where the
+    movement penalty outweighs a weak stretch of evidence, the path leaves the
+    boundary and cuts the corner -- reported 2026-09-04 as the contour not
+    following the intensity contour and scooping a piece out. Measured on the
+    real capsule that prompted it, the pass-1 path ran 7.9 px inside the
+    strongest edge over a 23-ray stretch.
+
+    A level set cannot cut a corner: it is defined by the image rather than by
+    a smoothness prior, so it has no shortcut to take.
+
+    The level is LOCAL -- the midpoint between the core-side and shell-side
+    medians measured either side of THIS ray's pass-1 radius. It has to be:
+    measured around the circumference of real capsules the core and shell
+    levels swing by 11-40% of the contrast (shading), so one global level would
+    sit at a different height on the edge at every angle, and where the swing
+    exceeds the contrast it would not cross the profile at all.
+
+    The search is a second `_trace_path` rather than "the nearest crossing on
+    each ray", because nearest-crossing is per-ray-independent and brings the
+    stepping straight back: measured, it took the worst ray-to-ray jump from
+    0.52 px to 13.69 px. The cost is normalised by the local step height so it
+    is comparable across a shaded capsule.
+
+    KNOWN BIAS, measured and accepted. The local level is only as good as the
+    two baseline medians, so structure sitting just outside the membrane pulls
+    it: on a synthetic edge with a trough of 40% of the step height 6 px out,
+    this places the contour 0.30 px worse than pass 1 alone. It is a sub-pixel
+    penalty in a case built to provoke it, against 1.8 px recovered at a real
+    dent, and all eleven production membranes improved -- but if a capsule type
+    ever shows a systematic ring just outside the membrane, re-measure before
+    trusting the placement.
+
+    Returns `r0` unchanged if no level can be estimated -- a refinement that
+    cannot be computed must not move the contour.
+    """
+    R = cap.mean_radius
+    half = _px(LEVEL_WINDOW, R)
+    gap = _px(LEVEL_GAP, R)
+    thick = _px(LEVEL_BASELINE, R)
+
+    inner = np.arange(-gap - thick, -gap, 1.0)
+    outer = np.arange(gap, gap + thick, 1.0)
+    if inner.size < 2 or outer.size < 2:
+        return r0
+    with np.errstate(invalid="ignore"):
+        core = np.nanmedian(
+            _sample(img, cap.cx, cap.cy, angs, r0[:, None] + inner[None, :]),
+            axis=1)
+        shell = np.nanmedian(
+            _sample(img, cap.cx, cap.cy, angs, r0[:, None] + outer[None, :]),
+            axis=1)
+    level = 0.5 * (core + shell)
+    height = np.abs(shell - core)
+    if not np.isfinite(level).any():
+        return r0
+
+    step = 0.25
+    s = np.arange(-half, half + step, step)
+    radii = r0[:, None] + s[None, :]
+    V = _sample(img, cap.cx, cap.cy, angs, radii)
+    V[radii > (rout[:, None] - _px(WALL_MARGIN, R))] = np.nan
+
+    with np.errstate(invalid="ignore", divide="ignore"):
+        dev = np.abs(V - level[:, None]) / np.where(
+            height < 1e-6, np.nan, height)[:, None]
+    E = np.where(np.isfinite(dev), -dev, _NEG)
+    if not (E > _NEG / 2).any():
+        return r0
+
+    arc = 2 * np.pi * float(np.mean(r0)) / max(len(angs), 1)
+    smax = int(np.clip(round(TRACE_SLOPE * arc / step), 1, len(s) - 1))
+    # The cost is already in units of the local step height, so the movement
+    # price is a fraction of that height rather than of an edge response.
+    path = _trace_path(E, smax, TRACE_PENALTY * 0.05 / smax)
+    if path is None:
+        return r0
+    return r0 + s[path]
+
+
 def _trace_inner(img, cap, angs, guide, rout):
     """Inner boundary as ONE closed contour, by dynamic programming.
 
@@ -518,6 +605,10 @@ def _trace_inner(img, cap, angs, guide, rout):
     It does not flatten the capsule into a circle: on the same eleven, the
     path keeps 97.5% of the evidence an unconstrained per-ray argmax could
     reach, against 44% for the best-fitting fixed radius.
+
+    That path is then snapped onto the local intensity level set by
+    `_snap_to_level` -- see there for why placing the contour is a separate
+    question from choosing which boundary it is on.
     """
     R = cap.mean_radius
     band = _px(TRACE_BAND, R)
@@ -572,6 +663,13 @@ def _trace_inner(img, cap, angs, guide, rout):
     radial = guide + u[i] + off * step
     strength = E[k, i]
     support = float(np.mean(strength >= 0.30 * ref))
+
+    # Pass 2: slide the contour onto the local intensity level set. Pass 1
+    # chose the boundary; this places the contour on it. Kept as a separate
+    # pass rather than folded into one cost, because the two terms answer
+    # different questions and combining them would need a weight to tune --
+    # this way each pass optimises one thing and there is nothing to balance.
+    radial = _snap_to_level(img, cap, angs, radial, rout)
 
     xs = cap.cx + radial * np.cos(angs)
     ys = cap.cy + radial * np.sin(angs)

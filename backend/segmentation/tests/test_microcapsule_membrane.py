@@ -101,6 +101,74 @@ def _traced_radii(membrane, cx, cy):
     return r[np.argsort(a)]
 
 
+def _dented_capsule(dent_px=14.0, dent_sig=0.10, shade=0.0, size=800,
+                    cx=400.0, cy=400.0, r_out=360.0, r_mem=200.0,
+                    core=90.0, shell=150.0, edge=1.4):
+    """A membrane with a local inward dent, optionally under illumination shading.
+
+    The dent is the shape a smoothness-penalised path cuts across: 14 px deep
+    over about 6 degrees. `shade` multiplies a linear gradient across the field,
+    which is what makes a single GLOBAL intensity level unusable and forces the
+    level to be estimated per ray.
+    """
+    yy, xx = np.mgrid[0:size, 0:size]
+    rr = np.hypot(xx - cx, yy - cy)
+    th = np.arctan2(yy - cy, xx - cx)
+    off = np.abs(np.arctan2(np.sin(th - np.pi), np.cos(th - np.pi)))
+    r_mem_theta = r_mem - dent_px * np.exp(-(off ** 2) / (2 * dent_sig ** 2))
+    img = np.full((size, size), 190.0)
+    inside = rr <= r_out
+    img[inside] = (core + (shell - core)
+                   * 0.5 * (1 + np.tanh((rr - r_mem_theta) / edge)))[inside]
+    if shade:
+        img = img * (1.0 + shade * (xx - cx) / size)
+    img[np.abs(rr - r_out) < 3.0] = 40.0
+    return np.clip(img, 0, 255).astype(np.uint8)
+
+
+def _dent_error(membrane, dent_px=14.0, dent_sig=0.10, cx=400.0, cy=400.0,
+                r_mem=200.0):
+    """Radial error against the known boundary, at the bottom of the dent."""
+    P = np.array([[p["x"], p["y"]] for p in membrane], float)
+    ang = np.arctan2(P[:, 1] - cy, P[:, 0] - cx)
+    r = np.hypot(P[:, 0] - cx, P[:, 1] - cy)
+    off = np.abs(np.arctan2(np.sin(ang - np.pi), np.cos(ang - np.pi)))
+    truth = r_mem - dent_px * np.exp(-(off ** 2) / (2 * dent_sig ** 2))
+    err = np.abs(r - truth)
+    return float(err[int(np.argmin(off))]), float(err.max())
+
+
+def _staircase_capsule(d=4.0, w=0.6, tilt=1.5, size=800, cx=400.0, cy=400.0,
+                       r_out=360.0, r_mem=200.0, core=90.0, shell=150.0):
+    """A membrane whose transition is a STAIRCASE with a plateau ON the level.
+
+    Two half-steps `2*d` apart with a flat stretch between them that sits at
+    the half level, plus a slight angle-dependent tilt of that plateau. Both
+    ends of the plateau are then a level crossing, and which one is nearest
+    flips around the circle.
+
+    This is the shape that separates a continuity-constrained level search from
+    a per-ray "nearest crossing": on real capsules the profile inside the
+    refinement window is often non-monotonic (bright-field interference), and
+    nearest-crossing then alternates between two near-tied minima. Measured on
+    the eleven production membranes, nearest-crossing gave a worst ray-to-ray
+    jump of 7.96 px against 1.63 px for the DP, with the contours differing by
+    up to 6 px -- but no smooth synthetic edge reproduces it, which is why this
+    fixture builds the tie explicitly.
+    """
+    yy, xx = np.mgrid[0:size, 0:size]
+    rr = np.hypot(xx - cx, yy - cy)
+    th = np.arctan2(yy - cy, xx - cx)
+    x = rr - r_mem
+    f = 0.25 * (1 + np.tanh((x + d) / w)) + 0.25 * (1 + np.tanh((x - d) / w))
+    ramp = tilt * np.cos(4 * th) * np.clip(x / d, -1, 1)
+    img = np.full((size, size), float(shell + 40))
+    inside = rr <= r_out
+    img[inside] = (core + (shell - core) * f + ramp)[inside]
+    img[np.abs(rr - r_out) < 3.0] = 40.0
+    return np.clip(img, 0, 255).astype(np.uint8)
+
+
 class TestCapsuleAdapter:
     def test_builds_a_capsule_from_a_stored_polygon(self):
         poly = _ring_polygon(100.0, 120.0, 50.0)
@@ -316,4 +384,93 @@ class TestOneContinuousContour:
         assert apex == pytest.approx(208.0, abs=1.2), (
             f"fold apex traced at r={apex:.2f}, true 208.0 — the contour is "
             "cutting the corner instead of following the boundary"
+        )
+
+
+class TestFollowsTheIntensityLevel:
+    """The contour must run along an intensity level set, not cut across one.
+
+    Reported 2026-09-04: the membrane "sometimes does not follow the intensity
+    contour and scoops a piece out". Maximising edge evidence answers WHICH
+    boundary but not WHERE ON IT: the gradient maximum only sits at a fixed
+    intensity for a symmetric edge, and the movement penalty that keeps the
+    path continuous will trade a weak stretch of evidence for a shortcut. On
+    the real capsule that prompted the report the path ran 7.9 px inside the
+    strongest edge over a 23-ray stretch. A level set has no shortcut to take.
+    """
+
+    def test_follows_a_dent_instead_of_cutting_across_it(self):
+        img = _dented_capsule()
+        poly = _ring_polygon(400.0, 400.0, 360.0)
+
+        state, score, feats, membrane = membrane_polygon_for(
+            prepare_gray(img), poly
+        )
+        assert state == "sharp", f"score={score} feats={feats}"
+        assert membrane is not None
+
+        at_dent, worst = _dent_error(membrane)
+        # Without the level pass this measures 1.83 px at the dent; the dent is
+        # 14 px deep, so cutting it entirely would read 14.
+        assert at_dent < 0.5, (
+            f"contour is {at_dent:.2f} px off the boundary at the dent — it is "
+            "cutting across instead of following it"
+        )
+        assert worst < 1.0, f"worst radial error {worst:.2f} px"
+
+    def test_estimates_the_level_locally_so_shading_cannot_shift_it(self):
+        # A 25% linear illumination gradient across the field. One global
+        # intensity level would sit at a different height on the edge at every
+        # angle here — measured on real capsules the core and shell levels
+        # swing by 11-40% of the contrast — and where the swing exceeds the
+        # contrast it would not cross the profile at all.
+        img = _dented_capsule(dent_px=10.0, dent_sig=0.09, shade=0.25)
+        poly = _ring_polygon(400.0, 400.0, 360.0)
+
+        _state, _score, _feats, membrane = membrane_polygon_for(
+            prepare_gray(img), poly
+        )
+        assert membrane is not None
+        at_dent, worst = _dent_error(membrane, dent_px=10.0, dent_sig=0.09)
+        assert at_dent < 0.5, f"{at_dent:.2f} px off at the dent under shading"
+        assert worst < 1.0, f"worst radial error {worst:.2f} px under shading"
+
+    def test_the_refinement_never_relocates_the_contour(self):
+        # It places the contour on the boundary pass 1 chose; it must not be
+        # able to walk it onto a different one. The window is a fraction of the
+        # capsule radius, so on this capsule it is a few px: a contour that
+        # moved further than that would mean the two passes disagree about
+        # which boundary is the membrane.
+        img = _two_edged_capsule()
+        poly = _ring_polygon(400.0, 400.0, 360.0)
+
+        _state, _score, _feats, membrane = membrane_polygon_for(
+            prepare_gray(img), poly
+        )
+        assert membrane is not None
+        median_r = float(np.median(_traced_radii(membrane, 400.0, 400.0)))
+        # The faces are at 200 and 214 and the evidence favours the inner one.
+        assert median_r == pytest.approx(200.0, abs=3.0), (
+            f"traced at r={median_r:.1f}; the level refinement has walked the "
+            "contour off the boundary the evidence chose"
+        )
+
+    def test_the_level_search_is_continuous_not_per_ray(self):
+        # Where two level crossings are near-tied, choosing the nearest one on
+        # each ray independently brings the stepping straight back -- the same
+        # failure the evidence pass was rewritten to remove, one stage later.
+        # On this fixture nearest-crossing jumps 3.00 px between adjacent
+        # points; the constrained search keeps it to 0.26.
+        img = _staircase_capsule()
+        poly = _ring_polygon(400.0, 400.0, 360.0)
+
+        _state, _score, _feats, membrane = membrane_polygon_for(
+            prepare_gray(img), poly
+        )
+        assert membrane is not None
+        r = _traced_radii(membrane, 400.0, 400.0)
+        jump = np.abs(np.diff(np.r_[r, r[0]])).max()
+        assert jump < 1.0, (
+            f"contour steps by {jump:.2f} px between rays — the level search "
+            "is picking each ray's crossing independently"
         )
