@@ -649,7 +649,31 @@ def _fit_circle_radius(cap, angs, radial, trust=None):
     return -b + np.sqrt(disc)
 
 
-def _trace_inner(img, cap, angs, guide, rout):
+def _trace_scales(edge_width):
+    """The band-pass scales for tracing a membrane of measured width.
+
+    `SIGMA_G` is a FLOOR, not the answer: it is the scale of a crisp step, and
+    a membrane can be broader than that. Matching the derivative to the
+    transition is what stops the per-ray maximum landing on sharper structure
+    inside the membrane -- see `_trace_inner` for the measurements.
+
+    `SIGMA_BG` moves with it so the band-pass keeps its shape. It is a
+    background scale whose only job is to stay well clear of the signal one, so
+    what has to be preserved is the RATIO, not the value: held fixed at 8.0
+    while sigma grew to 4 it would be only 2x the signal scale instead of the
+    5.33x it was designed at, and the band-pass would start subtracting the
+    edge from itself.
+
+    `edge_width` of None means "no measurement available" and leaves both at
+    their constants, which is the pre-2026-09-04 behaviour exactly.
+    """
+    if edge_width is None or not np.isfinite(edge_width):
+        return SIGMA_G, SIGMA_BG
+    sigma = max(SIGMA_G, float(edge_width))
+    return sigma, sigma * (SIGMA_BG / SIGMA_G)
+
+
+def _trace_inner(img, cap, angs, guide, rout, edge_width=None):
     """Inner boundary as ONE closed contour, by dynamic programming.
 
     Every ray offers several candidate edges inside the search band, and on a
@@ -702,12 +726,54 @@ def _trace_inner(img, cap, angs, guide, rout):
     range. `TRACE_STEP_MAX` and the SIGMA_G/3 floor together stop the grid
     coarsening past the point where the derivative can localise an edge.
 
+    THE DERIVATIVE SCALE IS THE MEMBRANE'S OWN, not `SIGMA_G`. Reported
+    2026-09-04 as the contour sitting well inside the membrane on `234.tiff`,
+    where the user then corrected it by hand -- the only human-drawn membrane
+    there is, and what the numbers below are measured against.
+
+    `SIGMA_G` is 1.5 px, which is the scale of a crisp step. Where the membrane
+    is a broad transition instead, a 1.5 px derivative under-responds to the
+    real edge and over-responds to whatever fine structure the ramp carries, so
+    the per-ray maximum lands on the sharper-but-smaller inner feature: measured
+    on that capsule, the strongest response sits at r=251.7 (D=3.05) while the
+    membrane the user drew is at r=261.8 (D=2.07). Continuity cannot rescue it,
+    because BOTH are continuous rings and the DP takes the more energetic one --
+    and neither can `_snap_to_level`, because on a ramp the local level is
+    `0.5*(I(r-gap) + I(r+gap)) = I(r)` for every r, so every radius is a fixed
+    point and the snap has no preferred position at all (measured: iterating it
+    twelve times moves the contour 0.5 px and converges at the wrong radius).
+
+    So the scale is matched to the edge: `max(SIGMA_G, width)`, where `width` is
+    the erf scale `_edge_width` already recovers in pass 2, with `SIGMA_BG` held
+    at its ratio to `SIGMA_G` so the band-pass keeps its shape. Nothing new is
+    calibrated -- the floor and the ratio are the existing constants and the
+    width is a measurement.
+
+    Measured over the eleven production membranes: the contour moves by more
+    than 3 px on exactly ONE, the capsule that prompted this (+13.1 px, and
+    2.09 px RMS from the hand-drawn boundary against 17.67 before, 96.8% of
+    rays within 5 px against 30.1%). The other ten move by at most 2.11 px --
+    0.06 px for the nine whose measured width is already near `SIGMA_G`.
+    Circle residual is unchanged (median 2.97 px, max 6.22 -> 6.21) and the
+    worst ray-to-ray jump improves from 2.13 to 2.02 px.
+
+    A FIXED wider scale was measured too and rejected, which is what makes the
+    adaptive form load-bearing rather than decoration. `SIGMA_G=3`/`SIGMA_BG=16`
+    fits the hand-drawn boundary just as well (RMS 2.10) but drags capsules
+    whose edge really is crisp away from their own pass-2 estimate: the largest
+    `|traced - r_edge|` disagreement goes from 15.02 px now to 19.61 px, where
+    the adaptive scale takes it to 3.05 px. `231.tiff` is the case in point --
+    measured width 1.38 px, `r_edge` 250.0, traced 249.0, and a fixed scale of 3
+    moves it to 269.6 for no reason the image supports.
+
     That path is then snapped onto the local intensity level set by
     `_snap_to_level` -- see there for why placing the contour is a separate
     question from choosing which boundary it is on.
     """
     R = cap.mean_radius
     band = _px(TRACE_BAND, R)
+
+    sigma, sigma_bg = _trace_scales(edge_width)
 
     # Sample the search at the movement cap itself. The cap is one state per
     # ray by construction then, so the grid is exactly as fine as the
@@ -717,15 +783,15 @@ def _trace_inner(img, cap, angs, guide, rout):
     # stops localising edges; on a capsule big enough to hit that clamp the
     # cap is carried by `smax` instead, so it stays the same physical slope.
     arc = 2 * np.pi * float(np.mean(guide)) / max(len(angs), 1)
-    step = float(np.clip(TRACE_SLOPE * arc, 0.25, min(TRACE_STEP_MAX, SIGMA_G / 3)))
+    step = float(np.clip(TRACE_SLOPE * arc, 0.25, min(TRACE_STEP_MAX, sigma / 3)))
     u = np.arange(-band, band + step, step)
     radii = guide[:, None] + u[None, :]
     V = _sample(img, cap.cx, cap.cy, angs, radii)
     V[radii > (rout[:, None] - _px(WALL_MARGIN, R))] = np.nan
 
     F = _row_fill(V)
-    D = (gaussian_filter1d(F, SIGMA_G / step, order=1, axis=1) -
-         gaussian_filter1d(F, SIGMA_BG / step, order=1, axis=1)) / step
+    D = (gaussian_filter1d(F, sigma / step, order=1, axis=1) -
+         gaussian_filter1d(F, sigma_bg / step, order=1, axis=1)) / step
     D[~np.isfinite(V)] = np.nan
 
     finite = D[np.isfinite(D)]
@@ -937,7 +1003,7 @@ def analyze(gray, cap, path="", th=None, trace=True):
     contour = None
     if score > 0 and trace and f["_guide"] is not None:
         contour, support = _trace_inner(img, cap, f["_angs"], f["_guide"],
-                                        f["_rout"])
+                                        f["_rout"], edge_width=f["width"])
         pub["trace_support"] = support
     return Membrane("sharp" if score > 0 else "dissolved", score, pub,
                     contour, f["_guide"], f["_icenter"])
