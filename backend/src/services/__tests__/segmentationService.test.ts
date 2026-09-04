@@ -2419,6 +2419,13 @@ describe('polygon-field SSOT round-trip', () => {
     instanceId: 'sperm-7',
     trackId: 'track-99',
     name: 'Tail A',
+    // The model's own semantic class. `metricsCalculator` separates a
+    // microcapsule's membrane from the capsule on exactly this field, so
+    // losing it does not merely drop a label: the membrane becomes a measured
+    // object and doubles every microcapsule row in the export.
+    class: 'membrane',
+    complete: true,
+    mtType: 'mt-type-3',
     _embedding: [
       [1, 2, 3],
       [4, 5, 6],
@@ -2440,7 +2447,15 @@ describe('polygon-field SSOT round-trip', () => {
   it('OPTIONAL_POLYGON_FIELDS registers all metadata fields and NOT _embedding', () => {
     const keys = OPTIONAL_POLYGON_FIELDS.map(f => f.key);
     expect(keys).toEqual(
-      expect.arrayContaining(['partClass', 'instanceId', 'trackId', 'name'])
+      expect.arrayContaining([
+        'partClass',
+        'instanceId',
+        'trackId',
+        'name',
+        'class',
+        'complete',
+        'mtType',
+      ])
     );
     expect(keys).not.toContain('_embedding');
   });
@@ -2472,6 +2487,7 @@ describe('polygon-field SSOT round-trip', () => {
     expect(stored[0].instanceId).toBe('sperm-7');
     expect(stored[0].trackId).toBe('track-99');
     expect(stored[0].name).toBe('Tail A');
+    expect(stored[0].class).toBe('membrane');
     expect(stored[0].geometry).toBe('polyline');
     expect(stored[0]._embedding).toEqual([
       [1, 2, 3],
@@ -2497,6 +2513,13 @@ describe('polygon-field SSOT round-trip', () => {
     expect(p.instanceId).toBe('sperm-7');
     expect(p.trackId).toBe('track-99');
     expect(p.name).toBe('Tail A');
+    // The read path is where this was lost: the validator builds its output
+    // from a whitelist, so a field missing from OPTIONAL_POLYGON_FIELDS is
+    // dropped on the way OUT even though the DB still holds it. The editor
+    // then saves back what it was served, and the DB loses it too.
+    expect(p.class).toBe('membrane');
+    expect(p.complete).toBe(true);
+    expect(p.mtType).toBe('mt-type-3');
     expect(p.geometry).toBe('polyline');
     expect(p._embedding).toBeUndefined();
   });
@@ -2548,6 +2571,7 @@ describe('polygon-field SSOT round-trip', () => {
     expect(stored[0].partClass).toBe('head');
     expect(stored[0].trackId).toBe('track-99');
     expect(stored[0].name).toBe('Tail A');
+    expect(stored[0].class).toBe('membrane');
     expect(stored[0]._embedding).toBeDefined();
 
     // Serve it: parent_id -> parentIds[], _embedding stripped.
@@ -2568,6 +2592,11 @@ describe('polygon-field SSOT round-trip', () => {
     expect(p.partClass).toBe('head');
     expect(p.trackId).toBe('track-99');
     expect(p.name).toBe('Tail A');
+    // THE path this bug was reported on: the user edits a microcapsule
+    // segmentation and saves. Before the fix the editor had never been served
+    // `class`, so the update wrote it away and the membrane stopped being a
+    // membrane — silently, with the export doubling on the next run.
+    expect(p.class).toBe('membrane');
     expect((p as { parent_id?: unknown }).parent_id).toBeUndefined();
     expect(p._embedding).toBeUndefined();
   });
