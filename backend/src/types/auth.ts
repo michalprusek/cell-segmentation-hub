@@ -16,6 +16,21 @@ export interface AuthUser {
   id: string;
   email: string;
   emailVerified: boolean;
+  /**
+   * Platform administrator, read fresh from the row on every request by
+   * `authenticate`. Required, not optional: this interface describes what is
+   * on the request AFTER authentication, and every code path that sets
+   * `req.user` knows the answer. Leaving it optional would have let a
+   * `req.user.isAdmin` check silently read `undefined` in any handler that
+   * builds its own request object.
+   *
+   * It also has to be here rather than only on the global express
+   * augmentation, because `AuthRequest` re-declares `user` and would
+   * otherwise no longer extend `Request` (TS2430) — which surfaces as a pile
+   * of unrelated-looking `params` errors in every router that uses a typed
+   * request.
+   */
+  isAdmin: boolean;
 }
 
 // Properly typed AuthRequest with all Express Request properties

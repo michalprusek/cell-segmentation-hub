@@ -395,14 +395,28 @@ const CanvasPolygon = React.memo(
     const handleMouseEnter = useCallback(() => onHover?.(id), [onHover, id]);
     const handleMouseLeave = useCallback(() => onHover?.(null), [onHover]);
 
+    // Double-click-to-edit belongs to the shape ONLY when the canvas is not
+    // in the middle of drawing something. While drawing, this used to
+    // `stopPropagation()` unconditionally and jump to EditVertices on the
+    // shape under the cursor — in CreatePolyline / AddPoints that threw away
+    // the microtubule extension the double-click was meant to COMMIT, and in
+    // CreatePolygon it abandoned the in-progress polygon outright. The
+    // polyline hit stroke is 12x the rendered width (min 6 px), so a
+    // double-click "in open space" lands on it far more often than it looks.
+    const canvasOwnsDoubleClick =
+      editMode === EditMode.CreatePolyline ||
+      editMode === EditMode.AddPoints ||
+      editMode === EditMode.CreatePolygon;
+
     const handleDoubleClick = useCallback(
       (e: React.MouseEvent) => {
+        if (canvasOwnsDoubleClick) return; // let it bubble to CanvasContainer
         e.stopPropagation();
         if (onEditPolygon) {
           onEditPolygon(id);
         }
       },
-      [onEditPolygon, id]
+      [onEditPolygon, id, canvasOwnsDoubleClick]
     );
 
     const handleKeyDown = useCallback(

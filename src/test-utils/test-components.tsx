@@ -58,6 +58,8 @@ export const MockAuthProvider: React.FC<{ children: React.ReactNode }> = ({
     token: 'test-token',
     loading: false,
     isAuthenticated: true,
+    isAdmin: false,
+    impersonatedBy: null,
     signIn: vi.fn(),
     signUp: vi.fn(),
     signOut: vi.fn(),

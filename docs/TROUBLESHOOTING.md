@@ -295,13 +295,13 @@ Check backend logs for issues:
 
 ```bash
 # View backend logs
-docker logs spheroseg-blue-backend -f --tail 100
+docker logs spheroseg-backend -f --tail 100
 
 # Search for errors
-docker logs spheroseg-blue-backend 2>&1 | grep ERROR
+docker logs spheroseg-backend 2>&1 | grep ERROR
 
 # Monitor WebSocket connections
-docker logs spheroseg-blue-backend 2>&1 | grep "WebSocket"
+docker logs spheroseg-backend 2>&1 | grep "WebSocket"
 ```
 
 ## Best Practices

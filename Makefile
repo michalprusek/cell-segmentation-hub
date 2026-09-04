@@ -343,10 +343,12 @@ type-check:
 # because backend/src still carries pre-existing problems that would
 # otherwise block every commit. Regenerate with `npm run lint:backend:update`.
 #
-# Vitest is intentionally NOT in this target — the suite has ~31% pre-
-# existing failures from prior refactors (webSocketManager, ND2 helpers,
-# legacy editor tests). Including it here would render `make ci` unusable
-# until the suite is healed. Use `make ci-test` to run vitest separately.
+# Vitest is intentionally NOT in this target — it is minutes, not seconds,
+# and `make ci` exists to be the fast pre-PR gate. That does NOT make it
+# optional: .github/workflows/ci.yml runs it with a coverage floor in both
+# the `frontend` and `backend` jobs, and the `main-protection` ruleset
+# requires both contexts. Run `make ci-test` (frontend) and the container
+# invocation in docs/testing-guide.md (backend) before pushing.
 ci:
 	@echo "🔍 [1/7] TypeScript (frontend — baseline gate)"
 	@npm run type-check
@@ -370,11 +372,11 @@ ci:
 docs-links:
 	@node scripts/check-doc-links.cjs
 
-# Optional: run the Vitest suite. Currently has known pre-existing
-# failures (~31%). Use to investigate specific test files; don't treat
-# pass/fail as a gate until the suite is healed.
+# The frontend Vitest suite. NOT part of `make ci` (which is the ~30 s
+# type/lint/i18n gate), but this is the same run the required `frontend` CI
+# job performs with coverage, so a red run here blocks the merge.
 ci-test:
-	@echo "🧪 Vitest (informational — has known pre-existing failures)"
+	@echo "🧪 Vitest (frontend) — the same suite the required CI job gates on"
 	@NODE_OPTIONS="--max-old-space-size=8192" npx vitest run --reporter=default --pool=forks
 
 # Development environment

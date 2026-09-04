@@ -17,6 +17,14 @@ export interface UserProfile {
   firstName?: string;
   lastName?: string;
   isEmailVerified: boolean;
+  /**
+   * Platform administrator. Carried on the profile because `/auth/profile` is
+   * the one call the SPA makes on every cold load, and the admin entry point
+   * has to be renderable from it without a second round-trip. It is a HINT
+   * for rendering only — every admin route re-checks the flag server-side
+   * (`requireAdmin`), so flipping it in devtools buys nothing.
+   */
+  isAdmin: boolean;
   language: string;
   theme: string;
   avatarUrl?: string | null;
@@ -78,6 +86,7 @@ export async function getUserProfile(
       firstName: user.profile?.title?.split(' ')[0],
       lastName: user.profile?.title?.split(' ').slice(1).join(' '),
       isEmailVerified: user.emailVerified,
+      isAdmin: user.isAdmin,
       // Fallback for a legacy row with no profile at all. English, not
       // Czech — the client treats whatever this endpoint returns as an
       // explicit preference and pins it, so a Czech fallback silently
@@ -257,52 +266,68 @@ export async function getUserActivity(
     // For now, we'll construct activity from database events
     // TODO: Implement proper activity logging
 
-    const recentProjects = await prisma.project.findMany({
-      where: { userId },
-      orderBy: { createdAt: 'desc' },
-      take: 3,
-      select: {
-        id: true,
-        title: true,
-        createdAt: true,
-      },
-    });
-
-    const recentImages = await prisma.image.findMany({
-      where: {
-        project: {
-          userId,
-        },
-      },
-      orderBy: { createdAt: 'desc' },
-      take: 5,
-      include: {
-        project: {
+    // Three independent reads — no data dependency between them, so one round
+    // trip rather than three.
+    //
+    // `select` on the segmentation read is load-bearing, not tidiness: the
+    // previous `include: { image: … }` narrowed the RELATION but left the
+    // Segmentation row itself unnarrowed, so every one of the five rows
+    // dragged `polygons` — the JSON-as-TEXT blob that holds a whole frame's
+    // geometry — across the wire for an activity line that reads only
+    // `id`, `model` and `createdAt`.
+    const [recentProjects, recentImages, recentSegmentations] =
+      await Promise.all([
+        prisma.project.findMany({
+          where: { userId },
+          orderBy: { createdAt: 'desc' },
+          take: 3,
           select: {
+            id: true,
             title: true,
+            createdAt: true,
           },
-        },
-      },
-    });
-
-    const recentSegmentations = await prisma.segmentation.findMany({
-      where: {
-        image: {
-          project: {
-            userId,
+        }),
+        prisma.image.findMany({
+          where: {
+            project: {
+              userId,
+            },
           },
-        },
-      },
-      orderBy: { createdAt: 'desc' },
-      take: 5,
-      include: {
-        image: {
+          orderBy: { createdAt: 'desc' },
+          take: 5,
           select: {
+            id: true,
             name: true,
+            createdAt: true,
+            project: {
+              select: {
+                title: true,
+              },
+            },
           },
-        },
-      },
-    });
+        }),
+        prisma.segmentation.findMany({
+          where: {
+            image: {
+              project: {
+                userId,
+              },
+            },
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 5,
+          select: {
+            id: true,
+            model: true,
+            createdAt: true,
+            image: {
+              select: {
+                name: true,
+              },
+            },
+          },
+        }),
+      ]);
 
     // Construct activity items
     const activities: Array<{

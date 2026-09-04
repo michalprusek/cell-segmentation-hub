@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import * as ProjectService from '../../services/projectService';
 import * as MtTypeLabelService from '../../services/mtTypeLabelService';
+import * as SharingService from '../../services/sharingService';
 import { ResponseHelper, asyncHandler } from '../../utils/response';
 import {
   CreateProjectData,
@@ -245,8 +246,19 @@ async function ensureProjectAccess(
     ResponseHelper.badRequest(res, 'Project ID is required');
     return false;
   }
-  const project = await ProjectService.getProjectById(projectId, req.user.id);
-  if (!project) {
+  // Deliberately NOT ProjectService.getProjectById: that helper runs this very
+  // access check and then fetches the project again with `include: { images:
+  // { … } }` and no `take`, i.e. every image row of the project — 621 rows on a
+  // real ND2 container — only for a null test. `hasProjectAccess` is exactly
+  // the gate getProjectById itself uses, and it returns hasAccess:false both
+  // when the caller has no access AND when the project does not exist (neither
+  // the owner lookup nor the share lookup can match a missing row), so the 404
+  // below fires in the same two cases as before.
+  const { hasAccess } = await SharingService.hasProjectAccess(
+    projectId,
+    req.user.id
+  );
+  if (!hasAccess) {
     ResponseHelper.notFound(
       res,
       'Projekt nebyl nalezen nebo k němu nemáte oprávnění',

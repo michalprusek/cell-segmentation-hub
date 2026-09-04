@@ -744,12 +744,19 @@ describe('cancelAllUserSegmentations', () => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe('getMultipleBatches — fairness & dispatch', () => {
+  // Query order inside getNextBatchExcluding: the plain priority/createdAt
+  // candidate and the recently-processed window go out together (Promise.all,
+  // findFirst first), and the user-restricted candidate is a SECOND findFirst
+  // issued only when that window is non-empty.
   it('prefers a user NOT in the recently-processed window', async () => {
+    const userAItem = makeQueueEntry({ userId: 'user-A', imageId: 'img-A' });
     const userBItem = makeQueueEntry({ userId: 'user-B', imageId: 'img-B' });
     prismaMock.segmentationQueue.findMany
       .mockResolvedValueOnce([{ userId: 'user-A' }]) // recentlyProcessed
       .mockResolvedValueOnce([userBItem]); // batch findMany for user-B
-    prismaMock.segmentationQueue.findFirst.mockResolvedValueOnce(userBItem); // preferred non-recent user
+    prismaMock.segmentationQueue.findFirst
+      .mockResolvedValueOnce(userAItem) // plain-order candidate: the recent user
+      .mockResolvedValueOnce(userBItem); // preferred non-recent user wins
 
     const batches = await service.getMultipleBatches(1);
 
@@ -763,8 +770,8 @@ describe('getMultipleBatches — fairness & dispatch', () => {
       .mockResolvedValueOnce([{ userId: 'user-A' }]) // recentlyProcessed
       .mockResolvedValueOnce([userAItem]); // batch findMany
     prismaMock.segmentationQueue.findFirst
-      .mockResolvedValueOnce(null) // preferred-user search: none
-      .mockResolvedValueOnce(userAItem); // plain-order fallback
+      .mockResolvedValueOnce(userAItem) // plain-order candidate
+      .mockResolvedValueOnce(null); // preferred-user search: none
 
     const batches = await service.getMultipleBatches(1);
 
@@ -774,11 +781,29 @@ describe('getMultipleBatches — fairness & dispatch', () => {
 
   it('returns empty batches when the queue is empty', async () => {
     prismaMock.segmentationQueue.findMany.mockResolvedValueOnce([]); // recentlyProcessed
-    prismaMock.segmentationQueue.findFirst.mockResolvedValueOnce(null); // plain fallback
+    prismaMock.segmentationQueue.findFirst.mockResolvedValueOnce(null); // plain candidate
 
     const batches = await service.getMultipleBatches(4);
 
     expect(batches).toHaveLength(0);
+  });
+
+  it('costs ONE findFirst and ONE findMany per tick on an empty queue', async () => {
+    // The worker calls this every 100 ms forever. An empty queue used to cost
+    // three SERIAL round trips — the recently-processed window, the
+    // user-restricted candidate, then the plain one. The plain candidate now
+    // goes out with the window and a null result short-circuits, so the
+    // user-restricted lookup is never issued.
+    prismaMock.segmentationQueue.findMany.mockResolvedValue([
+      { userId: 'user-A' },
+    ]); // a NON-empty fairness window, i.e. the expensive branch
+    prismaMock.segmentationQueue.findFirst.mockResolvedValue(null);
+
+    const batches = await service.getMultipleBatches(4);
+
+    expect(batches).toHaveLength(0);
+    expect(prismaMock.segmentationQueue.findFirst).toHaveBeenCalledTimes(1);
+    expect(prismaMock.segmentationQueue.findMany).toHaveBeenCalledTimes(1);
   });
 
   it('caps to a single batch for a serial-dispatch model (microtubule)', async () => {

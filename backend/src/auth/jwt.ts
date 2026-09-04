@@ -6,6 +6,24 @@ export interface JwtPayload {
   userId: string;
   email: string;
   emailVerified: boolean;
+  /**
+   * Set only on an IMPERSONATED session: the id of the admin who is really
+   * acting. `userId` stays the impersonated user's, so every ownership check
+   * downstream keeps working unchanged — the whole point of impersonation.
+   *
+   * This claim is NOT the source of truth. `authService.refreshToken`
+   * rebuilds the payload from scratch every ~13 minutes, so anything that
+   * lives only here is silently dropped on the first refresh and the admin is
+   * ejected mid-session. The durable copy is on the Redis refresh record
+   * (`sessionService`), which survives rotation; this claim is what the
+   * per-request middleware reads so it does not have to touch Redis.
+   */
+  impersonatorId?: string;
+  /**
+   * Correlates the "start" and "stop" rows of one impersonation in
+   * `impersonation_logs`. Carried alongside `impersonatorId` everywhere.
+   */
+  impersonationSessionId?: string;
 }
 
 export interface TokenPair {
