@@ -281,6 +281,12 @@ describe('QueueService Parallel Processing', () => {
     const matchesWhere = (entry: any, where: any): boolean => {
       if (!where) return true;
       return Object.entries(where).every(([key, val]) => {
+        // Prisma OMITS a filter whose value is `undefined`; it does not match
+        // rows whose column is null/absent. getNextBatchExcluding passes
+        // `imageId: undefined` whenever nothing is excluded, and treating that
+        // as an equality test made its batching findMany return [] every time,
+        // so the "batch several images of the same model" path was dead here.
+        if (val === undefined) return true;
         if (val && typeof val === 'object') {
           const v = val as any;
           if ('in' in v) return v.in.includes(entry[key]);
@@ -294,21 +300,62 @@ describe('QueueService Parallel Processing', () => {
       });
     };
 
+    // `orderBy` used to be accepted and dropped on the floor (it was spelled
+    // `orderBy: _orderBy`), and findFirst did not even take it. Everything the
+    // queue does about PRIORITY is expressed as
+    // `orderBy: [{ priority: 'desc' }, { createdAt: 'asc' }]`, so with it
+    // ignored the fake always handed back the first row inserted and no test
+    // in this file could observe priority at all — the "fairness" test below
+    // was reduced to comparing Date.now() readings taken in the same
+    // millisecond. Array.prototype.sort is stable, so equal keys keep
+    // insertion order, which is what a tied createdAt means here.
+    const applyOrderBy = (rows: any[], orderBy: any): any[] => {
+      if (!orderBy) return rows;
+      const clauses = Array.isArray(orderBy) ? orderBy : [orderBy];
+      // Dates are compared by their VALUE, not by reference. `createdAt` is a
+      // fresh `new Date()` per row, so two rows written in the same
+      // millisecond are `!==` while being equal as timestamps: a reference
+      // check made the comparator return 1 for both (a,b) and (b,a) — an
+      // asymmetric comparator, whose sort result is implementation-defined
+      // rather than "stable, so insertion order" — and stopped a tie ever
+      // falling through to the next orderBy clause.
+      const key = (v: unknown): unknown =>
+        v instanceof Date ? v.getTime() : v;
+      return [...rows].sort((a, b) => {
+        for (const clause of clauses) {
+          for (const [field, dir] of Object.entries(clause)) {
+            const av = key(a[field]);
+            const bv = key(b[field]);
+            if (av === bv) continue;
+            if (av === null || av === undefined) return 1;
+            if (bv === null || bv === undefined) return -1;
+            const cmp = (av as never) < (bv as never) ? -1 : 1;
+            return dir === 'desc' ? -cmp : cmp;
+          }
+        }
+        return 0;
+      });
+    };
+
     (
       prisma.segmentationQueue.findMany as MockedFunction<any>
-    ).mockImplementation(
-      async ({ where, take, orderBy: _orderBy }: any = {}) => {
-        let results = queueStore.filter(e => matchesWhere(e, where));
-        if (take !== undefined) results = results.slice(0, take);
-        return results;
-      }
-    );
+    ).mockImplementation(async ({ where, take, orderBy }: any = {}) => {
+      let results = applyOrderBy(
+        queueStore.filter(e => matchesWhere(e, where)),
+        orderBy
+      );
+      if (take !== undefined) results = results.slice(0, take);
+      return results;
+    });
 
     (
       prisma.segmentationQueue.findFirst as MockedFunction<any>
     ).mockImplementation(
-      async ({ where }: any = {}) =>
-        queueStore.find(e => matchesWhere(e, where)) || null
+      async ({ where, orderBy }: any = {}) =>
+        applyOrderBy(
+          queueStore.filter(e => matchesWhere(e, where)),
+          orderBy
+        )[0] || null
     );
 
     (prisma.segmentationQueue.count as MockedFunction<any>).mockImplementation(
@@ -491,8 +538,6 @@ describe('QueueService Parallel Processing', () => {
 
       // Submit batches concurrently for all 4 users
       const concurrentSubmissions = concurrentUsers.map(async user => {
-        const startTime = Date.now();
-
         const queueEntries = await queueService.addBatchToQueue(
           user.imageIds,
           user.projectId,
@@ -504,20 +549,15 @@ describe('QueueService Parallel Processing', () => {
           true // detectHoles
         );
 
-        const endTime = Date.now();
-
         return {
           user: user.userId,
           queueEntries,
-          submissionTime: endTime - startTime,
           batchSize: user.imageIds.length,
         };
       });
 
       // Execute all submissions in parallel
-      const startTime = Date.now();
       const results = await Promise.all(concurrentSubmissions);
-      const totalTime = Date.now() - startTime;
 
       // Assertions
       expect(results).toHaveLength(4);
@@ -525,11 +565,15 @@ describe('QueueService Parallel Processing', () => {
       // Verify all batches were submitted successfully
       for (const result of results) {
         expect(result.queueEntries).toHaveLength(result.batchSize);
-        expect(result.submissionTime).toBeLessThan(1000); // Should submit quickly
       }
 
-      // Verify total concurrent submission time is reasonable
-      expect(totalTime).toBeLessThan(2000); // All 4 batches should submit within 2 seconds
+      // There were two wall-clock ceilings here — submissionTime < 1000 ms and
+      // totalTime < 2000 ms — and they were removed rather than tuned.
+      // `addBatchToQueue` runs entirely against the in-memory `queueStore`
+      // fake in this file, so they timed a `vi.fn()`, and measured 2 ms
+      // against the 1000 ms ceiling: a 500x margin, i.e. green through any
+      // regression a reviewer would care about. What the submissions must
+      // actually do is below and does not involve a clock.
 
       // Verify database state
       const totalQueueItems = await prisma.segmentationQueue.count();
@@ -544,7 +588,10 @@ describe('QueueService Parallel Processing', () => {
       }
     });
 
-    test('should process 4 concurrent batches without blocking', async () => {
+    // Named for what it demonstrates. It used to be "should process 4
+    // concurrent batches without blocking", which it does not show: the four
+    // calls all take the same queue row (see the count assertion below).
+    test('runs 4 overlapping getNextBatch/processBatch cycles to completion', async () => {
       // Setup queue entries for all users
       for (const user of concurrentUsers) {
         await queueService.addBatchToQueue(
@@ -617,17 +664,34 @@ describe('QueueService Parallel Processing', () => {
           : 0;
 
       // Assertions
-      expect(batchProcessingMetrics.successfulBatches).toBeGreaterThan(0);
+      expect(batchProcessingMetrics.successfulBatches).toBe(4);
       expect(batchProcessingMetrics.failedBatches).toBe(0);
-      expect(batchProcessingMetrics.totalTime).toBeLessThan(1000); // Parallel processing should be fast
-      expect(batchProcessingMetrics.averageBatchTime).toBeLessThan(500); // Individual batches reasonably fast
+      // BATCH_LIMITS in getNextBatchExcluding is 1 for every model, so a batch
+      // is one image and never more.
+      expect(batchResults.map(r => r.batchSize)).toEqual([1, 1, 1, 1]);
 
-      // Verify some items were processed (each batch call processes 1 item at a time)
+      // Two wall-clock ceilings were removed here (totalTime < 1000 ms,
+      // averageBatchTime < 500 ms). Both timed the file's own
+      // `setTimeout(196|396)` mock of requestBatchSegmentation, so they
+      // measured the mock's timer and nothing in queueService.
+
       const remainingQueueItems = await prisma.segmentationQueue.count({
         where: { status: 'queued' },
       });
-      // 16 items total, 4 concurrent batch calls each processing 1 item = 12 remaining
-      expect(remainingQueueItems).toBeLessThan(16);
+      // 15, NOT 12 — and this used to say `toBeLessThan(16)` beside a comment
+      // claiming 12, which is how the discrepancy stayed invisible. All four
+      // calls claim the SAME row: `getNextBatch` -> `getMultipleBatches(1)` ->
+      // `getNextBatchExcluding` READS the top-priority queued row (findFirst /
+      // findMany) and does not mark it taken, so four overlapping reads see
+      // one row and process it four times.
+      //
+      // That is not a production bug — there is exactly one queue worker
+      // (`workers/queueWorker.ts`), so concurrent `getNextBatch()` calls never
+      // happen there — but it does mean this test does NOT show that
+      // concurrent claims are safe, whatever its name suggests. Pinned at 15
+      // so that if an atomic claim is ever added (making the honest answer
+      // 12), this fails and says so rather than passing either way.
+      expect(remainingQueueItems).toBe(15);
 
       // Verify WebSocket notifications were sent
       expect(mockWebSocketService.emitSegmentationUpdate).toHaveBeenCalled();
@@ -662,85 +726,63 @@ describe('QueueService Parallel Processing', () => {
         return images.map(() => mockSegmentationResults());
       });
 
-      // Track processing order and timing per user
-      const userProcessingMetrics: Record<
-        string,
-        { startTime: number; endTime: number; batchSize: number }
-      > = {};
+      // What getNextBatch actually chose, which is the only thing that can
+      // show priority ordering. The old version inferred it from Date.now()
+      // readings and could not: all four start times landed in the same
+      // millisecond, so `maxDeviation` was exactly 0 against a `< 100`
+      // ceiling, and the priority comparison was
+      // `avgHighPriorityStart <= avgLowPriorityStart + 50` — 0 <= 50 — wrapped
+      // in an `if` that would have skipped it silently had either list come
+      // back empty.
+      const pickedRows: Array<{
+        imageId: string;
+        userId: string;
+        priority: number;
+      }> = [];
 
       // Process batches and track metrics
       const processingPromises = fairnessTestUsers.map(async user => {
         const batch = await queueService.getNextBatch();
-        const startTime = Date.now();
-
-        userProcessingMetrics[user.userId] = {
-          startTime,
-          endTime: 0,
-          batchSize: batch.length,
-        };
+        pickedRows.push(
+          ...(
+            batch as unknown as Array<{
+              imageId: string;
+              userId: string;
+              priority: number;
+            }>
+          ).map(b => ({
+            imageId: b.imageId,
+            userId: b.userId,
+            priority: b.priority,
+          }))
+        );
 
         await queueService.processBatch(batch);
-
-        userProcessingMetrics[user.userId].endTime = Date.now();
 
         return { userId: user.userId, batchSize: batch.length };
       });
 
-      await Promise.all(processingPromises);
+      const processed = await Promise.all(processingPromises);
 
-      // Analyze fairness metrics
-      const processingTimes = Object.values(userProcessingMetrics).map(
-        metrics => metrics.endTime - metrics.startTime
-      );
+      // Every call is served, and each serves one image (BATCH_LIMITS is 1).
+      expect(processed.map(p => p.batchSize)).toEqual([1, 1, 1, 1]);
+      expect(pickedRows).toHaveLength(4);
 
-      const avgProcessingTime =
-        processingTimes.reduce((a, b) => a + b, 0) / processingTimes.length;
-      const maxDeviation = Math.max(
-        ...processingTimes.map(time => Math.abs(time - avgProcessingTime))
-      );
-
-      // Fairness assertions
-      expect(maxDeviation).toBeLessThan(100); // Processing times should be within 100ms of average
-
-      // Verify all users were processed
-      expect(Object.keys(userProcessingMetrics)).toHaveLength(
-        fairnessTestUsers.length
-      );
-
-      // Check that priority was respected (higher priority should process first when possible)
-      const highPriorityUsers = fairnessTestUsers
-        .filter(u => u.priority === 1)
-        .map(u => u.userId);
-
-      const lowPriorityUsers = fairnessTestUsers
-        .filter(u => u.priority === 0)
-        .map(u => u.userId);
-
-      // At least some high-priority users should start before low-priority users
-      const highPriorityStartTimes = highPriorityUsers
-        .map(userId => userProcessingMetrics[userId]?.startTime)
-        .filter(time => time !== undefined);
-
-      const lowPriorityStartTimes = lowPriorityUsers
-        .map(userId => userProcessingMetrics[userId]?.startTime)
-        .filter(time => time !== undefined);
-
-      if (
-        highPriorityStartTimes.length > 0 &&
-        lowPriorityStartTimes.length > 0
-      ) {
-        const avgHighPriorityStart =
-          highPriorityStartTimes.reduce((a, b) => a + b, 0) /
-          highPriorityStartTimes.length;
-        const avgLowPriorityStart =
-          lowPriorityStartTimes.reduce((a, b) => a + b, 0) /
-          lowPriorityStartTimes.length;
-
-        // This is a soft check since parallel processing may not guarantee strict ordering
-        expect(avgHighPriorityStart).toBeLessThanOrEqual(
-          avgLowPriorityStart + 50
-        );
+      // Priority beats arrival order. user_1 queued first but at priority 0;
+      // user_2 is the earliest of the priority-1 users, so
+      // `orderBy: [{ priority: 'desc' }, { createdAt: 'asc' }]` in
+      // getNextBatchExcluding must reach for its first image.
+      for (const row of pickedRows) {
+        expect(row.priority).toBe(1);
+        expect(row.userId).toBe('user_2');
+        expect(row.imageId).toBe('img_2_1');
       }
+      // And a priority-0 user really was waiting, or the line above is
+      // satisfied by there being nothing else to choose.
+      const queuedLowPriority = await prisma.segmentationQueue.count({
+        where: { status: 'queued', priority: 0 },
+      });
+      expect(queuedLowPriority).toBeGreaterThan(0);
     });
   });
 

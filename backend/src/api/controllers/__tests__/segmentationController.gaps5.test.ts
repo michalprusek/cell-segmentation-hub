@@ -68,6 +68,33 @@ function makeReq(
   return { params, user, body } as never;
 }
 
+/**
+ * The SegmentationService instance the controller actually calls.
+ *
+ * `segmentationController` is a module-level singleton, so its
+ * `segmentationService` was constructed when this file imported the module —
+ * before any `beforeEach` ran. Programming the constructor mock therefore does
+ * nothing to it; the instance has to be reached through the controller.
+ *
+ * This used to be an `if (segSvc?.batchProcess) { ... }` around the setup and
+ * an `expect(true).toBe(true)` for the assertion, which passed whether or not
+ * the mock was ever installed. It throws now, so a controller that stops
+ * holding a service fails loudly instead of silently testing nothing.
+ */
+function liveService(): Record<string, ReturnType<typeof vi.fn>> {
+  const svc = (
+    segmentationController as unknown as {
+      segmentationService?: Record<string, ReturnType<typeof vi.fn>>;
+    }
+  ).segmentationService;
+  if (!svc?.batchProcess || !svc?.getBatchSegmentationResults) {
+    throw new Error(
+      'segmentationController.segmentationService is not the mocked service'
+    );
+  }
+  return svc;
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   MockSegService.mockImplementation(function (this: Record<string, unknown>) {
@@ -138,39 +165,26 @@ describe('segmentationController.batchGetSegmentationResults', () => {
     );
   });
 
-  it('returns 500 when service throws', async () => {
-    const segSvc = (
-      segmentationController as unknown as {
-        segmentationService: Record<string, ReturnType<typeof vi.fn>>;
-      }
-    ).segmentationService;
-    if (segSvc?.getBatchSegmentationResults) {
-      segSvc.getBatchSegmentationResults.mockRejectedValueOnce(
-        new Error('DB error')
-      );
-    }
+  it('reports the service failure as a 500 and returns no results', async () => {
+    const boom = new Error('DB error');
+    liveService().getBatchSegmentationResults.mockRejectedValueOnce(boom);
 
     const req = makeReq({}, mockUser, { imageIds: ['img-1'] });
     const res = makeRes();
 
     await segmentationController.batchGetSegmentationResults(req, res);
-    // Either success or error is called depending on mock state
-    expect(true).toBe(true); // Just verify no unhandled exception
+
+    expect(mockRH.internalError).toHaveBeenCalledWith(res, boom, 'DB error');
+    expect(mockRH.success).not.toHaveBeenCalled();
   });
 });
 
 // ─── F. batchSegment — error catch ───────────────────────────────────────────
 
 describe('segmentationController.batchSegment', () => {
-  it('returns 500 when service throws', async () => {
-    const segSvc = (
-      segmentationController as unknown as {
-        segmentationService: Record<string, ReturnType<typeof vi.fn>>;
-      }
-    ).segmentationService;
-    if (segSvc?.batchProcess) {
-      segSvc.batchProcess.mockRejectedValueOnce(new Error('ML error'));
-    }
+  it('reports the ML failure as a 500 and does not report success', async () => {
+    const boom = new Error('ML error');
+    liveService().batchProcess.mockRejectedValueOnce(boom);
 
     const req = makeReq({}, mockUser, {
       imageIds: ['img-1', 'img-2'],
@@ -180,7 +194,40 @@ describe('segmentationController.batchSegment', () => {
     const res = makeRes();
 
     await segmentationController.batchSegment(req, res);
-    // Just verify it handles the error without unhandled exception
-    expect(true).toBe(true);
+
+    expect(mockRH.internalError).toHaveBeenCalledWith(res, boom, 'ML error');
+    expect(mockRH.success).not.toHaveBeenCalled();
+  });
+
+  it('enqueues and reports success when the service resolves', async () => {
+    const outcome = { successful: 2, failed: 0, results: [] };
+    liveService().batchProcess.mockResolvedValueOnce(outcome);
+
+    const req = makeReq({}, mockUser, {
+      imageIds: ['img-1', 'img-2'],
+      model: 'hrnet',
+      threshold: 0.5,
+    });
+    const res = makeRes();
+
+    await segmentationController.batchSegment(req, res);
+
+    // The happy path is what makes the failure test above mean something:
+    // without it, a controller that never called the service at all would
+    // satisfy "internalError was called" just as well.
+    expect(liveService().batchProcess).toHaveBeenCalledWith(
+      ['img-1', 'img-2'],
+      'hrnet',
+      0.5,
+      mockUser.id,
+      true, // detectHoles defaults on
+      undefined // no channel override
+    );
+    expect(mockRH.success).toHaveBeenCalledWith(
+      res,
+      outcome,
+      'Dávkové zpracování dokončeno'
+    );
+    expect(mockRH.internalError).not.toHaveBeenCalled();
   });
 });

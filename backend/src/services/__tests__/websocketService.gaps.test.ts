@@ -52,7 +52,13 @@ vi.mock('socket.io', () => ({
   // Replaced per-test via mockImplementation inside makeService()
   Server: vi.fn(),
 }));
-vi.mock('jsonwebtoken', () => jwtMock);
+// websocketService does `import jwt from 'jsonwebtoken'` — a DEFAULT import.
+// A factory returning the bare `{ verify }` namespace leaves that default
+// `undefined`, so `jwt.verify(...)` throws a TypeError and the middleware's
+// catch turns it into 'Authentication failed' — the same string the
+// verify-throws test expects, which is how that test passed without the mock
+// ever being consulted. Export the default too.
+vi.mock('jsonwebtoken', () => ({ ...jwtMock, default: jwtMock }));
 vi.mock('../../utils/logger');
 // Suppress process.exit(1) from config parse in non-test NODE_ENV
 vi.mock('../../utils/config', () => ({
@@ -206,17 +212,24 @@ describe('WebSocketService – gap coverage', () => {
         },
         next
       );
-      // When user not found the middleware calls next(new Error('Authentication failed'))
-      // because it falls through to the catch block in some paths, or the user-not-found
-      // branch — either way next() is called with an Error
-      expect(next).toHaveBeenCalledWith(expect.any(Error));
+      // Which branch this is was genuinely unknowable until the jsonwebtoken
+      // mock above was fixed: `jwt` was undefined, so every case reached the
+      // catch and reported 'Authentication failed'. The old assertion and its
+      // comment ("falls through to the catch block in some paths, or the
+      // user-not-found branch — either way next() is called with an Error")
+      // recorded that ambiguity instead of resolving it. It is the
+      // user-not-found branch, and it has its own message.
+      expect(next).toHaveBeenCalledWith(
+        expect.objectContaining({ message: 'Invalid authentication token' })
+      );
     });
 
-    it('calls next() exactly once (success path — reachable when token + user valid)', async () => {
-      // The middleware always terminates via next() — either with an Error (failure)
-      // or with no arg (success). We verify the middleware completes exactly once.
-      // Whether next() receives an Error or not depends on runtime env var config;
-      // the important invariant is that the middleware doesn't hang or throw.
+    it('admits a socket with a valid token and stamps the identity on it', async () => {
+      // Also formerly hedged — "whether next() receives an Error or not
+      // depends on runtime env var config" — and asserted only
+      // `toHaveBeenCalledTimes(1)`, which a rejection satisfies as well as an
+      // admission. Nothing here depends on the environment: the secret is set
+      // in beforeEach and both the token and the user are mocked.
       const middleware = getMiddleware(io);
       jwtMock.verify.mockReturnValueOnce({
         userId: 'real-user',
@@ -232,8 +245,10 @@ describe('WebSocketService – gap coverage', () => {
       };
       const next = vi.fn();
       await middleware(socket, next);
-      // The middleware always calls next() exactly once (never throws out)
       expect(next).toHaveBeenCalledTimes(1);
+      expect(next).toHaveBeenCalledWith(); // no argument == admitted
+      expect(socket.userId).toBe('real-user');
+      expect(socket.userEmail).toBe('real@x.com');
     });
   });
 

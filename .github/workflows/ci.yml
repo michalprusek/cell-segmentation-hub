@@ -311,7 +311,7 @@ jobs:
       # drivers" at import on a runner with no CUDA. It needs a real card --
       # `make test-ml`. See backend/requirements-pytest-ci.txt for the full
       # reasoning.
-      # focus_qc's 112 tests are listed separately because they live inside the
+      # focus_qc's 132 tests are listed separately because they live inside the
       # vendored package (backend/essays/module/focus_qc/tests) rather than in
       # the module's own tests/ directory, so the path above does not reach
       # them. They are the only thing pinning the focus descriptor's constants
