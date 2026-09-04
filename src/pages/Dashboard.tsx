@@ -515,6 +515,10 @@ const Dashboard = () => {
                 onProjectUpdate={handleProjectUpdate}
                 onRequestProjectMove={handleRequestProjectMove}
                 hasAnyFolder={hasAnyFolder}
+                // The in-grid "+" card and the list-mode create card must file
+                // a new project here too, not at the root — the header
+                // button below has done so since 2026-09-03.
+                folderId={currentFolderId}
                 onOpenFolder={handleNavigateToFolder}
                 onRenameFolder={(id, name) => setRenameTarget({ id, name })}
                 onMoveFolder={handleRequestFolderMove}
