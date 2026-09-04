@@ -18,6 +18,10 @@ export interface InteractionState {
   panStart: Point | null;
   draggedVertexInfo: { polygonId: string; vertexIndex: number } | null;
   originalVertexPosition?: Point | null; // For undo/redo
+  /** Cursor position, in image coordinates, when the vertex was grabbed.
+   *  The drag moves the vertex by (cursor - this), so grabbing a vertex
+   *  slightly off-centre no longer teleports it under the pointer. */
+  vertexGrabPoint?: Point | null;
   sliceStartPoint: Point | null;
   // Add point mode states
   addPointStartVertex: { polygonId: string; vertexIndex: number } | null;
