@@ -210,21 +210,60 @@ If the change is going to production, **build the production bundle locally and 
 
 ## Test Suite Reality
 
-The suite is GREEN and worth running. Measured 2026-09-04 (this section said
-"treat the test suite as currently broken, ~31% failures" from 2026-05-15 until
-then — if the numbers below look stale, re-measure before repeating them):
+Measured 2026-09-04 after a 15-PR audit that rewrote most of this section. The
+headline number is not the interesting part — **the interesting part is that a
+suite can be green, red, or wired to nothing, and this repo has all three.**
 
-| Suite                         | State                                                                                                                                                    |
-| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Vitest (frontend)             | **5037 pass / 5037**, 275 files, ~2 min. `npx vitest run`.                                                                                               |
-| Vitest (backend)              | **3740 pass / 3744** (4 skipped), 179 files, ~27 s. Not Jest. Must run in the container — see **Backend tests** below.                                   |
-| Python (ML + essays)          | **400 pass / 401** (1 skipped), ~26 s. Runs as step 7 of `make ci`; pytest is NOT in the ml image, `make ci` pip-installs it into a throwaway container. |
-| Playwright E2E (`tests/e2e/`) | Present, not regularly run, not in merge gate. Run manually via `make test-e2e`.                                                                         |
+### 1. Green and actually run
 
-**So a red suite now means something, and a green one is a real gate — but it
-is still not a substitute for [Verification](#verification-rules).** Everything
-in that section still holds, and 2026-09-04 gave three fresh demonstrations in
-one day:
+| Suite                   | State                                                                                                                               |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Vitest (frontend)       | **4915 pass**, 267 files, **~150 s**. `npx vitest run`. (Was 5037/275/~702 s — it got 4.7x faster by DELETING tests.)               |
+| Vitest (backend)        | **3735 pass / 0 skipped**, 180 files, ~27 s. Not Jest. Must run in the container — see **Backend tests** below.                     |
+| Python (`make test-py`) | **540 pass / 1 skipped**. Step 7 of `make ci`; pytest is NOT in the ml image, `make ci` pip-installs it into a throwaway container. |
+
+The old "400 pass / 401" figure was wrong, not stale: `make test-py` ran three
+of the four paths CI runs and silently omitted the 112 `focus_qc` tests.
+
+### 2. Flaky under load — and the blame MOVES
+
+Until 2026-09-04 the frontend suite was clean on roughly **2 runs in 5** on a
+busy machine, and the file it blamed changed every time (`ThemeContext`,
+`ProtectedRoute`, `CanvasImage`, `SegmentationEditor.orchestration`). That is
+the signature to recognise: **a leaked timer poisons whichever file the
+scheduler runs next, so the victim is random and the cause is not.**
+
+Root cause was a 500 ms `setTimeout` in a `SegmentationEditor.tsx` `useEffect`
+that returned **no cleanup at all**, firing after unmount. The existing abort
+signal could not have covered it — the timer is scheduled _after an await_, so
+a fast unmount tears the effect down before the handle exists. Fixed, with two
+more of identical shape (`ProjectDetail.tsx`, `useEnhancedSegmentationEditor.tsx`);
+5/5 clean runs after. **If flakiness returns, look for an uncleaned timer
+before you look at the test that failed.** Unfixed leaks of this shape are
+listed in PR #484 — `ShareAccept.tsx:103` is the live one.
+
+### 3. Red, or wired to nothing — the category nobody was tracking
+
+This is where the real risk was, and none of it showed up as a failure:
+
+- **`make test-e2e` does not run at all** (no `docker-compose.yml`), and 55 of
+  its 71 testids no longer exist in `src/`. Last touched 2026-05-12.
+- **`backend/src/test/integration/**`** — 3 798 lines, excluded from vitest,
+  and its jest runner collects **zero** tests.
+- **`make test-ml` was RED on `main`** and nothing ran it. Same for
+  `backend/segmentation/models/microtubule/tests` — the instancer's real
+  identity proofs, collected by **nothing**. Both now wired up; `make test-ml`
+  is 670 pass / 1 skip / 11 errors (the 11 are documented async-fixture errors).
+- **GitHub CI cannot run the ML suite at all**: the runner has no GPU, so
+  `import api.main` dies in `mamba_ssm` -> Triton -> "0 active drivers". See the
+  comment above the "Python files parse" step in `ci.yml`.
+- The backend coverage gate is **global**, with ~2 points of branch headroom —
+  an entirely untested new module can hide behind it.
+
+**So a green suite is a real gate for the code it covers, and says nothing
+whatsoever about the code it does not.** It is still not a substitute for
+[Verification](#verification-rules), and 2026-09-04 gave four fresh
+demonstrations:
 
 - A localisation fix shipped with green tests, a green `make ci` and green CI —
   and one of six upload phases still rendered English, found only by a real
@@ -234,6 +273,9 @@ one day:
   actually uses — pointed 10 px elsewhere.
 - Two mutations survived a fully green new test file, and they were the two the
   whole change rested on. See [Mutation testing](#mutation-testing) below.
+- A test named _"should handle points with Infinity coordinates"_ passed for
+  months while `CanvasPolygon` emitted `d="MInfinity,10 ..."`, silently erasing
+  the polygon — because `isNaN(Infinity)` is `false`. Use `Number.isFinite`.
 
 ### Backend tests need the container
 
@@ -350,11 +392,24 @@ Each of these shipped to production at least once in 2026 despite green pre-comm
 
 15. **Phantom (transitive-only) dependency**. A package imported directly in code but absent from `package.json`, satisfied only transitively via another dep. Removing that parent (e.g. `bull`) drops the phantom (`ioredis`, imported directly by `healthCheckService.ts`) from a fresh `npm ci` → the service crash-loops at startup (`ERR_MODULE_NOT_FOUND`). The host `node_modules` still has it, so `make ci` and a local run pass; only a fresh-install Docker build/deploy catches it. Check: before removing a package, `npm ls <suspect>` for direct importers that resolve only through it, and declare any such import as a direct dependency.
 
-16. **Yanked or load-bearing dependency pins**. A pinned `requirements.txt` version can be **yanked** from PyPI — pip warns `Reason for being yanked` but still installs the explicit pin — so bump to a non-yanked patch in the same minor (e.g. `transformers` 4.57.0 → 4.57.6, which preserves DINOv3). Do NOT casually bump `torch`/`torchvision`/`transformers` majors: they are load-bearing (mamba-ssm + causal-conv1d CUDA kernels are source-built against torch 2.6.0+cu124; DINOv3 needs transformers ≥4.57). Full bump = recompile kernels + re-pair torchvision + re-verify all 7 models. See memory `reference_dependency_pin_constraints`.
+16. **Yanked or load-bearing dependency pins**. A pinned `requirements.txt` version can be **yanked** from PyPI — pip warns `Reason for being yanked` but still installs the explicit pin. `torch==2.6.0` / `torchvision==0.21.0` / `numpy==1.26.4` are load-bearing: mamba-ssm + causal-conv1d ship CUDA kernels source-built against torch 2.6.0+cu124, and numpy is what that torch was built against. **`transformers` is pinned at 5.5.4 and the ceiling was re-measured 2026-09-04 — it is 5.9.0, not the 5.16.1 the old comment claimed.** 5.6.2 / 5.7.0 / 5.8.1 are clean and bit-identical; **5.9.0** renames the SegFormer state-dict layout (`segformer.encoder.block.N.M` → `stages.N.blocks.M`, `attention.self.{query,key,value}` → `{q,k,v}_proj`, …) so the checkpoint stops loading; **5.10.x will not even import** on torch 2.6.0 (it evaluates `torch.float8_e8m0fnu` at module scope, and pip cannot warn because transformers declares `torch>=2.5` only under `extra == "torch"`). The HIGH advisory GHSA-xrqw-3rrv-vx5w fixes in 5.10.0 and therefore **cannot be taken** — it is also unreachable here: `grep -rn save_pretrained backend/` has no Python call site. **`opencv-python-headless` and `ml_dtypes` are `ResolutionImpossible` against numpy 1.26.4** (opencv's wall is 4.12, a wheel BUILD property, so there is no intermediate release) and both are Dependabot-ignored. Guarded by `backend/essays/tests/test_transformers_pin.py`. See memory `reference_dependency_pin_constraints`.
 
 17. **Cross-frame MT identity is geometric since v5H (2026-08-17).** The model no longer emits 32-d embeddings; `/api/v1/track` matches on symmetric curve distance plus an overlap gate, with common-mode stage drift removed by normal-flow least squares. A `trackId` regression therefore shows up as a _geometry_ problem — gate too tight, drift misestimated on a field of parallel filaments — not a decode problem. Check `api/mt_geometry_cost.py` first. **There is no hard gate any more.** `GATE_MAX_SHIFT` was removed in the same series that added the geometry (it fragmented tracks 3.14x) and is now `CURVE_SCALE_PX` — a saturation _scale_, not a rejection threshold: a pair beyond it is expensive, never `inf`. The only surviving `inf` is geometry too degenerate to compare (a centerline with fewer than two points), where a distance of 0 would otherwise read as a perfect match. `GATE_MIN_OVERLAP`, `OVERLAP_TOL` and `overlap_fraction` still exist in that file and are still tested, but the tracker **does not import them** — as a hard gate overlap caused the fragmentation, and folded in as a cost term it measured no better while doubling wall-clock, because it rebuilds cKDTrees `curve_distance` has already built. They are kept as a geometry primitive for a possible future use (splitting a merged detection), so treat them as a library, not as something in the matching path: tuning them changes nothing. The request's `embedding` and `emb_template_alpha` fields are accepted-and-ignored, and `corrupt_count` / `degraded` are pinned to `0` / `false`; rows written by v7 still carry an `_embedding` and `extra="forbid"` would 400 them otherwise.
 
 18. **`process.env` in a browser bundle blanks the page.** There is no `process` global in the browser, and Vite only substitutes the literal text `process.env.NODE_ENV` — so a `process.env.VITE_*` read survives into the served module and throws `ReferenceError: process is not defined` while the enclosing object literal is evaluated. That takes the whole module down, and with it everything importing it; the dev server rendered a blank page. Production escaped only because rollup tree-shook the offending object out of the bundle entirely, so one new import of it would have shipped the crash. Use `import.meta.env` in `src/` — `import.meta.env.MODE` is the exact equivalent of a NODE_ENV compare ('development' under `vite dev`, 'production' under `vite build`, 'test' under vitest). Live readers today are `services/webSocketManager.ts` and `components/DashboardHeader.tsx`. (This note used to live in `src/lib/constants.ts`, which no longer reads env at all.)
+
+19. **A test that defines its own subject.** `webSocketService.cancel.test.ts` declared `class WebSocketService` at line 172 **of the test file**, with `emitOperationCancelled` / `emitExportCancelled` / `emitCancelError` — none of which exist in the real service — and imported nothing from this repo. `queueCancel.test.ts` was headed _"Mock Express App for Testing (TDD - to be implemented)"_ and defined its endpoint in-file, for a route that has never existed. Six such shadow suites were found (2026-09-04), 195 tests, ~4 000 lines, green forever, measuring nothing; deleting them **raised** coverage. The proof they were worthless: breaking the real cancel button turned its real test red twice while a 23-test shadow — including one named _"should call onCancel when clicked"_ — stayed fully green. Check: **does the test file import the thing it claims to test?**
+
+20. **`async def` on a single-worker uvicorn blocks everything.** `/mt-metrics` and `/mt-background-rois` were `async def` doing CPU work on a `--workers 1` server, so a 24-minute export blocked `/segment`, `/track`, `/kymograph` **and the compose healthcheck's `/health`** for its whole duration (measured: `/health` 9.84 s → 0.02 s after the fix). The obvious fix is worse: plain `def` hands the route to Starlette's 40-slot threadpool, and each slot calls a 3.4 GB `_load_volume` — that is an OOM, not a fix. Use a **one-slot executor**, the pattern `/kymograph` already uses.
+
+21. **A generated baseline file hides the error it is regenerated over.** `typecheck-baseline.json` and `eslint-baseline.json` record tolerated problems; re-running `npm run type-check:update` after a conflict silently accepts anything new. When you must regenerate, **diff the result against both parents** and account for every entry that appears in neither. On 2026-09-04 all five such entries turned out to be pre-existing errors whose message text changed because `AuthContextType` gained `isAdmin` — but the total was FALLING (1649 → 1608), so a genuinely new error would have been invisible.
+
+22. **A stale Prisma client makes the host TS check lie.** After any `schema.prisma` change, `npx tsc` on the host reports `Property 'x' does not exist` until the client is regenerated — and `npx prisma generate` **fails on the host** (`EACCES: permission denied, unlink .prisma/client/index.d.ts`) because `backend/node_modules` is root-owned, written by the containers. Regenerate through the container:
+    ```bash
+    docker run --rm --user root --entrypoint /bin/sh \
+      -v $PWD/backend:/app -w /app cell-segmentation-hub-backend -c "npx prisma generate"
+    ```
+    Same root cause makes `cp -al node_modules` fail silently for a non-root user (`fs.protected_hardlinks=1`): it creates the directory tree and **zero files**.
 
 ---
 
@@ -451,15 +506,15 @@ There are no longer `scripts/deploy-production.sh` / `rollback-deployment.sh` / 
 
 ## Tech Stack
 
-| Layer      | Technology                                                                             |
-| ---------- | -------------------------------------------------------------------------------------- |
-| Frontend   | React 18 + TypeScript + Vite + shadcn/ui (Radix + Tailwind)                            |
-| Backend    | Node.js + Express + TypeScript + Prisma                                                |
-| ML Service | Python + FastAPI + PyTorch (HRNet, CBAM-ResUNet, U-Net, Sperm, Wound, Microtubule v5H) |
-| Database   | PostgreSQL (dev + prod via Docker compose)                                             |
-| Real-time  | Socket.io with auto-reconnect + exponential backoff                                    |
-| Auth       | JWT access + refresh tokens                                                            |
-| i18n       | 6 languages (EN, CS, ES, DE, FR, ZH) via i18next                                       |
+| Layer      | Technology                                                                                 |
+| ---------- | ------------------------------------------------------------------------------------------ |
+| Frontend   | React 18 + TypeScript + Vite + shadcn/ui (Radix + Tailwind)                                |
+| Backend    | Node.js + Express + TypeScript + Prisma                                                    |
+| ML Service | Python + FastAPI + PyTorch (HRNet, CBAM-ResUNet, U-Net, Sperm, Wound, Microtubule v5H)     |
+| Database   | PostgreSQL (dev + prod via Docker compose)                                                 |
+| Real-time  | Socket.io with auto-reconnect + exponential backoff                                        |
+| Auth       | JWT access + refresh tokens                                                                |
+| i18n       | 6 languages (EN, CS, ES, DE, FR, ZH) via a hand-rolled `LanguageContext` — **not i18next** |
 
 ---
 
@@ -493,6 +548,11 @@ Controllers → Services → Prisma ORM → Storage (local FS / S3)
 - API routes: `/backend/src/api/routes/`, Swagger at `:3001/api-docs`
 - Queue: `SegmentationQueue` model, controller `queueController.ts`, supports 10 000 imgs/batch
 - Export: COCO / YOLO / JSON in `/backend/src/services/export/`
+- **Admin + impersonation** (2026-09-04): `users.isAdmin`, an append-only `impersonation_logs` table, `requireAdmin` middleware, and `GET /api/admin/users` + `POST /api/admin/impersonate/:userId` + `/impersonate/stop`. Three things about it are load-bearing and non-obvious:
+  - **The impersonation lives on the Redis refresh record beside `family`, NOT in the JWT.** `authService.refreshToken()` rebuilds the payload from the DB row, and the frontend refreshes every 13 minutes — so a token-only claim is silently dropped and the admin is ejected mid-session.
+  - **"Stop" mints a fresh admin session** rather than restoring the old tokens: the refresh cookie is path-scoped to `/api/auth`, so the server never receives it, and stashing a copy would undo the 2026-08 work that stopped keeping raw tokens in Redis.
+  - **The migration grants the flag to NOBODY**, deliberately — sign-up is open, so pinning an e-mail would hand admin to whoever registers it first. Granting is an explicit operator action: `docker exec -e ADMIN_EMAIL=... spheroseg-backend npx tsx src/db/grantAdmin.ts`.
+  - `accessLogger` writes `admin@x(as:user@y)`; during impersonation `req.user` IS the target, so without this the security log attributes admin actions to the wrong person.
 
 ### ML service (`/backend/segmentation/`)
 
@@ -509,7 +569,7 @@ Controllers → Services → Prisma ORM → Storage (local FS / S3)
 
 ### Automated Essays worker (`/backend/essays/`)
 
-Batch microtubule assay of ND2 wells. `essays_api.py` is a thin FastAPI job runner that shells out to `module/evaluate.py`; the `essays` image is built `FROM` the ml image so it inherits the exact validated stack (torch 2.6.0+cu124, transformers 4.57.1 — see the pin warning in [Deploy Gotchas](#deploy-gotchas)).
+Batch microtubule assay of ND2 wells. `essays_api.py` is a thin FastAPI job runner that shells out to `module/evaluate.py`; the `essays` image is built `FROM` the ml image so it inherits the exact validated stack (torch 2.6.0+cu124, transformers 5.5.4 — see the pin warning in [Deploy Gotchas](#deploy-gotchas)).
 
 - **The module is vendored at `backend/essays/module`** (it was a separate private repo cloned at image build until 2026-08-11 — no more git clone, build secret, or network at build time).
 - **The model code has ONE copy**, in `backend/segmentation/models/microtubule` (`wrapper.py`, `net.py`, `instance/`, `vendor/dynamic_network_architectures/`, `params_v5h.json`). The essays module imports it via `_mt_package.ensure_on_path()` (`MT_PACKAGE_DIR=/app/models` in the image, populated by a `COPY` from the repo — _not_ inherited from the ml base image, so a stale ml image can never make the worker run older model code). Before this, the two copies drifted in opposite directions for months and neither side got the other's fix. **Do not re-introduce a second copy**; a change to `wrapper.py` or anything under `instance/` reaches both callers, so re-verify BOTH the essays batch run and interactive MT segmentation when touching them.
@@ -606,6 +666,83 @@ The real PR gate is local: pre-commit hook + `make ci` + Playwright verification
 ## Email
 
 UTIA mail server (`hermes.utia.cas.cz:25`, STARTTLS, no auth). 2-10 min delays are normal (background queue). Config in `.env.production`.
+
+---
+
+## Best Practices
+
+Distilled from the 2026-09-04 audit (14 parallel work units, 15 PRs). Each line
+below cost something to learn; none of it is generic advice.
+
+### Before you trust a test
+
+1. **Does the test file import the thing it tests?** Six suites here did not —
+   they declared the component or endpoint inside the test file. 195 tests,
+   green forever, measuring nothing. Deleting them raised coverage.
+2. **Mutate the claim.** Revert the fix, confirm RED, restore. Assert the
+   anchor string is present AND unique before replacing, or a short anchor
+   matches a different site and reads exactly like a surviving mutant.
+3. **Make the fixture discriminate.** If both branches produce the same output,
+   the fixture is too nice. A polyline fixture must BEND (a straight line hid a
+   sign error in the shared band rasteriser through two whole suites). Three
+   synthetic fixtures let a `_render_profiles` mutation survive; real kymograph
+   rows killed it instantly.
+4. **Never assert on wall-clock.** `performance.now()` resolves to a whole
+   millisecond under vitest, and measured clean-vs-regressed distributions here
+   **overlap** under load — so no threshold exists and tuning one is
+   self-deception. Assert the deterministic thing: renders counted, queries
+   issued, calls made, work cancelled.
+5. **Check what actually runs it.** A suite can be red or unwired for months.
+   Before trusting coverage, ask which command reaches the file.
+
+### Before you trust a measurement
+
+6. **Measure both distributions, not just the improved one.** "Faster" without
+   a regressed baseline is a story, not a result.
+7. **Validate on real production data.** Synthetic fixtures pass because you
+   built them to match your assumption. Every performance claim in this batch
+   that survived was proven byte-identical on real containers.
+8. **A green build proves the build, not the behaviour.** CI here cannot run the
+   ML suite at all (no GPU on the runner), the frontend `tsc` is vacuous, and
+   backend test files are unlinted.
+
+### Before you trust a document
+
+9. **Re-measure a number before repeating it.** The `transformers` ceiling in
+   this repo's own comments was wrong by seven minors, and a brief written from
+   it would have shipped a broken ML service.
+10. **Rehearse the runbook.** `docs/database-backup.md` documented a restore
+    against a database that does not exist, with a glob matching no files. It
+    failed twice, and only under an actual incident would anyone find out.
+
+### When changing dependencies
+
+11. `npm ls <pkg>` before removing anything — a direct import may resolve only
+    transitively (`qs`, `ioredis`). Grep the BUILD config too (`vite.config.ts`
+    `manualChunks`), not just `src/`.
+12. Prefer bumping the real parent; reach for `overrides` only when no parent
+    admits the patched version, and say why. This repo moved away from
+    hand-maintained overrides because they went stale unnoticed.
+13. If a bot regenerates the PR you closed, closing it again is a treadmill —
+    fix the `ignore` rule.
+
+### When automating against GitHub
+
+14. After a rebase the API still reports the PREVIOUS run's checks; poll on the
+    new run, and keep an independent `mergeStateStatus` guard.
+15. `UNSTABLE` means required checks passed and something non-required did not.
+16. `git branch -r --merged` reports 0 **by construction** in a squash-merge
+    repo — it can never be evidence of anything here.
+
+### When you are about to be clever
+
+17. Don't weaken a guard for your own convenience. `allow_auto_merge` is off
+    **on purpose**, and `dependabot.yml` documents why.
+18. Don't route around a soft-denied command. If a gate blocks you, finish
+    everything else and hand over the exact steps.
+19. Don't "simplify" code whose docstring carries measured numbers —
+    `rasterize_band`, `vicinity_mask` and `focus_qc/metrics.py` are deliberately
+    harder to read than the loops they replaced.
 
 ---
 
