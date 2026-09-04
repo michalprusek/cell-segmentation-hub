@@ -85,12 +85,27 @@ async function runHelper<T = PythonResult>(
       stdout += text;
       // Helpers may emit progress lines prefixed with "PROGRESS " — pick
       // these out as they arrive without waiting for the final JSON.
+      //
+      // Wire format: `PROGRESS <fraction> [<done> <total>]`. The counts are
+      // optional on purpose, and adding them was safe in BOTH directions:
+      // `parseFloat` stops at the first space, so an old backend reading a new
+      // helper still gets the fraction, and a new backend reading an old helper
+      // simply gets no counts. That matters because the backend image bakes the
+      // helpers in — the two are always deployed together, but a partial
+      // rollback should degrade the message, not the progress.
       if (onProgress) {
         for (const line of text.split('\n')) {
           if (line.startsWith('PROGRESS ')) {
-            const fraction = parseFloat(line.slice(9).trim());
+            const fields = line.slice(9).trim().split(/\s+/);
+            const fraction = parseFloat(fields[0]);
             if (Number.isFinite(fraction)) {
-              onProgress({ progress: Math.max(0, Math.min(1, fraction)) });
+              const done = Number.parseInt(fields[1] ?? '', 10);
+              const total = Number.parseInt(fields[2] ?? '', 10);
+              onProgress({
+                progress: Math.max(0, Math.min(1, fraction)),
+                ...(Number.isFinite(done) ? { currentFrame: done } : {}),
+                ...(Number.isFinite(total) ? { totalFrames: total } : {}),
+              });
             }
           }
         }
@@ -435,18 +450,19 @@ export interface DriftCorrectionResult {
 export async function correctDriftInContainer(
   containerDir: string,
   channelNames: string[],
-  sourceChannel: string
+  sourceChannel: string,
+  onProgress?: ProgressCallback
 ): Promise<DriftCorrectionResult> {
   if (!channelNames.includes(sourceChannel)) {
     throw new Error(
       `drift correction: source channel '${sourceChannel}' is not among [${channelNames.join(', ')}]`
     );
   }
-  const result = await runHelper<DriftCorrectionResult>('correct_drift.py', [
-    containerDir,
-    sourceChannel,
-    channelNames.join(','),
-  ]);
+  const result = await runHelper<DriftCorrectionResult>(
+    'correct_drift.py',
+    [containerDir, sourceChannel, channelNames.join(',')],
+    onProgress
+  );
   logger.info('Drift correction finished', 'VideoExtractor', {
     containerDir,
     ...result,

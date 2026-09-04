@@ -26,9 +26,12 @@ import { config } from '../../utils/config';
 import { logger } from '../../utils/logger';
 import { ResponseHelper } from '../../utils/response';
 import { uploadVideoFromFile } from '../../services/videoUploadService';
+import type { VideoUploadProgressEvent } from '../../services/videoUploadService';
 import { addChannelToFrames } from '../../services/addChannelService';
 import { isVideoFilename } from '../../services/video/videoExtractor';
 import { isSafeChannelName } from '../../services/video/types';
+import { WebSocketService } from '../../services/websocketService';
+import { WebSocketEvent } from '../../types/websocket';
 
 interface ChannelDTO {
   name: string;
@@ -247,6 +250,29 @@ export class VideoController {
       // it, so a backfill script or a re-extract job gets the same policy this
       // endpoint does. The controller's job is to say what the USER asked for.
 
+      // The POST does not return until extraction has finished, so the only
+      // channel that can tell the browser what is happening in the meantime
+      // is the socket. Without this the service's progress events had no
+      // subscriber at all — `onProgress` was plumbed through the whole
+      // service and never passed by anyone, so the user watched a full
+      // progress bar for the entire server-side phase (10 min 21 s on the
+      // 3.41 GB ND2 that prompted this).
+      //
+      // Emitting is best-effort: a socket failure must never fail an upload
+      // whose frames are already on disk.
+      const emitProgress = (event: VideoUploadProgressEvent): void => {
+        try {
+          WebSocketService.getInstance().emitToUser(
+            userId,
+            WebSocketEvent.VIDEO_UPLOAD_PROGRESS,
+            event
+          );
+        } catch {
+          // getInstance() throws before the socket server is initialised
+          // (scripts, tests); emitToUser swallows its own failures.
+        }
+      };
+
       // uploadVideoFromFile owns the tmp file from here — it either
       // renames it into place (success) or removes it via cleanupOnFailure
       // (failure). Either way, no second cleanupTmp() in the success path.
@@ -256,6 +282,7 @@ export class VideoController {
         mimeType: file.mimetype,
         tempFilePath: file.path,
         registerChannels: wantsRegister,
+        onProgress: emitProgress,
       });
 
       ResponseHelper.success(res, {

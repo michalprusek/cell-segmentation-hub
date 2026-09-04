@@ -89,13 +89,23 @@ def main() -> int:
         print(f"no frames directory at {frames_dir}", file=sys.stderr)
         return 2
 
+    # ``PROGRESS <0..1>`` on stdout is the protocol `pythonExtractor.runHelper`
+    # already parses (see `extract_nd2.py`). Drift correction is silent for tens
+    # of seconds on a long stack — 48 s on the 300-frame ND2 that prompted this
+    # — and that silence used to reach the user as a frozen progress bar.
+    def _progress(fraction: float) -> None:
+        sys.stdout.write(f"PROGRESS {max(0.0, min(1.0, fraction)):.4f}\n")
+        sys.stdout.flush()
+
     # A raise from here means the REWRITE failed part-way: some frames are
     # de-drifted and some are not, and `registration.json` was never composed.
     # That is not a decline, it is a corrupted container, and it exits with a
     # distinct code so the caller can roll the upload back instead of logging a
     # warning and finalising it. Declines return normally with a reason.
     try:
-        drift = correct_drift_in_place(frames_dir, channel_names, source_channel)
+        drift = correct_drift_in_place(
+            frames_dir, channel_names, source_channel, on_progress=_progress
+        )
     except Exception as exc:  # noqa: BLE001 - re-raised as a distinct exit code
         print(
             f"drift: REWRITE FAILED PART-WAY on {frames_dir} "

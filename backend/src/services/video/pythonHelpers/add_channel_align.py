@@ -55,6 +55,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
+from frame_png import save_frame_png
 from channel_registration import (
     REASON_SHAPE_MISMATCH,
     estimate_translation_detailed,
@@ -74,7 +75,7 @@ def _load_array(path: str) -> np.ndarray:
 
 
 def _save_array(arr: np.ndarray, path: str) -> None:
-    Image.fromarray(arr).save(path, format="PNG", optimize=True)
+    save_frame_png(arr, path)
 
 
 def main() -> int:

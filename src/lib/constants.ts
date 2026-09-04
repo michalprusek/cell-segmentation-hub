@@ -88,6 +88,35 @@ export function videoUploadTimeoutMs(fileSizeBytes: number): number {
 }
 
 /**
+ * How much of a video upload's progress bar belongs to the network transfer.
+ *
+ * A video upload is ONE blocking POST: the browser's `onUploadProgress` reaches
+ * 100 % when the last byte is sent, and the server THEN decodes the file,
+ * writes N frame PNGs and creates N Image rows before the response comes back.
+ * Mapping transfer alone onto the whole bar is what made a real upload sit at
+ * "100 %" for ten minutes with nothing to look at.
+ *
+ * So the transfer gets the first slice and the server-side phase — reported
+ * over the `videoUploadProgress` socket event — gets the rest.
+ *
+ * The number comes from the upload that prompted this: a 3.41 GB / 300-frame
+ * ND2 on production took 748 s of transfer and 621 s of server-side work,
+ * i.e. the transfer was 54.6 % of a 22 min 49 s wall clock. 0.55 is that,
+ * rounded.
+ *
+ * It is a weighting, not a prediction, and the spread is wide: the same day, a
+ * 315 MB / 300-frame TIFF uploaded from a client on the server's own network
+ * spent 6.1 s transferring and 120.8 s in extraction — a 5 % / 95 % split. The
+ * two halves scale with different things (the client's uplink vs the frame
+ * count), so the bar moves at different rates in each. That is why the phase
+ * label beside it is not optional: the label ("Extracting frames 143/300") is
+ * what makes the number readable, and it is the part that is always true.
+ * What the split guarantees is the thing that was actually broken — the bar
+ * cannot read 100 % while the server is still working.
+ */
+export const VIDEO_UPLOAD_TRANSFER_SHARE = 0.55;
+
+/**
  * Retry attempt configurations for different operation types
  */
 export const RETRY_ATTEMPTS = {

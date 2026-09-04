@@ -89,6 +89,7 @@ from typing import NamedTuple
 
 import numpy as np
 
+from frame_png import save_frame_png
 from channel_registration import (
     REASON_OK,
     estimate_translation_prepared,
@@ -208,6 +209,7 @@ def estimate_drift_trajectory_detailed(
     multi_scale: bool = True,
     max_shift_px: int = DRIFT_MAX_SHIFT_PX,
     fast: bool = True,
+    on_pass=None,
 ) -> DriftTrajectory:
     """Per-frame correction ``(dy, dx)`` that puts every frame back onto frame 0.
 
@@ -273,7 +275,16 @@ def estimate_drift_trajectory_detailed(
     anchor_lag = lags[-1] if multi_scale else None
     measured = accepted = 0
     anchored = False
-    for dt in lags:
+    # Liveness only. ``on_pass(done, total)`` is called once per lag, before the
+    # pass runs, and touches nothing the estimate depends on — it exists so a
+    # 300-frame stack does not spend ~48 s looking to the user like a hung
+    # upload. Pass granularity, not pair granularity: the passes are wildly
+    # unequal (the dt=1 pass is most of the work), so this proves the process
+    # is alive rather than predicting when it will finish, and it costs no
+    # restructuring of a loop whose exact shape is transcribed from Fiji.
+    for pass_index, dt in enumerate(lags):
+        if on_pass is not None:
+            on_pass(pass_index, len(lags))
         if fast and dt == 1:
             steps = range(1, n)
             decim = _FAST_SHORT_LAG_DECIMATION
@@ -479,6 +490,7 @@ def correct_drift_in_place(
     frames_dir,
     channel_names: list[str],
     source_channel: str,
+    on_progress=None,
 ) -> dict | None:
     """Estimate stage drift from ``source_channel`` and de-drift EVERY channel.
 
@@ -524,7 +536,13 @@ def correct_drift_in_place(
     # uncorrected one.
     try:
         est = estimate_drift_trajectory_detailed(
-            _DiskFrames(frames_dir, source_channel, indices)
+            _DiskFrames(frames_dir, source_channel, indices),
+            # Estimation is the long half; give it 0..0.8 of this step's bar
+            # and leave 0.8..1.0 for the rewrite. See `on_pass`: liveness, not
+            # a time estimate.
+            on_pass=None if on_progress is None else (
+                lambda done, total: on_progress(0.8 * done / max(1, total))
+            ),
         )
     except Exception as exc:  # noqa: BLE001 - report and decline, never abort
         sys.stderr.write(
@@ -600,6 +618,8 @@ def correct_drift_in_place(
     # and the applied one cannot come apart.
     applied: dict[str, list[int]] = {}
     for pos, t in enumerate(indices):
+        if on_progress is not None and (pos % 5 == 0 or pos == len(indices) - 1):
+            on_progress(0.8 + 0.2 * (pos + 1) / len(indices))
         dy, dx = trajectory[pos]
         idy, idx = _round_shift(dy, dx)
         applied[str(t)] = [idy, idx]
@@ -624,10 +644,10 @@ def correct_drift_in_place(
                 arr = np.asarray(im)
             # No `mode=`: it is deprecated in Pillow 12 and removed in 13, and
             # it was never needed — the dtype already determines the mode, and
-            # `shift_frame` preserves it. Saved exactly as `_save_png` does.
-            Image.fromarray(apply_drift(arr, dy, dx)).save(
-                path, format="PNG", optimize=True
-            )
+            # `shift_frame` preserves it. `save_frame_png` is the one encoder
+            # every frame goes through, so a rewritten frame is byte-comparable
+            # with a freshly extracted one.
+            save_frame_png(apply_drift(arr, dy, dx), path)
 
     return {
         "corrected": True,
