@@ -95,9 +95,18 @@ export const authenticate = async (
     }
 
     // Get user from database
+    // `select`, not `include`: this is the highest-frequency query in the
+    // backend (every authenticated request), and the default User shape ships
+    // the bcrypt hash, verificationToken, resetToken and resetTokenExpiry —
+    // four columns nothing below reads. Same narrowing #476 applied to the
+    // colder call sites in queueController and sharingService.
     const user = await prisma.user.findUnique({
       where: { id: payload.userId },
-      include: {
+      select: {
+        id: true,
+        email: true,
+        emailVerified: true,
+        isAdmin: true,
         profile: true,
       },
     });
@@ -364,9 +373,18 @@ export const optionalAuthenticate = async (
     }
 
     // Get user from database
+    // `select`, not `include`: this is the highest-frequency query in the
+    // backend (every authenticated request), and the default User shape ships
+    // the bcrypt hash, verificationToken, resetToken and resetTokenExpiry —
+    // four columns nothing below reads. Same narrowing #476 applied to the
+    // colder call sites in queueController and sharingService.
     const user = await prisma.user.findUnique({
       where: { id: payload.userId },
-      include: {
+      select: {
+        id: true,
+        email: true,
+        emailVerified: true,
+        isAdmin: true,
         profile: true,
       },
     });

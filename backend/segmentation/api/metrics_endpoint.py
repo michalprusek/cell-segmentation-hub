@@ -101,7 +101,18 @@ class MetricsResponse(BaseModel):
     BoundingBoxHeight: float
 
 @router.post("/calculate-metrics", response_model=MetricsResponse)
-async def calculate_metrics(request: MetricsRequest):
+# NOTE: these routes are declared `def`, NOT `async def`, ON PURPOSE.
+# They are pure CPU (OpenCV/NumPy over full frames) with nothing to await.
+# An `async def` handler runs ON the event loop, and this service runs
+# `--workers 1`, so one of these would block /segment, /track, /kymograph and
+# the compose healthcheck's GET /health for its whole duration — measured at
+# 9.84 s on /health before the same fix was applied to /mt-metrics (#480).
+# A plain `def` hands the work to Starlette's threadpool instead.
+#
+# /mt-metrics needed a ONE-SLOT executor rather than the threadpool because
+# its `_load_volume` holds 3.4 GB and 40 concurrent slots would OOM. That does
+# not apply here: DI holds two H x W uint8 masks (~8 MB at 2048 squared).
+def calculate_metrics(request: MetricsRequest):
     """
     Calculate comprehensive metrics for a polygon contour.
     Optionally accounts for holes (internal polygons) by subtracting their areas.
@@ -160,14 +171,14 @@ async def calculate_metrics(request: MetricsRequest):
         raise internal_error(logger, "Failed to calculate metrics", e)
 
 @router.post("/batch-calculate-metrics")
-async def batch_calculate_metrics(polygons: List[MetricsRequest]) -> List[MetricsResponse]:
+def batch_calculate_metrics(polygons: List[MetricsRequest]) -> List[MetricsResponse]:
     """
     Calculate metrics for multiple polygons in batch.
     """
     results = []
     for polygon_request in polygons:
         try:
-            metrics = await calculate_metrics(polygon_request)
+            metrics = calculate_metrics(polygon_request)
             results.append(metrics)
         except Exception as e:
             # Returning zeros keeps one bad polygon from failing the whole batch,
@@ -200,7 +211,7 @@ async def batch_calculate_metrics(polygons: List[MetricsRequest]) -> List[Metric
     return results
 
 @router.post("/disintegration-index", response_model=DisintegrationResponse)
-async def disintegration_index(request: DisintegrationRequest):
+def disintegration_index(request: DisintegrationRequest):
     """Compute the per-image core-anchored Disintegration Index (DI).
 
     Implements the paper's core-anchored DI. Radial distances of every

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { Polygon, Point } from '@/lib/segmentation';
 import {
-  canJoinPolylines,
+  joinClassesCompatible,
   findJoinTarget,
   scanJoinTargets,
   inheritJoinClass,
@@ -39,25 +39,29 @@ describe('endpointPoint / nearestEndpoint', () => {
   });
 });
 
-describe('canJoinPolylines', () => {
+describe('joinClassesCompatible', () => {
   const B = line('b', [
     { x: 20, y: 0 },
     { x: 30, y: 0 },
   ]);
-  it('rejects self, non-polyline, and <2 points', () => {
-    expect(canJoinPolylines(A, A, 'microtubules')).toBe(false);
-    const poly = line('p', A.points, { geometry: 'polygon' });
-    expect(canJoinPolylines(A, poly, 'microtubules')).toBe(false);
-    const short = line('s', [{ x: 0, y: 0 }]);
-    expect(canJoinPolylines(A, short, 'microtubules')).toBe(false);
+  // The structural guards are scanJoinTargets' job, not this predicate's —
+  // asserted on the live path so they keep their coverage now that the old
+  // `canJoinPolylines` wrapper (which merged both concerns) is gone.
+  it('the live scan rejects self, non-polyline and <2-point candidates', () => {
+    const at = { x: 20, y: 0 };
+    expect(findJoinTarget([A], A, at, 5, 'microtubules')).toBeNull();
+    const poly = line('p', B.points, { geometry: 'polygon' });
+    expect(findJoinTarget([A, poly], A, at, 5, 'microtubules')).toBeNull();
+    const short = line('s', [{ x: 20, y: 0 }]);
+    expect(findJoinTarget([A, short], A, at, 5, 'microtubules')).toBeNull();
   });
   it('microtubule: joins same mtType incl. both untyped, rejects different', () => {
-    expect(canJoinPolylines(A, B, 'microtubules')).toBe(true); // both undefined
+    expect(joinClassesCompatible(A, B, 'microtubules')).toBe(true); // both undefined
     const at = line('a', A.points, { mtType: 't1' });
     const bt = line('b', B.points, { mtType: 't1' });
     const bx = line('b', B.points, { mtType: 't2' });
-    expect(canJoinPolylines(at, bt, 'microtubules')).toBe(true);
-    expect(canJoinPolylines(at, bx, 'microtubules')).toBe(false);
+    expect(joinClassesCompatible(at, bt, 'microtubules')).toBe(true);
+    expect(joinClassesCompatible(at, bx, 'microtubules')).toBe(false);
   });
   // Reported 2026-09-04: joining "did not work" because one microtubule was
   // labelled and the other was not yet. An unlabelled side joins ANY label,
@@ -65,9 +69,9 @@ describe('canJoinPolylines', () => {
   it('microtubule: an UNLABELLED polyline joins a labelled one, both ways', () => {
     const typed = line('a', A.points, { mtType: 't1' });
     const untyped = line('b', B.points);
-    expect(canJoinPolylines(typed, untyped, 'microtubules')).toBe(true);
+    expect(joinClassesCompatible(typed, untyped, 'microtubules')).toBe(true);
     expect(
-      canJoinPolylines(
+      joinClassesCompatible(
         line('a', A.points),
         line('b', B.points, { mtType: 't1' }),
         'microtubules'
@@ -82,39 +86,39 @@ describe('canJoinPolylines', () => {
       mtType: null as unknown as string,
     });
     const empty = line('b', B.points, { mtType: '' });
-    expect(canJoinPolylines(typed, nulled, 'microtubules')).toBe(true);
-    expect(canJoinPolylines(typed, empty, 'microtubules')).toBe(true);
+    expect(joinClassesCompatible(typed, nulled, 'microtubules')).toBe(true);
+    expect(joinClassesCompatible(typed, empty, 'microtubules')).toBe(true);
     // …and two unlabelled ones still join when they disagree on WHICH
     // flavour of unlabelled they are.
-    expect(canJoinPolylines(nulled, line('a', A.points), 'microtubules')).toBe(
-      true
-    );
+    expect(
+      joinClassesCompatible(nulled, line('a', A.points), 'microtubules')
+    ).toBe(true);
   });
   it('sperm: joins same partClass, rejects different', () => {
     const at = line('a', A.points, { partClass: 'tail' });
     const bt = line('b', B.points, { partClass: 'tail' });
     const bh = line('b', B.points, { partClass: 'head' });
-    expect(canJoinPolylines(at, bt, 'sperm')).toBe(true);
-    expect(canJoinPolylines(at, bh, 'sperm')).toBe(false);
+    expect(joinClassesCompatible(at, bt, 'sperm')).toBe(true);
+    expect(joinClassesCompatible(at, bh, 'sperm')).toBe(false);
   });
   it('sperm: an unclassed polyline joins a classed one', () => {
     const at = line('a', A.points, { partClass: 'tail' });
     const plain = line('b', B.points);
-    expect(canJoinPolylines(at, plain, 'sperm')).toBe(true);
-    expect(canJoinPolylines(plain, at, 'sperm')).toBe(true);
+    expect(joinClassesCompatible(at, plain, 'sperm')).toBe(true);
+    expect(joinClassesCompatible(plain, at, 'sperm')).toBe(true);
   });
   it('microtubule: partClass is NOT the gate (and vice versa for sperm)', () => {
     // Cross-check that the kind picks the right field — an mtType clash must
     // not block a sperm join and a partClass clash must not block an MT one.
     const a = line('a', A.points, { mtType: 't1', partClass: 'head' });
     const b = line('b', B.points, { mtType: 't1', partClass: 'tail' });
-    expect(canJoinPolylines(a, b, 'microtubules')).toBe(true);
-    expect(canJoinPolylines(a, b, 'sperm')).toBe(false);
+    expect(joinClassesCompatible(a, b, 'microtubules')).toBe(true);
+    expect(joinClassesCompatible(a, b, 'sperm')).toBe(false);
   });
   it('generic: joins any two polylines regardless of fields', () => {
     const at = line('a', A.points, { partClass: 'tail' });
     const bh = line('b', B.points, { partClass: 'head' });
-    expect(canJoinPolylines(at, bh, 'spheroid')).toBe(true);
+    expect(joinClassesCompatible(at, bh, 'spheroid')).toBe(true);
   });
 });
 

@@ -141,28 +141,24 @@ export const passwordResetLimiter = passwordResetRateLimiter;
  * 60/5min is generous for a human clicking through a support flow and
  * useless for a script.
  */
-export const adminRateLimiter = createRateLimiter({
+export const adminLimiter = createRateLimiter({
   windowMs: 5 * 60 * 1000,
   max: 60,
   message: 'Too many admin requests, please try again later',
   skipSuccessfulRequests: false,
 });
 
-export const adminLimiter = adminRateLimiter;
-
 /**
  * Stricter limiter for the two endpoints that actually mint a session.
  * Separate from `adminLimiter` so browsing the user list cannot exhaust the
  * budget for getting back OUT of an impersonated session.
  */
-export const impersonationRateLimiter = createRateLimiter({
+export const impersonationLimiter = createRateLimiter({
   windowMs: 5 * 60 * 1000,
   max: 20,
   message: 'Too many impersonation requests, please try again later',
   skipSuccessfulRequests: false,
 });
-
-export const impersonationLimiter = impersonationRateLimiter;
 
 /**
  * General API rate limiter

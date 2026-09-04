@@ -18,6 +18,7 @@ import { Badge } from '@/components/ui/badge';
 import { useAuth, useLanguage } from '@/contexts/exports';
 import apiClient from '@/lib/api';
 import { logger } from '@/lib/logger';
+import { useDebounce } from '@/hooks/useDebounce';
 import { getErrorMessage, type AdminUserSummary } from '@/types';
 
 const PAGE_SIZE = 25;
@@ -33,19 +34,20 @@ const AdminUsers: React.FC = () => {
   const { t } = useLanguage();
   const { user: currentUser } = useAuth();
   const [searchInput, setSearchInput] = useState('');
-  const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [impersonatingId, setImpersonatingId] = useState<string | null>(null);
 
   // Debounced so typing an e-mail does not fire a request per keystroke
   // against a rate-limited endpoint (60 per 5 min per admin).
+  //
+  // `useDebounce`, not a hand-rolled effect: the hand-rolled one reset the page
+  // on every KEYSTROKE rather than on the debounced value, so typing and then
+  // deleting a trailing space bounced an admin on page 3 back to page 1 without
+  // changing the query at all.
+  const search = useDebounce(searchInput.trim(), 300);
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setSearch(searchInput.trim());
-      setPage(1);
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [searchInput]);
+    setPage(1);
+  }, [search]);
 
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ['admin', 'users', page, search],

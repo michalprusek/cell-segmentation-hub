@@ -21,7 +21,7 @@
  * read gate enforced 64, and nine containers became permanently
  * unreadable because the two copies of this regex disagreed).
  */
-export const CHANNEL_NAME_RE = /^[A-Za-z0-9_-]{1,64}$/;
+const CHANNEL_NAME_RE = /^[A-Za-z0-9_-]{1,64}$/;
 
 /**
  * The gate. Call THIS, not `CHANNEL_NAME_RE.test` — the regex is only half of
