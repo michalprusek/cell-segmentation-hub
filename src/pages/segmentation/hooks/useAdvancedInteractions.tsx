@@ -61,6 +61,7 @@ interface UseAdvancedInteractionsProps {
     vertexIndex: number | null;
     dragOffset?: { x: number; y: number };
     originalPosition?: { x: number; y: number };
+    mode?: 'vertex' | 'translate';
   }) => void;
 
   // Data operations
@@ -728,6 +729,51 @@ export const useAdvancedInteractions = ({
           }
         }
 
+        // Grabbing the CONTOUR (not a vertex) translates the whole shape.
+        //
+        // Requested 2026-09-04. Deliberately gated to EditVertices: that is
+        // the mode whose job is changing geometry, and it is where the
+        // gesture cannot be confused with anything else. In View mode a drag
+        // pans the canvas and a click selects — silently turning that into a
+        // shape move would be a trap. The vertex branch above runs FIRST, so
+        // a point still wins over the outline it sits on.
+        if (
+          target &&
+          target.dataset &&
+          target.dataset.polygonId &&
+          target.dataset.vertexIndex === undefined &&
+          editMode === EditMode.EditVertices
+        ) {
+          const polygonId = target.dataset.polygonId;
+          const polygon = getPolygons().find(p => p.id === polygonId);
+          if (polygon && polygon.points.length > 0) {
+            // Dragging a shape that is not selected selects it, so the
+            // gesture works on first contact instead of needing a click
+            // first.
+            if (selectedPolygonId !== polygonId) {
+              onPolygonSelection(polygonId);
+            }
+            setInteractionState({
+              ...interactionState,
+              isDraggingVertex: true,
+              draggedVertexInfo: { polygonId, vertexIndex: -1 },
+              originalVertexPosition: { ...polygon.points[0] },
+              vertexGrabPoint: { ...imagePoint },
+            });
+            if (setVertexDragState) {
+              setVertexDragState({
+                isDragging: true,
+                polygonId,
+                vertexIndex: null,
+                originalPosition: { ...polygon.points[0] },
+                dragOffset: { x: 0, y: 0 },
+                mode: 'translate',
+              });
+            }
+            return;
+          }
+        }
+
         switch (editMode) {
           case EditMode.View:
             handleViewModeClick(imagePoint, e);
@@ -839,9 +885,12 @@ export const useAdvancedInteractions = ({
           setVertexDragState({
             isDragging: true,
             polygonId,
-            vertexIndex,
+            // -1 is the translate sentinel written at drag start; the render
+            // side keys on `mode`, so the index is carried but unused there.
+            vertexIndex: vertexIndex < 0 ? null : vertexIndex,
             originalPosition: interactionState.originalVertexPosition,
             dragOffset: { x: offsetX, y: offsetY },
+            mode: vertexIndex < 0 ? 'translate' : 'vertex',
           });
 
           // Vertex drag offset updated
@@ -1100,10 +1149,23 @@ export const useAdvancedInteractions = ({
                 }
               : { x: coordinates.imageX, y: coordinates.imageY };
 
-          // Update the actual polygon points with the final position
+          // Update the actual polygon points with the final position.
+          // vertexIndex -1 is the whole-shape translate: every point moves by
+          // the same delta, which is the same delta the preview drew.
+          const dx = grab ? coordinates.imageX - grab.x : 0;
+          const dy = grab ? coordinates.imageY - grab.y : 0;
           const polygons = getPolygons();
           const updatedPolygons = polygons.map(polygon => {
             if (polygon.id === polygonId) {
+              if (vertexIndex < 0) {
+                return {
+                  ...polygon,
+                  points: polygon.points.map(p => ({
+                    x: p.x + dx,
+                    y: p.y + dy,
+                  })),
+                };
+              }
               const updatedPoints = [...polygon.points];
               updatedPoints[vertexIndex] = finalPoint;
               return { ...polygon, points: updatedPoints };

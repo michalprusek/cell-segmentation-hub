@@ -158,6 +158,7 @@ export const useEnhancedSegmentationEditor = ({
     vertexIndex: number | null;
     dragOffset?: { x: number; y: number };
     originalPosition?: { x: number; y: number };
+    mode?: 'vertex' | 'translate';
   }>({
     isDragging: false,
     polygonId: null,
