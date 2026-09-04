@@ -482,55 +482,70 @@ describe('Cancel Performance Tests', () => {
       expect(operationsPerSecond).toBeGreaterThan(20); // At least 20 concurrent ops/sec
     });
 
-    it('should scale with operation volume', async () => {
+    it('cancels every operation at increasing volumes, without hanging', async () => {
       const manager = cancelTestUtils.createMockOperationManager();
 
+      // THIS TEST NO LONGER ASSERTS ON WALL-CLOCK TIME. Three attempts were
+      // measured and all three are unsound here; the numbers are recorded so
+      // nobody spends the afternoon again.
+      //
+      // 1. The original ratio ("ops/sec must not fall by more than 50% between
+      //    volumes") was FLAKY: `performance.now()` is quantised to a whole
+      //    MILLISECOND under vitest/jsdom — over 2000 consecutive samples the
+      //    only distinct delta is exactly 1, while bare node resolves
+      //    microseconds, so it is the environment and not the machine. A pass
+      //    took 0-2 ms, so the ratio was built from small integers: 1 ms then
+      //    7 ms gives 0.29, and 1 ms then 4 ms gives exactly 0.5 — the reported
+      //    `expected 0.5 to be greater than 0.5`. Under CPU contention it
+      //    failed about 1 run in 6.
+      //
+      // 2. Repeating each volume for a 25 ms budget fixed the resolution and
+      //    was still VACUOUS: making `cancelAllOperations` genuinely O(n^2) did
+      //    not fail it. Per-operation cost is dominated by fixed per-pass
+      //    overhead and FALLS as volume rises — 2.37 / 1.56 / 1.42 us at
+      //    50 / 100 / 200 clean, and 2.56 / 1.94 / 1.20 us with the quadratic
+      //    mutation. At volume 4000 the signal appears (1.25 vs 3.00 us) but
+      //    the clean run's own volume-to-volume scatter is +-40%.
+      //
+      // 3. An absolute ceiling per operation cannot separate them either.
+      //    Measured under a 10-core load: clean runs span 3.5-62.5 us/op and a
+      //    2000x-work regression spans 6.1-320 us/op. The distributions
+      //    OVERLAP, so every threshold is either flaky or blind.
+      //
+      // What is left is deterministic and worth keeping: at each volume every
+      // operation must actually be cancelled and removed, and the whole thing
+      // must finish — a hang fails on vitest's own timeout. That catches the
+      // regressions a mock manager can genuinely demonstrate (a cancel loop
+      // that misses entries, an unresolved promise, leaked state) and claims
+      // nothing about speed, which this harness cannot measure.
       const volumes = [10, 50, 100, 200];
-      const performanceResults: { volume: number; opsPerSecond: number }[] = [];
 
       for (const volume of volumes) {
-        const startTime = profiler.startMeasurement(`volume-${volume}`);
+        const operations = cancelTestUtils
+          .createTestDataFactories()
+          .mixedOperations(volume);
+
+        let operationIds: string[] = [];
+        await act(async () => {
+          operationIds = operations.map(op => manager.registerOperation(op));
+        });
+        expect(operationIds).toHaveLength(volume);
+        expect(manager.stats.total).toBe(volume);
 
         await act(async () => {
-          const operations = cancelTestUtils
-            .createTestDataFactories()
-            .mixedOperations(volume);
-          const operationIds = operations.map(op =>
-            manager.registerOperation(op)
-          );
           await manager.cancelAllOperations();
-
-          // Cleanup
-          operationIds.forEach(id => manager.removeOperation(id));
         });
 
-        const duration = profiler.endMeasurement(`volume-${volume}`, startTime);
-        const opsPerSecond = (volume / duration) * 1000;
-
-        performanceResults.push({ volume, opsPerSecond });
-      }
-
-      // Performance should not degrade significantly with volume.
-      // When operations are nearly instant the raw ratio can be NaN (0/0) or
-      // Infinity; in those cases we skip the ratio check since the test passed
-      // (operations completed faster than measurement resolution).
-      for (let i = 1; i < performanceResults.length; i++) {
-        const current = performanceResults[i];
-        const previous = performanceResults[i - 1];
-
-        // Skip ratio check when both are near-instant (finite comparison meaningless)
-        if (
-          !isFinite(previous.opsPerSecond) ||
-          !isFinite(current.opsPerSecond)
-        ) {
-          continue;
+        // Every one of them, not just some: a cancel loop that skips entries
+        // is exactly the regression this can still see.
+        for (const id of operationIds) {
+          expect(manager.getOperation(id)?.status).toBe('cancelled');
         }
 
-        // Performance degradation should be less than 50%
-        const performanceRatio = current.opsPerSecond / previous.opsPerSecond;
-        if (!isNaN(performanceRatio)) {
-          expect(performanceRatio).toBeGreaterThan(0.5);
-        }
+        await act(async () => {
+          operationIds.forEach(id => manager.removeOperation(id));
+        });
+        expect(manager.stats.total).toBe(0);
       }
     });
   });
