@@ -40,6 +40,15 @@ export enum WebSocketEvent {
   UPLOAD_COMPLETED = 'uploadCompleted',
   UPLOAD_FAILED = 'uploadFailed',
 
+  // Video upload — the SERVER-SIDE half of a video/ND2/TIFF upload.
+  // A video upload is one blocking POST whose response only arrives after
+  // frame extraction has finished, so the browser's own upload-progress
+  // events stop at the last byte sent and the user then waits out the whole
+  // extraction against a full bar. Measured on a real 3.41 GB / 300-frame
+  // ND2 in production: 748 s of transfer followed by 621 s of silence.
+  // This event carries that second half. Payload: VideoUploadProgressEvent.
+  VIDEO_UPLOAD_PROGRESS = 'videoUploadProgress',
+
   // Project events
   PROJECT_UPDATE = 'projectUpdate',
   PROJECT_DELETED = 'projectDeleted',

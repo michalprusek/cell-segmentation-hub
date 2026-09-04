@@ -227,6 +227,68 @@ describe('pythonExtractor', () => {
       expect(cb).toHaveBeenCalledWith({ progress: 0.75 });
     });
 
+    it('parses the optional frame counts a helper appends', async () => {
+      // Wire format is `PROGRESS <fraction> [<done> <total>]`. The counts are
+      // what turns the card's message from a bare percentage into
+      // "Extracting frames 126/300" — before they existed, the upload service
+      // rendered the literal `Frame ?`, because `currentFrame` was never set.
+      const fake = makeFakeChild();
+      setupSpawn(fake);
+      const cb = vi.fn();
+
+      process.nextTick(() => {
+        fake.stdout.emit('data', 'PROGRESS 0.4200 126 300\n');
+        fake.stdout.emit('data', JSON.stringify(makePythonResult()) + '\n');
+        fake.child.emit('close', 0);
+      });
+
+      await extractTiffStack('/a', '/b', cb);
+
+      expect(cb).toHaveBeenCalledWith({
+        progress: 0.42,
+        currentFrame: 126,
+        totalFrames: 300,
+      });
+    });
+
+    it('still parses a bare PROGRESS line, with no count keys at all', async () => {
+      // Backward compatibility in the direction that can actually happen: the
+      // backend image bakes the helpers in, so the two ship together — but a
+      // partial rollback must degrade the MESSAGE, never the progress. The
+      // keys are omitted rather than set to undefined so the payload stays
+      // exactly what it was before the counts existed.
+      const fake = makeFakeChild();
+      setupSpawn(fake);
+      const cb = vi.fn();
+
+      process.nextTick(() => {
+        fake.stdout.emit('data', 'PROGRESS 0.5\n');
+        fake.stdout.emit('data', JSON.stringify(makePythonResult()) + '\n');
+        fake.child.emit('close', 0);
+      });
+
+      await extractTiffStack('/a', '/b', cb);
+
+      expect(cb).toHaveBeenCalledWith({ progress: 0.5 });
+      expect(Object.keys(cb.mock.calls[0][0])).toEqual(['progress']);
+    });
+
+    it('ignores unparseable counts but keeps the fraction', async () => {
+      const fake = makeFakeChild();
+      setupSpawn(fake);
+      const cb = vi.fn();
+
+      process.nextTick(() => {
+        fake.stdout.emit('data', 'PROGRESS 0.6 x y\n');
+        fake.stdout.emit('data', JSON.stringify(makePythonResult()) + '\n');
+        fake.child.emit('close', 0);
+      });
+
+      await extractTiffStack('/a', '/b', cb);
+
+      expect(cb).toHaveBeenCalledWith({ progress: 0.6 });
+    });
+
     it('clamps PROGRESS > 1 to 1', async () => {
       const fake = makeFakeChild();
       setupSpawn(fake);

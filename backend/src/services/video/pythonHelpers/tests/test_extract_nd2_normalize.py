@@ -203,8 +203,15 @@ from pathlib import Path  # noqa: E402
 
 
 def _seq_write(arr_tcyx, root, names):
-    """Reference sequential writer matching the pre-optimisation behaviour."""
-    from PIL import Image
+    """Reference sequential writer matching the pre-optimisation behaviour.
+
+    Encodes through ``save_frame_png``, the same one ``_write_frames`` uses, on
+    purpose: what this pins is that the CHUNKED, THREAD-POOLED write produces
+    the same bytes as a plain loop. Naming the encoder settings here as well
+    would make this test fail on any deliberate encoder change while proving
+    nothing extra — the encoder has its own tests in ``test_frame_png.py``.
+    """
+    from frame_png import save_frame_png
 
     from extract_nd2 import _to_png_dtype
 
@@ -213,8 +220,8 @@ def _seq_write(arr_tcyx, root, names):
         fd = root / f"{t:04d}"
         fd.mkdir(parents=True, exist_ok=True)
         for c in range(C):
-            Image.fromarray(_to_png_dtype(np.asarray(arr_tcyx[t, c]))).save(
-                fd / f"{names[c]}.png", format="PNG", optimize=True
+            save_frame_png(
+                _to_png_dtype(np.asarray(arr_tcyx[t, c])), fd / f"{names[c]}.png"
             )
 
 
