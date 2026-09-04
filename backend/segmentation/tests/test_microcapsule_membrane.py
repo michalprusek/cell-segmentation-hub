@@ -169,6 +169,59 @@ def _staircase_capsule(d=4.0, w=0.6, tilt=1.5, size=800, cx=400.0, cy=400.0,
     return np.clip(img, 0, 255).astype(np.uint8)
 
 
+def _varying_skew_capsule(shade=0.0, size=800, cx=400.0, cy=400.0,
+                          r_out=360.0, r_mem=200.0, core=90.0, shell=150.0):
+    """A membrane whose transition ASYMMETRY varies around the circle.
+
+    Crisp on one side, a long outward tail on the other. The gradient maximum
+    is only at a fixed intensity for a SYMMETRIC edge, so pass 1 alone places
+    the contour at a different height on the step at every angle; a level set
+    does not. `shade` adds a linear illumination gradient, which is what makes
+    a single GLOBAL level fail.
+
+    This replaced a dent fixture that stopped discriminating once `TRACE_BAND`
+    widened to 0.10R: pass 1 could then reach the dent unaided, and the tests
+    that were meant to pin the level pass passed with it deleted.
+    """
+    yy, xx = np.mgrid[0:size, 0:size]
+    rr = np.hypot(xx - cx, yy - cy)
+    th = np.arctan2(yy - cy, xx - cx)
+    tail = 1.5 + 7.0 * (1 + np.cos(th)) / 2.0
+    x = rr - r_mem
+    f = np.where(x < 0, 0.5 * np.exp(x / 1.2), 1 - 0.5 * np.exp(-x / tail))
+    img = np.full((size, size), float(shell + 40))
+    inside = rr <= r_out
+    img[inside] = (core + (shell - core) * f)[inside]
+    if shade:
+        img = img * (1.0 + shade * (xx - cx) / size)
+    img[np.abs(rr - r_out) < 3.0] = 40.0
+    return np.clip(img, 0, 255).astype(np.uint8)
+
+
+def _level_spread(gray, membrane, cx=400.0, cy=400.0):
+    """5-95 spread of the contour's height on the LOCAL intensity step.
+
+    Shading divides out, so 0 means "always at the same place on the edge"
+    however the capsule is lit. This is the honest yardstick: the spread of
+    ABSOLUTE intensity along a contour measures the illumination gradient, not
+    whether the contour left the boundary.
+    """
+    from models.microcapsule_membrane import _sample
+
+    P = np.array([[p["x"], p["y"]] for p in membrane], float)
+    ang = np.arctan2(P[:, 1] - cy, P[:, 0] - cx)
+    r = np.hypot(P[:, 0] - cx, P[:, 1] - cy)
+    inner = _sample(gray, cx, cy, ang, r[:, None] + np.arange(-16, -6, 1.0)[None, :])
+    outer = _sample(gray, cx, cy, ang, r[:, None] + np.arange(6, 16, 1.0)[None, :])
+    with np.errstate(invalid="ignore"):
+        lo = np.nanmedian(inner, axis=1)
+        hi = np.nanmedian(outer, axis=1)
+    at = _sample(gray, cx, cy, ang, r[:, None])[:, 0]
+    t = (at - lo) / np.where(np.abs(hi - lo) < 1e-6, np.nan, hi - lo)
+    t = t[np.isfinite(t)]
+    return float(np.percentile(t, 95) - np.percentile(t, 5))
+
+
 class TestCapsuleAdapter:
     def test_builds_a_capsule_from_a_stored_polygon(self):
         poly = _ring_polygon(100.0, 120.0, 50.0)
@@ -317,20 +370,24 @@ class TestOneContinuousContour:
         )
 
     def test_still_follows_a_non_circular_membrane(self):
-        # The continuity constraint must not flatten real shape into a circle.
+        # The continuity constraint must not flatten real shape into a circle,
+        # and the search band must be wide enough to let it.
         #
-        # The ellipse here is deliberately mild — semi-axes 205 and 190, i.e.
-        # +-7.5 px off round. That is not timidity: the guide is a CIRCLE fit
-        # and `TRACE_BAND` searches only +-0.035R around it, so a membrane much
-        # further out of round is outside the searchable window and no tracer
-        # can follow it. Measured on a 230x170 ellipse, the old per-ray argmax
-        # spanned 24.0 px and the DP 22.3 — both simply pinned to the band
-        # edges. That is a limit of the guide, not of this constraint, so do
-        # not "strengthen" this test by making the ellipse rounder-breaking.
+        # Semi-axes 220 and 180, i.e. 40 px out of round. The band is what
+        # limits this: the guide is a circle fit, and at the old +-0.035R the
+        # trace was pinned to the band edges at a 21.6 px span; at 0.10R it is
+        # the true 40.0 px. So this pins the band as well as the constraint.
+        #
+        # Do NOT make the ellipse rounder-breaking to "strengthen" it. A
+        # 230x170 ellipse demands 0.307 px per arc px at its steepest, above
+        # TRACE_SLOPE, so the movement cap clips it by design — measured, not
+        # assumed. An earlier version of this test used 230x170 and appeared to
+        # pass only because a fixed radial step had quietly loosened the cap to
+        # 0.294.
         size, cx, cy = 800, 400.0, 400.0
         yy, xx = np.mgrid[0:size, 0:size]
         rr_out = np.hypot(xx - cx, yy - cy)
-        ell = np.hypot((xx - cx) / 205.0, (yy - cy) / 190.0)
+        ell = np.hypot((xx - cx) / 220.0, (yy - cy) / 180.0)
         img = np.full((size, size), 190.0)
         inside = rr_out <= 360.0
         img[inside] = (90 + 60 * 0.5 * (1 + np.tanh((ell - 1.0) / 0.01)))[inside]
@@ -342,12 +399,11 @@ class TestOneContinuousContour:
         )
         assert membrane is not None
         r = _traced_radii(membrane, cx, cy)
-        # A circle would span ~0; the ellipse spans 15 px between its axes.
-        assert r.max() - r.min() > 10.0, (
-            f"radius spans only {r.max() - r.min():.1f} px — the constraint "
-            "flattened a 15 px-out-of-round ellipse into a circle"
+        span = r.max() - r.min()
+        assert span > 35.0, (
+            f"radius spans only {span:.1f} px of the true 40 px — the search "
+            "band is clipping a genuinely non-circular membrane"
         )
-
     def test_follows_a_local_fold_rather_than_cutting_the_corner(self):
         """The movement cap must be loose enough to track a real feature.
 
@@ -418,23 +474,40 @@ class TestFollowsTheIntensityLevel:
         )
         assert worst < 1.0, f"worst radial error {worst:.2f} px"
 
-    def test_estimates_the_level_locally_so_shading_cannot_shift_it(self):
-        # A 25% linear illumination gradient across the field. One global
-        # intensity level would sit at a different height on the edge at every
-        # angle here — measured on real capsules the core and shell levels
-        # swing by 11-40% of the contrast — and where the swing exceeds the
-        # contrast it would not cross the profile at all.
-        img = _dented_capsule(dent_px=10.0, dent_sig=0.09, shade=0.25)
+    def test_sits_at_one_height_on_the_step_all_the_way_round(self):
+        # Pass 1 maximises the gradient, which only coincides with a fixed
+        # intensity on a symmetric edge. Where the asymmetry varies with angle,
+        # pass 1 alone lands at a different height at every angle (spread
+        # 0.126); the level pass equalises it (0.059).
+        img = _varying_skew_capsule()
+        gray = prepare_gray(img)
         poly = _ring_polygon(400.0, 400.0, 360.0)
 
-        _state, _score, _feats, membrane = membrane_polygon_for(
-            prepare_gray(img), poly
-        )
+        state, score, feats, membrane = membrane_polygon_for(gray, poly)
+        assert state == "sharp", f"score={score} feats={feats}"
         assert membrane is not None
-        at_dent, worst = _dent_error(membrane, dent_px=10.0, dent_sig=0.09)
-        assert at_dent < 0.5, f"{at_dent:.2f} px off at the dent under shading"
-        assert worst < 1.0, f"worst radial error {worst:.2f} px under shading"
+        spread = _level_spread(gray, membrane)
+        assert spread < 0.09, (
+            f"contour height on the step varies by {spread:.3f} — it is "
+            "tracking the gradient maximum, not a level"
+        )
 
+    def test_estimates_the_level_locally_so_shading_cannot_shift_it(self):
+        # A 25% linear illumination gradient. One global intensity level would
+        # sit at a different height on the edge at every angle here — measured
+        # on real capsules the core and shell levels swing by 11-40% of the
+        # contrast — and where the swing exceeds the contrast it would not
+        # cross the profile at all. A global level measures 0.190 here.
+        img = _varying_skew_capsule(shade=0.25)
+        gray = prepare_gray(img)
+        poly = _ring_polygon(400.0, 400.0, 360.0)
+
+        _state, _score, _feats, membrane = membrane_polygon_for(gray, poly)
+        assert membrane is not None
+        spread = _level_spread(gray, membrane)
+        assert spread < 0.09, (
+            f"contour height on the step varies by {spread:.3f} under shading"
+        )
     def test_the_refinement_never_relocates_the_contour(self):
         # It places the contour on the boundary pass 1 chose; it must not be
         # able to walk it onto a different one. The window is a fraction of the
@@ -473,4 +546,138 @@ class TestFollowsTheIntensityLevel:
         assert jump < 1.0, (
             f"contour steps by {jump:.2f} px between rays — the level search "
             "is picking each ray's crossing independently"
+        )
+
+
+class TestTunableInvariants:
+    """Constraints the tunables are DERIVED from, asserted directly.
+
+    `TRACE_STEP` cannot be pinned by a synthetic fixture. Coarsening it to
+    1.0 px moves real contours by up to 21 px (p95 2.48 px), but three
+    principled attempts to reproduce that synthetically — two near-tied faces,
+    a thin dark line, and added noise — all came out step-independent, because
+    the failure needs the irregular radial structure of real bright field. So
+    the invariant the value is derived FROM is asserted instead of the
+    behaviour it produces, which at least fails loudly if someone changes one
+    number without the other.
+    """
+
+    def test_the_derivative_scale_survives_the_radial_sampling(self):
+        from models import microcapsule_membrane as mm
+
+        # `SIGMA_G / step` is the fine-derivative sigma in SAMPLES. Below about
+        # 3 the Gaussian is too narrow for its own grid and edge localisation
+        # degrades; at a 1.0 px step it is 1.5, and real traces then move by up
+        # to 21 px.
+        assert mm.SIGMA_G / mm.TRACE_STEP_MAX >= 3.0, (
+            f"SIGMA_G/TRACE_STEP_MAX = {mm.SIGMA_G / mm.TRACE_STEP_MAX:.1f}"
+        )
+
+    def test_the_placement_window_is_reachable_from_the_search_grid(self):
+        from models import microcapsule_membrane as mm
+
+        # Pass 2 refines within +-LEVEL_WINDOW of pass 1's answer, and pass 1
+        # quantises to its own step. If the window were smaller than that
+        # quantisation, the refinement could not undo pass 1's rounding.
+        for radius in (40.0, 250.0, 2000.0):
+            assert mm._px(mm.LEVEL_WINDOW, radius) > mm.TRACE_STEP_MAX, radius
+
+    def test_the_movement_cap_is_never_tighter_than_intended(self):
+        from models import microcapsule_membrane as mm
+
+        # The cap is a shape constraint in px per arc px, so it must not
+        # tighten with magnification -- a tighter cap clips real shape, which
+        # is the harm. It is allowed to come out LOOSER on a small capsule:
+        # `N_ANG` is fixed, so below about R=175 the rays are closer together
+        # than the radial grid can resolve and the integer state count rounds
+        # up. That direction only lets the path move faster on a capsule whose
+        # rays already oversample it, so nothing is clipped.
+        for radius in (40.0, 60.0, 125.0, 250.0, 600.0, 1500.0):
+            arc = 2 * np.pi * radius / mm.N_ANG
+            step = float(np.clip(mm.TRACE_SLOPE * arc, 0.25,
+                                 min(mm.TRACE_STEP_MAX, mm.SIGMA_G / 3)))
+            smax = max(1, int(np.ceil(0.9 * mm.TRACE_SLOPE * arc / step)))
+            effective = smax * step / arc
+            # 10% of slack: the state count is an integer, so the cap can
+            # rarely be exactly TRACE_SLOPE, and `_trace_inner` rounds up
+            # rather than to nearest for exactly this reason. Plain rounding
+            # measured up to 29% tighter at some radii.
+            assert effective >= 0.9 * mm.TRACE_SLOPE, (
+                f"at R={radius:.0f} the cap is {effective:.3f} px per arc px, "
+                f"tighter than the intended {mm.TRACE_SLOPE}"
+            )
+
+    def test_a_large_capsule_gets_the_same_slope_as_a_small_one(self):
+        """The cap must scale with the capsule, not with the ray index.
+
+        The formula test above checks the arithmetic; this one runs the code.
+        On a capsule whose membrane sits at r~595 the rays are 5.2 px apart, so
+        the same 0.23 px-per-arc-px cap has to buy several radial states rather
+        than one. Pinning the state count at 1 -- which is what it happens to
+        be at the ~250 px radii in production, so no other fixture here would
+        notice -- clips this 120 px-out-of-round ellipse to a 25 px span.
+
+        The ellipse demands 0.202 px per arc px at its steepest, just under the
+        cap, so it is reachable by design rather than by luck.
+        """
+        size, cx, cy = 1800, 900.0, 900.0
+        yy, xx = np.mgrid[0:size, 0:size]
+        rr = np.hypot(xx - cx, yy - cy)
+        ell = np.hypot((xx - cx) / 660.0, (yy - cy) / 540.0)
+        img = np.full((size, size), 190.0)
+        inside = rr <= 850.0
+        img[inside] = (90 + 60 * 0.5 * (1 + np.tanh((ell - 1.0) / 0.006)))[inside]
+        img[np.abs(rr - 850.0) < 4.0] = 40.0
+        poly = _ring_polygon(cx, cy, 850.0, n=240)
+
+        _state, _score, _feats, membrane = membrane_polygon_for(
+            prepare_gray(img.astype(np.uint8)), poly
+        )
+        assert membrane is not None
+        r = _traced_radii(membrane, cx, cy)
+        span = r.max() - r.min()
+        assert span > 100.0, (
+            f"radius spans only {span:.1f} px of the true 120 px — the "
+            "movement cap has not scaled with the capsule"
+        )
+
+    def test_a_small_capsule_gets_the_same_slope_as_a_large_one(self):
+        """The other end of the same scaling, and the one that bites.
+
+        On a capsule whose membrane sits at r~105 the rays are 0.92 px apart,
+        so the intended 0.23 px-per-arc-px cap is 0.21 px per ray -- finer than
+        the 0.5 px grid the big capsules use. Sampling the search at a FIXED
+        0.5 px would make the cap 0.5 px per ray whatever the capsule size,
+        i.e. 1.36 px per arc px here: six times looser than intended, enough
+        for the contour to hop between two faces 7 px apart (span 5.6 px
+        against 2.3).
+
+        The large-capsule test above cannot catch this: there the derived step
+        and a fixed 0.5 px coincide.
+        """
+        size, cx, cy, r_out, r_mem = 340, 170.0, 170.0, 155.0, 105.0
+        sep, swing = 7.0, 9.0
+        yy, xx = np.mgrid[0:size, 0:size]
+        rr = np.hypot(xx - cx, yy - cy)
+        th = np.arctan2(yy - cy, xx - cx)
+        total = 60.0
+        m = swing * np.cos(6.0 * th)
+        img = np.full((size, size), 190.0)
+        inside = rr <= r_out
+        img[inside] = (90 + (total / 2 + m) * 0.5 * (1 + np.tanh((rr - r_mem) / 1.0))
+                          + (total / 2 - m) * 0.5
+                          * (1 + np.tanh((rr - r_mem - sep) / 1.0)))[inside]
+        img[np.abs(rr - r_out) < 2.0] = 40.0
+        poly = _ring_polygon(cx, cy, r_out, n=120)
+
+        _state, _score, _feats, membrane = membrane_polygon_for(
+            prepare_gray(np.clip(img, 0, 255).astype(np.uint8)), poly
+        )
+        assert membrane is not None
+        r = _traced_radii(membrane, cx, cy)
+        jump = float(np.abs(np.diff(np.r_[r, r[0]])).max())
+        arc = 2 * np.pi * float(np.mean(r)) / len(r)
+        assert jump / arc < 0.6, (
+            f"contour moves {jump / arc:.2f} px per arc px on a small capsule, "
+            "far past the intended cap — the radial grid is not scaling with it"
         )
