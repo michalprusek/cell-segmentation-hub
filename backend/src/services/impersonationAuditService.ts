@@ -102,11 +102,14 @@ export async function recordImpersonationEvent(
         targetId: record.targetId,
         targetEmail,
         sessionId: record.sessionId,
-        // Truncated at write time: both are attacker-controlled headers and
-        // this is a TEXT column with no length limit of its own.
+        // Truncated at write time: all three are attacker-influenced and these
+        // are TEXT columns with no length limit of their own. `detail` earns
+        // its place here because `adminService` composes it as
+        // `${detail}: ${targetUserId}` from a raw path parameter — so this
+        // must not depend on every caller remembering to bound its input.
         ip: record.ip ? record.ip.slice(0, 100) : null,
         userAgent: record.userAgent ? record.userAgent.slice(0, 300) : null,
-        detail: record.detail ?? null,
+        detail: record.detail ? record.detail.slice(0, 500) : null,
       },
     });
   } catch (error) {

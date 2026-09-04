@@ -54,7 +54,7 @@ const joinClassOf = (p: Polygon, kind: PolylineKind): string | undefined => {
  * merge would have to discard one of them) — but the caller is expected to
  * SAY so rather than swallow the click.
  */
-const joinClassesCompatible = (
+export const joinClassesCompatible = (
   a: Polygon,
   b: Polygon,
   projectType: string | undefined
@@ -90,20 +90,6 @@ export const inheritJoinClass = (
   if (joinClassOf(a, kind) !== undefined) return {}; // A already labelled
   if (joinClassOf(b, kind) === undefined) return {}; // B unlabelled too
   return kind === 'sperm' ? { partClass: b.partClass } : { mtType: b.mtType };
-};
-
-/**
- * Can polyline `b` be merged into `a`? They must be distinct joinable
- * polylines whose class labels are compatible (`joinClassesCompatible`).
- */
-export const canJoinPolylines = (
-  a: Polygon,
-  b: Polygon,
-  projectType: string | undefined
-): boolean => {
-  if (a.id === b.id) return false;
-  if (!isJoinablePolyline(a) || !isJoinablePolyline(b)) return false;
-  return joinClassesCompatible(a, b, projectType);
 };
 
 export interface JoinTarget {
