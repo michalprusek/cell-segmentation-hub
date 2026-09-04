@@ -109,11 +109,20 @@ networkx>=3.0
 # encoder is architecturally unchanged) and builds the microcapsule U-Net.
 segmentation-models-pytorch==0.5.0
 
-# transformers backs exactly TWO things in this repo, and neither is
+# transformers backs exactly TWO MODELS in this repo, and neither is
 # microtubule any more:
 #
 #   models/segformer.py                 SegformerConfig / SegformerForSemanticSegmentation
 #   sperm_final/models/backbone.py      Dinov2Model.from_pretrained("facebook/dinov2-large")
+#
+# There is a THIRD coupling that is not a model and is easy to miss:
+# models/mamba_unet.py aliases the removed `GreedySearchDecoderOnlyOutput` /
+# `SampleDecoderOnlyOutput` onto `transformers.generation.GenerateDecoderOnlyOutput`
+# so `from mamba_ssm import Mamba` can finish importing. If that successor is ever
+# renamed the shim RETURNS SILENTLY, the mamba import raises ImportError, and
+# ml/model_loader.py drops Mamba-UNet out of the registry while /health stays
+# green. So the probe must import models.mamba_unet too, not just the two
+# checkpoints. (Present and correct at 5.15.1, checked 2026-09-04.)
 #
 # The old pin here was 4.57.1 for the microtubule v7 DINOv3 backbone, where
 # 4.57.2 silently degraded the ViT features (303 real MTs -> 76 scattered, no
@@ -132,12 +141,64 @@ segmentation-models-pytorch==0.5.0
 # 4.57.x. 5.5.4 needs only torch>=2.4, so it does NOT disturb the torch 2.6.0
 # pin the mamba-ssm / causal-conv1d CUDA kernels are built against.
 #
-# CEILING, measured, not guessed: transformers 5.16.1 BREAKS SegFormer. The
-# module layout was renamed (`segformer.encoder.block.N.M` -> `segformer.stages.
-# N.blocks.M`, `decode_head.linear_c` -> `linear_projections`), so our checkpoint
-# no longer load_state_dicts. 5.5.4 and 5.6.0 are both clean; the break is above
-# 5.6. dependabot.yml therefore allows PATCH updates here and blocks minor/major.
-# Re-run the probe against both checkpoints before crossing a minor.
+# CEILING, measured, not guessed: the SegFormer module layout was renamed and
+# segformer_b0_spheroseg.pth stops load_state_dict-ing —
+# `segformer.encoder.block.N.M`         -> `segformer.stages.N.blocks.M`
+# `segformer.encoder.patch_embeddings.N`-> `segformer.stages.N.patch_embeddings`
+# `attention.self.{query,key,value}`    -> `attention.{q,k,v}_proj`
+# `attention.output.dense`              -> `attention.o_proj`
+# `attention.self.sr`                   -> `attention.sequence_reduction.*`
+# `layer_norm_{1,2}`                    -> `layernorm_{before,after}`
+# `mlp.dense{1,2}`                      -> `mlp.fc{1,2}`
+# `decode_head.linear_c.N`              -> `decode_head.linear_projections.N`
+# The old note here said "5.16.1 breaks it, the break is above 5.6" — true, but
+# seven minors too generous. Bisected 2026-09-04 against the real checkpoint on
+# a seeded 1x3x1024x1024 input: 5.6.2 / 5.7.0 / 5.8.1 all reproduce the 5.5.4
+# forward BIT-IDENTICALLY (sha ec4010afadd9a00d), and **5.9.0 is where it
+# breaks** — 5.9.0, 5.11.0, 5.12.1, 5.13.1, 5.14.1, 5.15.0, 5.15.1 all fail.
+#
+# SECOND wall above that, and it is torch's, not ours: 5.10.1 / 5.10.2 / 5.10.4
+# cannot even IMPORT a model on torch 2.6.0. `integrations/finegrained_fp8.py`
+# evaluates `torch.float8_e8m0fnu` at module scope; 2.6.0 has no such dtype, so
+# `from transformers import SegformerForSemanticSegmentation` raises
+# ModuleNotFoundError. pip cannot warn about this — transformers declares
+# `torch>=2.5` only under `extra == "torch"`, i.e. NO torch bound at all in a
+# plain install. (5.11.0+ guards the attribute again and imports fine; they die
+# on the rename instead.)
+#
+# So the SECURITY FLOOR and the working CEILING DO NOT OVERLAP, and that is why
+# GHSA-xrqw-3rrv-vx5w / CVE-2026-9856 (high, `save_pretrained` path traversal)
+# is left OPEN here. Its "first patched version" is 5.10.0 — which sits above
+# the 5.9.0 wall, is itself YANKED from PyPI ("pushed from a week old main
+# branch"), and whose unyanked siblings want a torch this stack cannot move to
+# (mamba-ssm / causal-conv1d ship CUDA kernels source-built against 2.6.0+cu124).
+# Every release at or above the fix was measured on 2026-09-04 and every one is
+# unusable here — 5.10.x will not import, 5.11.0+ will not load the checkpoint.
+# Moving torch off 2.6.0 is not on the table, so the pin STAYS.
+#
+# Leaving it open is safe because the advisory is UNREACHABLE here: it fires on
+# `save_pretrained()` of a tokenizer or processor whose downloaded
+# `chat_template` dict carries traversal keys. No Python under backend/ calls
+# `save_pretrained()` at all, and the only two `from_pretrained` calls in the
+# repo build a SegformerConfig and a Dinov2Model — no tokenizer, no processor,
+# no chat template, and nothing is ever written back to disk.
+# `backend/essays/tests/test_transformers_pin.py` asserts both halves so the
+# reasoning cannot rot silently; the second one keys on the CLASS being loaded,
+# because a tokenizer added to models/segformer.py would be just as dangerous as
+# one added anywhere else.
+#
+# For the record, sperm is FINE all the way up: probed at 5.15.1, the
+# `Dinov2Model.from_pretrained` load, the 2.5 GB Mask2Former checkpoint load,
+# all four DINOv2 feature layers and pred_logits/pred_masks come out
+# bit-identical to 5.5.4 (max|diff| 0.000e+00). SegFormer is the sole blocker.
+#
+# The only real fix is a key-remapping shim in models/segformer.py (or a
+# re-exported checkpoint), verified against a real forward. Until someone writes
+# that, do NOT "resolve" the alert by moving this number.
+#
+# dependabot.yml allows PATCH updates here and blocks minor/major. Re-run the
+# probe — both checkpoints AND `import models.mamba_unet` — before crossing a
+# minor, and note that CI cannot do it for you: the weights are not in the repo.
 transformers==5.5.4
 tifffile>=2024.1.30
 # tifffile decodes Deflate natively but delegates LZW (and JPEG, PackBits, LZMA...)
