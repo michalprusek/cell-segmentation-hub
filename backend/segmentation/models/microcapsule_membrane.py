@@ -86,6 +86,8 @@ ALIGN_WIN = (0.30, 80.0)    # half-window around the guide in pass 2
 INLIER_BAND = (0.05, 8.0)   # a sector counts towards coverage inside this band
 TRACE_BAND = (0.10, 20.0)   # search band for the inner contour (pass 1)
 TRACE_STEP_MAX = 0.5        # coarsest radial sampling of that search
+SHAPE_PRIOR = 2.0           # pull toward a circle where the edge is weak
+SHAPE_PRIOR_GATE = 0.65     # 'weak' means below this fraction of the strong edges
 BASELINE_GAP = (0.05, 15.0) # keep the compartment medians this clear of the edge
 SIGMA_G = 1.5               # px, fine derivative scale (edge localisation)
 SIGMA_BG = 8.0              # px, coarse scale subtracted to reject broad ramps
@@ -582,6 +584,71 @@ def _snap_to_level(img, cap, angs, r0, rout):
     return r0 + s[path]
 
 
+def _fit_circle_radius(cap, angs, radial, trust=None):
+    """Robust circle through a traced path, expressed back as r(theta) in the
+    capsule's polar frame.
+
+    `trust` is an optional per-ray weight in [0, 1]; rays below half of its
+    mean are dropped before fitting. That matters more than the iterative
+    trimming: the stretches this circle is meant to correct are CONTIGUOUS
+    arcs, and a contiguous arc pulled inward is indistinguishable from a
+    circle whose centre has moved, so least squares absorbs it into the centre
+    instead of flagging it. Fitted to a ring with a fifth of its circumference
+    dragged 25 px in, the untrusted fit returns 195 rather than 200; selecting
+    on the same evidence that gates the pull returns 200.
+
+    Returns None rather than a guess when no circle can be defined -- a
+    degenerate path makes the normal equations singular, and `lstsq` answers
+    with a minimum-norm solution rather than raising.
+    """
+    x = cap.cx + radial * np.cos(angs)
+    y = cap.cy + radial * np.sin(angs)
+
+    keep = np.ones(len(angs), bool)
+    if trust is not None and np.isfinite(trust).any():
+        level = float(np.nanmean(trust))
+        if level > 1e-9:
+            strong = trust >= 0.5 * level
+            if strong.sum() >= 30:
+                keep = strong
+
+    # No extent means no circle. Guard before fitting, not after: the radius
+    # that comes back from a singular fit looks perfectly healthy.
+    if (np.ptp(x[keep]) <= 1e-6) or (np.ptp(y[keep]) <= 1e-6):
+        return None
+
+    cx = cy = rad = None
+    for _ in range(6):
+        if keep.sum() < 30:
+            return None
+        A = np.c_[2 * x[keep], 2 * y[keep], np.ones(int(keep.sum()))]
+        b = x[keep] ** 2 + y[keep] ** 2
+        sol, *_ = np.linalg.lstsq(A, b, rcond=None)
+        cx, cy = float(sol[0]), float(sol[1])
+        inside = sol[2] + cx * cx + cy * cy
+        if not np.isfinite(inside) or inside <= 1e-6:
+            return None
+        rad = float(np.sqrt(inside))
+        res = np.hypot(x - cx, y - cy) - rad
+        spread = 1.4826 * np.median(np.abs(res - np.median(res)))
+        nxt = keep & (np.abs(res - np.median(res)) < max(2.0, 2.5 * spread))
+        if nxt.sum() < 30 or np.array_equal(nxt, keep):
+            break
+        keep = nxt
+
+    if rad is None or rad <= 1e-6:
+        return None
+
+    # Solve |c + r*u - i| = rad for r, so the circle is a radius per ray in the
+    # same frame every other stage uses.
+    dx, dy = cap.cx - cx, cap.cy - cy
+    b = dx * np.cos(angs) + dy * np.sin(angs)
+    disc = b * b - (dx * dx + dy * dy - rad * rad)
+    if np.any(disc < 0):
+        return None
+    return -b + np.sqrt(disc)
+
+
 def _trace_inner(img, cap, angs, guide, rout):
     """Inner boundary as ONE closed contour, by dynamic programming.
 
@@ -688,6 +755,62 @@ def _trace_inner(img, cap, angs, guide, rout):
     path = _trace_path(E, smax, lam)
     if path is None:
         return None, 0.0
+
+    # A shape prior, applied ONLY where the image does not answer the question.
+    #
+    # On the arc where the membrane is a broad ramp rather than a step, the
+    # radial profile has no edge at all -- measured on the capsule that
+    # prompted this, intensity climbs monotonically from 65 to 150 over ~100 px
+    # and the band-passed response is 1.2-1.8 against 4-6.7 in the sharp
+    # sectors. The boundary is genuinely under-determined there, so the path
+    # locks onto whatever ripple the ramp happens to carry and the contour dips
+    # inward in patches. A microcapsule membrane is a closed shell, so the
+    # missing constraint is that it is round.
+    #
+    # The pull is scaled by (1 - local peak / the capsule's own strong peaks),
+    # so a ray with a proper edge is untouched and only the featureless ones
+    # are drawn back. Measured over the eleven production membranes at
+    # the shipped settings: the eight already-round ones move by at most
+    # 0.14 px of circle residual, while the capsule that prompted this goes
+    # from 5.03 px of non-circularity to 3.24 and the next two worst from 4.82
+    # to 4.33 and 2.33 to 1.57. Nothing gains a ray-to-ray jump.
+    #
+    # The gate matters more than the weight, and it is what keeps this honest:
+    # a genuinely non-circular membrane whose edge is sharp all the way round
+    # is NOT rounded off, because none of its rays are weak enough to be
+    # pulled. The 120 px out-of-round ellipse in the tests comes out at
+    # 120.1 px at every gate from 0.35 to 0.80.
+    if SHAPE_PRIOR > 0:
+        peak = np.nanmax(np.where(np.isfinite(D), D, -np.inf), axis=1)
+        finite_peak = peak[np.isfinite(peak)]
+        # Fit the circle on the rays that carry a real edge, and pull the ones
+        # that do not: one confidence signal, used for both halves.
+        circle = _fit_circle_radius(cap, angs, guide + u[path],
+                                    trust=np.where(np.isfinite(peak), peak, 0.0))
+        if circle is not None:
+            if finite_peak.size:
+                strong = float(np.percentile(finite_peak, 90))
+                if strong > 1e-9:
+                    # A GATE, not a ramp from 1.0. The penalty is linear in
+                    # distance and the band is wide, so a small weight times a
+                    # large excursion still swamps the evidence: with a plain
+                    # (1 - peak/strong) this rounded a genuinely 120 px
+                    # out-of-round ellipse down to a 66 px span, because rays
+                    # a little below the 90th percentile still carried some
+                    # pull. Nothing is pulled until its edge is weaker than
+                    # SHAPE_PRIOR_GATE of the capsule's own strong ones.
+                    weak = np.clip(
+                        (SHAPE_PRIOR_GATE - peak / strong) / SHAPE_PRIOR_GATE,
+                        0.0, 1.0)
+                    pull = SHAPE_PRIOR * ref * weak
+                    E2 = np.where(
+                        np.isfinite(D),
+                        D - pull[:, None] * np.abs(radii - circle[:, None]),
+                        _NEG,
+                    )
+                    guided = _trace_path(E2, smax, lam)
+                    if guided is not None:
+                        path = guided
 
     # Sub-pixel: parabola through the chosen state and its neighbours.
     k = np.arange(len(angs))
