@@ -494,6 +494,9 @@ export default {
         extractingFrames: 'Bilder werden extrahiert {{current}}/{{total}}',
         extractingFramesPct: 'Bilder werden extrahiert ({{percent}} %)',
         correctingDrift: 'Bilddrift wird korrigiert',
+        correctingDriftPosition:
+          'Bilddrift wird korrigiert (Position {{index}}/{{total}})',
+        position: 'Position {{index}}/{{total}}',
         generatingThumbnail: 'Vorschaubild wird erzeugt',
         persistingPositions: 'Positionen werden gespeichert',
         videoReady: 'Video bereit',

@@ -487,6 +487,9 @@ export default {
         extractingFrames: 'Extracting frames {{current}}/{{total}}',
         extractingFramesPct: 'Extracting frames ({{percent}}%)',
         correctingDrift: 'Correcting stage drift',
+        correctingDriftPosition:
+          'Correcting stage drift (position {{index}}/{{total}})',
+        position: 'Position {{index}}/{{total}}',
         generatingThumbnail: 'Generating thumbnail',
         persistingPositions: 'Persisting positions',
         videoReady: 'Video ready',
