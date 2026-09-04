@@ -80,7 +80,11 @@ vi.mock('../../../services/video/videoExtractor', () => ({
   isVideoFilename: () => true,
 }));
 
-import { VideoController } from '../videoController';
+import {
+  VideoController,
+  isSafeChannelKey,
+  SERVER_OWNED_CHANNEL_KEYS,
+} from '../videoController';
 
 // --- helpers -----------------------------------------------------------
 
@@ -492,6 +496,113 @@ describe('VideoController security regressions (round-2 GAP-2 + GAP-3)', () => {
         type: 'irm',
         isSegmentationSource: false,
       });
+    });
+  });
+
+  describe('updateChannels — the key is a property NAME, not just a value', () => {
+    // The merge copies the body's keys into a fresh object by computed name
+    // (`out[k] = v`), which is what lets a client own fields this controller
+    // has not enumerated. A computed write is not neutral about the name it is
+    // given: `out['__proto__'] = v` is a [[Set]], so it re-points the object's
+    // prototype instead of adding a property, and `out['toString'] = 'x'`
+    // shadows a method every later coercion of that channel needs.
+    //
+    // Sent as a raw JSON STRING on purpose. `{ __proto__: {...} }` written as
+    // an object literal sets the prototype and `JSON.stringify` then emits
+    // nothing, so a fixture built that way silently stops discriminating.
+    const raw = (json: string) =>
+      request(buildApp())
+        .patch('/images/video-1/channels')
+        .set('Content-Type', 'application/json')
+        .send(json);
+
+    beforeEach(() => {
+      prismaImageFindUnique.mockResolvedValue(VALID_CONTAINER_ROW);
+      prismaImageUpdate.mockResolvedValue({});
+    });
+
+    it('JSON.parse really does make __proto__ an own enumerable key', () => {
+      // The premise the two tests below rest on. If a future Node/parser
+      // stopped doing this they would pass for the wrong reason.
+      const parsed = JSON.parse('{"__proto__":{"polluted":true}}');
+      expect(Object.keys(parsed)).toContain('__proto__');
+    });
+
+    it('rejects a channel carrying __proto__ and writes nothing', async () => {
+      const res = await raw(
+        '{"channels":[{"name":"IRM","type":"irm","isSegmentationSource":true,' +
+          '"__proto__":{"polluted":true}}]}'
+      );
+
+      expect(res.status).toBe(400);
+      expect(prismaImageUpdate).not.toHaveBeenCalled();
+      expect(
+        ({} as Record<string, unknown>).polluted
+      ).toBeUndefined();
+    });
+
+    it('rejects a channel that shadows an Object.prototype member', async () => {
+      const res = await raw(
+        '{"channels":[{"name":"IRM","type":"irm","isSegmentationSource":true,' +
+          '"toString":"not a function"}]}'
+      );
+
+      expect(res.status).toBe(400);
+      expect(prismaImageUpdate).not.toHaveBeenCalled();
+    });
+
+    it('names the offending key in the 400 so a client can fix it', async () => {
+      const res = await raw(
+        '{"channels":[{"name":"IRM","type":"irm","isSegmentationSource":true,' +
+          '"__proto__":{"polluted":true}}]}'
+      );
+
+      expect(res.status).toBe(400);
+      expect(res.body.message ?? res.body.error ?? JSON.stringify(res.body)).toContain(
+        '__proto__'
+      );
+    });
+
+    it('every SERVER-OWNED key the ingest writes passes the gate', async () => {
+      // The read gate and the write gate must agree. Nothing validates key
+      // shape on the ingest side (`videoUploadService`, `addChannelService`,
+      // the extractors), so a new `ChannelMeta` field named outside this shape
+      // would make rename permanently impossible on every container that has
+      // it — the Institut Curie incident, one field along. This fails the
+      // moment such a field is added.
+      for (const key of SERVER_OWNED_CHANNEL_KEYS) {
+        expect(isSafeChannelKey(key)).toBe(true);
+      }
+    });
+
+    it('rejects a channel NAMED __proto__ — the name is a map key downstream', async () => {
+      // `CHANNEL_NAME_RE` accepts `__proto__`, and `mtMetricsExporter`,
+      // `staticFrameChannels` and `ChannelOverlayList` all do
+      // `map[channel.name] = v` on a plain object. `isSafeChannelName` is the
+      // one gate that stops it.
+      const res = await raw(
+        '{"channels":[{"name":"__proto__","type":"irm","isSegmentationSource":true}]}'
+      );
+
+      expect(res.status).toBe(400);
+      expect(prismaImageUpdate).not.toHaveBeenCalled();
+    });
+
+    it('still accepts an ordinary camelCase key this controller has never heard of', async () => {
+      // The guard is on the SHAPE of the key, not on a list of known fields —
+      // a new client-owned field must not need a code change to survive.
+      const res = await raw(
+        '{"channels":[{"name":"IRM","type":"irm","isSegmentationSource":true,' +
+          '"someFutureField":7}]}'
+      );
+
+      expect(res.status).toBe(200);
+      const written = (
+        prismaImageUpdate.mock.calls[0]?.[0] as {
+          data: { channels: Record<string, unknown>[] };
+        }
+      ).data.channels;
+      expect(written[0]).toMatchObject({ someFutureField: 7 });
     });
   });
 });

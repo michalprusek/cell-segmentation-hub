@@ -67,7 +67,7 @@ interface ChannelDTO {
  * deliberate: a new ingest-owned field is protected by adding one line here,
  * whereas the old shape protected only what someone remembered to list.
  */
-const SERVER_OWNED_CHANNEL_KEYS = [
+export const SERVER_OWNED_CHANNEL_KEYS = [
   'pngBacked',
   'frameIds',
   'staticSource',
@@ -81,6 +81,39 @@ const SERVER_OWNED_CHANNEL_KEYS = [
 const SERVER_OWNED_CHANNEL_KEY_SET: ReadonlySet<string> = new Set(
   SERVER_OWNED_CHANNEL_KEYS
 );
+
+/**
+ * A key a PATCH body may carry on a channel object.
+ *
+ * `updateChannels` copies the body's keys into a fresh object by COMPUTED
+ * name, which is what lets a client own fields this file has not enumerated.
+ * A computed write is not neutral about which name it is given: `out[k] = v`
+ * is a [[Set]], so `k === '__proto__'` re-points the object's prototype
+ * instead of adding a property (CWE-1321), and any exotic name reaches the
+ * stored channels JSON and every consumer that iterates it.
+ *
+ * Every field of `ChannelDTO` — and every key `apiClient.updateImageChannels`
+ * sends — is a plain camelCase identifier, so anchoring the key to
+ * `[A-Za-z][A-Za-z0-9]*` costs nothing and rejects `__proto__` by its leading
+ * underscore. Names already carried by `Object.prototype` go too: `toString`
+ * passes the regex, and shadowing it with a string makes every later
+ * coercion of the stored channel throw. Checked against the prototype rather
+ * than against a list of names, so nothing has to be remembered.
+ *
+ * This is deliberately a check on the SHAPE of the key rather than a list of
+ * allowed field names: an allow-list would silently drop the next
+ * client-owned field somebody adds, which is the failure this codebase has
+ * already had with `OPTIONAL_POLYGON_FIELDS` stripping `class`. Measured
+ * against production on 2026-09-04: all 13 distinct keys across every
+ * `images.channels` row pass.
+ */
+const SAFE_CHANNEL_KEY_RE = /^[A-Za-z][A-Za-z0-9]*$/;
+
+export function isSafeChannelKey(key: string): boolean {
+  return (
+    SAFE_CHANNEL_KEY_RE.test(key) && !Object.hasOwn(Object.prototype, key)
+  );
+}
 
 const MAX_CHANNEL_DISPLAY_NAME_LEN = 128;
 
@@ -725,6 +758,10 @@ export class VideoController {
       const storedByName = new Map(
         storedChannels.filter(c => c?.name).map(c => [c.name, c] as const)
       );
+      // Set by the merge below when a channel carries a key this server will
+      // not write. Collected rather than thrown so the answer is a 400 that
+      // names the problem, instead of a key vanishing on its way to the DB.
+      let rejectedKey: string | undefined;
       const merged = channels.map(c => {
         // Drop the server-owned keys the body carried, then re-add exactly what
         // the stored row has — so a value the row does not have does not
@@ -736,6 +773,16 @@ export class VideoController {
         // real acquisition out of the segmentation queue.
         const out: Record<string, unknown> = {};
         for (const [k, v] of Object.entries(c)) {
+          // The key check sits HERE, on the line that turns a caller's string
+          // into a property name, rather than in the validation pass above:
+          // one guard, next to the write it protects, so a refactor cannot
+          // move the write out from under it.
+          if (!isSafeChannelKey(k)) {
+            if (rejectedKey === undefined) {
+              rejectedKey = k;
+            }
+            continue;
+          }
           if (!SERVER_OWNED_CHANNEL_KEY_SET.has(k)) {
             out[k] = v;
           }
@@ -749,6 +796,23 @@ export class VideoController {
         }
         return out as unknown as ChannelDTO;
       });
+
+      if (rejectedKey !== undefined) {
+        // Name the key. It is attacker-chosen text, so it is truncated and
+        // stripped of the control characters `isValidDisplayName` rejects on
+        // the same grounds — a rejected key still has to be diagnosable by
+        // whoever sent it.
+        const shown = rejectedKey
+          // eslint-disable-next-line no-control-regex
+          .replace(/[\x00-\x1f\x7f]/g, '')
+          .slice(0, 64);
+        ResponseHelper.error(
+          res,
+          `channel key ${JSON.stringify(shown)} is not allowed: keys must start with a letter and be alphanumeric`,
+          400
+        );
+        return;
+      }
 
       await prisma.image.update({
         where: { id: imageId },
