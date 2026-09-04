@@ -72,6 +72,7 @@ async function seedDatabase(): Promise<void> {
           email: adminEmail,
           password: adminPassword,
           emailVerified: true,
+          isAdmin: true,
           profile: {
             create: {
               username: 'admin',
@@ -90,6 +91,18 @@ async function seedDatabase(): Promise<void> {
       });
       logger.info('Admin user created', 'Seed', { email: adminEmail });
     } else {
+      // Grant the flag to a pre-existing row too. The account long predates
+      // `isAdmin`, so without this branch every deployment that was seeded
+      // before 2026-09-04 would keep an "admin" with no admin rights.
+      if (!existingAdmin.isAdmin) {
+        await prisma.user.update({
+          where: { id: existingAdmin.id },
+          data: { isAdmin: true },
+        });
+        logger.info('Admin flag granted to existing user', 'Seed', {
+          email: adminEmail,
+        });
+      }
       logger.info('Admin user already exists', 'Seed', { email: adminEmail });
     }
 

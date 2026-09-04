@@ -3112,4 +3112,32 @@ export default {
       delete: 'Polygon löschen',
     },
   },
+  admin: {
+    navLabel: 'Administration',
+    usersTitle: 'Registrierte Benutzer',
+    usersDescription:
+      'Wählen Sie einen Benutzer aus, um sich zur Fehlersuche und Unterstützung als dieser anzumelden. Jede Sitzung wird im Audit-Log festgehalten.',
+    searchPlaceholder: 'Nach E-Mail oder Benutzername suchen',
+    columnUsername: 'Benutzername',
+    columnProjects: 'Projekte',
+    columnRegistered: 'Registriert',
+    badgeAdmin: 'Administrator',
+    logInAs: 'Anmelden als',
+    cannotImpersonateSelf: 'Das ist Ihr eigenes Konto.',
+    cannotImpersonateAdmin:
+      'Administratorkonten können nicht übernommen werden.',
+    impersonateFailed: 'Anmeldung als dieser Benutzer nicht möglich.',
+    loadUsersFailed: 'Die Benutzerliste konnte nicht geladen werden.',
+    noUsersFound: 'Kein Benutzer entspricht dieser Suche.',
+    pageOf: 'Seite {{page}} von {{total}}',
+    nextPage: 'Weiter',
+    notAuthorizedTitle: 'Administratorrechte erforderlich',
+    notAuthorizedDescription:
+      'Diese Seite ist nur für Plattform-Administratoren verfügbar.',
+    impersonationBannerTitle: 'Support-Sitzung.',
+    impersonationBannerViewing: 'Sie sehen das Konto von',
+    impersonationBannerSignedInAs: '— angemeldet als',
+    returnToUserList: 'Zurück zur Benutzerliste',
+    stopImpersonationFailed: 'Die Support-Sitzung konnte nicht beendet werden.',
+  },
 };

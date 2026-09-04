@@ -328,6 +328,10 @@ export function createMockReqRes(
       id: makeId('usr'),
       email: 'test@example.com',
       emailVerified: true,
+      // Non-admin by default: a test request that accidentally passed
+      // `requireAdmin` would be worse than useless. Admin cases opt in via
+      // reqOverrides.
+      isAdmin: false,
     },
     params: {},
     query: {},
