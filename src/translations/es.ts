@@ -1124,13 +1124,13 @@ export default {
         clickVertexMt:
           'Haga clic en un extremo del microtúbulo para extenderlo',
         addPointsMt:
-          'Haga clic para añadir puntos y pulse Enter para finalizar',
+          'Haga clic para añadir puntos y pulse Enter o haga doble clic para finalizar',
         addPoints:
           'Haz clic para agregar puntos, luego haz clic en otro vértice para completar. Haz clic directamente en otro vértice sin agregar puntos para eliminar todos los puntos entre ellos.',
         holdShift: 'Mantén SHIFT para agregar puntos automáticamente',
         cancel: 'Presiona ESC para cancelar',
         joinHint:
-          'Haz clic en el extremo de otra polilínea de la misma clase para unirlas',
+          'Haz clic en el extremo de otra polilínea para unirlas: las etiquetas deben coincidir, salvo que una parte no tenga etiqueta',
       },
       editVertices: {
         selectPolygon: 'Haz clic en un polígono para seleccionarlo para editar',
@@ -1292,6 +1292,8 @@ export default {
       cannotDeleteVertex:
         'No se puede eliminar vértice - el polígono necesita al menos 3 puntos',
       vertexDeleted: 'Vértice eliminado exitosamente',
+      joinClassMismatch:
+        'Estas polilíneas tienen etiquetas diferentes y no se pueden unir',
       started: 'La segmentación ha comenzado',
       completed: 'Segmentación completada exitosamente',
       completedWithCount:

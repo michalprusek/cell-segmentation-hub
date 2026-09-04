@@ -62,7 +62,7 @@ const mockEditor = vi.hoisted(() => ({
   handleMouseDown: vi.fn(),
   handleMouseMove: vi.fn(),
   handleMouseUp: vi.fn(),
-  handleCreatePolylineDoubleClick: vi.fn(),
+  handleCanvasDoubleClick: vi.fn(),
   handleDeletePolygon: vi.fn(),
   handlePolygonSelection: vi.fn(),
   handlePolygonClick: vi.fn(),

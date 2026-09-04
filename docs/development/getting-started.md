@@ -151,30 +151,35 @@ node scripts/check-i18n.cjs           # translations
 node scripts/check-doc-links.cjs      # docs links (make docs-links)
 make test-py                          # Python, no GPU needed
 make test-ml                          # full Python suite, needs a GPU
-make ci-test                          # Vitest — informational, see below
+make ci-test                          # frontend Vitest, see below
 ```
 
-**Vitest is not a gate.** The suite has substantial pre-existing failures from
-earlier refactors, so a whole-suite run gives no clean signal. Run individual
-files instead:
+**`make ci` does not run Vitest, but CI does.** The suite is green (5037
+frontend / 3740 backend as of 2026-09-04) and
+`.github/workflows/ci.yml` runs it with a coverage floor in both the
+`frontend` and `backend` jobs, which the `main-protection` ruleset requires.
+So a green `make ci` says nothing about the unit suites — run them too:
 
 ```bash
-npx vitest run src/lib/__tests__/polygonGeometry.test.ts
+npx vitest run                                        # whole frontend suite
+npx vitest run src/lib/__tests__/polygonGeometry.test.ts  # one file
 ```
 
-See the [testing guide](../testing-guide.md) for the honest state of each
-suite.
+The backend suite must run inside the container (canvas ABI). See the
+[testing guide](../testing-guide.md) for the invocation and the per-suite
+state.
 
 ---
 
 ## Database work
 
-> **A fresh clone may have no migration history.** `backend/.gitignore`
-> currently excludes `prisma/migrations/`, so the migration files — including
-> `migration_lock.toml`, which pins the database provider — are not in the
-> repository. `prisma migrate deploy` has nothing to apply and no provider lock
-> in that state. Check whether that ignore rule is still present before
-> concluding your database is broken.
+> **The migration history is tracked.** It once was not — `backend/.gitignore`
+> excluded `prisma/migrations/`, so `prisma migrate deploy` had nothing to
+> apply and no `migration_lock.toml` to pin the provider. That rule is gone
+> (`backend/.gitignore:21` now carries a note saying it must not come back) and
+> the migrations, including `0001_init`, are in the repository. After
+> generating a migration, check `git status backend/prisma/migrations` — a new
+> one that stays untracked is the old bug returning.
 
 ```bash
 # Inside the backend container, or with DATABASE_URL set on the host

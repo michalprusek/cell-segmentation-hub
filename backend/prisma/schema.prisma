@@ -152,6 +152,12 @@ model Image {
   // Covers the MT tracker gate query ("are all frames of this container in a
   // final status?") which filters by parentVideoId AND segmentationStatus.
   @@index([parentVideoId, segmentationStatus], map: "idx_image_video_status")
+  // Covers the DEFAULT sort of both image listings (imageQuerySchema sortBy
+  // defaults to createdAt/desc) and the project card's latest-image pull
+  // (`images: { take: 1, orderBy: { createdAt: 'desc' } }`). Neither
+  // (projectId, segmentationStatus) nor (projectId, displayOrder) supplies
+  // that ordering.
+  @@index([projectId, createdAt], map: "idx_image_project_created")
   @@map("images")
 }
 
@@ -202,6 +208,14 @@ model SegmentationQueue {
   // Speeds FK-cascade deletes (image -> its queue rows) and "is this image
   // already queued?" lookups, which previously scanned the whole queue table.
   @@index([imageId], map: "idx_queue_image")
+  // Every enqueue reads back the rows it just wrote by batchId, and
+  // cancelBatch filters on it twice; batchId was in no index at all.
+  @@index([batchId], map: "idx_queue_batch")
+  // The queue-fairness window (`status IN (...) ORDER BY completedAt DESC`)
+  // runs every 100 ms from the worker, and the hourly cleanup range-scans
+  // completedAt. idx_queue_status_priority orders by (priority, createdAt)
+  // and cannot serve either.
+  @@index([status, completedAt], map: "idx_queue_status_completed")
   @@map("segmentation_queue")
 }
 
@@ -240,6 +254,10 @@ model ProjectShare {
   @@index([projectId, status], map: "idx_share_project_status")
   @@index([shareToken], map: "idx_share_token")
   @@index([email, status], map: "idx_share_email_status")
+  // sharedWithId was in no index, yet it is the filter for every dashboard
+  // load (getSharedProjects, and the shared arm of getUserProjects) and is an
+  // ON DELETE CASCADE foreign key.
+  @@index([sharedWithId, status, createdAt], map: "idx_share_sharedwith_status")
   @@map("project_shares")
 }
 

@@ -1134,13 +1134,13 @@ export default {
         clickVertexMt:
           'Klicken Sie auf ein Mikrotubulus-Ende, um es zu verlängern',
         addPointsMt:
-          'Klicken zum Hinzufügen von Punkten, dann Enter zum Abschließen',
+          'Klicken zum Hinzufügen von Punkten, dann Enter oder Doppelklick zum Abschließen',
         addPoints:
           'Klicken Sie, um Punkte hinzuzufügen, dann klicken Sie auf einen anderen Eckpunkt zum Abschließen. Klicken Sie direkt auf einen anderen Eckpunkt ohne Punkte hinzuzufügen, um alle Punkte dazwischen zu entfernen.',
         holdShift: 'SHIFT halten für automatisches Hinzufügen von Punkten',
         cancel: 'Drücken Sie ESC zum Abbrechen',
         joinHint:
-          'Klicke auf den Endpunkt einer anderen Polylinie derselben Klasse, um sie zu verbinden',
+          'Klicke auf den Endpunkt einer anderen Polylinie, um sie zu verbinden — die Labels müssen übereinstimmen, außer eine Seite hat keines',
       },
       editVertices: {
         selectPolygon:
@@ -1308,6 +1308,8 @@ export default {
       cannotDeleteVertex:
         'Kann Scheitelpunkt nicht löschen - Polygon benötigt mindestens 3 Punkte',
       vertexDeleted: 'Scheitelpunkt erfolgreich gelöscht',
+      joinClassMismatch:
+        'Diese Polylinien haben unterschiedliche Labels und können nicht verbunden werden',
       started: 'Segmentierung hat begonnen',
       completed: 'Segmentierung erfolgreich abgeschlossen',
       completedWithCount:

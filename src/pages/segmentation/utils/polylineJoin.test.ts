@@ -3,6 +3,8 @@ import type { Polygon, Point } from '@/lib/segmentation';
 import {
   canJoinPolylines,
   findJoinTarget,
+  scanJoinTargets,
+  inheritJoinClass,
   joinPolylinePoints,
   nearestEndpoint,
   endpointPoint,
@@ -57,12 +59,57 @@ describe('canJoinPolylines', () => {
     expect(canJoinPolylines(at, bt, 'microtubules')).toBe(true);
     expect(canJoinPolylines(at, bx, 'microtubules')).toBe(false);
   });
+  // Reported 2026-09-04: joining "did not work" because one microtubule was
+  // labelled and the other was not yet. An unlabelled side joins ANY label,
+  // in either direction.
+  it('microtubule: an UNLABELLED polyline joins a labelled one, both ways', () => {
+    const typed = line('a', A.points, { mtType: 't1' });
+    const untyped = line('b', B.points);
+    expect(canJoinPolylines(typed, untyped, 'microtubules')).toBe(true);
+    expect(
+      canJoinPolylines(
+        line('a', A.points),
+        line('b', B.points, { mtType: 't1' }),
+        'microtubules'
+      )
+    ).toBe(true);
+  });
+  it('microtubule: null / empty-string mtType count as unlabelled, not as a distinct label', () => {
+    const typed = line('a', A.points, { mtType: 't1' });
+    // `null` reaches the editor from paths that skip the null→undefined
+    // normalisation; it must behave exactly like `undefined`.
+    const nulled = line('b', B.points, {
+      mtType: null as unknown as string,
+    });
+    const empty = line('b', B.points, { mtType: '' });
+    expect(canJoinPolylines(typed, nulled, 'microtubules')).toBe(true);
+    expect(canJoinPolylines(typed, empty, 'microtubules')).toBe(true);
+    // …and two unlabelled ones still join when they disagree on WHICH
+    // flavour of unlabelled they are.
+    expect(canJoinPolylines(nulled, line('a', A.points), 'microtubules')).toBe(
+      true
+    );
+  });
   it('sperm: joins same partClass, rejects different', () => {
     const at = line('a', A.points, { partClass: 'tail' });
     const bt = line('b', B.points, { partClass: 'tail' });
     const bh = line('b', B.points, { partClass: 'head' });
     expect(canJoinPolylines(at, bt, 'sperm')).toBe(true);
     expect(canJoinPolylines(at, bh, 'sperm')).toBe(false);
+  });
+  it('sperm: an unclassed polyline joins a classed one', () => {
+    const at = line('a', A.points, { partClass: 'tail' });
+    const plain = line('b', B.points);
+    expect(canJoinPolylines(at, plain, 'sperm')).toBe(true);
+    expect(canJoinPolylines(plain, at, 'sperm')).toBe(true);
+  });
+  it('microtubule: partClass is NOT the gate (and vice versa for sperm)', () => {
+    // Cross-check that the kind picks the right field — an mtType clash must
+    // not block a sperm join and a partClass clash must not block an MT one.
+    const a = line('a', A.points, { mtType: 't1', partClass: 'head' });
+    const b = line('b', B.points, { mtType: 't1', partClass: 'tail' });
+    expect(canJoinPolylines(a, b, 'microtubules')).toBe(true);
+    expect(canJoinPolylines(a, b, 'sperm')).toBe(false);
   });
   it('generic: joins any two polylines regardless of fields', () => {
     const at = line('a', A.points, { partClass: 'tail' });
@@ -97,6 +144,161 @@ describe('findJoinTarget', () => {
     expect(
       findJoinTarget([at, bx], at, { x: 20, y: 0 }, 5, 'microtubules')
     ).toBeNull();
+  });
+  it('does not offer a farther compatible endpoint when a mismatched one is nearer', () => {
+    // The hover ring must follow the same rule as the click, or it would
+    // advertise a merge into a polyline that is not the one under the cursor.
+    const at = line('a', A.points, { mtType: 't1' });
+    const bx = line('b', B.points, { mtType: 't2' });
+    const ok = line('c', [
+      { x: 25, y: 0 },
+      { x: 40, y: 0 },
+    ]);
+    expect(
+      findJoinTarget([at, bx, ok], at, { x: 21, y: 0 }, 5, 'microtubules')
+    ).toBeNull();
+  });
+  it('finds an unlabelled candidate for a labelled source', () => {
+    const at = line('a', A.points, { mtType: 't1' });
+    const plain = line('b', B.points);
+    expect(
+      findJoinTarget([at, plain], at, { x: 20, y: 0 }, 5, 'microtubules')
+    ).toEqual({ polygonId: 'b', endpoint: 'head', distanceSq: 0 });
+  });
+});
+
+describe('scanJoinTargets', () => {
+  const B = line('b', [
+    { x: 20, y: 0 },
+    { x: 30, y: 0 },
+  ]);
+  it('reports a class-mismatched neighbour as blockedByClass', () => {
+    const at = line('a', A.points, { mtType: 't1' });
+    const bx = line('b', B.points, { mtType: 't2' });
+    const scan = scanJoinTargets(
+      [at, bx],
+      at,
+      { x: 21, y: 0 },
+      5,
+      'microtubules'
+    );
+    expect(scan.target).toBeNull();
+    expect(scan.blockedByClass).toEqual({
+      polygonId: 'b',
+      endpoint: 'head',
+      distanceSq: 1,
+    });
+  });
+  // The NEAREST endpoint decides, compatible or not. Preferring the nearest
+  // COMPATIBLE one would merge into a polyline the user did not click.
+  it('refuses when the NEAREST endpoint is mismatched, even with a compatible one in range', () => {
+    const at = line('a', A.points, { mtType: 't1' });
+    const bx = line('b', B.points, { mtType: 't2' }); // head at 20 → dSq 1
+    const ok = line('c', [
+      { x: 25, y: 0 }, // → dSq 16, also in range
+      { x: 40, y: 0 },
+    ]);
+    const scan = scanJoinTargets(
+      [at, bx, ok],
+      at,
+      { x: 21, y: 0 },
+      5,
+      'microtubules'
+    );
+    expect(scan.target).toBeNull();
+    expect(scan.blockedByClass?.polygonId).toBe('b');
+  });
+
+  it('joins when the nearest endpoint is the compatible one', () => {
+    const at = line('a', A.points, { mtType: 't1' });
+    const bx = line('b', B.points, { mtType: 't2' }); // head at 20 → dSq 4
+    const ok = line('c', [
+      { x: 22, y: 0 }, // → dSq 0
+      { x: 40, y: 0 },
+    ]);
+    const scan = scanJoinTargets(
+      [at, bx, ok],
+      at,
+      { x: 22, y: 0 },
+      5,
+      'microtubules'
+    );
+    expect(scan.target?.polygonId).toBe('c');
+    expect(scan.blockedByClass).toBeNull();
+  });
+  it('reports neither when the mismatched endpoint is out of range', () => {
+    const at = line('a', A.points, { mtType: 't1' });
+    const bx = line('b', B.points, { mtType: 't2' });
+    const scan = scanJoinTargets(
+      [at, bx],
+      at,
+      { x: 100, y: 100 },
+      5,
+      'microtubules'
+    );
+    expect(scan).toEqual({ target: null, blockedByClass: null });
+  });
+  it('generic projects never block on class', () => {
+    const at = line('a', A.points, { mtType: 't1' });
+    const bx = line('b', B.points, { mtType: 't2' });
+    const scan = scanJoinTargets([at, bx], at, { x: 21, y: 0 }, 5, 'spheroid');
+    expect(scan.target?.polygonId).toBe('b');
+    expect(scan.blockedByClass).toBeNull();
+  });
+});
+
+describe('inheritJoinClass', () => {
+  const B = line('b', [
+    { x: 20, y: 0 },
+    { x: 30, y: 0 },
+  ]);
+  it('an unlabelled A takes B’s mtType', () => {
+    expect(
+      inheritJoinClass(A, line('b', B.points, { mtType: 't1' }), 'microtubules')
+    ).toEqual({ mtType: 't1' });
+  });
+  it('an unclassed A takes B’s partClass', () => {
+    expect(
+      inheritJoinClass(A, line('b', B.points, { partClass: 'tail' }), 'sperm')
+    ).toEqual({ partClass: 'tail' });
+  });
+  it('a labelled A keeps its own label', () => {
+    const at = line('a', A.points, { mtType: 't1' });
+    const bt = line('b', B.points, { mtType: 't1' });
+    expect(inheritJoinClass(at, bt, 'microtubules')).toEqual({});
+  });
+  it('two unlabelled sides inherit nothing', () => {
+    expect(inheritJoinClass(A, B, 'microtubules')).toEqual({});
+    // …including when the "unlabelled" is a raw null on either side.
+    expect(
+      inheritJoinClass(
+        A,
+        line('b', B.points, { mtType: null as unknown as string }),
+        'microtubules'
+      )
+    ).toEqual({});
+  });
+  it('generic projects inherit nothing even when B carries fields', () => {
+    expect(
+      inheritJoinClass(
+        A,
+        line('b', B.points, { partClass: 'tail' }),
+        'spheroid'
+      )
+    ).toEqual({});
+  });
+  it('does not cross the field over between project kinds', () => {
+    // A sperm project must never copy an mtType, and vice versa.
+    expect(
+      inheritJoinClass(A, line('b', B.points, { mtType: 't1' }), 'sperm')
+    ).toEqual({});
+    expect(
+      inheritJoinClass(
+        A,
+        line('b', B.points, { partClass: 'tail' }),
+        'microtubules'
+      )
+    ).toEqual({});
   });
 });
 

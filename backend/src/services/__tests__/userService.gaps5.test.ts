@@ -148,6 +148,60 @@ describe('getUserActivity', () => {
 
     await expect(getUserActivity(userId)).rejects.toThrow('DB timeout');
   });
+
+  it('never asks for the polygons blob', async () => {
+    // The activity line reads only id / model / createdAt / image.name. The
+    // previous `include: { image: { select: { name: true } } }` narrowed the
+    // RELATION but left the Segmentation row unnarrowed, so all five rows
+    // dragged `polygons` — a whole frame's geometry as JSON-in-TEXT — across
+    // the wire and threw it away.
+    await getUserActivity(userId);
+
+    const args = prismaMock.segmentation.findMany.mock.calls[0][0];
+    expect(args.include).toBeUndefined();
+    expect(args.select).toEqual({
+      id: true,
+      model: true,
+      createdAt: true,
+      image: { select: { name: true } },
+    });
+    expect(Object.keys(args.select)).not.toContain('polygons');
+  });
+
+  it('narrows the image read to the four fields the feed renders', async () => {
+    await getUserActivity(userId);
+
+    const args = prismaMock.image.findMany.mock.calls[0][0];
+    expect(args.include).toBeUndefined();
+    expect(args.select).toEqual({
+      id: true,
+      name: true,
+      createdAt: true,
+      project: { select: { title: true } },
+    });
+  });
+
+  it('issues the three reads in ONE round trip, not three', async () => {
+    // Nothing here depends on anything else, so blocking the first read must
+    // NOT stop the other two from being issued.
+    let releaseProjects!: (v: unknown) => void;
+    prismaMock.project.findMany.mockReturnValueOnce(
+      new Promise(resolve => {
+        releaseProjects = resolve;
+      })
+    );
+
+    const pending = getUserActivity(userId);
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(prismaMock.image.findMany).toHaveBeenCalledTimes(1);
+    expect(prismaMock.segmentation.findMany).toHaveBeenCalledTimes(1);
+
+    releaseProjects([]);
+    await pending;
+  });
 });
 
 // ─── C. updateUserProfile — additional branches ───────────────────────────────

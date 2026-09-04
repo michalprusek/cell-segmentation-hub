@@ -2,7 +2,6 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../db';
 import { logger } from '../utils/logger';
 import * as ProjectService from './projectService';
-import * as SharingService from './sharingService';
 
 export interface FolderDTO {
   id: string;
@@ -429,14 +428,53 @@ export async function moveProjectsToFolder(
     }
   }
 
-  const accessChecks = await Promise.all(
-    projectIds.map(async pid => ({
-      pid,
-      ok: (await SharingService.hasProjectAccess(pid, userId)).hasAccess,
-    }))
-  );
-  const allowed = accessChecks.filter(c => c.ok).map(c => c.pid);
-  const skipped = accessChecks.filter(c => !c.ok).map(c => c.pid);
+  // One query for the whole selection, not one per project. This used to be
+  // `Promise.all(projectIds.map(pid => SharingService.hasProjectAccess(pid,
+  // userId)))`, and `hasProjectAccess` costs 1 query when the caller owns the
+  // project, 3 when they reach it through a share and 4 when access is denied
+  // — so a single request (capped at 100 ids by `folderItemsSchema`) fired
+  // 100-400 concurrent queries at a pool of tens of connections.
+  //
+  // The predicate below is `hasProjectAccess`'s grant rule verbatim: the
+  // caller owns the project, OR an accepted share names them by id or by the
+  // e-mail on their account. The e-mail arm is dropped when the user row is
+  // missing, matching that function's early `return { hasAccess: false }`.
+  const accessUser = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { email: true },
+  });
+  const shareRecipientConditions: Prisma.ProjectShareWhereInput[] = [
+    { sharedWithId: userId },
+  ];
+  if (accessUser?.email) {
+    shareRecipientConditions.push({ email: accessUser.email });
+  }
+  const accessibleProjects = accessUser
+    ? await prisma.project.findMany({
+        where: {
+          id: { in: projectIds },
+          OR: [
+            { userId },
+            {
+              shares: {
+                some: { status: 'accepted', OR: shareRecipientConditions },
+              },
+            },
+          ],
+        },
+        select: { id: true },
+      })
+    : // No user row ⇒ only ownership could grant access, and the FK on
+      // projects.userId makes that unreachable. Keep the shape explicit
+      // rather than letting the share arm run against a null e-mail.
+      await prisma.project.findMany({
+        where: { id: { in: projectIds }, userId },
+        select: { id: true },
+      });
+  const allowedSet = new Set(accessibleProjects.map(p => p.id));
+  // Preserve the caller's ordering, and with it the previous return order.
+  const allowed = projectIds.filter(pid => allowedSet.has(pid));
+  const skipped = projectIds.filter(pid => !allowedSet.has(pid));
 
   if (allowed.length === 0) {
     return { movedProjectIds: [], skippedProjectIds: skipped };
@@ -448,13 +486,21 @@ export async function moveProjectsToFolder(
         where: { userId, projectId: { in: allowed } },
       });
     } else {
-      for (const projectId of allowed) {
-        await tx.projectFolderItem.upsert({
-          where: { userId_projectId: { userId, projectId } },
-          create: { userId, projectId, folderId },
-          update: { folderId },
-        });
-      }
+      // Set-based equivalent of the per-project `upsert` loop this replaces:
+      // `updateMany` is the upsert's `update` arm for rows that already exist
+      // (id and createdAt preserved, exactly as before), `createMany` with
+      // `skipDuplicates` is its `create` arm for the rest. Two statements
+      // instead of one per project, inside the same transaction, and the end
+      // state is identical because `@@unique([userId, projectId])` makes the
+      // two sets disjoint.
+      await tx.projectFolderItem.updateMany({
+        where: { userId, projectId: { in: allowed } },
+        data: { folderId },
+      });
+      await tx.projectFolderItem.createMany({
+        data: allowed.map(projectId => ({ userId, projectId, folderId })),
+        skipDuplicates: true,
+      });
     }
   });
 

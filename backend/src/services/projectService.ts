@@ -595,56 +595,64 @@ export async function getProjectStats(
       return null;
     }
 
-    // Get the project
-    const project = await prisma.project.findUnique({
-      where: { id: projectId },
-    });
+    // Four independent reads, one round trip. `select` on the project row
+    // keeps `mtTypeLabels` (a Json column) and `description` out of a payload
+    // that only reports four scalars.
+    const [project, imageStats, totalFileSize, totalSegmentations] =
+      await Promise.all([
+        prisma.project.findUnique({
+          where: { id: projectId },
+          select: {
+            id: true,
+            title: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        }),
+        prisma.image.groupBy({
+          by: ['segmentationStatus'],
+          where: {
+            projectId: projectId,
+          },
+          _count: {
+            id: true,
+          },
+        }),
+        prisma.image.aggregate({
+          where: {
+            projectId: projectId,
+          },
+          _sum: {
+            fileSize: true,
+          },
+        }),
+        prisma.segmentation.count({
+          where: {
+            image: {
+              projectId: projectId,
+            },
+          },
+        }),
+      ]);
 
     if (!project) {
       return null;
     }
-
-    // Get image statistics
-    const imageStats = await prisma.image.groupBy({
-      by: ['segmentationStatus'],
-      where: {
-        projectId: projectId,
-      },
-      _count: {
-        id: true,
-      },
-    });
-
-    // Get total image count and file sizes
-    const totalImages = await prisma.image.count({
-      where: {
-        projectId: projectId,
-      },
-    });
-
-    const totalFileSize = await prisma.image.aggregate({
-      where: {
-        projectId: projectId,
-      },
-      _sum: {
-        fileSize: true,
-      },
-    });
-
-    // Get segmentation count
-    const totalSegmentations = await prisma.segmentation.count({
-      where: {
-        image: {
-          projectId: projectId,
-        },
-      },
-    });
 
     // Transform image stats to a more usable format
     const segmentationStatusCounts: Record<string, number> = {};
     imageStats.forEach(stat => {
       segmentationStatusCounts[stat.segmentationStatus] = stat._count.id;
     });
+
+    // `groupBy(segmentationStatus)` partitions every image row of the project,
+    // so the per-status counts already sum to the project total. This used to
+    // be a fifth query (`prisma.image.count({ where: { projectId } })`) asking
+    // the same table the same question.
+    const totalImages = imageStats.reduce(
+      (sum, stat) => sum + stat._count.id,
+      0
+    );
 
     // Calculate completion percentage
     const completedCount = segmentationStatusCounts.completed || 0;

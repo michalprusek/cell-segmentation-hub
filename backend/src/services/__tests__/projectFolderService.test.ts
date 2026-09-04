@@ -18,7 +18,14 @@ const { prismaMock } = vi.hoisted(() => {
     projectFolderItem: {
       findMany: vi.fn(),
       deleteMany: vi.fn(),
-      upsert: vi.fn(),
+      updateMany: vi.fn(),
+      createMany: vi.fn(),
+    },
+    user: {
+      findUnique: vi.fn(),
+    },
+    project: {
+      findMany: vi.fn(),
     },
     $queryRaw: vi.fn(),
     $transaction: vi.fn(),
@@ -38,10 +45,6 @@ vi.mock('../projectService', () => ({
   deleteProject: vi.fn(),
 }));
 
-vi.mock('../sharingService', () => ({
-  hasProjectAccess: vi.fn(),
-}));
-
 // ---------------------------------------------------------------------------
 // Imports AFTER mocks
 // ---------------------------------------------------------------------------
@@ -57,14 +60,10 @@ import {
 } from '../projectFolderService';
 
 import * as ProjectService from '../projectService';
-import * as SharingService from '../sharingService';
 import { Prisma } from '@prisma/client';
 
 const mockDeleteProject = ProjectService.deleteProject as MockedFunction<
   typeof ProjectService.deleteProject
->;
-const mockHasProjectAccess = SharingService.hasProjectAccess as MockedFunction<
-  typeof SharingService.hasProjectAccess
 >;
 
 // ---------------------------------------------------------------------------
@@ -500,13 +499,19 @@ describe('projectFolderService', () => {
   // =========================================================================
 
   describe('moveProjectsToFolder()', () => {
+    /** Make the batched access probe report exactly these ids as reachable. */
+    const grantAccessTo = (...ids: string[]) => {
+      prismaMock.project.findMany.mockResolvedValue(ids.map(id => ({ id })));
+    };
+
     beforeEach(() => {
-      mockHasProjectAccess.mockResolvedValue({
-        hasAccess: true,
-        isOwner: true,
+      prismaMock.user.findUnique.mockResolvedValue({
+        email: 'owner@example.com',
       });
+      grantAccessTo('proj-a', 'proj-b', 'proj-1', 'proj-ok');
       prismaMock.projectFolder.findFirst.mockResolvedValue({ id: FOLDER_ID });
-      prismaMock.projectFolderItem.upsert.mockResolvedValue({});
+      prismaMock.projectFolderItem.updateMany.mockResolvedValue({ count: 0 });
+      prismaMock.projectFolderItem.createMany.mockResolvedValue({ count: 0 });
       prismaMock.projectFolderItem.deleteMany.mockResolvedValue({ count: 1 });
     });
 
@@ -518,23 +523,71 @@ describe('projectFolderService', () => {
       ).rejects.toMatchObject({ code: 'NOT_FOUND' });
     });
 
-    it('upserts each accessible project into the target folder', async () => {
+    it('writes every accessible placement with two set-based statements, not one per project', async () => {
       await moveProjectsToFolder(USER_ID, FOLDER_ID, ['proj-a', 'proj-b']);
 
-      expect(prismaMock.projectFolderItem.upsert).toHaveBeenCalledTimes(2);
-      expect(prismaMock.projectFolderItem.upsert).toHaveBeenCalledWith(
+      // The update arm of the old per-project upsert.
+      expect(prismaMock.projectFolderItem.updateMany).toHaveBeenCalledTimes(1);
+      expect(prismaMock.projectFolderItem.updateMany).toHaveBeenCalledWith({
+        where: { userId: USER_ID, projectId: { in: ['proj-a', 'proj-b'] } },
+        data: { folderId: FOLDER_ID },
+      });
+      // The create arm; skipDuplicates makes the two sets disjoint.
+      expect(prismaMock.projectFolderItem.createMany).toHaveBeenCalledTimes(1);
+      expect(prismaMock.projectFolderItem.createMany).toHaveBeenCalledWith({
+        data: [
+          { userId: USER_ID, projectId: 'proj-a', folderId: FOLDER_ID },
+          { userId: USER_ID, projectId: 'proj-b', folderId: FOLDER_ID },
+        ],
+        skipDuplicates: true,
+      });
+    });
+
+    it('resolves access for the whole selection in ONE query, not one per project', async () => {
+      const ids = Array.from({ length: 100 }, (_, i) => `proj-${i}`);
+      grantAccessTo(...ids);
+
+      await moveProjectsToFolder(USER_ID, FOLDER_ID, ids);
+
+      // 100 ids ⇒ 1 user lookup + 1 project lookup. The previous
+      // implementation called SharingService.hasProjectAccess per id, which is
+      // 1-4 queries each (owner / shared / denied) — 100 to 400 concurrent
+      // queries for this one request.
+      expect(prismaMock.project.findMany).toHaveBeenCalledTimes(1);
+      expect(prismaMock.user.findUnique).toHaveBeenCalledTimes(1);
+      expect(prismaMock.project.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { userId_projectId: { userId: USER_ID, projectId: 'proj-a' } },
-          create: { userId: USER_ID, projectId: 'proj-a', folderId: FOLDER_ID },
-          update: { folderId: FOLDER_ID },
+          where: expect.objectContaining({ id: { in: ids } }),
+          select: { id: true },
         })
       );
+      // ...and 100 placements ⇒ 2 write statements, not 100 upserts.
+      expect(prismaMock.projectFolderItem.updateMany).toHaveBeenCalledTimes(1);
+      expect(prismaMock.projectFolderItem.createMany).toHaveBeenCalledTimes(1);
+    });
+
+    it('grants access to a project the caller owns OR holds an accepted share on', async () => {
+      await moveProjectsToFolder(USER_ID, FOLDER_ID, ['proj-a']);
+
+      const where = prismaMock.project.findMany.mock.calls[0][0].where;
+      expect(where.OR).toEqual([
+        { userId: USER_ID },
+        {
+          shares: {
+            some: {
+              status: 'accepted',
+              OR: [
+                { sharedWithId: USER_ID },
+                { email: 'owner@example.com' },
+              ],
+            },
+          },
+        },
+      ]);
     });
 
     it('returns movedProjectIds for accessible projects, skips inaccessible ones', async () => {
-      mockHasProjectAccess
-        .mockResolvedValueOnce({ hasAccess: true, isOwner: true }) // proj-ok
-        .mockResolvedValueOnce({ hasAccess: false, isOwner: false }); // proj-denied
+      grantAccessTo('proj-ok');
 
       const result = await moveProjectsToFolder(USER_ID, FOLDER_ID, [
         'proj-ok',
@@ -555,24 +608,22 @@ describe('projectFolderService', () => {
     });
 
     it('returns empty lists immediately when all projects are inaccessible', async () => {
-      mockHasProjectAccess.mockResolvedValue({
-        hasAccess: false,
-        isOwner: false,
-      });
+      grantAccessTo();
 
       const result = await moveProjectsToFolder(USER_ID, FOLDER_ID, [
         'bad-1',
         'bad-2',
       ]);
 
-      expect(prismaMock.projectFolderItem.upsert).not.toHaveBeenCalled();
+      expect(prismaMock.projectFolderItem.updateMany).not.toHaveBeenCalled();
+      expect(prismaMock.projectFolderItem.createMany).not.toHaveBeenCalled();
       expect(result.movedProjectIds).toEqual([]);
       expect(result.skippedProjectIds).toEqual(['bad-1', 'bad-2']);
     });
 
     it('does not verify folder existence when folderId is null', async () => {
       await moveProjectsToFolder(USER_ID, null, ['proj-a']);
-      // findFirst only called for access check, not folder lookup
+      // findFirst only called for the folder lookup, which root skips
       expect(prismaMock.projectFolder.findFirst).not.toHaveBeenCalled();
     });
   });

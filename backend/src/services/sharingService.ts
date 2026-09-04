@@ -347,8 +347,14 @@ export async function getSharedProjects(
   userId: string
 ): Promise<ShareWithDetails[]> {
   try {
-    // Fetch user email once
-    const user = await prisma.user.findUnique({ where: { id: userId } });
+    // Fetch user email once. `select` matters for the same reason it does in
+    // hasProjectAccess below: the only consumer is `userEmail` in the debug
+    // line, and the default shape ships the whole User row — password hash
+    // included — on every dashboard load.
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true },
+    });
 
     // Only fetch ACCEPTED shares where the user is the recipient
     // Removed the email condition as it was causing confusion

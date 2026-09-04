@@ -54,16 +54,19 @@ Run the provided script to check GPU availability and create override files:
 
 ### 3. Starting Services with GPU
 
-For development environment:
+For a host-side development run, start the ML service directly (there is no
+tracked `docker-compose.yml`, and the Compose service is named `ml`, not
+`ml-service`):
 
 ```bash
-docker compose up -d ml-service
+cd backend/segmentation && python -m uvicorn api.main:app --host 0.0.0.0 --port 8000
 ```
 
-For production (green) environment:
+For production:
 
 ```bash
-docker compose -f docker-compose.green.yml up -d green-ml
+docker compose -f docker-compose.production.yml --env-file .env.production \
+  up -d --no-deps --force-recreate ml
 ```
 
 ### 4. Verify GPU Detection
@@ -71,11 +74,7 @@ docker compose -f docker-compose.green.yml up -d green-ml
 Check if GPU is detected in the container:
 
 ```bash
-# For development
 docker exec spheroseg-ml python -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}')"
-
-# For production
-docker exec green-ml python -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}')"
 ```
 
 ## Performance Comparison
@@ -144,7 +143,7 @@ nvidia-smi -l 1
 nvidia-smi --query-gpu=memory.used,memory.total --format=csv
 
 # Monitor specific container
-docker stats green-ml
+docker stats spheroseg-ml
 ```
 
 ## Future Improvements

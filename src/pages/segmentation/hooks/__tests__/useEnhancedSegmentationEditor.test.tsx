@@ -22,6 +22,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useEnhancedSegmentationEditor } from '../useEnhancedSegmentationEditor';
 import { useKeyboardShortcuts } from '../useKeyboardShortcuts';
+import { useAdvancedInteractions } from '../useAdvancedInteractions';
 import { EditMode } from '../../types';
 import { Polygon } from '@/lib/segmentation';
 import { toast } from 'sonner';
@@ -1323,6 +1324,334 @@ describe('useEnhancedSegmentationEditor', () => {
       rerender({ ...baseProps, initialPolygons: [newPoly], reloadNonce: 1 });
 
       expect(result.current.polygons[0].points[0]).toEqual({ x: 1, y: 1 });
+    });
+  });
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // Canvas double-click. Reported 2026-09-04: a double-click in AddPoints
+  // created a stray polygon while Enter did the elongation, because the canvas
+  // bound the CreatePolyline finaliser directly with no mode check. Enter and
+  // double-click are now the SAME function, so these assertions also pin
+  // `onEnter`.
+  describe('handleCanvasDoubleClick', () => {
+    const finaliser = vi.fn();
+    const defaultInteractions = () => ({
+      handleMouseDown: vi.fn(),
+      handleMouseMove: vi.fn(),
+      handleMouseUp: vi.fn(),
+      handleCreatePolylineDoubleClick: finaliser,
+    });
+
+    beforeEach(() => {
+      finaliser.mockClear();
+      vi.mocked(useAdvancedInteractions).mockImplementation(
+        defaultInteractions
+      );
+    });
+
+    /** Put the editor into "extending pl1 from its tail" with one drawn point. */
+    const armAddPoints = (
+      result: { current: ReturnType<typeof useEnhancedSegmentationEditor> },
+      polylineId: string,
+      pivot: number
+    ) => {
+      act(() => {
+        result.current.setSelectedPolygonId(polylineId);
+        result.current.setEditMode(EditMode.AddPoints);
+        result.current.setTempPoints([{ x: 20, y: 20 }]);
+        result.current.setInteractionState({
+          isDraggingVertex: false,
+          isPanning: false,
+          panStart: null,
+          draggedVertexInfo: null,
+          originalVertexPosition: null,
+          sliceStartPoint: null,
+          addPointStartVertex: { polygonId: polylineId, vertexIndex: pivot },
+          addPointEndVertex: null,
+          isAddingPoints: true,
+        });
+      });
+    };
+
+    it('AddPoints: extends the selected polyline IN PLACE instead of creating one', () => {
+      const poly = makePolyline('pl1'); // (0,0) (5,5) (10,10)
+      const { result } = renderHook(() =>
+        useEnhancedSegmentationEditor({ ...baseProps, initialPolygons: [poly] })
+      );
+      armAddPoints(result, 'pl1', 2);
+
+      act(() => result.current.handleCanvasDoubleClick());
+
+      // The stray-polyline bug showed up here as a second polygon.
+      expect(result.current.polygons).toHaveLength(1);
+      expect(result.current.polygons[0].id).toBe('pl1');
+      expect(result.current.polygons[0].points).toEqual([
+        { x: 0, y: 0 },
+        { x: 5, y: 5 },
+        { x: 10, y: 10 },
+        { x: 20, y: 20 },
+      ]);
+      expect(result.current.editMode).toBe(EditMode.EditVertices);
+      expect(result.current.tempPoints).toEqual([]);
+      // The old dblclick path left this stale while flipping to View.
+      expect(result.current.interactionState.isAddingPoints).toBe(false);
+      expect(result.current.interactionState.addPointStartVertex).toBeNull();
+      expect(finaliser).not.toHaveBeenCalled();
+    });
+
+    it('AddPoints: a double-click commits exactly what Enter commits', () => {
+      const poly = makePolyline('pl1');
+      const viaEnter = renderHook(() =>
+        useEnhancedSegmentationEditor({ ...baseProps, initialPolygons: [poly] })
+      );
+      armAddPoints(viaEnter.result, 'pl1', 2);
+      act(() => viaEnter.result.current.handleCanvasDoubleClick());
+
+      const viaKey = renderHook(() =>
+        useEnhancedSegmentationEditor({ ...baseProps, initialPolygons: [poly] })
+      );
+      armAddPoints(viaKey.result, 'pl1', 2);
+      // onEnter is what the Enter key runs — see useKeyboardShortcuts wiring.
+      const onEnter = vi.mocked(useKeyboardShortcuts).mock.calls.at(-1)?.[0]
+        .onEnter as () => void;
+      act(() => onEnter());
+
+      expect(viaKey.result.current.polygons).toEqual(
+        viaEnter.result.current.polygons
+      );
+    });
+
+    it('CreatePolyline: forwards to the interactions finaliser', () => {
+      const { result } = renderHook(() =>
+        useEnhancedSegmentationEditor(baseProps)
+      );
+
+      act(() => result.current.setEditMode(EditMode.CreatePolyline));
+      act(() => result.current.handleCanvasDoubleClick());
+
+      expect(finaliser).toHaveBeenCalledTimes(1);
+    });
+
+    it.each([
+      ['View', EditMode.View],
+      ['CreatePolygon', EditMode.CreatePolygon],
+      ['Slice', EditMode.Slice],
+      ['DeletePolygon', EditMode.DeletePolygon],
+    ])('%s: is a no-op — no new polygon, no finaliser', (_name, mode) => {
+      const poly = makePolyline('pl1');
+      const { result } = renderHook(() =>
+        useEnhancedSegmentationEditor({ ...baseProps, initialPolygons: [poly] })
+      );
+
+      act(() => {
+        result.current.setEditMode(mode);
+        result.current.setTempPoints([
+          { x: 0, y: 0 },
+          { x: 5, y: 5 },
+          { x: 9, y: 9 },
+        ]);
+      });
+      act(() => result.current.handleCanvasDoubleClick());
+
+      expect(result.current.polygons).toHaveLength(1);
+      expect(result.current.polygons[0].id).toBe('pl1');
+      expect(finaliser).not.toHaveBeenCalled();
+      expect(result.current.editMode).toBe(mode);
+    });
+
+    // The auto-anchor picks the endpoint nearest the FIRST click; the
+    // direction used to be decided by the LAST drawn point. When those
+    // disagree, `pts.slice(0, pivot + 1)` keeps a single vertex and the rest
+    // of the filament is deleted. An ENDPOINT pivot must decide the direction
+    // itself — pivoting on an end means "extend from that end".
+    it('an endpoint anchor extends from that end even when the drawn points aim the other way', () => {
+      const pl1 = makePolyline('pl1'); // (0,0) (5,5) (10,10)
+      const { result } = renderHook(() =>
+        useEnhancedSegmentationEditor({ ...baseProps, initialPolygons: [pl1] })
+      );
+
+      act(() => {
+        result.current.setSelectedPolygonId('pl1');
+        result.current.setEditMode(EditMode.AddPoints);
+        // Anchored at the HEAD, but the drawn run ends past the TAIL.
+        result.current.setTempPoints([
+          { x: 12, y: 12 },
+          { x: 14, y: 14 },
+        ]);
+        result.current.setInteractionState({
+          isDraggingVertex: false,
+          isPanning: false,
+          panStart: null,
+          draggedVertexInfo: null,
+          originalVertexPosition: null,
+          sliceStartPoint: null,
+          addPointStartVertex: { polygonId: 'pl1', vertexIndex: 0 },
+          addPointEndVertex: null,
+          isAddingPoints: true,
+        });
+      });
+      act(() => result.current.handleCanvasDoubleClick());
+
+      // Head extension, whole filament intact. Deciding the direction from
+      // the drawn points instead gave [(0,0),(12,12),(14,14)] — (5,5) and
+      // (10,10) silently deleted.
+      expect(result.current.polygons[0].points).toEqual([
+        { x: 14, y: 14 },
+        { x: 12, y: 12 },
+        { x: 0, y: 0 },
+        { x: 5, y: 5 },
+        { x: 10, y: 10 },
+      ]);
+    });
+
+    it('a MIDDLE anchor still replaces the arm the drawn points aim at', () => {
+      const pl1 = makePolyline('pl1', [
+        { x: 0, y: 0 },
+        { x: 5, y: 5 },
+        { x: 10, y: 10 },
+        { x: 15, y: 15 },
+      ]);
+      const { result } = renderHook(() =>
+        useEnhancedSegmentationEditor({ ...baseProps, initialPolygons: [pl1] })
+      );
+
+      act(() => {
+        result.current.setSelectedPolygonId('pl1');
+        result.current.setEditMode(EditMode.AddPoints);
+        result.current.setTempPoints([{ x: 20, y: 20 }]); // aims past the tail
+        result.current.setInteractionState({
+          isDraggingVertex: false,
+          isPanning: false,
+          panStart: null,
+          draggedVertexInfo: null,
+          originalVertexPosition: null,
+          sliceStartPoint: null,
+          addPointStartVertex: { polygonId: 'pl1', vertexIndex: 1 },
+          addPointEndVertex: null,
+          isAddingPoints: true,
+        });
+      });
+      act(() => result.current.handleCanvasDoubleClick());
+
+      // The arm from the pivot toward the tail is replaced; head side kept.
+      expect(result.current.polygons[0].points).toEqual([
+        { x: 0, y: 0 },
+        { x: 5, y: 5 },
+        { x: 20, y: 20 },
+      ]);
+    });
+
+    // `pts.slice(0, pivot + 1)` / `pts.slice(pivot)` with an anchor that is
+    // not an index into THIS polyline truncates it to an arbitrary prefix,
+    // or — past the end — to nothing.
+    it('ignores an anchor that belongs to a DIFFERENT polyline', () => {
+      const pl1 = makePolyline('pl1'); // (0,0) (5,5) (10,10)
+      const pl2 = makePolyline('pl2', [
+        { x: 90, y: 90 },
+        { x: 99, y: 99 },
+      ]);
+      const { result } = renderHook(() =>
+        useEnhancedSegmentationEditor({
+          ...baseProps,
+          initialPolygons: [pl1, pl2],
+        })
+      );
+
+      act(() => {
+        result.current.setSelectedPolygonId('pl1');
+        result.current.setEditMode(EditMode.AddPoints);
+        result.current.setTempPoints([{ x: 20, y: 20 }]);
+        result.current.setInteractionState({
+          isDraggingVertex: false,
+          isPanning: false,
+          panStart: null,
+          draggedVertexInfo: null,
+          originalVertexPosition: null,
+          sliceStartPoint: null,
+          // pl2's index 0 — meaningless as a pivot into pl1.
+          addPointStartVertex: { polygonId: 'pl2', vertexIndex: 0 },
+          addPointEndVertex: null,
+          isAddingPoints: true,
+        });
+      });
+      act(() => result.current.handleCanvasDoubleClick());
+
+      // Falls back to a plain tail extension; pl1 keeps all three of its
+      // points. With the stale index applied it collapses to [(0,0),(20,20)].
+      expect(result.current.polygons[0].points).toEqual([
+        { x: 0, y: 0 },
+        { x: 5, y: 5 },
+        { x: 10, y: 10 },
+        { x: 20, y: 20 },
+      ]);
+      expect(result.current.polygons[1].points).toEqual(pl2.points);
+    });
+
+    it('ignores an anchor index this polyline no longer has', () => {
+      const pl1 = makePolyline('pl1'); // 3 points, last index 2
+      const { result } = renderHook(() =>
+        useEnhancedSegmentationEditor({ ...baseProps, initialPolygons: [pl1] })
+      );
+
+      act(() => {
+        result.current.setSelectedPolygonId('pl1');
+        result.current.setEditMode(EditMode.AddPoints);
+        // Drawn point beyond the HEAD, so the head branch (`pts.slice(pivot)`)
+        // runs — that is the one an out-of-range pivot empties completely.
+        result.current.setTempPoints([{ x: -5, y: -5 }]);
+        result.current.setInteractionState({
+          isDraggingVertex: false,
+          isPanning: false,
+          panStart: null,
+          draggedVertexInfo: null,
+          originalVertexPosition: null,
+          sliceStartPoint: null,
+          addPointStartVertex: { polygonId: 'pl1', vertexIndex: 99 },
+          addPointEndVertex: null,
+          isAddingPoints: true,
+        });
+      });
+      act(() => result.current.handleCanvasDoubleClick());
+
+      // Plain head extension. With `pts.slice(99)` the polyline would be
+      // reduced to the single drawn point.
+      expect(result.current.polygons[0].points).toEqual([
+        { x: -5, y: -5 },
+        { x: 0, y: 0 },
+        { x: 5, y: 5 },
+        { x: 10, y: 10 },
+      ]);
+    });
+
+    it('AddPoints on a CLOSED polygon: no-op (the splice flow owns that)', () => {
+      const { result } = renderHook(
+        () => useEnhancedSegmentationEditor(baseProps) // p1 is a closed polygon
+      );
+      armAddPoints(result, 'p1', 1);
+
+      act(() => result.current.handleCanvasDoubleClick());
+
+      expect(result.current.polygons).toHaveLength(1);
+      expect(result.current.polygons[0].points).toHaveLength(4);
+      expect(result.current.editMode).toBe(EditMode.AddPoints);
+    });
+
+    it('wires a refused join to a toast', () => {
+      renderHook(() => useEnhancedSegmentationEditor(baseProps));
+
+      const onJoinBlockedByClass = vi
+        .mocked(useAdvancedInteractions)
+        .mock.calls.at(-1)?.[0].onJoinBlockedByClass as () => void;
+      expect(onJoinBlockedByClass).toBeTypeOf('function');
+
+      act(() => onJoinBlockedByClass());
+
+      // A fixed sonner id, so a run of clicks inside the same hit radius
+      // replaces the toast instead of stacking one per click.
+      expect(toast.error).toHaveBeenCalledWith(
+        'toast.segmentation.joinClassMismatch',
+        { id: 'polyline-join-class-mismatch' }
+      );
     });
   });
 });

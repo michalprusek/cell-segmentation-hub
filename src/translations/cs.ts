@@ -962,13 +962,14 @@ export default {
       addPoints: {
         clickVertex: 'Klikněte na jakýkoli vrchol pro zahájení přidávání bodů',
         clickVertexMt: 'Klikněte na konec mikrotubulu pro jeho prodloužení',
-        addPointsMt: 'Klikáním přidávejte body, poté ukončete stiskem Enter',
+        addPointsMt:
+          'Klikáním přidávejte body, poté ukončete stiskem Enter nebo dvojklikem',
         addPoints:
           'Klikněte pro přidání bodů, poté klikněte na jiný vrchol pro dokončení. Klikněte přímo na jiný vrchol bez přidávání bodů pro odstranění všech bodů mezi nimi.',
         holdShift: 'Držte SHIFT pro automatické přidávání bodů',
         cancel: 'Stiskněte ESC pro zrušení',
         joinHint:
-          'Kliknutím na koncový bod jiné polylinie stejné třídy je spojíte',
+          'Kliknutím na koncový bod jiné polylinie je spojíte — štítky se musí shodovat, pokud jedna strana není bez štítku',
       },
       editVertices: {
         selectPolygon: 'Klikněte na polygon pro jeho výběr k úpravě',
@@ -1270,6 +1271,7 @@ export default {
       cannotDeleteVertex:
         'Nelze smazat vrchol - polygon potřebuje alespoň 3 body',
       vertexDeleted: 'Vrchol byl úspěšně smazán',
+      joinClassMismatch: 'Tyto polylinie mají různé štítky a nelze je spojit',
       failed: 'Segmentace selhala',
       saved: 'Segmentace byla úspěšně uložena',
       started: 'Segmentace byla zahájena',

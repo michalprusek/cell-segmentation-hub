@@ -15,20 +15,43 @@ Microscopy segmentation and measurement platform powered by deep learning. Full-
 
 ### Start Development
 
+> **A fresh clone does not start with `make up`.** Two files it needs are
+> gitignored and nothing generates them, so read
+> [docs/development/getting-started.md](docs/development/getting-started.md)
+> before the commands below — it is short and it is the honest version.
+>
+> - **No development Compose file is tracked.** Only
+>   `docker-compose.production.yml`, `docker-compose.test.yml` and
+>   `docker-compose.monitoring.yml` are in the repository, so every `make`
+>   target that runs `docker compose` without a `-f` — `up`, `down`, `dev`,
+>   `logs*`, `shell-*`, `test`, `test-e2e`, `test-coverage`, `lint`,
+>   `type-check`, `status`, `health` — looks for a `docker-compose.yml` that
+>   does not exist.
+> - **No `.env` file is tracked** beyond `.env.example`. Copy it before you run
+>   anything.
+
 ```bash
-git clone https://github.com/your-org/cell-segmentation-hub.git
+git clone https://github.com/michalprusek/cell-segmentation-hub.git
 cd cell-segmentation-hub
-make up
+
+# Compose needs an env file; .env.production is gitignored, so make one
+cp .env.example .env.production   # then fill in real secrets before deploying
+
+docker compose -f docker-compose.production.yml --env-file .env.production up -d
 ```
 
-All services start automatically:
+Once up, that stack publishes:
 
 | Service     | URL                            | Purpose           |
 | ----------- | ------------------------------ | ----------------- |
-| Frontend    | http://localhost:3000          | React application |
-| Backend API | http://localhost:3001          | REST API          |
-| API Docs    | http://localhost:3001/api-docs | Swagger/OpenAPI   |
-| ML Service  | http://localhost:8000          | AI inference      |
+| Frontend    | http://localhost:4000          | React application |
+| Backend API | http://localhost:4001          | REST API          |
+| API Docs    | http://localhost:4001/api-docs | Swagger/OpenAPI   |
+| ML Service  | http://localhost:4008          | AI inference      |
+
+Running the services directly on the host instead (the fastest edit loop for
+frontend work) puts them on 3000 / 3001 / 8000; `docs/development/getting-started.md`
+covers that route.
 
 > **Model Weights**: The ML service requires model weights (~1.8 GB). On first start, they are auto-downloaded from Google Drive. Run `make check-weights` to verify.
 
@@ -63,8 +86,8 @@ All services start automatically:
                     ▼                   ▼
           ┌──────────────────┐ ┌──────────────────┐
           │  PostgreSQL      │ │  Redis           │
-          │  (prod) / SQLite │ │  Sessions, Queue │
-          │  (dev)           │ │  Cache           │
+          │  (dev + prod)    │ │  Sessions, Queue │
+          │                  │ │  Cache           │
           └──────────────────┘ └──────────────────┘
 ```
 
@@ -75,7 +98,7 @@ All services start automatically:
 | Frontend   | React 18 + TypeScript + Vite + shadcn/ui (Radix + Tailwind)              |
 | Backend    | Node.js + Express + TypeScript + Prisma ORM                              |
 | ML Service | Python + FastAPI + PyTorch (11 models — see docs/reference/ml-models.md) |
-| Database   | SQLite (dev) / PostgreSQL (prod)                                         |
+| Database   | PostgreSQL (dev + prod, via Docker Compose)                              |
 | Real-time  | Socket.io with auto-reconnect + exponential backoff                      |
 | Auth       | JWT access + refresh tokens                                              |
 | i18n       | 6 languages via i18next (EN, CS, ES, DE, FR, ZH)                         |
@@ -109,8 +132,12 @@ Performance measured on NVIDIA GPU. CPU fallback is supported.
 
 ### Commands
 
+Every `make` target below that shells into a container needs a
+`docker-compose.yml` the repository does not ship (see Quick Start). The
+host-side ones — `make ci`, `npx …` — work on a fresh clone.
+
 ```bash
-# Start/Stop
+# Start/Stop (needs a docker-compose.yml)
 make up                    # Start all services
 make down                  # Stop services
 make logs-f                # Tail all logs
@@ -121,17 +148,18 @@ make shell-fe              # Frontend container
 make shell-be              # Backend container
 make shell-ml              # ML service container
 
-# Code Quality
+# Code Quality (host-side, works anywhere)
+make ci                    # TypeScript + ESLint + i18n + doc links + Python
 npx tsc --noEmit           # TypeScript check (frontend)
-make lint                  # ESLint
-make type-check            # Full TypeScript check
+npx eslint --max-warnings=0 src/   # ESLint (frontend)
 
 # Testing
-make test                  # Unit tests (Vitest frontend, Jest backend)
-make test-e2e              # Playwright E2E tests
+npx vitest run             # Frontend unit suite (what CI gates on)
+make test-e2e              # Playwright E2E tests (container)
 
 # Building
-make build-optimized       # Smart build with auto-cleanup
+make build-optimized       # Build every production image
+make build-service SERVICE=frontend  # Build one service
 make build-clean           # Full rebuild without cache
 ```
 
@@ -155,24 +183,40 @@ All user-facing strings must exist in all 6 translation files (`src/translations
 
 ## Testing
 
-The project has comprehensive test coverage across all layers:
+The unit suites are green and gate every pull request (`ci.yml` runs the
+frontend and backend jobs; both are required by the `main-protection`
+ruleset). Counts measured 2026-09-04:
 
-| Layer      | Framework                      | Files | Tests  | Coverage Target |
-| ---------- | ------------------------------ | ----- | ------ | --------------- |
-| Frontend   | Vitest + React Testing Library | 142   | ~2500  | 80%             |
-| Backend    | Jest + Supertest               | 63    | ~980   | 75%             |
-| ML Service | pytest                         | 14    | ~170   | 80%             |
-| E2E        | Playwright                     | 14    | varies | critical flows  |
+| Layer      | Framework                      | Files | Tests             |
+| ---------- | ------------------------------ | ----- | ----------------- |
+| Frontend   | Vitest + React Testing Library | 275   | 5037 pass         |
+| Backend    | Vitest + Supertest             | 179   | 3740 pass, 4 skip |
+| ML Service | pytest                         | —     | 400 pass, 1 skip  |
+| E2E        | Playwright                     | 14    | not in the gate   |
 
 ```bash
-# Run tests
-make test                  # All unit tests
-make test-e2e              # Playwright E2E
+# Frontend, on the host
+npx vitest run
+npx vitest run --coverage
 
-# Coverage
-npx vitest run --coverage  # Frontend coverage
-cd backend && npx jest --coverage  # Backend coverage
+# Backend, in the container — the `canvas` native module is built against the
+# image's Node 20, not the host's Node 22, so a host run fails on the ABI
+docker run --rm --user root --entrypoint /bin/sh \
+  -v $PWD/backend:/app -v /app/node_modules -w /app \
+  cell-segmentation-hub-backend -c "npx vitest run --coverage"
+
+# Playwright (manual; not a merge gate). `make test-e2e` needs a running
+# frontend container, so it shares the missing-compose-file problem above.
+npx playwright test
 ```
+
+> `make test` runs the frontend suite only — it is
+> `docker compose exec -T frontend npm run test`. There is no `make` target
+> that runs the backend suite; use the `docker run` invocation above. See
+> [docs/testing-guide.md](docs/testing-guide.md).
+
+A green suite is still not a substitute for exercising the change in a real
+browser against real services; see the verification rules in `CLAUDE.md`.
 
 ## Production Deployment
 
