@@ -84,7 +84,8 @@ R_LO = 0.35                 # innermost radius searched
 DR = 0.40                   # radial sample spacing, px
 ALIGN_WIN = (0.30, 80.0)    # half-window around the guide in pass 2
 INLIER_BAND = (0.05, 8.0)   # a sector counts towards coverage inside this band
-TRACE_BAND = (0.035, 8.0)   # search band for the pixel-precise inner contour
+TRACE_BAND = (0.10, 20.0)   # search band for the inner contour (pass 1)
+TRACE_STEP_MAX = 0.5        # coarsest radial sampling of that search
 BASELINE_GAP = (0.05, 15.0) # keep the compartment medians this clear of the edge
 SIGMA_G = 1.5               # px, fine derivative scale (edge localisation)
 SIGMA_BG = 8.0              # px, coarse scale subtracted to reject broad ramps
@@ -606,13 +607,50 @@ def _trace_inner(img, cap, angs, guide, rout):
     path keeps 97.5% of the evidence an unconstrained per-ray argmax could
     reach, against 44% for the best-fitting fixed radius.
 
+    TWO TUNABLES HERE HAVE NON-OBVIOUS VALUES, both measured 2026-09-04.
+
+    `TRACE_BAND` is 0.10R, not the 0.035R this shipped with. A bright-field
+    capsule can show TWO near-parallel transitions 6-11 px apart on the side
+    where the membrane is a broad ramp rather than a crisp step, and at 0.035R
+    the inner one lay outside the search entirely on ~110 of 720 rays. Widening
+    it is targeted, not a blanket loosening: measured over the eleven
+    production membranes, 8 of them move by under 0.33 px (p95) and change
+    their evidence retention by at most 0.2 points, while the three ambiguous
+    ones gain 0.4-4.1 points. No capsule gets worse and the worst ray-to-ray
+    jump is unchanged at 0.63 px. It cannot affect any VERDICT: `TRACE_BAND` is
+    read only here, and this runs only after `decide` has already returned a
+    positive score.
+
+    The radial sampling is the movement cap itself (`TRACE_SLOPE * arc`,
+    ~0.5 px at production radii), not the 0.25 px the placement pass uses.
+    Since `_snap_to_level` took over placement this pass only has to CHOOSE
+    the boundary, so it does not need sub-pixel sampling -- and at 0.10R a
+    quarter-pixel grid costs 5.3x more, because the DP is quadratic in the
+    number of radial states. Measured against that finer grid on all eleven:
+    p95 difference 0.25 px, max 0.50 px, which the placement pass re-resolves.
+    Deriving the step FROM the cap rather than fixing it keeps the cap
+    magnification-independent: a fixed 0.5 px step would have made the cap
+    0.5 px/ray whatever the capsule size, i.e. twice the intended slope at
+    half the radius, and would have left `TRACE_SLOPE` inert over most of its
+    range. `TRACE_STEP_MAX` and the SIGMA_G/3 floor together stop the grid
+    coarsening past the point where the derivative can localise an edge.
+
     That path is then snapped onto the local intensity level set by
     `_snap_to_level` -- see there for why placing the contour is a separate
     question from choosing which boundary it is on.
     """
     R = cap.mean_radius
     band = _px(TRACE_BAND, R)
-    step = 0.25
+
+    # Sample the search at the movement cap itself. The cap is one state per
+    # ray by construction then, so the grid is exactly as fine as the
+    # constraint can use and no finer -- which is what keeps the wide band
+    # affordable. Clamped below by SIGMA_G/3, since `SIGMA_G / step` is the
+    # derivative scale in samples and a Gaussian narrower than ~3 samples
+    # stops localising edges; on a capsule big enough to hit that clamp the
+    # cap is carried by `smax` instead, so it stays the same physical slope.
+    arc = 2 * np.pi * float(np.mean(guide)) / max(len(angs), 1)
+    step = float(np.clip(TRACE_SLOPE * arc, 0.25, min(TRACE_STEP_MAX, SIGMA_G / 3)))
     u = np.arange(-band, band + step, step)
     radii = guide[:, None] + u[None, :]
     V = _sample(img, cap.cx, cap.cy, angs, radii)
@@ -634,9 +672,16 @@ def _trace_inner(img, cap, angs, guide, rout):
     # px per arc px is ~0.5 px/ray at the ~250 px radii in production, which is
     # where cap saturation levels off (22% of rays pinned at 0.35 px/ray, 3.1%
     # at 0.5, 1.4% beyond) and before a looser cap starts letting the path
-    # wander between faces again.
-    arc = 2 * np.pi * float(np.mean(guide)) / max(len(angs), 1)
-    smax = int(np.clip(round(TRACE_SLOPE * arc / step), 1, len(u) - 1))
+    # wander between faces again. Usually 1 state, by the choice of `step`
+    # above; more only on a capsule large enough to hit the SIGMA_G clamp.
+    #
+    # The state count is an integer, so the cap can rarely be exactly
+    # TRACE_SLOPE. Round UP unless that would only be chasing the clamp's
+    # rounding (the 0.9 slack): a cap that comes out TIGHTER than intended
+    # clips genuine shape, while one that comes out looser merely relaxes a
+    # regulariser the evidence still has to argue against. Plain `round`
+    # measured up to 29% tighter at some radii; this is never worse than 10%.
+    smax = int(np.clip(np.ceil(0.9 * TRACE_SLOPE * arc / step), 1, len(u) - 1))
     lam = TRACE_PENALTY * ref / smax
 
     E = np.where(np.isfinite(D), D, _NEG)
