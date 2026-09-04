@@ -102,15 +102,32 @@ def _subpixel_peak(row: np.ndarray, j: int, width: int) -> float:
     return float(j)
 
 
-def _segment_runs(
+# A directed phase shorter than this many grid frames is not called motion: it
+# is demoted to the surrounding pause. Six frames is the rule the processive
+# totals have always used; `segment_phases` reuses it so the two cannot drift.
+MIN_RUN_FRAMES = 6
+
+
+def segment_phases(
     t: np.ndarray, x: np.ndarray, pause_thresh: float
 ) -> List[Dict[str, float]]:
-    """Split a trajectory into directed runs ≥6 frames; fit a slope per run.
+    """Cut a trajectory into contiguous motion / pause phases.
 
-    A run is a contiguous span whose smoothed velocity stays above
-    ``pause_thresh`` in one direction AND lasts at least 6 grid frames. Pauses
-    *and* sub-6-frame directed flickers are excluded — so the aggregated
-    ``total_run_*`` totals undercount very short directed segments by design.
+    Every grid frame belongs to exactly one phase and the phases tile the
+    trajectory end to end -- unlike :func:`_segment_runs`, which returns only
+    the directed runs and silently drops the pauses between them. A phase is
+    labelled by its direction: ``+1`` and ``-1`` are processive motion,
+    ``0`` is a pause. A direction change is a phase boundary, because reversing
+    IS a change of motion.
+
+    A directed stretch shorter than ``MIN_RUN_FRAMES`` is demoted to a pause
+    rather than dropped, which is what keeps the tiling complete. That is the
+    same rule (and the same smoothing and threshold) the processive totals use,
+    so a phase's velocity and the totals cannot disagree.
+
+    Each phase carries the least-squares slope of the SMOOTHED track over it,
+    the same estimator ``_segment_runs`` fits, so a moving phase's velocity is
+    directly comparable with the trajectory's run velocities.
     """
     from scipy.ndimage import gaussian_filter1d
 
@@ -120,22 +137,55 @@ def _segment_runs(
     vel = np.gradient(xs)
     state = np.where(np.abs(vel) > pause_thresh, np.sign(vel), 0).astype(int)
 
-    runs: List[Dict[str, float]] = []
+    # Demote too-short directed stretches BEFORE merging, so the survivors
+    # merge with the pauses either side into one phase.
+    i = 0
+    while i < len(state):
+        j = i
+        while j + 1 < len(state) and state[j + 1] == state[i]:
+            j += 1
+        if state[i] != 0 and (j - i + 1) < MIN_RUN_FRAMES:
+            state[i : j + 1] = 0
+        i = j + 1
+
+    phases: List[Dict[str, float]] = []
     i = 0
     while i < len(grid):
         j = i
         while j + 1 < len(grid) and state[j + 1] == state[i]:
             j += 1
-        if state[i] != 0 and (j - i + 1) >= 6:
-            gt = grid[i : j + 1].astype(np.float64)
-            gx = xs[i : j + 1]
+        gt = grid[i : j + 1].astype(np.float64)
+        gx = xs[i : j + 1]
+        if len(gt) >= 2:
             design = np.vstack([gt, np.ones_like(gt)]).T
-            coef = np.linalg.lstsq(design, gx, rcond=None)[0]
-            runs.append(
-                {"v_pxframe": float(coef[0]), "t0": int(gt[0]), "t1": int(gt[-1])}
-            )
+            slope = float(np.linalg.lstsq(design, gx, rcond=None)[0][0])
+        else:
+            slope = 0.0
+        phases.append(
+            {
+                "direction": int(state[i]),
+                "t0": int(gt[0]),
+                "t1": int(gt[-1]),
+                "v_pxframe": slope,
+                "displacement_px": abs(slope) * (gt[-1] - gt[0]),
+            }
+        )
         i = j + 1
-    return runs
+    return phases
+
+
+def _segment_runs(
+    t: np.ndarray, x: np.ndarray, pause_thresh: float
+) -> List[Dict[str, float]]:
+    """The directed runs of a trajectory; fit a slope per run.
+
+    A thin filter over :func:`segment_phases` -- one segmentation rule, so the
+    processive totals and the exported phases can never disagree about where a
+    run starts. Pauses *and* sub-``MIN_RUN_FRAMES`` directed flickers are
+    excluded, so the aggregated ``total_run_*`` totals undercount very short
+    directed segments by design.
+    """
+    return [p for p in segment_phases(t, x, pause_thresh) if p["direction"] != 0]
 
 
 def net_velocity_threshold(
@@ -682,7 +732,8 @@ def detect_tracks(
         amps = [float(S[int(t), c]) for t, c in zip(t_arr, cols)]
 
         net = float((x_arr[-1] - x_arr[0]) / (t_arr[-1] - t_arr[0]))
-        segs = _segment_runs(t_arr, x_arr, pause_thresh)
+        phases = segment_phases(t_arr, x_arr, pause_thresh)
+        segs = [p for p in phases if p["direction"] != 0]
         out.append(
             {
                 "points": [[int(t), float(x)] for t, x in zip(t_arr, x_arr)],
@@ -692,6 +743,9 @@ def detect_tracks(
                 "total_run_displacement_px": float(
                     sum(abs(s["v_pxframe"]) * (s["t1"] - s["t0"]) for s in segs)
                 ),
+                # Every phase, pauses included, tiling the trajectory. The
+                # totals above are the directed subset of exactly this list.
+                "phases": phases,
             }
         )
     out.sort(key=lambda r: -abs(r["net_pxframe"]))

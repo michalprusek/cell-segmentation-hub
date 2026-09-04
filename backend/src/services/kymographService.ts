@@ -186,8 +186,18 @@ export type EdgeFlag = 'left' | 'right' | 'both' | 'none';
 /** Raw track shape returned by the ML ``/kymograph`` endpoint: velocity +
  *  displacement in kymograph columns/frame, intensity in raw pixel units, time
  *  in frames. Converted to the calibrated (µm/s velocity, µm length, s time)
- *  camelCase shape below. Per-run detail is not exposed — only the two
- *  processive totals. */
+ *  camelCase shape below. */
+interface MlPhase {
+  direction: number;
+  t0: number;
+  t1: number;
+  v_pxframe: number;
+  displacement_px: number;
+  intensity_signal: number | null;
+  intensity_background: number | null;
+  intensity_minus_bg: number | null;
+}
+
 interface MlTrack {
   points: KymoPoint[];
   net_pxframe: number;
@@ -199,6 +209,7 @@ interface MlTrack {
   intensity_background: number | null;
   intensity_minus_bg: number | null;
   bright: boolean;
+  phases?: MlPhase[];
 }
 
 export interface KymographServiceInput {
@@ -320,6 +331,28 @@ export interface KymographTrack {
    *  relative to the other tracks on the same kymograph — likely a multi-motor
    *  aggregate rather than a single motor. */
   bright: boolean;
+  /** The trajectory cut at every motion↔pause transition. The phases tile it
+   *  end to end, so a pause is as much a phase as a run, and the processive
+   *  totals above are the directed subset of exactly this list. */
+  phases: KymographPhase[];
+}
+
+/** One motion or pause phase of a trajectory, calibrated the same way the
+ *  track totals are. `kind` is 'pause' for a phase the particle spent
+ *  stationary and 'run' for processive motion; `direction` is +1/-1 for a run
+ *  and 0 for a pause. A reversal ends a phase. */
+export interface KymographPhase {
+  kind: 'run' | 'pause';
+  direction: number;
+  startFrame: number;
+  endFrame: number;
+  durationS: number | null;
+  velocityPxPerFrame: number;
+  velocityUmPerSec: number | null;
+  displacementUm: number | null;
+  intensitySignal: number | null;
+  intensityBackground: number | null;
+  intensityMinusBackground: number | null;
 }
 
 export interface KymographServiceResult {
@@ -1105,6 +1138,23 @@ function mapMlPayload(
         intensityMinusBackground: tr.intensity_minus_bg ?? null,
         edge: tr.edge ?? 'none',
         bright: tr.bright ?? false,
+        // An older ml container has no `phases`; an empty list keeps the
+        // exporter's segment sheet empty rather than throwing.
+        phases: (tr.phases ?? []).map(ph => ({
+          kind: ph.direction === 0 ? ('pause' as const) : ('run' as const),
+          direction: ph.direction,
+          startFrame: ph.t0,
+          endFrame: ph.t1,
+          // A phase spanning frames t0..t1 lasts (t1 - t0) intervals, the same
+          // convention `total_run_time_frames` sums.
+          durationS: toSeconds(ph.t1 - ph.t0),
+          velocityPxPerFrame: ph.v_pxframe,
+          velocityUmPerSec: toUms(ph.v_pxframe),
+          displacementUm: toUmLength(ph.displacement_px),
+          intensitySignal: ph.intensity_signal ?? null,
+          intensityBackground: ph.intensity_background ?? null,
+          intensityMinusBackground: ph.intensity_minus_bg ?? null,
+        })),
       }))
     : undefined;
 
