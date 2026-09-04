@@ -53,6 +53,16 @@
 # built FROM, so the two can never resolve different versions of a shared stack.
 # It tracks backend/segmentation/requirements.txt -- change both together, and
 # read the CEILING note there before crossing a transformers minor.
+#
+# That note is why GHSA-xrqw-3rrv-vx5w / CVE-2026-9856 (high, `save_pretrained`
+# path traversal) is open against THIS file too and stays open. Measured
+# 2026-09-04: the advisory's first patched release is 5.10.0, the ml image's
+# SegFormer checkpoint stops loading at 5.9.0, and 5.10.x will not even import a
+# model on torch 2.6.0 (`torch.float8_e8m0fnu` does not exist there). There is no
+# version that is both patched and workable, so the number does not move. It is
+# moot for this worker in any case -- the MT path imports no transformers at all,
+# nothing here calls `save_pretrained`, and the pin exists only for image parity.
+# `backend/essays/tests/test_transformers_pin.py` holds both files to it.
 
 # --- Deep learning core ---
 torch==2.6.0
