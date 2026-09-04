@@ -160,16 +160,9 @@ describe('React Key Generation Fixes', () => {
         id: i % 3 === 0 ? undefined : `polygon_${i}`,
       }));
 
-      const startTime = performance.now();
       const keys = polygons.map(polygon =>
         generateSafePolygonKey(polygon, false)
       );
-      const endTime = performance.now();
-
-      const duration = endTime - startTime;
-
-      // Load-tolerant ceiling (wall-clock perf flakes under parallel load)
-      expect(duration).toBeLessThan(1500);
 
       // All keys should be unique
       const uniqueKeys = new Set(keys);

@@ -129,23 +129,41 @@ const CanvasPolygon = React.memo(
     // Determine if this is a polyline (open path)
     const isPolyline = polygon.geometry === 'polyline';
 
-    // Validate points without simplification to preserve full polygon detail
-    const validPoints = useMemo(() => {
-      if (!points) return [];
+    // Validate points without simplification to preserve full polygon detail.
+    //
+    // `validPoints` is COMPACTED, so its indices are not the polygon's own
+    // point indices. `validPointIndices[i]` carries the original index of
+    // `validPoints[i]`; pathString needs it because `vertexDragState
+    // .vertexIndex` is an index into the RAW points array (it comes from
+    // PolygonVertices' `originalIndex` / closestVertex). Comparing the two
+    // directly moved the wrong path point — or none at all — whenever a point
+    // ahead of the dragged one had been filtered out.
+    const { validPoints, validPointIndices } = useMemo(() => {
+      const kept: typeof points = [];
+      const keptIndices: number[] = [];
 
-      // First filter out invalid points
-      const filtered = points.filter(
-        p =>
-          p &&
-          typeof p.x === 'number' &&
-          typeof p.y === 'number' &&
-          !isNaN(p.x) &&
-          !isNaN(p.y)
-      );
+      if (points) {
+        for (let i = 0; i < points.length; i++) {
+          const p = points[i];
+          // Number.isFinite, NOT !isNaN: `isNaN(Infinity)` is false, so the old
+          // guard let ±Infinity straight through into the SVG path and emitted
+          // d="MInfinity,10 L50,-Infinity ...". A malformed `d` is not ignored
+          // per-command — the renderer stops at the error — so a single
+          // infinite coordinate silently erased the whole polygon from the
+          // canvas. Number.isFinite also rejects non-numbers without coercion,
+          // which is why the typeof checks are gone.
+          if (p && Number.isFinite(p.x) && Number.isFinite(p.y)) {
+            kept.push(p);
+            keptIndices.push(i);
+          }
+        }
+      }
 
       // Polylines need at least 2 points, polygons need at least 3
       const minPoints = isPolyline ? 2 : 3;
-      return filtered.length >= minPoints ? filtered : [];
+      return kept.length >= minPoints
+        ? { validPoints: kept, validPointIndices: keptIndices }
+        : { validPoints: [], validPointIndices: [] };
     }, [points, isPolyline]);
 
     // Generate SVG path string from valid points (no simplification).
@@ -174,7 +192,8 @@ const CanvasPolygon = React.memo(
       const parts = new Array<string>(validPoints.length);
       for (let i = 0; i < validPoints.length; i++) {
         const p = validPoints[i];
-        if (translating || i === dragIdx) {
+        // validPointIndices[i], not i: dragIdx indexes the RAW points array.
+        if (translating || validPointIndices[i] === dragIdx) {
           parts[i] = `${p.x + dragOffsetX},${p.y + dragOffsetY}`;
         } else {
           parts[i] = `${p.x},${p.y}`;
@@ -183,7 +202,7 @@ const CanvasPolygon = React.memo(
 
       // Polylines: open path (no Z). Polygons: closed path (Z).
       return `M${parts.join(' L')}${isPolyline ? '' : ' Z'}`;
-    }, [validPoints, vertexDragState, id, isPolyline]);
+    }, [validPoints, validPointIndices, vertexDragState, id, isPolyline]);
 
     // For the path stroke width, we need to adjust based on zoom level
     // When zoomed in, the stroke appears thicker so we need to make it thinner

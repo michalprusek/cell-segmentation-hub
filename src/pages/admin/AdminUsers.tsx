@@ -49,8 +49,7 @@ const AdminUsers: React.FC = () => {
 
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ['admin', 'users', page, search],
-    queryFn: () =>
-      apiClient.listAdminUsers({ page, limit: PAGE_SIZE, search }),
+    queryFn: () => apiClient.listAdminUsers({ page, limit: PAGE_SIZE, search }),
   });
 
   const handleImpersonate = async (target: AdminUserSummary) => {
@@ -118,9 +117,7 @@ const AdminUsers: React.FC = () => {
             <table className="w-full min-w-[640px] text-sm">
               <thead className="border-b border-gray-200 text-left dark:border-gray-700">
                 <tr className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                  <th className="px-4 py-3 font-medium">
-                    {t('common.email')}
-                  </th>
+                  <th className="px-4 py-3 font-medium">{t('common.email')}</th>
                   <th className="px-4 py-3 font-medium">
                     {t('admin.columnUsername')}
                   </th>

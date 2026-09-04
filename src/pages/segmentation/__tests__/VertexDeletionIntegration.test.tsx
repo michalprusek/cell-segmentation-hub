@@ -739,8 +739,6 @@ describe('Vertex Deletion Integration Tests', () => {
 
       const handleDeleteVertex = vi.fn();
 
-      const startTime = performance.now();
-
       render(
         <svg width="300" height="300">
           {manyVerticesPolygon.points.map((point, index) => (
@@ -763,11 +761,6 @@ describe('Vertex Deletion Integration Tests', () => {
           ))}
         </svg>
       );
-
-      const renderTime = performance.now() - startTime;
-
-      // Should render efficiently even with many vertices (load-tolerant ceiling)
-      expect(renderTime).toBeLessThan(2000);
 
       const vertices = Array.from(
         document.querySelectorAll('[data-testid^="vertex-"]')

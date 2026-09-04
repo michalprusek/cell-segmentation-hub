@@ -88,9 +88,7 @@ describe('AdminUsers', () => {
   });
 
   it('lists the users the API returned', async () => {
-    vi.mocked(apiClient.listAdminUsers).mockResolvedValue(
-      page([row()])
-    );
+    vi.mocked(apiClient.listAdminUsers).mockResolvedValue(page([row()]));
     renderPage();
 
     expect(await screen.findByText('user@example.com')).toBeInTheDocument();
@@ -99,9 +97,7 @@ describe('AdminUsers', () => {
   });
 
   it('impersonates and then does a FULL page load', async () => {
-    vi.mocked(apiClient.listAdminUsers).mockResolvedValue(
-      page([row()])
-    );
+    vi.mocked(apiClient.listAdminUsers).mockResolvedValue(page([row()]));
     vi.mocked(apiClient.impersonateUser).mockResolvedValue({
       user: { id: 'user-1', email: 'user@example.com' },
       impersonatedBy: { id: 'admin-1', email: 'admin@admin.com' },
@@ -143,7 +139,9 @@ describe('AdminUsers', () => {
     renderPage();
     await screen.findByText('other@admin.com');
 
-    expect(within(rowFor('other@admin.com')).getByRole('button')).toBeDisabled();
+    expect(
+      within(rowFor('other@admin.com')).getByRole('button')
+    ).toBeDisabled();
     // ...and says so, rather than looking broken.
     expect(
       within(rowFor('other@admin.com')).getByRole('button')
@@ -151,9 +149,7 @@ describe('AdminUsers', () => {
   });
 
   it('stays on the page and reports a failed impersonation', async () => {
-    vi.mocked(apiClient.listAdminUsers).mockResolvedValue(
-      page([row()])
-    );
+    vi.mocked(apiClient.listAdminUsers).mockResolvedValue(page([row()]));
     vi.mocked(apiClient.impersonateUser).mockRejectedValue(new Error('nope'));
 
     renderPage();
@@ -167,9 +163,7 @@ describe('AdminUsers', () => {
   });
 
   it('debounces the search into a single request', async () => {
-    vi.mocked(apiClient.listAdminUsers).mockResolvedValue(
-      page([row()])
-    );
+    vi.mocked(apiClient.listAdminUsers).mockResolvedValue(page([row()]));
     renderPage();
     await screen.findByText('user@example.com');
     vi.mocked(apiClient.listAdminUsers).mockClear();

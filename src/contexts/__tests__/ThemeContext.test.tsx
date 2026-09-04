@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act, waitFor, render } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { ThemeProvider } from '@/contexts/ThemeContext';
-import { useTheme } from '@/contexts/exports';
+import { useAuth, useTheme } from '@/contexts/exports';
 import { AuthProvider } from '@/contexts/AuthContext';
 import apiClient from '@/lib/api';
 import { ReactNode } from 'react';
@@ -204,11 +204,23 @@ describe('ThemeContext', () => {
         email: 'test@example.com',
       });
 
-      const { result } = renderHook(() => useTheme(), { wrapper });
+      // Observe the auth user alongside the theme. The precondition this test
+      // depends on is that AuthProvider has finished hydrating `user` — only
+      // then does ThemeProvider call updateUserProfile.
+      const { result } = renderHook(
+        () => ({ ...useTheme(), authUser: useAuth().user }),
+        { wrapper }
+      );
 
-      // Wait until the ThemeProvider has finished loading (user is set)
+      // This used to wait on `expect(result.current.theme).toBeDefined()`,
+      // which is true on the very first render — `theme` always has a default.
+      // So the wait returned immediately, setTheme ran while `user` was still
+      // null, and ThemeProvider skipped the profile update. That is the flake:
+      // it only passed when getUserProfile happened to resolve inside the first
+      // tick. Measured 1 failure in 5 full-suite runs under load.
+      // Wait on the actual precondition instead.
       await waitFor(() => {
-        expect(result.current.theme).toBeDefined();
+        expect(result.current.authUser).not.toBeNull();
       });
 
       await act(async () => {

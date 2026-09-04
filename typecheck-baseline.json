@@ -5,10 +5,10 @@
   "_doNotEditByHand": true,
   "typescriptVersion": "5.9.3",
   "totals": {
-    "tsconfig.app.json": 399,
+    "tsconfig.app.json": 377,
     "tsconfig.node.json": 21,
-    "tsconfig.test.json": 1232,
-    "all": 1652
+    "tsconfig.test.json": 1210,
+    "all": 1608
   },
   "projects": {
     "tsconfig.app.json": {
@@ -383,13 +383,6 @@
         "TS2322: Type 'null | {id: string; }' is not assignable to type 'null | {id: string; token: string; }'.": 1,
         "TS2556: A spread argument must either have a tuple type or be passed to a rest parameter.": 1
       },
-      "src/test-fixtures/cancelScenarios.ts": {
-        "TS1355: A 'const' assertions can only be applied to references to enum members, or string, number, boolean, array, or object literals.": 1
-      },
-      "src/test-utils/cancelTestHelpers.tsx": {
-        "TS2304: Cannot find name 'expect'.": 13,
-        "TS2339: Property 'memory' does not exist on type 'Performance'.": 4
-      },
       "src/test-utils/canvasTestUtils.ts": {
         "TS2304: Cannot find name 'expect'.": 3,
         "TS2322: Type 'CanvasGradient | CanvasPattern | string' is not assignable to type 'string'.": 2,
@@ -405,15 +398,11 @@
         "TS2322: Type '<type elided by tsc>' is not assignable to type 'IntrinsicAttributes & { children: ReactNode; }'.": 1
       },
       "src/test-utils/segmentationTestUtils.ts": {
-        "TS2339: Property 'jsHeapSizeLimit' does not exist on type '{}'.": 1,
-        "TS2339: Property 'totalJSHeapSize' does not exist on type '{}'.": 1,
-        "TS2339: Property 'usedJSHeapSize' does not exist on type '{}'.": 1,
         "TS2353: Object literal may only specify known properties, and 'x' does not exist in type '{ polygonId: string; vertexIndex: number; }'.": 1,
-        "TS2578: Unused '@ts-expect-error' directive.": 1,
         "TS2722: Cannot invoke an object which is possibly 'undefined'.": 8
       },
       "src/test-utils/test-components.tsx": {
-        "TS2322: Type '{ user: { id: string; email: string; name: string; }; profile: { id: string; userId: string; bio: string; avatarUrl: string; }; token: string; loading: boolean; isAuthenticated: boolean; signIn: Mock<Procedure>; signUp: Mock<...>; signOut: Mock<...>; deleteAccount: Mock<...>; refreshProfile: Mock<...>; }' is not assignable to type 'AuthContextType'.": 1
+        "TS2322: Type '<type elided by tsc>' is not assignable to type 'AuthContextType'.": 1
       },
       "src/test-utils/test-helpers.ts": {
         "TS2724: '\"@/pages/segmentation/types\"' has no exported member named '_EditMode'. Did you mean 'EditMode'?": 1
@@ -432,7 +421,7 @@
         "TS2339: Property '__REACT_DEVTOOLS_GLOBAL_HOOK__' does not exist on type 'Window & typeof globalThis'.": 1,
         "TS2739: Type 'Mock<Procedure>' is missing the following properties from type '{new (url: URL | string, protocols?: string | string[] | undefined): WebSocket; prototype: WebSocket; readonly CONNECTING: 0; readonly OPEN: 1; readonly CLOSING: 2; readonly CLOSED: 3; }': CONNECTING, OPEN, CLOSING, CLOSED": 1,
         "TS2739: Type '{ getItem: Mock<Procedure>; setItem: Mock<Procedure>; removeItem: Mock<Procedure>; clear: Mock<Procedure>; }' is missing the following properties from type 'Storage': length, key": 1,
-        "TS2739: Type '{getItem: Mock<\"system\" | (key: string) => \"en\" | null>; setItem: Mock<Procedure>; removeItem: Mock<Procedure>; clear: Mock<Procedure>; }' is missing the following properties from type 'Storage': length, key": 1
+        "TS2739: Type '{getItem: Mock<\"en\" | (key: string) => \"system\" | null>; setItem: Mock<Procedure>; removeItem: Mock<Procedure>; clear: Mock<Procedure>; }' is missing the following properties from type 'Storage': length, key": 1
       }
     },
     "tsconfig.node.json": {
@@ -495,11 +484,6 @@
         "TS2339: Property 'displayName' does not exist on type '() => ReactElement<any, JSXElementConstructor<any> | string>'.": 1,
         "TS2769: No overload matches this call.": 1,
         "TS6307: File 'src/App.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
-      },
-      "src/__tests__/performance/cancel-performance.test.ts": {
-        "TS2353: Object literal may only specify known properties, and 'metadata' does not exist in type 'Partial<CancelOperation>'.": 1,
-        "TS6307: File 'src/test-fixtures/cancelScenarios.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
-        "TS6307: File 'src/test-utils/cancelTestHelpers.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
       },
       "src/components/DashboardHeader.tsx": {
         "TS2322: Type 'string | string[]' is not assignable to type 'string | undefined'.": 1,
@@ -579,9 +563,6 @@
         "TS2345: Argument of type '{ user: { email: string; id: string; username: string; }; isAuthenticated: boolean; login: Mock<Procedure>; logout: Mock<Procedure>; register: Mock<Procedure>; refreshToken: Mock<...>; isLoading: boolean; }' is not assignable to parameter of type 'AuthContextType'.": 1,
         "TS2345: Argument of type '{ user: { email: undefined; id: string; username: string; }; isAuthenticated: boolean; login: Mock<Procedure>; logout: Mock<Procedure>; register: Mock<Procedure>; refreshToken: Mock<...>; isLoading: boolean; }' is not assignable to parameter of type 'AuthContextType'.": 1,
         "TS2353: Object literal may only specify known properties, and 'waiting' does not exist in type 'QueueStats'.": 1
-      },
-      "src/components/__tests__/ImageUploader.cancel.test.tsx": {
-        "TS2684: The 'this' context of type 'this' is not assignable to method's 'this' of type 'FileReader'.": 2
       },
       "src/components/__tests__/ImageUploader.test.tsx": {
         "TS2556: A spread argument must either have a tuple type or be passed to a rest parameter.": 1
@@ -743,10 +724,6 @@
         "TS2322: Type 'Mock<(e: FormEvent<Element>) => void>' is not assignable to type '(e: React.FormEvent) => Promise<void>'.": 1,
         "TS2345: Argument of type '{ projectName: string; setProjectName: Mock<Procedure>; projectDescription: string; setProjectDescription: Mock<Procedure>; isCreating: true; handleCreateProject: Mock<...>; }' is not assignable to parameter of type '<type elided by tsc>'.": 1
       },
-      "src/components/project/__tests__/QueueStatsPanel.cancel.test.tsx": {
-        "TS2339: Property 'webSocketManager' does not exist on type 'MockedObject<typeof import(\"src/services/webSocketManager\")>'.": 1,
-        "TS2353: Object literal may only specify known properties, and 'type' does not exist in type '{ id: string; status: string; progress: number; }'.": 1
-      },
       "src/components/project/__tests__/QueueStatsPanel.parallel.test.tsx": {
         "TS2345: Argument of type '{ t: Mock<(key: string, params?: Record<string, any>) => string>; }' is not assignable to parameter of type 'LanguageContextType'.": 1,
         "TS2741: Property 'total' is missing in type '{ queueLength: number; processing: number; queued: number; }' but required in type 'QueueStats'.": 5,
@@ -838,7 +815,7 @@
         "TS2345: Argument of type 'null' is not assignable to parameter of type 'string'.": 4
       },
       "src/contexts/__tests__/ModelContext.test.tsx": {
-        "TS2345: Argument of type '\"sperm\" | (key: string) => \"false\" | null' is not assignable to parameter of type 'NormalizedProcedure<(key: string) => string>'.": 1,
+        "TS2345: Argument of type '\"false\" | (key: string) => \"sperm\" | null' is not assignable to parameter of type 'NormalizedProcedure<(key: string) => string>'.": 1,
         "TS2345: Argument of type '(key: string) => \"0.8\" | null' is not assignable to parameter of type 'NormalizedProcedure<(key: string) => string>'.": 1,
         "TS2345: Argument of type '(key: string) => \"invalid_model_xyz\" | null' is not assignable to parameter of type 'NormalizedProcedure<(key: string) => string>'.": 1
       },
@@ -849,8 +826,8 @@
         "TS2345: Argument of type '{}' is not assignable to parameter of type 'Profile'.": 1
       },
       "src/contexts/__tests__/WebSocketContext.test.tsx": {
-        "TS2740: Type '{ user: null; login: Mock<Procedure>; logout: Mock<Procedure>; register: Mock<Procedure>; updateProfile: Mock<Procedure>; isLoading: boolean; }' is missing the following properties from type 'AuthContextType': profile, loading, isAuthenticated, signIn, and 4 more.": 1,
-        "TS2740: Type '{ user: { id: string; name: string; }; login: Mock<Procedure>; logout: Mock<Procedure>; register: Mock<Procedure>; updateProfile: Mock<Procedure>; isLoading: boolean; }' is missing the following properties from type 'AuthContextType': profile, loading, isAuthenticated, signIn, and 4 more.": 2
+        "TS2740: Type '{ user: null; login: Mock<Procedure>; logout: Mock<Procedure>; register: Mock<Procedure>; updateProfile: Mock<Procedure>; isLoading: boolean; }' is missing the following properties from type 'AuthContextType': profile, loading, isAuthenticated, isAdmin, and 6 more.": 1,
+        "TS2740: Type '{ user: { id: string; name: string; }; login: Mock<Procedure>; logout: Mock<Procedure>; register: Mock<Procedure>; updateProfile: Mock<Procedure>; isLoading: boolean; }' is missing the following properties from type 'AuthContextType': profile, loading, isAuthenticated, isAdmin, and 6 more.": 2
       },
       "src/contexts/__tests__/translationLoader.test.ts": {
         "TS6307: File 'src/contexts/translationLoader.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
@@ -880,13 +857,6 @@
       },
       "src/contexts/useWebSocket.ts": {
         "TS6307: File 'src/contexts/WebSocketContext.types.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
-      },
-      "src/hooks/__tests__/useAbortController.enhanced.test.tsx": {
-        "TS2339: Property 'dispatchEvent' does not exist on type 'never'.": 1,
-        "TS2339: Property 'signal' does not exist on type 'never'.": 1,
-        "TS2345: Argument of type 'AbortController' is not assignable to parameter of type 'never'.": 1,
-        "TS2345: Argument of type 'AbortSignal' is not assignable to parameter of type 'never'.": 1,
-        "TS7030: Not all code paths return a value.": 1
       },
       "src/hooks/__tests__/useActiveSection.test.ts": {
         "TS6307: File 'src/hooks/useActiveSection.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
@@ -947,9 +917,6 @@
       },
       "src/hooks/shared/__tests__/useAbortController.test.ts": {
         "TS6307: File 'src/hooks/shared/useAbortController.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
-      },
-      "src/hooks/shared/__tests__/useAbortController.unit.test.ts": {
-        "TS6307: File 'src/lib/errorUtils.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
       },
       "src/hooks/shared/__tests__/useRetry.test.ts": {
         "TS6307: File 'src/hooks/shared/useRetry.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
@@ -1026,6 +993,9 @@
       },
       "src/lib/__tests__/downloadUtils.test.ts": {
         "TS6307: File 'src/lib/downloadUtils.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
+      },
+      "src/lib/__tests__/errorUtils.race-condition.test.ts": {
+        "TS6307: File 'src/lib/errorUtils.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
       },
       "src/lib/__tests__/export-config.test.ts": {
         "TS6307: File 'src/lib/export-config.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
@@ -1384,9 +1354,6 @@
         "TS2339: Property 'container' does not exist on type 'RenderResult<typeof import(\"node_modules/@testing-library/dom/types/queries\"), HTMLElement, HTMLElement> | {...; }'.": 21,
         "TS2353: Object literal may only specify known properties, and 'metadata' does not exist in type 'Polygon'.": 1
       },
-      "src/pages/segmentation/__tests__/PolygonPerformanceRegression.test.tsx": {
-        "TS6307: File 'src/test-utils/polygonTestDataFactory.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
-      },
       "src/pages/segmentation/__tests__/VertexDeletionIntegration.test.tsx": {
         "TS2322: Type 'null' is not assignable to type 'string'.": 1,
         "TS6307: File 'src/test-utils/reactTestUtils.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
@@ -1484,6 +1451,9 @@
       "src/pages/segmentation/components/canvas/VideoFrameImage.tsx": {
         "TS6307: File 'src/pages/segmentation/components/canvas/CanvasImage.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
         "TS6307: File 'src/pages/segmentation/components/canvas/MultiChannelCanvas.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
+      },
+      "src/pages/segmentation/components/canvas/__tests__/CanvasPolygon.test.tsx": {
+        "TS2353: Object literal may only specify known properties, and 'startPoint' does not exist in type 'VertexDragState'.": 1
       },
       "src/pages/segmentation/components/canvas/__tests__/CanvasTemporaryGeometryLayer.test.tsx": {
         "TS2353: Object literal may only specify known properties, and 'isDragging' does not exist in type 'Partial<InteractionState>'.": 1
@@ -1653,7 +1623,7 @@
         "TS2345: Argument of type '\"emit\"' is not assignable to parameter of type 'never'.": 1,
         "TS2345: Argument of type '0' is not assignable to parameter of type 'never'.": 1,
         "TS2345: Argument of type '<type elided by tsc>' is not assignable to parameter of type 'Socket<DefaultEventsMap, DefaultEventsMap>'.": 1,
-        "TS2345: Argument of type 'Mock<Procedure>' is not assignable to parameter of type 'never'.": 3,
+        "TS2345: Argument of type 'Mock<Procedure>' is not assignable to parameter of type 'never'.": 2,
         "TS2345: Argument of type '{ event: string; data: { data: number; timestamp: number; }; }' is not assignable to parameter of type 'never'.": 1,
         "TS2353: Object literal may only specify known properties, and 'progress' does not exist in type 'Partial<SegmentationUpdate>'.": 3,
         "TS2353: Object literal may only specify known properties, and 'progress' does not exist in type 'SegmentationUpdate'.": 2,
@@ -1670,9 +1640,6 @@
         "TS2556: A spread argument must either have a tuple type or be passed to a rest parameter.": 1,
         "TS6307: File 'src/types/websocket.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
       },
-      "src/test-fixtures/cancelScenarios.ts": {
-        "TS1355: A 'const' assertions can only be applied to references to enum members, or string, number, boolean, array, or object literals.": 1
-      },
       "src/test-utils/__tests__/canvasTestUtils.test.ts": {
         "TS18048: 'context.createLinearGradient' is possibly 'undefined'.": 1,
         "TS18048: 'context.createPattern' is possibly 'undefined'.": 1,
@@ -1683,9 +1650,6 @@
       },
       "src/test-utils/__tests__/webSocketTestUtils.test.ts": {
         "TS2353: Object literal may only specify known properties, and 'progress' does not exist in type 'Partial<SegmentationUpdate>'.": 1
-      },
-      "src/test-utils/cancelTestHelpers.tsx": {
-        "TS2339: Property 'memory' does not exist on type 'Performance'.": 4
       },
       "src/test-utils/canvasTestUtils.ts": {
         "TS2322: Type 'CanvasGradient | CanvasPattern | string' is not assignable to type 'string'.": 2,
@@ -1702,15 +1666,11 @@
         "TS6307: File 'src/test-utils/test-helpers.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
       },
       "src/test-utils/segmentationTestUtils.ts": {
-        "TS2339: Property 'jsHeapSizeLimit' does not exist on type '{}'.": 1,
-        "TS2339: Property 'totalJSHeapSize' does not exist on type '{}'.": 1,
-        "TS2339: Property 'usedJSHeapSize' does not exist on type '{}'.": 1,
         "TS2353: Object literal may only specify known properties, and 'x' does not exist in type '{ polygonId: string; vertexIndex: number; }'.": 1,
-        "TS2578: Unused '@ts-expect-error' directive.": 1,
         "TS2722: Cannot invoke an object which is possibly 'undefined'.": 8
       },
       "src/test-utils/test-components.tsx": {
-        "TS2322: Type '{ user: { id: string; email: string; name: string; }; profile: { id: string; userId: string; bio: string; avatarUrl: string; }; token: string; loading: boolean; isAuthenticated: boolean; signIn: Mock<Procedure>; signUp: Mock<...>; signOut: Mock<...>; deleteAccount: Mock<...>; refreshProfile: Mock<...>; }' is not assignable to type 'AuthContextType'.": 1
+        "TS2322: Type '<type elided by tsc>' is not assignable to type 'AuthContextType'.": 1
       },
       "src/test-utils/test-helpers.ts": {
         "TS2724: '\"@/pages/segmentation/types\"' has no exported member named '_EditMode'. Did you mean 'EditMode'?": 1

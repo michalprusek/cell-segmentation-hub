@@ -6,10 +6,7 @@ import {
   type Polygon,
 } from '@/lib/segmentation';
 import { calculatePolygonArea } from '@/lib/polygonGeometry';
-import {
-  createTestPolygons,
-  measurePerformance,
-} from '@/test-utils/polygonTestUtils';
+import { createTestPolygons } from '@/test-utils/polygonTestUtils';
 
 // Mock DOM APIs for testing
 Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
@@ -167,14 +164,30 @@ describe('Segmentation Algorithms', () => {
     });
   });
 
-  describe('Performance Tests', () => {
-    it('should calculate polygon metrics efficiently for large polygons', async () => {
-      const performance = await measurePerformance(() => {
-        calculatePolygonArea(testPolygons.large);
-        calculatePerimeter(testPolygons.large);
-      }, 100);
+  /**
+   * Was a `describe('Performance Tests')` asserting `averageTime < 100` over
+   * 100 iterations. `testPolygons.large` is a 20-point polygon and jsdom's
+   * performance.now() resolves to a whole millisecond, so averageTime measured
+   * 0 and the assertion was `expect(0).toBeLessThan(100)` — it could not fail.
+   *
+   * The fixture is a regular 20-gon of circumradius 1000, which has exact
+   * closed-form area and perimeter. Assert those instead: same fixture, same
+   * code path, but now it checks the answer.
+   */
+  describe('regular 20-gon (analytic ground truth)', () => {
+    const N = 20;
+    const R = 1000;
 
-      expect(performance.averageTime).toBeLessThan(100); // load-tolerant ceiling: wall-clock budgets inflate under V8 coverage on CI
+    it('area matches (n/2) R^2 sin(2pi/n)', () => {
+      const expected = (N / 2) * R * R * Math.sin((2 * Math.PI) / N);
+      expect(calculatePolygonArea(testPolygons.large)).toBeCloseTo(expected, 6);
+      expect(expected).toBeCloseTo(3090169.9437, 4);
+    });
+
+    it('perimeter matches n * 2R sin(pi/n)', () => {
+      const expected = N * 2 * R * Math.sin(Math.PI / N);
+      expect(calculatePerimeter(testPolygons.large)).toBeCloseTo(expected, 6);
+      expect(expected).toBeCloseTo(6257.3786, 4);
     });
   });
 

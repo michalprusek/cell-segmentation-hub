@@ -78,9 +78,7 @@ describe('ImpersonationBanner', () => {
       screen.getByRole('button', { name: /returnToUserList/i })
     );
 
-    await waitFor(() =>
-      expect(apiClient.stopImpersonation).toHaveBeenCalled()
-    );
+    await waitFor(() => expect(apiClient.stopImpersonation).toHaveBeenCalled());
     // A react-router navigate would leave the React Query cache, the
     // WebSocket subscription and every context holding the impersonated
     // user's data under the admin's name.
@@ -91,9 +89,7 @@ describe('ImpersonationBanner', () => {
 
   it('keeps the banner up and reports the failure when the stop call fails', async () => {
     mockAuth.impersonatedBy = { id: 'a1', email: 'admin@admin.com' };
-    vi.mocked(apiClient.stopImpersonation).mockRejectedValue(
-      new Error('boom')
-    );
+    vi.mocked(apiClient.stopImpersonation).mockRejectedValue(new Error('boom'));
 
     render(<ImpersonationBanner />);
     const button = screen.getByRole('button', { name: /returnToUserList/i });

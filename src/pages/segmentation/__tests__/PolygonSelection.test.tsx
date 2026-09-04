@@ -402,27 +402,25 @@ describe('Polygon Selection Functionality', () => {
     });
   });
 
-  describe('Performance with Multiple Polygons', () => {
-    it('should handle selection efficiently with many polygons', () => {
+  describe('Selection with Multiple Polygons', () => {
+    it('selects the clicked polygon out of 50, and only that one', () => {
+      // The two `toBeLessThan(2000)` ceilings that used to bracket this test
+      // were ~400x the real cost of a jsdom render, so neither could fail.
+      // The claim that matters with 50 polygons on the canvas is that the click
+      // lands on the RIGHT one — a hit-testing regression is invisible to a
+      // clock but obvious here.
       const manyPolygons = createMockPolygons(50);
-
-      const startTime = performance.now();
       renderPolygonsInSvg(manyPolygons);
-      const renderTime = performance.now() - startTime;
 
-      // Should render quickly even with many polygons (load-tolerant ceiling)
-      expect(renderTime).toBeLessThan(2000);
+      manyPolygons.forEach(polygon => {
+        expect(screen.getByTestId(polygon.id)).toBeInTheDocument();
+      });
 
-      // Click on a polygon in the middle
       const targetPolygon = screen.getByTestId('hex-5');
       const targetPath = targetPolygon.querySelector('path')!;
-
-      const selectStart = performance.now();
       fireEvent.click(targetPath);
-      const selectTime = performance.now() - selectStart;
 
-      // Selection should be fast
-      expect(selectTime).toBeLessThan(2000); // load-tolerant ceiling: wall-clock budgets inflate under V8 coverage on CI
+      expect(mockOnSelectPolygon).toHaveBeenCalledTimes(1);
       expect(mockOnSelectPolygon).toHaveBeenCalledWith('hex-5');
     });
 

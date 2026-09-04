@@ -59,6 +59,18 @@ const PolygonVertices = React.memo(
         originalIndex: index,
       }));
 
+      // Drop non-finite vertices. CanvasPolygon filters these out of the PATH
+      // (validPoints) but hands us the RAW points, so without this a NaN or
+      // ±Infinity coordinate reached the DOM as <circle cx="NaN"> — an invalid
+      // SVG attribute, so the browser drops the handle and the vertex becomes
+      // ungrabbable. Filtering here rather than upstream keeps `originalIndex`
+      // aligned with the polygon's real points array, which is what
+      // onDeleteVertex / onDuplicateVertex index into.
+      verticesWithIndices = verticesWithIndices.filter(
+        ({ point }) =>
+          point && Number.isFinite(point.x) && Number.isFinite(point.y)
+      );
+
       // Apply viewport culling if bounds are provided (keep this for performance)
       if (viewportBounds) {
         const buffer = 100; // Increased buffer for better visibility

@@ -301,41 +301,46 @@ describe('useWebSocketToasts', () => {
         event: WebSocketEvent
       ) => void;
 
-      const startTime = performance.now();
-
       // Send many events rapidly
       for (let i = 0; i < 1000; i++) {
         eventHandler({ type: 'reconnecting' });
       }
 
-      const endTime = performance.now();
-
-      // Catastrophic-regression ceiling (generous for contended CI/coverage
-      // load — wall-clock perf assertions flake when the box is busy). The
-      // meaningful assertion is the call count below.
-      expect(endTime - startTime).toBeLessThan(3000);
-
       // Should have called toast for each event
       expect(toast.error).toHaveBeenCalledTimes(1000);
     });
 
-    it('should handle listener registration/cleanup efficiently', () => {
-      // Measure multiple mount/unmount cycles
-      const startTime = performance.now();
-
+    it('detaches exactly what it attached across 50 mount/unmount cycles', () => {
+      // Was a 2000ms ceiling whose comment claimed "a real O(n^2) leak would
+      // still trip it". It would not: 50 cycles cost single-digit milliseconds,
+      // jsdom's performance.now() resolves to a whole millisecond, and a
+      // deliberately quadratic implementation at this volume still lands far
+      // under 2000ms. (CLAUDE.md records the same claim being disproved on
+      // cancel-performance.test.ts.)
+      //
+      // A listener leak IS deterministically observable: count on() vs off().
       const instances = [];
       for (let i = 0; i < 50; i++) {
         instances.push(renderHook(() => useWebSocketToasts()));
       }
 
-      // Cleanup all instances
+      // Each mount registers 'reconnecting' + 'reconnected'.
+      expect(webSocketEventEmitter.on).toHaveBeenCalledTimes(100);
+      expect(webSocketEventEmitter.off).not.toHaveBeenCalled();
+
       instances.forEach(instance => instance.unmount());
 
-      const endTime = performance.now();
+      // ...and each unmount must remove both. Anything less is the leak.
+      expect(webSocketEventEmitter.off).toHaveBeenCalledTimes(100);
 
-      // Catastrophic-regression ceiling (50 mount/unmount cycles). Generous
-      // for contended CI/coverage load; a real O(n^2) leak would still trip it.
-      expect(endTime - startTime).toBeLessThan(2000);
+      // Same handler identity per pair, or off() silently removes nothing.
+      const onHandlers = vi
+        .mocked(webSocketEventEmitter.on)
+        .mock.calls.map(call => call[1]);
+      const offHandlers = vi
+        .mocked(webSocketEventEmitter.off)
+        .mock.calls.map(call => call[1]);
+      expect(new Set(offHandlers)).toEqual(new Set(onHandlers));
     });
   });
 

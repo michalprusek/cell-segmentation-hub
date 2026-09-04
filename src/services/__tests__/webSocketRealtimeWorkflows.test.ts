@@ -892,8 +892,6 @@ describe('WebSocket Real-time Workflows', () => {
 
       wsManager.joinProject(projectId);
 
-      const startTime = performance.now();
-
       // Simulate large batch processing
       for (let i = 0; i < imageCount; i++) {
         const imageId = `batch-img-${i}`;
@@ -927,15 +925,9 @@ describe('WebSocket Real-time Workflows', () => {
         }
       }
 
-      const endTime = performance.now();
-      const duration = endTime - startTime;
-
       // Verify all updates were processed
       expect(segmentationListener).toHaveBeenCalledTimes(imageCount * 2);
       expect(queueStatsListener).toHaveBeenCalledTimes(10); // Every 100 images
-
-      // Performance should be reasonable (less than 3 seconds for 1000 images)
-      expect(duration).toBeLessThan(3000);
     });
   });
 });

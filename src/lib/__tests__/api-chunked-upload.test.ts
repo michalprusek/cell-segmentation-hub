@@ -351,7 +351,6 @@ describe('ApiClient - Chunked Upload Tests', () => {
       const mockFiles = createMockFiles(100);
       const chunkSize = 20;
       const rateLimitDelay = 1000; // 1 second between chunks
-      const startTime = Date.now();
 
       // Mock successful responses with delay
       mockAxiosInstance.post.mockImplementation(() => {
@@ -382,10 +381,12 @@ describe('ApiClient - Chunked Upload Tests', () => {
         }
       }
 
-      const totalTime = Date.now() - startTime;
-      const expectedMinTime = (chunks - 1) * rateLimitDelay; // Delay between chunks
-
-      expect(totalTime).toBeGreaterThanOrEqual(expectedMinTime);
+      // `expect(totalTime).toBeGreaterThanOrEqual((chunks - 1) * delay)` used
+      // to stand here. The delays are the TEST'S own `await new
+      // Promise(setTimeout)` calls in the loop above, not anything apiClient
+      // does — so it asserted that the test slept as long as the test told
+      // itself to sleep. It could not fail, and it said nothing about
+      // production. The chunk count is the real claim.
       expect(mockAxiosInstance.post).toHaveBeenCalledTimes(chunks);
     });
   });

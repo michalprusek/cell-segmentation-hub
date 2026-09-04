@@ -69,16 +69,26 @@ describe('config', () => {
       expect(typeof wsUrl).toBe('string');
     });
 
-    it('when non-empty, uses ws:// or wss:// protocol', () => {
-      if (wsUrl.length > 0) {
-        expect(wsUrl).toMatch(/^wss?:\/\//);
-      }
+    // These two guarded their assertion behind `if (wsUrl.length > 0)`. That
+    // holds today (VITE_WS_URL is set in the vitest env, so wsUrl is
+    // 'ws://localhost:3001'), but the guard means that the day the env stops
+    // setting it these tests go on reporting green having asserted nothing.
+    // Assert the precondition instead, so the test fails loudly rather than
+    // quietly turning into a no-op.
+    it('uses ws:// or wss:// protocol', () => {
+      expect(
+        wsUrl,
+        'VITE_WS_URL must be set for this test to mean anything'
+      ).not.toBe('');
+      expect(wsUrl).toMatch(/^wss?:\/\//);
     });
 
-    it('when non-empty, is a valid URL', () => {
-      if (wsUrl.length > 0) {
-        expect(() => new URL(wsUrl)).not.toThrow();
-      }
+    it('is a valid URL', () => {
+      expect(
+        wsUrl,
+        'VITE_WS_URL must be set for this test to mean anything'
+      ).not.toBe('');
+      expect(() => new URL(wsUrl)).not.toThrow();
     });
 
     it('never uses http:// or https:// protocol', () => {

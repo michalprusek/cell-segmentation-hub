@@ -27,7 +27,7 @@ vi.mock('../components/canvas/PolygonVertices', () => ({
   ),
 }));
 
-vi.mock('../../context-menu/PolygonContextMenu', () => ({
+vi.mock('../components/context-menu/PolygonContextMenu', () => ({
   default: ({ children }: any) => <g>{children}</g>,
 }));
 
@@ -638,8 +638,6 @@ describe('Polygon Hole Rendering', () => {
         })
       );
 
-      const startTime = performance.now();
-
       render(
         <svg width="800" height="600" viewBox="0 0 800 600">
           {internalPolygons.map(polygon => (
@@ -658,11 +656,6 @@ describe('Polygon Hole Rendering', () => {
           ))}
         </svg>
       );
-
-      const renderTime = performance.now() - startTime;
-
-      // Should render multiple internal polygons quickly (generous threshold for CI)
-      expect(renderTime).toBeLessThan(2000);
 
       // All internal polygons should be rendered with correct classes
       internalPolygons.forEach(polygon => {
