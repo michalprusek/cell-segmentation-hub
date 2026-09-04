@@ -257,6 +257,9 @@ export default {
     createProjectDesc:
       'Přidat nový projekt pro organizaci vašich mikroskopických snímků a analýz.',
     projectType: 'Typ projektu',
+    renameProject: 'Přejmenovat projekt',
+    projectRenamed: 'Projekt přejmenován',
+    projectRenameFailed: 'Projekt se nepodařilo přejmenovat',
     projectTypeUpdated: 'Typ projektu byl aktualizován',
     failedToUpdateProject: 'Nepodařilo se aktualizovat projekt',
     changeProjectType: 'Změnit typ projektu',

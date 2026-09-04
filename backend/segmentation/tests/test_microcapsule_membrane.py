@@ -681,3 +681,205 @@ class TestTunableInvariants:
             f"contour moves {jump / arc:.2f} px per arc px on a small capsule, "
             "far past the intended cap — the radial grid is not scaling with it"
         )
+
+
+class TestShapePrior:
+    """A membrane is a closed shell, so where the image says nothing the
+    contour should stay round.
+
+    Reported 2026-09-04: "the boundary dips inward in some places; I want the
+    membrane to be ideally a circle". On the arc in question the radial profile
+    has no edge at all -- intensity climbs monotonically from 65 to 150 over
+    ~100 px and the band-passed response is 1.2-1.8 against 4-6.7 in the sharp
+    sectors -- so the path locks onto whatever ripple the ramp carries.
+
+    WHAT IS AND IS NOT COVERED HERE. The prior's effect is established on real
+    data (the reported capsule goes from 5.03 px of non-circularity to 3.24,
+    the eight already-round ones move by at most 0.14 px). Three attempts at a
+    synthetic fixture that would fail without it -- a half-blurred capsule, one
+    with a corrugated ramp, one with a decoy arc on the soft half -- all came
+    out prior-independent or made the capsule read as dissolved, because the
+    failure needs the irregular structure of real bright field. So what is
+    pinned here is the SAFETY property, which is the one that could silently
+    ruin good output, plus the robustness of the circle it pulls toward.
+    """
+
+    def test_does_not_round_off_a_genuinely_non_circular_membrane(self):
+        # The 120 px out-of-round ellipse from the scaling test, restated as a
+        # prior question: its edge is sharp the whole way round, so no ray is
+        # weak enough to be pulled and the shape must survive intact. This is
+        # the failure mode that matters -- an earlier ungated version of the
+        # pull, which ramped from 1.0 instead of gating, flattened it to a
+        # 66 px span.
+        size, cx, cy = 1800, 900.0, 900.0
+        yy, xx = np.mgrid[0:size, 0:size]
+        rr = np.hypot(xx - cx, yy - cy)
+        ell = np.hypot((xx - cx) / 660.0, (yy - cy) / 540.0)
+        img = np.full((size, size), 190.0)
+        inside = rr <= 850.0
+        img[inside] = (90 + 60 * 0.5 * (1 + np.tanh((ell - 1.0) / 0.006)))[inside]
+        img[np.abs(rr - 850.0) < 4.0] = 40.0
+        poly = _ring_polygon(cx, cy, 850.0, n=240)
+
+        _state, _score, _feats, membrane = membrane_polygon_for(
+            prepare_gray(img.astype(np.uint8)), poly
+        )
+        assert membrane is not None
+        r = _traced_radii(membrane, cx, cy)
+        assert r.max() - r.min() > 100.0, (
+            f"span {r.max() - r.min():.1f} px of the true 120 — the shape "
+            "prior is rounding off a membrane the image clearly resolves"
+        )
+
+    def test_the_gate_leaves_a_confident_edge_alone(self):
+        from models import microcapsule_membrane as mm
+
+        # The gate is what makes the test above hold, so state it directly: a
+        # ray carrying an edge as strong as the capsule's best gets no pull at
+        # all, and the pull only reaches full strength at zero evidence.
+        strong = 1.0
+        for frac in (1.0, 0.9, mm.SHAPE_PRIOR_GATE):
+            weak = np.clip((mm.SHAPE_PRIOR_GATE - frac / strong)
+                           / mm.SHAPE_PRIOR_GATE, 0.0, 1.0)
+            assert weak == 0.0, f"a ray at {frac} of the strong edges is pulled"
+        assert np.clip((mm.SHAPE_PRIOR_GATE - 0.0) / mm.SHAPE_PRIOR_GATE,
+                       0.0, 1.0) == 1.0
+
+    def test_the_circle_it_pulls_toward_ignores_the_bad_stretches(self):
+        from models import microcapsule_membrane as mm
+
+        # The prior is only as good as its circle, and that circle is fitted to
+        # the very path whose bad stretches it exists to correct.
+        #
+        # Trimming alone cannot do it. The bad stretches are CONTIGUOUS arcs,
+        # and an arc pulled inward is indistinguishable from a circle whose
+        # centre has moved, so least squares absorbs it into the centre instead
+        # of flagging it as an outlier. Both halves are asserted here, because
+        # the failing one is the reason the `trust` argument exists.
+        angs = np.linspace(0, 2 * np.pi, 720, endpoint=False)
+        radial = np.full(720, 200.0)
+        radial[100:244] -= 25.0            # a fifth of the ring, dragged in
+        cap = mm.capsule_from_polygon(_ring_polygon(0.0, 0.0, 360.0))
+
+        blind = mm._fit_circle_radius(cap, angs, radial)
+        assert blind is not None
+        assert float(np.median(blind)) < 198.0, (
+            "the unweighted fit is expected to be dragged by a contiguous "
+            "arc; if it is not, this test no longer proves anything"
+        )
+
+        # The same evidence that gates the pull also selects the fit: the bad
+        # arc is where the edge was weak, so it is excluded.
+        trust = np.ones(720)
+        trust[100:244] = 0.05
+        fitted = mm._fit_circle_radius(cap, angs, radial, trust=trust)
+        assert fitted is not None
+        assert float(np.median(fitted)) == pytest.approx(200.0, abs=1.5), (
+            f"weighted fit came out at {np.median(fitted):.1f}"
+        )
+
+    def test_the_circle_fit_refuses_rather_than_inventing_one(self):
+        from models import microcapsule_membrane as mm
+
+        # Degenerate input must return None so the caller keeps pass 1's path,
+        # rather than a circle solved from a singular system.
+        angs = np.linspace(0, 2 * np.pi, 720, endpoint=False)
+        cap = mm.capsule_from_polygon(_ring_polygon(0.0, 0.0, 360.0))
+        assert mm._fit_circle_radius(cap, angs, np.zeros(720)) is None
+
+
+class TestTheDerivativeScaleIsTheMembranesOwn:
+    """`SIGMA_G` is the scale of a crisp step; a membrane can be broader.
+
+    Reported 2026-09-04 on `234.tiff`, whose membrane the user then corrected by
+    hand -- the only human-drawn membrane there is. Traced at the fixed 1.5 px
+    scale the contour sat 16.6 px inside it (RMS 17.19, 31.7% of rays within
+    5 px); traced at the measured width it lands on it (RMS 2.09, 96.8%).
+
+    THESE TESTS DO NOT REPRODUCE THAT ON A SYNTHETIC IMAGE, and the attempt is
+    recorded here so nobody repeats it: a fixture with a broad membrane, one
+    with added core texture, one with a background ramp, and one with a sharp
+    incoherent inner face were all built and measured, and in every case the
+    two scales agreed to under 0.5 px. What breaks the fixed scale is a real
+    capsule's combination of a broad transition WITH structure that survives
+    the per-angle median of `_aligned_profile` but still forms a continuous
+    ring, and that did not fall out of any synthetic tried. So these assert the
+    rule, its wiring, and the invariance that protects every other capsule --
+    the real evidence is the measurement in `_trace_inner`'s docstring, over
+    the eleven production membranes.
+    """
+
+    def test_the_scale_is_the_measured_width_floored_at_sigma_g(self):
+        from models import microcapsule_membrane as mm
+
+        # Below the floor the constants stand: a crisp membrane must trace
+        # exactly as it did before, which is what keeps this change surgical.
+        assert mm._trace_scales(0.5) == (mm.SIGMA_G, mm.SIGMA_BG)
+        assert mm._trace_scales(mm.SIGMA_G) == (mm.SIGMA_G, mm.SIGMA_BG)
+
+        # Above it the derivative follows the membrane.
+        sigma, sigma_bg = mm._trace_scales(4.0)
+        assert sigma == 4.0
+        # The background scale keeps its RATIO, not its value -- pinned at 8.0
+        # it would sit at 2x the signal scale instead of 5.33x and the
+        # band-pass would begin subtracting the edge from itself.
+        assert sigma_bg == pytest.approx(4.0 * (mm.SIGMA_BG / mm.SIGMA_G))
+        assert sigma_bg / sigma == pytest.approx(mm.SIGMA_BG / mm.SIGMA_G)
+
+    def test_no_measurement_leaves_the_old_constants(self):
+        from models import microcapsule_membrane as mm
+
+        # A missing or unusable width is not an excuse to invent a scale.
+        assert mm._trace_scales(None) == (mm.SIGMA_G, mm.SIGMA_BG)
+        assert mm._trace_scales(float("nan")) == (mm.SIGMA_G, mm.SIGMA_BG)
+
+    def test_analyze_hands_the_measured_width_to_the_tracer(self):
+        from models import microcapsule_membrane as mm
+
+        # The bug class this guards is the one that keeps recurring here: the
+        # helper is right and nobody passes it the argument. A broad membrane,
+        # so the width is well clear of the floor and a dropped argument
+        # cannot look the same as a passed one.
+        gray = _capsule_image(membrane_edge_px=5.0)
+        cap = capsule_from_polygon(_ring_polygon(280.0, 280.0, 200.0))
+        seen = {}
+        original = mm._trace_inner
+
+        def spy(img, capsule, angs, guide, rout, edge_width=None):
+            seen["edge_width"] = edge_width
+            return original(img, capsule, angs, guide, rout,
+                            edge_width=edge_width)
+
+        mm._trace_inner = spy
+        try:
+            result = mm.analyze(gray, cap)
+        finally:
+            mm._trace_inner = original
+
+        assert result.contour is not None, "fixture must trace, or it proves nothing"
+        assert seen["edge_width"] == result.features["width"]
+        assert seen["edge_width"] > mm.SIGMA_G, (
+            f"fixture edge is {seen['edge_width']:.2f} px, at or below the "
+            f"{mm.SIGMA_G} px floor, so passing it changes nothing and this "
+            "test would pass with the argument dropped"
+        )
+
+    def test_a_crisp_membrane_traces_exactly_as_before(self):
+        from models import microcapsule_membrane as mm
+
+        # The nine production capsules whose measured width is already near
+        # SIGMA_G moved by at most 0.06 px. That is not a happy accident of
+        # the floor -- it is the property that makes this change safe to ship,
+        # so it is asserted rather than assumed.
+        gray = prepare_gray(_capsule_image(membrane_edge_px=1.0))
+        cap = capsule_from_polygon(_ring_polygon(280.0, 280.0, 200.0))
+        f = mm.measure(gray, cap)
+        assert f["width"] <= mm.SIGMA_G, (
+            f"fixture width {f['width']:.2f} is above the floor; pick a "
+            "crisper edge or this asserts nothing"
+        )
+        before, _ = mm._trace_inner(gray, cap, f["_angs"], f["_guide"],
+                                    f["_rout"], edge_width=None)
+        after, _ = mm._trace_inner(gray, cap, f["_angs"], f["_guide"],
+                                   f["_rout"], edge_width=f["width"])
+        assert np.allclose(before, after)

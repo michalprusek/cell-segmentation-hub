@@ -18,6 +18,10 @@ export interface InteractionState {
   panStart: Point | null;
   draggedVertexInfo: { polygonId: string; vertexIndex: number } | null;
   originalVertexPosition?: Point | null; // For undo/redo
+  /** Cursor position, in image coordinates, when the vertex was grabbed.
+   *  The drag moves the vertex by (cursor - this), so grabbing a vertex
+   *  slightly off-centre no longer teleports it under the pointer. */
+  vertexGrabPoint?: Point | null;
   sliceStartPoint: Point | null;
   // Add point mode states
   addPointStartVertex: { polygonId: string; vertexIndex: number } | null;
@@ -48,4 +52,9 @@ export interface VertexDragState {
   vertexIndex: number | null;
   dragOffset?: { x: number; y: number };
   originalPosition?: { x: number; y: number };
+  /** What the drag moves. 'vertex' moves the single point at `vertexIndex`;
+   *  'translate' moves the whole shape and ignores `vertexIndex`. One state
+   *  for both, so the live preview, the commit and undo all follow one path
+   *  — the alternative was a parallel drag state that could disagree. */
+  mode?: 'vertex' | 'translate';
 }

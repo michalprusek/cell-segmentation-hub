@@ -89,10 +89,17 @@ const PolygonVertices = React.memo(
           const isVertexHovered =
             hoveredVertex?.polygonId === polygonId &&
             hoveredVertex?.vertexIndex === originalIndex;
-          const isDragging =
+          // A whole-shape translate carries every vertex with the outline;
+          // without this the dots stay behind and the preview reads as if the
+          // drag were not working.
+          const onThisShape =
             vertexDragState?.isDragging &&
-            vertexDragState?.polygonId === polygonId &&
-            vertexDragState?.vertexIndex === originalIndex;
+            vertexDragState?.polygonId === polygonId;
+          const translating =
+            onThisShape && vertexDragState?.mode === 'translate';
+          const isDragging =
+            (onThisShape && vertexDragState?.vertexIndex === originalIndex) ||
+            !!translating;
           const dragOffset = isDragging
             ? vertexDragState?.dragOffset
             : undefined;

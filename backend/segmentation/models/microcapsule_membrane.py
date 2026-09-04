@@ -86,6 +86,8 @@ ALIGN_WIN = (0.30, 80.0)    # half-window around the guide in pass 2
 INLIER_BAND = (0.05, 8.0)   # a sector counts towards coverage inside this band
 TRACE_BAND = (0.10, 20.0)   # search band for the inner contour (pass 1)
 TRACE_STEP_MAX = 0.5        # coarsest radial sampling of that search
+SHAPE_PRIOR = 2.0           # pull toward a circle where the edge is weak
+SHAPE_PRIOR_GATE = 0.65     # 'weak' means below this fraction of the strong edges
 BASELINE_GAP = (0.05, 15.0) # keep the compartment medians this clear of the edge
 SIGMA_G = 1.5               # px, fine derivative scale (edge localisation)
 SIGMA_BG = 8.0              # px, coarse scale subtracted to reject broad ramps
@@ -582,7 +584,96 @@ def _snap_to_level(img, cap, angs, r0, rout):
     return r0 + s[path]
 
 
-def _trace_inner(img, cap, angs, guide, rout):
+def _fit_circle_radius(cap, angs, radial, trust=None):
+    """Robust circle through a traced path, expressed back as r(theta) in the
+    capsule's polar frame.
+
+    `trust` is an optional per-ray weight in [0, 1]; rays below half of its
+    mean are dropped before fitting. That matters more than the iterative
+    trimming: the stretches this circle is meant to correct are CONTIGUOUS
+    arcs, and a contiguous arc pulled inward is indistinguishable from a
+    circle whose centre has moved, so least squares absorbs it into the centre
+    instead of flagging it. Fitted to a ring with a fifth of its circumference
+    dragged 25 px in, the untrusted fit returns 195 rather than 200; selecting
+    on the same evidence that gates the pull returns 200.
+
+    Returns None rather than a guess when no circle can be defined -- a
+    degenerate path makes the normal equations singular, and `lstsq` answers
+    with a minimum-norm solution rather than raising.
+    """
+    x = cap.cx + radial * np.cos(angs)
+    y = cap.cy + radial * np.sin(angs)
+
+    keep = np.ones(len(angs), bool)
+    if trust is not None and np.isfinite(trust).any():
+        level = float(np.nanmean(trust))
+        if level > 1e-9:
+            strong = trust >= 0.5 * level
+            if strong.sum() >= 30:
+                keep = strong
+
+    # No extent means no circle. Guard before fitting, not after: the radius
+    # that comes back from a singular fit looks perfectly healthy.
+    if (np.ptp(x[keep]) <= 1e-6) or (np.ptp(y[keep]) <= 1e-6):
+        return None
+
+    cx = cy = rad = None
+    for _ in range(6):
+        if keep.sum() < 30:
+            return None
+        A = np.c_[2 * x[keep], 2 * y[keep], np.ones(int(keep.sum()))]
+        b = x[keep] ** 2 + y[keep] ** 2
+        sol, *_ = np.linalg.lstsq(A, b, rcond=None)
+        cx, cy = float(sol[0]), float(sol[1])
+        inside = sol[2] + cx * cx + cy * cy
+        if not np.isfinite(inside) or inside <= 1e-6:
+            return None
+        rad = float(np.sqrt(inside))
+        res = np.hypot(x - cx, y - cy) - rad
+        spread = 1.4826 * np.median(np.abs(res - np.median(res)))
+        nxt = keep & (np.abs(res - np.median(res)) < max(2.0, 2.5 * spread))
+        if nxt.sum() < 30 or np.array_equal(nxt, keep):
+            break
+        keep = nxt
+
+    if rad is None or rad <= 1e-6:
+        return None
+
+    # Solve |c + r*u - i| = rad for r, so the circle is a radius per ray in the
+    # same frame every other stage uses.
+    dx, dy = cap.cx - cx, cap.cy - cy
+    b = dx * np.cos(angs) + dy * np.sin(angs)
+    disc = b * b - (dx * dx + dy * dy - rad * rad)
+    if np.any(disc < 0):
+        return None
+    return -b + np.sqrt(disc)
+
+
+def _trace_scales(edge_width):
+    """The band-pass scales for tracing a membrane of measured width.
+
+    `SIGMA_G` is a FLOOR, not the answer: it is the scale of a crisp step, and
+    a membrane can be broader than that. Matching the derivative to the
+    transition is what stops the per-ray maximum landing on sharper structure
+    inside the membrane -- see `_trace_inner` for the measurements.
+
+    `SIGMA_BG` moves with it so the band-pass keeps its shape. It is a
+    background scale whose only job is to stay well clear of the signal one, so
+    what has to be preserved is the RATIO, not the value: held fixed at 8.0
+    while sigma grew to 4 it would be only 2x the signal scale instead of the
+    5.33x it was designed at, and the band-pass would start subtracting the
+    edge from itself.
+
+    `edge_width` of None means "no measurement available" and leaves both at
+    their constants, which is the pre-2026-09-04 behaviour exactly.
+    """
+    if edge_width is None or not np.isfinite(edge_width):
+        return SIGMA_G, SIGMA_BG
+    sigma = max(SIGMA_G, float(edge_width))
+    return sigma, sigma * (SIGMA_BG / SIGMA_G)
+
+
+def _trace_inner(img, cap, angs, guide, rout, edge_width=None):
     """Inner boundary as ONE closed contour, by dynamic programming.
 
     Every ray offers several candidate edges inside the search band, and on a
@@ -635,12 +726,54 @@ def _trace_inner(img, cap, angs, guide, rout):
     range. `TRACE_STEP_MAX` and the SIGMA_G/3 floor together stop the grid
     coarsening past the point where the derivative can localise an edge.
 
+    THE DERIVATIVE SCALE IS THE MEMBRANE'S OWN, not `SIGMA_G`. Reported
+    2026-09-04 as the contour sitting well inside the membrane on `234.tiff`,
+    where the user then corrected it by hand -- the only human-drawn membrane
+    there is, and what the numbers below are measured against.
+
+    `SIGMA_G` is 1.5 px, which is the scale of a crisp step. Where the membrane
+    is a broad transition instead, a 1.5 px derivative under-responds to the
+    real edge and over-responds to whatever fine structure the ramp carries, so
+    the per-ray maximum lands on the sharper-but-smaller inner feature: measured
+    on that capsule, the strongest response sits at r=251.7 (D=3.05) while the
+    membrane the user drew is at r=261.8 (D=2.07). Continuity cannot rescue it,
+    because BOTH are continuous rings and the DP takes the more energetic one --
+    and neither can `_snap_to_level`, because on a ramp the local level is
+    `0.5*(I(r-gap) + I(r+gap)) = I(r)` for every r, so every radius is a fixed
+    point and the snap has no preferred position at all (measured: iterating it
+    twelve times moves the contour 0.5 px and converges at the wrong radius).
+
+    So the scale is matched to the edge: `max(SIGMA_G, width)`, where `width` is
+    the erf scale `_edge_width` already recovers in pass 2, with `SIGMA_BG` held
+    at its ratio to `SIGMA_G` so the band-pass keeps its shape. Nothing new is
+    calibrated -- the floor and the ratio are the existing constants and the
+    width is a measurement.
+
+    Measured over the eleven production membranes: the contour moves by more
+    than 3 px on exactly ONE, the capsule that prompted this (+13.1 px, and
+    2.09 px RMS from the hand-drawn boundary against 17.67 before, 96.8% of
+    rays within 5 px against 30.1%). The other ten move by at most 2.11 px --
+    0.06 px for the nine whose measured width is already near `SIGMA_G`.
+    Circle residual is unchanged (median 2.97 px, max 6.22 -> 6.21) and the
+    worst ray-to-ray jump improves from 2.13 to 2.02 px.
+
+    A FIXED wider scale was measured too and rejected, which is what makes the
+    adaptive form load-bearing rather than decoration. `SIGMA_G=3`/`SIGMA_BG=16`
+    fits the hand-drawn boundary just as well (RMS 2.10) but drags capsules
+    whose edge really is crisp away from their own pass-2 estimate: the largest
+    `|traced - r_edge|` disagreement goes from 15.02 px now to 19.61 px, where
+    the adaptive scale takes it to 3.05 px. `231.tiff` is the case in point --
+    measured width 1.38 px, `r_edge` 250.0, traced 249.0, and a fixed scale of 3
+    moves it to 269.6 for no reason the image supports.
+
     That path is then snapped onto the local intensity level set by
     `_snap_to_level` -- see there for why placing the contour is a separate
     question from choosing which boundary it is on.
     """
     R = cap.mean_radius
     band = _px(TRACE_BAND, R)
+
+    sigma, sigma_bg = _trace_scales(edge_width)
 
     # Sample the search at the movement cap itself. The cap is one state per
     # ray by construction then, so the grid is exactly as fine as the
@@ -650,15 +783,15 @@ def _trace_inner(img, cap, angs, guide, rout):
     # stops localising edges; on a capsule big enough to hit that clamp the
     # cap is carried by `smax` instead, so it stays the same physical slope.
     arc = 2 * np.pi * float(np.mean(guide)) / max(len(angs), 1)
-    step = float(np.clip(TRACE_SLOPE * arc, 0.25, min(TRACE_STEP_MAX, SIGMA_G / 3)))
+    step = float(np.clip(TRACE_SLOPE * arc, 0.25, min(TRACE_STEP_MAX, sigma / 3)))
     u = np.arange(-band, band + step, step)
     radii = guide[:, None] + u[None, :]
     V = _sample(img, cap.cx, cap.cy, angs, radii)
     V[radii > (rout[:, None] - _px(WALL_MARGIN, R))] = np.nan
 
     F = _row_fill(V)
-    D = (gaussian_filter1d(F, SIGMA_G / step, order=1, axis=1) -
-         gaussian_filter1d(F, SIGMA_BG / step, order=1, axis=1)) / step
+    D = (gaussian_filter1d(F, sigma / step, order=1, axis=1) -
+         gaussian_filter1d(F, sigma_bg / step, order=1, axis=1)) / step
     D[~np.isfinite(V)] = np.nan
 
     finite = D[np.isfinite(D)]
@@ -688,6 +821,62 @@ def _trace_inner(img, cap, angs, guide, rout):
     path = _trace_path(E, smax, lam)
     if path is None:
         return None, 0.0
+
+    # A shape prior, applied ONLY where the image does not answer the question.
+    #
+    # On the arc where the membrane is a broad ramp rather than a step, the
+    # radial profile has no edge at all -- measured on the capsule that
+    # prompted this, intensity climbs monotonically from 65 to 150 over ~100 px
+    # and the band-passed response is 1.2-1.8 against 4-6.7 in the sharp
+    # sectors. The boundary is genuinely under-determined there, so the path
+    # locks onto whatever ripple the ramp happens to carry and the contour dips
+    # inward in patches. A microcapsule membrane is a closed shell, so the
+    # missing constraint is that it is round.
+    #
+    # The pull is scaled by (1 - local peak / the capsule's own strong peaks),
+    # so a ray with a proper edge is untouched and only the featureless ones
+    # are drawn back. Measured over the eleven production membranes at
+    # the shipped settings: the eight already-round ones move by at most
+    # 0.14 px of circle residual, while the capsule that prompted this goes
+    # from 5.03 px of non-circularity to 3.24 and the next two worst from 4.82
+    # to 4.33 and 2.33 to 1.57. Nothing gains a ray-to-ray jump.
+    #
+    # The gate matters more than the weight, and it is what keeps this honest:
+    # a genuinely non-circular membrane whose edge is sharp all the way round
+    # is NOT rounded off, because none of its rays are weak enough to be
+    # pulled. The 120 px out-of-round ellipse in the tests comes out at
+    # 120.1 px at every gate from 0.35 to 0.80.
+    if SHAPE_PRIOR > 0:
+        peak = np.nanmax(np.where(np.isfinite(D), D, -np.inf), axis=1)
+        finite_peak = peak[np.isfinite(peak)]
+        # Fit the circle on the rays that carry a real edge, and pull the ones
+        # that do not: one confidence signal, used for both halves.
+        circle = _fit_circle_radius(cap, angs, guide + u[path],
+                                    trust=np.where(np.isfinite(peak), peak, 0.0))
+        if circle is not None:
+            if finite_peak.size:
+                strong = float(np.percentile(finite_peak, 90))
+                if strong > 1e-9:
+                    # A GATE, not a ramp from 1.0. The penalty is linear in
+                    # distance and the band is wide, so a small weight times a
+                    # large excursion still swamps the evidence: with a plain
+                    # (1 - peak/strong) this rounded a genuinely 120 px
+                    # out-of-round ellipse down to a 66 px span, because rays
+                    # a little below the 90th percentile still carried some
+                    # pull. Nothing is pulled until its edge is weaker than
+                    # SHAPE_PRIOR_GATE of the capsule's own strong ones.
+                    weak = np.clip(
+                        (SHAPE_PRIOR_GATE - peak / strong) / SHAPE_PRIOR_GATE,
+                        0.0, 1.0)
+                    pull = SHAPE_PRIOR * ref * weak
+                    E2 = np.where(
+                        np.isfinite(D),
+                        D - pull[:, None] * np.abs(radii - circle[:, None]),
+                        _NEG,
+                    )
+                    guided = _trace_path(E2, smax, lam)
+                    if guided is not None:
+                        path = guided
 
     # Sub-pixel: parabola through the chosen state and its neighbours.
     k = np.arange(len(angs))
@@ -814,7 +1003,7 @@ def analyze(gray, cap, path="", th=None, trace=True):
     contour = None
     if score > 0 and trace and f["_guide"] is not None:
         contour, support = _trace_inner(img, cap, f["_angs"], f["_guide"],
-                                        f["_rout"])
+                                        f["_rout"], edge_width=f["width"])
         pub["trace_support"] = support
     return Membrane("sharp" if score > 0 else "dissolved", score, pub,
                     contour, f["_guide"], f["_icenter"])

@@ -61,6 +61,7 @@ interface UseAdvancedInteractionsProps {
     vertexIndex: number | null;
     dragOffset?: { x: number; y: number };
     originalPosition?: { x: number; y: number };
+    mode?: 'vertex' | 'translate';
   }) => void;
 
   // Data operations
@@ -211,6 +212,7 @@ export const useAdvancedInteractions = ({
           originalVertexPosition: {
             ...originalPosition,
           },
+          vertexGrabPoint: { ...imagePoint },
         });
 
         // Initialize vertex drag state with original position
@@ -706,6 +708,7 @@ export const useAdvancedInteractions = ({
                 originalVertexPosition: {
                   ...originalPosition,
                 },
+                vertexGrabPoint: { ...imagePoint },
               });
 
               // Initialize vertex drag state with original position
@@ -723,6 +726,51 @@ export const useAdvancedInteractions = ({
               }
               return;
             }
+          }
+        }
+
+        // Grabbing the CONTOUR (not a vertex) translates the whole shape.
+        //
+        // Requested 2026-09-04. Deliberately gated to EditVertices: that is
+        // the mode whose job is changing geometry, and it is where the
+        // gesture cannot be confused with anything else. In View mode a drag
+        // pans the canvas and a click selects — silently turning that into a
+        // shape move would be a trap. The vertex branch above runs FIRST, so
+        // a point still wins over the outline it sits on.
+        if (
+          target &&
+          target.dataset &&
+          target.dataset.polygonId &&
+          target.dataset.vertexIndex === undefined &&
+          editMode === EditMode.EditVertices
+        ) {
+          const polygonId = target.dataset.polygonId;
+          const polygon = getPolygons().find(p => p.id === polygonId);
+          if (polygon && polygon.points.length > 0) {
+            // Dragging a shape that is not selected selects it, so the
+            // gesture works on first contact instead of needing a click
+            // first.
+            if (selectedPolygonId !== polygonId) {
+              onPolygonSelection(polygonId);
+            }
+            setInteractionState({
+              ...interactionState,
+              isDraggingVertex: true,
+              draggedVertexInfo: { polygonId, vertexIndex: -1 },
+              originalVertexPosition: { ...polygon.points[0] },
+              vertexGrabPoint: { ...imagePoint },
+            });
+            if (setVertexDragState) {
+              setVertexDragState({
+                isDragging: true,
+                polygonId,
+                vertexIndex: null,
+                originalPosition: { ...polygon.points[0] },
+                dragOffset: { x: 0, y: 0 },
+                mode: 'translate',
+              });
+            }
+            return;
           }
         }
 
@@ -819,20 +867,30 @@ export const useAdvancedInteractions = ({
       ) {
         const { polygonId, vertexIndex } = interactionState.draggedVertexInfo;
 
-        // Calculate drag offset from original position
+        // Move the vertex BY the drag delta, not TO the cursor. Measured on
+        // production 2026-09-04: grabbing a vertex 4 px off centre and
+        // dragging by (120, 60) landed it 3.35 px away from the delta,
+        // because the offset was taken from the vertex rather than from
+        // where the pointer actually went down. The grab radius is 8 screen
+        // px, so on a dense microtubule polyline that is enough to snatch a
+        // neighbouring vertex and snap it under the cursor.
         if (interactionState.originalVertexPosition && setVertexDragState) {
-          const offsetX =
-            imagePoint.x - interactionState.originalVertexPosition.x;
-          const offsetY =
-            imagePoint.y - interactionState.originalVertexPosition.y;
+          const grab =
+            interactionState.vertexGrabPoint ??
+            interactionState.originalVertexPosition;
+          const offsetX = imagePoint.x - grab.x;
+          const offsetY = imagePoint.y - grab.y;
 
           // Update only the drag offset, not the actual points
           setVertexDragState({
             isDragging: true,
             polygonId,
-            vertexIndex,
+            // -1 is the translate sentinel written at drag start; the render
+            // side keys on `mode`, so the index is carried but unused there.
+            vertexIndex: vertexIndex < 0 ? null : vertexIndex,
             originalPosition: interactionState.originalVertexPosition,
             dragOffset: { x: offsetX, y: offsetY },
+            mode: vertexIndex < 0 ? 'translate' : 'vertex',
           });
 
           // Vertex drag offset updated
@@ -1047,6 +1105,18 @@ export const useAdvancedInteractions = ({
         });
       }
 
+      // A vertex drag must NOT be ended by the pointer leaving the canvas.
+      // `CanvasContainer` routes onMouseLeave to this handler, which used to
+      // COMMIT the vertex whereever the pointer happened to cross the edge --
+      // reported 2026-09-04 as a vertex jumping out of the field of view and
+      // becoming impossible to grab or delete afterwards, since nothing
+      // clamps the committed point back into the image. The genuine release
+      // is caught by the window listener below, so leaving the canvas
+      // mid-drag now just keeps dragging, and coming back resumes normally.
+      if (e.type === 'mouseleave' && interactionState.isDraggingVertex) {
+        return;
+      }
+
       // End vertex dragging - apply final position
       if (
         interactionState.isDraggingVertex &&
@@ -1063,12 +1133,39 @@ export const useAdvancedInteractions = ({
             transform,
             canvasRef
           );
-          const finalPoint = { x: coordinates.imageX, y: coordinates.imageY };
+          // Commit the same thing the drag drew: the original position moved
+          // BY the pointer delta. Committing the raw cursor position instead
+          // silently discards wherever within the grab radius the user
+          // actually took hold of the vertex.
+          const grab =
+            interactionState.vertexGrabPoint ??
+            interactionState.originalVertexPosition;
+          const origin = interactionState.originalVertexPosition;
+          const finalPoint =
+            grab && origin
+              ? {
+                  x: origin.x + (coordinates.imageX - grab.x),
+                  y: origin.y + (coordinates.imageY - grab.y),
+                }
+              : { x: coordinates.imageX, y: coordinates.imageY };
 
-          // Update the actual polygon points with the final position
+          // Update the actual polygon points with the final position.
+          // vertexIndex -1 is the whole-shape translate: every point moves by
+          // the same delta, which is the same delta the preview drew.
+          const dx = grab ? coordinates.imageX - grab.x : 0;
+          const dy = grab ? coordinates.imageY - grab.y : 0;
           const polygons = getPolygons();
           const updatedPolygons = polygons.map(polygon => {
             if (polygon.id === polygonId) {
+              if (vertexIndex < 0) {
+                return {
+                  ...polygon,
+                  points: polygon.points.map(p => ({
+                    x: p.x + dx,
+                    y: p.y + dy,
+                  })),
+                };
+              }
               const updatedPoints = [...polygon.points];
               updatedPoints[vertexIndex] = finalPoint;
               return { ...polygon, points: updatedPoints };
@@ -1109,6 +1206,7 @@ export const useAdvancedInteractions = ({
           ...interactionState,
           isDraggingVertex: false,
           draggedVertexInfo: null,
+          vertexGrabPoint: null,
           originalVertexPosition: null,
         });
       }
@@ -1123,6 +1221,22 @@ export const useAdvancedInteractions = ({
       canvasRef,
     ]
   );
+
+  // The canvas only sees a release that happens over it. Since a vertex drag
+  // now survives leaving the canvas (see handleMouseUp), the genuine mouseup
+  // has to be caught at the window, or the drag would hang until the next
+  // click. Bound only while a vertex is actually being dragged.
+  const mouseUpRef = useRef(handleMouseUp);
+  mouseUpRef.current = handleMouseUp;
+  useEffect(() => {
+    if (!interactionState.isDraggingVertex) return;
+    const onWindowMouseUp = (e: MouseEvent) => {
+      // handleMouseUp reads only clientX/clientY and type off the event.
+      mouseUpRef.current(e as unknown as React.MouseEvent<HTMLDivElement>);
+    };
+    window.addEventListener('mouseup', onWindowMouseUp);
+    return () => window.removeEventListener('mouseup', onWindowMouseUp);
+  }, [interactionState.isDraggingVertex]);
 
   return {
     handleMouseDown,

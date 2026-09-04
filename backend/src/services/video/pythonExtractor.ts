@@ -363,6 +363,32 @@ export interface ChannelAlignResult {
  * temp file and its path passed to the helper (avoids CLI-length limits for
  * hundreds of frames).
  */
+/** Convert an image the browser cannot render into a PNG, preserving the
+ *  source bit depth and resolution exactly.
+ *
+ *  Deliberately NOT sharp, which the rest of the Node side uses. sharp
+ *  destroys a high-bit-depth TIFF while DECODING it, not while encoding:
+ *  measured on a real production file (uint16, 237..3853, 3525 levels) it
+ *  reads the image as 8-bit by shifting right 8, so the browser was served a
+ *  2-grey-level, essentially black picture. This helper round-trips the same
+ *  file bit-exactly, and is the encoder the frame extractors already use.
+ *
+ *  `lossless` is false only for a float source, where a rescale is
+ *  unavoidable — worth surfacing rather than pretending. */
+export async function convertImageForDisplay(
+  sourcePath: string,
+  destPath: string
+): Promise<{
+  ok: boolean;
+  width?: number;
+  height?: number;
+  mode?: string;
+  lossless?: boolean;
+  error?: string;
+}> {
+  return runHelper('convert_for_display.py', [sourcePath, destPath]);
+}
+
 export async function alignChannelFrames(
   manifestPath: string
 ): Promise<ChannelAlignResult> {
