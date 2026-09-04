@@ -1128,13 +1128,13 @@ export default {
         clickVertexMt:
           'Cliquez sur une extrémité du microtubule pour l’étendre',
         addPointsMt:
-          'Cliquez pour ajouter des points, puis appuyez sur Entrée pour terminer',
+          'Cliquez pour ajouter des points, puis appuyez sur Entrée ou double-cliquez pour terminer',
         addPoints:
           'Cliquez pour ajouter des points, puis cliquez sur un autre sommet pour terminer. Cliquez directement sur un autre sommet sans ajouter de points pour supprimer tous les points entre eux.',
         holdShift: 'Maintenez SHIFT pour ajouter automatiquement des points',
         cancel: 'Appuyez sur ESC pour annuler',
         joinHint:
-          'Cliquez sur l’extrémité d’une autre polyligne de la même classe pour les joindre',
+          'Cliquez sur l’extrémité d’une autre polyligne pour les joindre — les étiquettes doivent correspondre, sauf si l’une n’est pas étiquetée',
       },
       editVertices: {
         selectPolygon:
@@ -1301,6 +1301,8 @@ export default {
       cannotDeleteVertex:
         'Impossible de supprimer le sommet - le polygone a besoin d’au moins 3 points',
       vertexDeleted: 'Sommet supprimé avec succès',
+      joinClassMismatch:
+        'Ces polylignes ont des étiquettes différentes et ne peuvent pas être jointes',
       started: 'La segmentation a commencé',
       completed: 'Segmentation terminée avec succès',
       completedWithCount: 'Segmentation terminée ! {{count}} objets trouvés',

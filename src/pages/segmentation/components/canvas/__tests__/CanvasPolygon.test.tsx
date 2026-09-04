@@ -8,7 +8,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import CanvasPolygon from '../CanvasPolygon';
 import { createMockPolygon } from '@/test-utils/segmentationTestUtils';
-import type { VertexDragState } from '@/pages/segmentation/types';
+import { EditMode, type VertexDragState } from '@/pages/segmentation/types';
 
 // Mock the heavy dependencies
 vi.mock('../PolygonVertices', () => ({
@@ -357,6 +357,68 @@ describe('CanvasPolygon', () => {
 
       expect(onEditPolygon).toHaveBeenCalledWith('test-polygon');
     });
+
+    // While the canvas is drawing, the double-click is the COMMIT gesture and
+    // the canvas owns it. This used to `stopPropagation()` unconditionally, so
+    // finishing a microtubule extension anywhere over an existing filament
+    // (the transparent hit stroke is 12x the rendered width, min 6 px) threw
+    // the extension away and jumped to EditVertices instead.
+    it.each([
+      ['CreatePolyline', EditMode.CreatePolyline],
+      ['AddPoints', EditMode.AddPoints],
+      ['CreatePolygon', EditMode.CreatePolygon],
+    ])(
+      'lets a double-click bubble to the canvas in %s mode',
+      (_name, editMode) => {
+        const onEditPolygon = vi.fn();
+        const onDoubleClick = vi.fn();
+        render(
+          <svg width="800" height="600" onDoubleClick={onDoubleClick}>
+            <CanvasPolygon
+              {...defaultProps}
+              editMode={editMode}
+              onEditPolygon={onEditPolygon}
+            />
+          </svg>
+        );
+
+        const pathElement = screen
+          .getByTestId('test-polygon')
+          .querySelector('path');
+        fireEvent.doubleClick(pathElement!);
+
+        expect(onEditPolygon).not.toHaveBeenCalled();
+        expect(onDoubleClick).toHaveBeenCalledTimes(1);
+      }
+    );
+
+    it.each([
+      ['View', EditMode.View],
+      ['EditVertices', EditMode.EditVertices],
+    ])(
+      'still edits the shape and stops propagation in %s mode',
+      (_name, editMode) => {
+        const onEditPolygon = vi.fn();
+        const onDoubleClick = vi.fn();
+        render(
+          <svg width="800" height="600" onDoubleClick={onDoubleClick}>
+            <CanvasPolygon
+              {...defaultProps}
+              editMode={editMode}
+              onEditPolygon={onEditPolygon}
+            />
+          </svg>
+        );
+
+        const pathElement = screen
+          .getByTestId('test-polygon')
+          .querySelector('path');
+        fireEvent.doubleClick(pathElement!);
+
+        expect(onEditPolygon).toHaveBeenCalledWith('test-polygon');
+        expect(onDoubleClick).not.toHaveBeenCalled();
+      }
+    );
 
     it('shows context menu on right-click', async () => {
       renderPolygonInSvg(<CanvasPolygon {...defaultProps} isSelected={true} />);
