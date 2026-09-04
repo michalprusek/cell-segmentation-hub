@@ -19,9 +19,11 @@ name: CI
 # Regenerate the baseline with `npm run type-check:update` (reviewable: the
 # accepted errors show up as added lines in the diff).
 #
-# This check is NOT yet a required status check — to make it BLOCK merges, add
-# "CI / frontend" and "CI / backend" as required status checks in the repo's
-# branch-protection rules for main.
+# These checks ARE required. The repository ruleset `main-protection` lists the
+# contexts `frontend` and `backend` under required_status_checks with
+# strict_required_status_checks_policy, so a red run here blocks the merge —
+# even though `make ci` does not run vitest and will happily go green.
+# Inspect with: gh api /repos/:owner/:repo/rulesets
 #
 # ML/Python tests are intentionally omitted — they require a CUDA GPU (mamba/
 # Triton initialise at import) that GitHub-hosted runners do not provide. Run
