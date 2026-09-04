@@ -79,6 +79,21 @@ const FloatingUploadProgress: React.FC = () => {
   const successCount = displaySession?.successCount ?? 0;
   const failedCount = displaySession?.failedCount ?? 0;
 
+  // The state machine hands us KEYS, not sentences: `UploadProvider` sits
+  // outside `LanguageProvider`, so this is the first place in the chain that
+  // can translate anything. Parts are joined with ", " because the video
+  // summary omits its zero counts; the filename is appended untranslated.
+  const operationText = useMemo(
+    () =>
+      (displaySession?.currentOperation ?? [])
+        .map(op => {
+          const text = op.key ? t(op.key, op.params) : (op.text ?? '');
+          return op.file ? `${text} — ${op.file}` : text;
+        })
+        .join(', '),
+    [displaySession?.currentOperation, t]
+  );
+
   const statusIcon = useMemo(() => {
     if (!status) return null;
     switch (status) {
@@ -121,14 +136,8 @@ const FloatingUploadProgress: React.FC = () => {
 
   if (!displaySession) return null;
 
-  const {
-    overallProgress,
-    projectId,
-    projectName,
-    chunkProgress,
-    currentOperation,
-    startedAt,
-  } = displaySession;
+  const { overallProgress, projectId, projectName, chunkProgress, startedAt } =
+    displaySession;
 
   // Estimate remaining time
   const elapsed = (Date.now() - startedAt) / 1000;
@@ -240,12 +249,12 @@ const FloatingUploadProgress: React.FC = () => {
                 looks stuck and one that is visibly working. It used to be
                 visible only after expanding the card, which nobody does while
                 watching an upload. */}
-            {currentOperation && (
+            {operationText && (
               <div
                 className="mt-1 text-xs text-gray-500 dark:text-gray-400 truncate"
-                title={currentOperation}
+                title={operationText}
               >
-                {currentOperation}
+                {operationText}
               </div>
             )}
           </div>

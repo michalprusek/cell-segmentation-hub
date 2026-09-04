@@ -1589,7 +1589,15 @@ class ApiClient {
                   totalFiles: validFiles.length,
                   chunkProgress: chunkProgressPercent,
                   overallProgress: overallProgressValue,
-                  currentOperation: `Uploading chunk ${chunkIndex + 1} of ${chunks.length}`,
+                  currentOperation: [
+                    {
+                      key: 'images.upload.op.uploadingChunk',
+                      params: {
+                        index: chunkIndex + 1,
+                        total: chunks.length,
+                      },
+                    },
+                  ],
                 };
 
                 // Update both overall and chunk progress

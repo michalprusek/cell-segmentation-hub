@@ -122,6 +122,38 @@ export interface ChunkingConfig {
   retryDelayMs: number;
 }
 
+/** One line of the upload card's status text, as a TRANSLATION KEY rather
+ *  than a rendered string.
+ *
+ *  It has to be a key: `UploadProvider` sits OUTSIDE `LanguageProvider` in the
+ *  app tree (see `App.tsx`), so nothing in the upload state machine can call
+ *  `t()` — a comment there has said so since before this existed, and the
+ *  consequence was that every one of these lines reached the card in English
+ *  whatever locale the user had chosen. Keeping the key here and translating
+ *  at the single render site in `FloatingUploadProgress` fixes that without
+ *  reordering providers, which would change mount order for everything else.
+ *
+ *  `file` is appended after an em dash when present; it is a filename, so it
+ *  is never translated. */
+export interface UploadOperation {
+  /** Translation key. Omitted only for `text`. */
+  key?: string;
+  params?: Record<string, string | number>;
+  /** Verbatim, already-composed text. The ONE legitimate use is a sentence
+   *  that arrived from the server without a key — an un-recreated backend
+   *  during a deploy window. It is English by construction, which is the whole
+   *  problem this type exists to solve, so never introduce a new producer of
+   *  it: add a key instead. */
+  text?: string;
+  file?: string;
+}
+
+/** A status line is a LIST because the video batch summary omits its zero
+ *  parts ("2 uploaded, 1 failed" with nothing said about cancelled). Joining
+ *  translated fragments with ", " keeps that, where one key per combination
+ *  would need eight of them per language. Usually it holds exactly one entry. */
+export type UploadOperationText = UploadOperation[];
+
 export interface ChunkProgress {
   chunkIndex: number;
   totalChunks: number;
@@ -129,7 +161,7 @@ export interface ChunkProgress {
   totalFiles: number;
   chunkProgress: number;
   overallProgress: number;
-  currentOperation: string;
+  currentOperation: UploadOperationText;
 }
 
 export interface ChunkedUploadResult<T> {
@@ -206,8 +238,24 @@ export async function processChunksWithConcurrency<T>(
               ),
               currentOperation:
                 attempt > 0
-                  ? `Retrying chunk ${globalChunkIndex + 1} (attempt ${attempt + 1})`
-                  : `Processing chunk ${globalChunkIndex + 1} of ${totalChunks}`,
+                  ? [
+                      {
+                        key: 'images.upload.op.retryingChunk',
+                        params: {
+                          index: globalChunkIndex + 1,
+                          attempt: attempt + 1,
+                        },
+                      },
+                    ]
+                  : [
+                      {
+                        key: 'images.upload.op.processingChunk',
+                        params: {
+                          index: globalChunkIndex + 1,
+                          total: totalChunks,
+                        },
+                      },
+                    ],
             });
           }
 
@@ -260,7 +308,12 @@ export async function processChunksWithConcurrency<T>(
         totalFiles,
         chunkProgress: 100,
         overallProgress: Math.round((processedChunks / totalChunks) * 100),
-        currentOperation: `Completed ${processedChunks} of ${totalChunks} chunks`,
+        currentOperation: [
+          {
+            key: 'images.upload.op.chunksDone',
+            params: { done: processedChunks, total: totalChunks },
+          },
+        ],
       });
     }
   }

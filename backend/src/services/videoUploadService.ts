@@ -58,7 +58,14 @@ export interface VideoUploadProgressEvent {
   filename: string;
   phase: 'saving' | 'extracting' | 'persisting' | 'completed' | 'failed';
   progress: number;
+  /** Human-readable English phase name. RETAINED, but it is a fallback: the
+   *  server has no idea what locale the browser is in, so composing the
+   *  user-visible sentence here can only ever produce English. `messageKey`
+   *  is what the card actually renders. */
   message?: string;
+  /** Translation key naming the phase, resolved in the browser. */
+  messageKey?: string;
+  messageParams?: Record<string, string | number>;
   error?: string;
 }
 
@@ -542,7 +549,9 @@ export async function uploadVideoFromFile(options: {
   const reportProgress = (
     phase: VideoUploadProgressEvent['phase'],
     progress: number,
-    message?: string
+    message?: string,
+    messageKey?: string,
+    messageParams?: Record<string, string | number>
   ): void => {
     onProgress?.({
       videoContainerId: containerId,
@@ -550,6 +559,8 @@ export async function uploadVideoFromFile(options: {
       phase,
       progress,
       message,
+      messageKey,
+      messageParams,
     });
   };
 
@@ -573,7 +584,7 @@ export async function uploadVideoFromFile(options: {
 
   try {
     // 2. Move multer's temp file into the canonical location.
-    reportProgress('saving', 0.05, 'Persisting original');
+    reportProgress('saving', 0.05, 'Persisting original', 'images.upload.op.persistingOriginal');
     await fs.mkdir(baseDir, { recursive: true });
     // ``ext`` comes from the user-supplied filename — guard the canonical
     // ``original.<ext>`` leaf name once and reuse it everywhere below.
@@ -594,7 +605,7 @@ export async function uploadVideoFromFile(options: {
     );
 
     // 3. Run the extractor end-to-end.
-    reportProgress('extracting', 0.1, 'Extracting frames');
+    reportProgress('extracting', 0.1, 'Extracting frames', 'images.upload.op.extractingFramesStart');
     const outcome = await extractVideoSafe(originalPath, baseDir, {
       onProgress: (p: ExtractionProgress) =>
         reportProgress(
@@ -608,7 +619,13 @@ export async function uploadVideoFromFile(options: {
           p.message ??
             (p.currentFrame !== undefined && p.totalFrames !== undefined
               ? `Extracting frames ${p.currentFrame}/${p.totalFrames}`
-              : `Extracting frames (${Math.round(p.progress * 100)}%)`)
+              : `Extracting frames (${Math.round(p.progress * 100)}%)`),
+          p.currentFrame !== undefined && p.totalFrames !== undefined
+            ? 'images.upload.op.extractingFrames'
+            : 'images.upload.op.extractingFramesPct',
+          p.currentFrame !== undefined && p.totalFrames !== undefined
+            ? { current: p.currentFrame, total: p.totalFrames }
+            : { percent: Math.round(p.progress * 100) }
         ),
       registerChannels,
     });
@@ -616,7 +633,7 @@ export async function uploadVideoFromFile(options: {
     // 4a. Single-position / ordinary video: finalize the pre-created row.
     if (outcome.kind === 'single') {
       if (correctDrift) {
-        reportProgress('persisting', 0.8, 'Correcting stage drift');
+        reportProgress('persisting', 0.8, 'Correcting stage drift', 'images.upload.op.correctingDrift');
         await correctDriftForContainer(baseDir, outcome.result.channels, p =>
           // Drift correction is the longest step left once extraction is fast
           // (48 s of the 621 s server-side phase measured on the 300-frame ND2,
@@ -629,7 +646,7 @@ export async function uploadVideoFromFile(options: {
           )
         );
       }
-      reportProgress('persisting', 0.95, 'Generating thumbnail');
+      reportProgress('persisting', 0.95, 'Generating thumbnail', 'images.upload.op.generatingThumbnail');
       await finalizeContainer({
         containerId,
         baseDir,
@@ -639,7 +656,7 @@ export async function uploadVideoFromFile(options: {
         originalStorageKey: sourceOriginalKey,
       });
 
-      reportProgress('completed', 1.0, 'Video ready');
+      reportProgress('completed', 1.0, 'Video ready', 'images.upload.op.videoReady');
       logger.info('Video upload complete', 'VideoUploadService', {
         containerId,
         projectId,
@@ -671,7 +688,7 @@ export async function uploadVideoFromFile(options: {
       throw new Error('ND2 extraction returned zero positions');
     }
 
-    reportProgress('persisting', 0.85, 'Persisting positions');
+    reportProgress('persisting', 0.85, 'Persisting positions', 'images.upload.op.persistingPositions');
     for (let i = 0; i < positions.length; i++) {
       const pos = positions[i];
       const label = positionLabel(pos);
@@ -797,7 +814,7 @@ export async function uploadVideoFromFile(options: {
     // is the same join computed when the source was first persisted.
     await fs.rm(originalPath, { force: true }).catch(() => undefined);
 
-    reportProgress('completed', 1.0, 'Video ready');
+    reportProgress('completed', 1.0, 'Video ready', 'images.upload.op.videoReady');
     logger.info('Multi-position video upload complete', 'VideoUploadService', {
       containerId,
       projectId,

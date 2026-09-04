@@ -16,6 +16,8 @@ import {
   ChunkProgress,
   DEFAULT_CHUNKING_CONFIG,
   shouldRouteAsVideo,
+  UploadOperation,
+  UploadOperationText,
 } from '@/lib/uploadUtils';
 import { VIDEO_UPLOAD_TRANSFER_SHARE } from '@/lib/constants';
 
@@ -29,7 +31,7 @@ export interface UploadSession {
   failedCount: number;
   overallProgress: number; // 0-100
   chunkProgress: ChunkProgress | null;
-  currentOperation: string;
+  currentOperation: UploadOperationText;
   startedAt: number;
   error?: string;
 }
@@ -91,7 +93,7 @@ function loadPersistedSessions(): Record<string, UploadSession> {
           ...s,
           status: 'cancelled',
           chunkProgress: null,
-          currentOperation: 'Upload interrupted by page refresh',
+          currentOperation: [{ key: 'images.upload.op.interrupted' }],
         };
       } else {
         restored[id] = s;
@@ -197,9 +199,27 @@ export const UploadProvider: React.FC<{ children: React.ReactNode }> = ({
 
         let currentOperation = session.currentOperation;
         if (data.currentFileStatus === 'uploading') {
-          currentOperation = `Uploading ${data.filename} (${data.filesCompleted + 1}/${data.filesTotal})`;
+          currentOperation = [
+            {
+              key: 'images.upload.op.uploadingFile',
+              params: {
+                index: data.filesCompleted + 1,
+                total: data.filesTotal,
+              },
+              file: data.filename,
+            },
+          ];
         } else if (data.currentFileStatus === 'processing') {
-          currentOperation = `Processing ${data.filename} (${data.filesCompleted + 1}/${data.filesTotal})`;
+          currentOperation = [
+            {
+              key: 'images.upload.op.processingFile',
+              params: {
+                index: data.filesCompleted + 1,
+                total: data.filesTotal,
+              },
+              file: data.filename,
+            },
+          ];
         }
 
         const successCount =
@@ -241,7 +261,15 @@ export const UploadProvider: React.FC<{ children: React.ReactNode }> = ({
             ...session,
             successCount: data.summary.successCount,
             failedCount: data.summary.failedCount,
-            currentOperation: `Upload completed: ${data.summary.successCount} successful, ${data.summary.failedCount} failed`,
+            currentOperation: [
+              {
+                key: 'images.upload.op.completedSummary',
+                params: {
+                  success: data.summary.successCount,
+                  failed: data.summary.failedCount,
+                },
+              },
+            ],
           },
         };
       });
@@ -257,7 +285,12 @@ export const UploadProvider: React.FC<{ children: React.ReactNode }> = ({
       filename: string;
       phase: 'saving' | 'extracting' | 'persisting' | 'completed' | 'failed';
       progress: number;
+      /** Legacy English sentence. Kept so an older backend still says
+       *  something; `messageKey` wins when present. */
       message?: string;
+      /** Translation key for the phase, resolved at the render site. */
+      messageKey?: string;
+      messageParams?: Record<string, string | number>;
       error?: string;
     }) => {
       const sessionId = activeSessionIdRef.current;
@@ -278,9 +311,23 @@ export const UploadProvider: React.FC<{ children: React.ReactNode }> = ({
       setSessions(prev => {
         const session = prev[sessionId];
         if (!session || session.status !== 'uploading') return prev;
-        const operation = data.message
-          ? `${data.message} — ${data.filename}`
-          : session.currentOperation;
+        // The server names the phase; the FILE it names is not translated.
+        // `messageKey` is preferred over the legacy English `message` so an
+        // older backend still says something rather than nothing.
+        const operation: UploadOperationText = data.messageKey
+          ? [
+              {
+                key: data.messageKey,
+                params: data.messageParams,
+                file: data.filename,
+              },
+            ]
+          : data.message
+            ? // Legacy path: a backend that predates `messageKey` still names
+              // its phase, in English. Showing that beats showing the previous
+              // phase, which would read as a stall.
+              [{ text: data.message, file: data.filename }]
+            : session.currentOperation;
         if (
           operation === session.currentOperation &&
           overall <= session.overallProgress
@@ -347,7 +394,12 @@ export const UploadProvider: React.FC<{ children: React.ReactNode }> = ({
             failedCount: 0,
             overallProgress: 0,
             chunkProgress: null,
-            currentOperation: `Preparing to upload ${files.length} files...`,
+            currentOperation: [
+              {
+                key: 'images.upload.op.preparing',
+                params: { count: files.length },
+              },
+            ],
             startedAt: Date.now(),
           },
         };
@@ -409,7 +461,13 @@ export const UploadProvider: React.FC<{ children: React.ReactNode }> = ({
                 ...prev,
                 [sessionId]: {
                   ...s,
-                  currentOperation: `Uploading video ${i + 1}/${videoFiles.length}: ${vfile.name}`,
+                  currentOperation: [
+                    {
+                      key: 'images.upload.op.uploadingVideo',
+                      params: { index: i + 1, total: videoFiles.length },
+                      file: vfile.name,
+                    },
+                  ],
                 },
               };
             });
@@ -446,7 +504,12 @@ export const UploadProvider: React.FC<{ children: React.ReactNode }> = ({
                         // names its phase.
                         currentOperation:
                           percent >= 100
-                            ? `Processing on server: ${vfile.name}`
+                            ? [
+                                {
+                                  key: 'images.upload.op.processingOnServer',
+                                  file: vfile.name,
+                                },
+                              ]
                             : s.currentOperation,
                       },
                     };
@@ -508,14 +571,35 @@ export const UploadProvider: React.FC<{ children: React.ReactNode }> = ({
                 : videoCancelled > 0 && videoFailed === 0 && videoSuccess === 0
                   ? 'cancelled'
                   : 'completed';
-            const opSummary =
-              [
-                videoSuccess > 0 ? `${videoSuccess} uploaded` : null,
-                videoFailed > 0 ? `${videoFailed} failed` : null,
-                videoCancelled > 0 ? `${videoCancelled} cancelled` : null,
-              ]
-                .filter(Boolean)
-                .join(', ') || 'no files processed';
+            // Zero parts are omitted, which is why this is a list rather
+            // than one key: eight combinations x 6 languages is not a table
+            // anybody would keep correct.
+            const opSummaryParts: Array<UploadOperation | null> = [
+              videoSuccess > 0
+                ? {
+                    key: 'images.upload.op.countUploaded',
+                    params: { count: videoSuccess },
+                  }
+                : null,
+              videoFailed > 0
+                ? {
+                    key: 'images.upload.op.countFailed',
+                    params: { count: videoFailed },
+                  }
+                : null,
+              videoCancelled > 0
+                ? {
+                    key: 'images.upload.op.countCancelled',
+                    params: { count: videoCancelled },
+                  }
+                : null,
+            ];
+            const opSummary: UploadOperationText = opSummaryParts.filter(
+              (o): o is UploadOperation => o !== null
+            );
+            if (opSummary.length === 0) {
+              opSummary.push({ key: 'images.upload.op.noFiles' });
+            }
             setSessions(prev => ({
               ...prev,
               [sessionId]: {
@@ -625,8 +709,21 @@ export const UploadProvider: React.FC<{ children: React.ReactNode }> = ({
                 chunkProgress: null,
                 currentOperation:
                   failedFileCount > 0
-                    ? `${uploadedCount} uploaded, ${failedFileCount} failed`
-                    : `${uploadedCount} files uploaded successfully`,
+                    ? [
+                        {
+                          key: 'images.upload.op.uploadedWithFailures',
+                          params: {
+                            uploaded: uploadedCount,
+                            failed: failedFileCount,
+                          },
+                        },
+                      ]
+                    : [
+                        {
+                          key: 'images.upload.op.uploadedOk',
+                          params: { count: uploadedCount },
+                        },
+                      ],
               },
             }));
 
@@ -649,7 +746,12 @@ export const UploadProvider: React.FC<{ children: React.ReactNode }> = ({
               ...prev,
               [sessionId]: {
                 ...prev[sessionId],
-                currentOperation: `Uploading ${remainingFiles.length} files...`,
+                currentOperation: [
+                  {
+                    key: 'images.upload.op.uploadingFiles',
+                    params: { count: remainingFiles.length },
+                  },
+                ],
               },
             }));
 
@@ -679,7 +781,12 @@ export const UploadProvider: React.FC<{ children: React.ReactNode }> = ({
                 status: 'completed',
                 overallProgress: 100,
                 successCount: uploadedImages.length,
-                currentOperation: `${uploadedImages.length} files uploaded successfully`,
+                currentOperation: [
+                  {
+                    key: 'images.upload.op.uploadedOk',
+                    params: { count: uploadedImages.length },
+                  },
+                ],
               },
             }));
 
@@ -705,7 +812,7 @@ export const UploadProvider: React.FC<{ children: React.ReactNode }> = ({
               [sessionId]: {
                 ...prev[sessionId],
                 status: 'cancelled',
-                currentOperation: 'Upload cancelled',
+                currentOperation: [{ key: 'images.upload.cancelled' }],
                 chunkProgress: null,
               },
             }));
@@ -718,7 +825,7 @@ export const UploadProvider: React.FC<{ children: React.ReactNode }> = ({
                 ...prev[sessionId],
                 status: 'failed',
                 error: error?.message || 'Upload failed',
-                currentOperation: 'Upload failed',
+                currentOperation: [{ key: 'images.upload.failed' }],
                 chunkProgress: null,
               },
             }));

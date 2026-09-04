@@ -88,7 +88,7 @@ const baseSession = (
   failedCount: 0,
   overallProgress: 30,
   chunkProgress: null,
-  currentOperation: '',
+  currentOperation: [],
   startedAt: Date.now() - 10000,
   ...overrides,
 });
@@ -372,6 +372,71 @@ describe('FloatingUploadProgress', () => {
       // Most recent session is completed
       expect(
         screen.getByText('3 files uploaded successfully')
+      ).toBeInTheDocument();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // The status line is TRANSLATED here
+  //
+  // `UploadProvider` sits outside `LanguageProvider`, so the upload state
+  // machine can only hand this component keys. This is the one place in the
+  // whole chain that can turn them into words — if it stops, the card shows
+  // raw dotted keys and every locale is equally broken.
+  // -------------------------------------------------------------------------
+
+  describe('the operation line is translated, not printed raw', () => {
+    it('renders the translation of the key, with its parameters filled in', () => {
+      setActive(
+        baseSession({
+          currentOperation: [
+            {
+              key: 'images.upload.op.extractingFrames',
+              params: { current: 150, total: 300 },
+              file: 'big.nd2',
+            },
+          ],
+        })
+      );
+
+      render(<FloatingUploadProgress />);
+
+      expect(
+        screen.getByText('Extracting frames 150/300 — big.nd2')
+      ).toBeInTheDocument();
+      // The key itself must never reach the DOM.
+      expect(
+        screen.queryByText(/images\.upload\.op\./)
+      ).not.toBeInTheDocument();
+    });
+
+    it('joins the parts of a summary that omits its zero counts', () => {
+      setActive(
+        baseSession({
+          currentOperation: [
+            { key: 'images.upload.op.countUploaded', params: { count: 2 } },
+            { key: 'images.upload.op.countFailed', params: { count: 1 } },
+          ],
+        })
+      );
+
+      render(<FloatingUploadProgress />);
+
+      expect(screen.getByText('2 uploaded, 1 failed')).toBeInTheDocument();
+    });
+
+    it('shows a keyless server sentence verbatim rather than nothing', () => {
+      // The deploy-window case: a backend that predates `messageKey`.
+      setActive(
+        baseSession({
+          currentOperation: [{ text: 'Correcting stage drift', file: 'a.nd2' }],
+        })
+      );
+
+      render(<FloatingUploadProgress />);
+
+      expect(
+        screen.getByText('Correcting stage drift — a.nd2')
       ).toBeInTheDocument();
     });
   });
