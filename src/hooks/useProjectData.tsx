@@ -349,6 +349,7 @@ export const useProjectData = (
 
   return {
     projectTitle,
+    setProjectTitle,
     projectType,
     setProjectType,
     projectVerified,
