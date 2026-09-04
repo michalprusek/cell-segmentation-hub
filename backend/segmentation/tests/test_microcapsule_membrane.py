@@ -681,3 +681,108 @@ class TestTunableInvariants:
             f"contour moves {jump / arc:.2f} px per arc px on a small capsule, "
             "far past the intended cap — the radial grid is not scaling with it"
         )
+
+
+class TestShapePrior:
+    """A membrane is a closed shell, so where the image says nothing the
+    contour should stay round.
+
+    Reported 2026-09-04: "the boundary dips inward in some places; I want the
+    membrane to be ideally a circle". On the arc in question the radial profile
+    has no edge at all -- intensity climbs monotonically from 65 to 150 over
+    ~100 px and the band-passed response is 1.2-1.8 against 4-6.7 in the sharp
+    sectors -- so the path locks onto whatever ripple the ramp carries.
+
+    WHAT IS AND IS NOT COVERED HERE. The prior's effect is established on real
+    data (the reported capsule goes from 5.03 px of non-circularity to 3.24,
+    the eight already-round ones move by at most 0.14 px). Three attempts at a
+    synthetic fixture that would fail without it -- a half-blurred capsule, one
+    with a corrugated ramp, one with a decoy arc on the soft half -- all came
+    out prior-independent or made the capsule read as dissolved, because the
+    failure needs the irregular structure of real bright field. So what is
+    pinned here is the SAFETY property, which is the one that could silently
+    ruin good output, plus the robustness of the circle it pulls toward.
+    """
+
+    def test_does_not_round_off_a_genuinely_non_circular_membrane(self):
+        # The 120 px out-of-round ellipse from the scaling test, restated as a
+        # prior question: its edge is sharp the whole way round, so no ray is
+        # weak enough to be pulled and the shape must survive intact. This is
+        # the failure mode that matters -- an earlier ungated version of the
+        # pull, which ramped from 1.0 instead of gating, flattened it to a
+        # 66 px span.
+        size, cx, cy = 1800, 900.0, 900.0
+        yy, xx = np.mgrid[0:size, 0:size]
+        rr = np.hypot(xx - cx, yy - cy)
+        ell = np.hypot((xx - cx) / 660.0, (yy - cy) / 540.0)
+        img = np.full((size, size), 190.0)
+        inside = rr <= 850.0
+        img[inside] = (90 + 60 * 0.5 * (1 + np.tanh((ell - 1.0) / 0.006)))[inside]
+        img[np.abs(rr - 850.0) < 4.0] = 40.0
+        poly = _ring_polygon(cx, cy, 850.0, n=240)
+
+        _state, _score, _feats, membrane = membrane_polygon_for(
+            prepare_gray(img.astype(np.uint8)), poly
+        )
+        assert membrane is not None
+        r = _traced_radii(membrane, cx, cy)
+        assert r.max() - r.min() > 100.0, (
+            f"span {r.max() - r.min():.1f} px of the true 120 — the shape "
+            "prior is rounding off a membrane the image clearly resolves"
+        )
+
+    def test_the_gate_leaves_a_confident_edge_alone(self):
+        from models import microcapsule_membrane as mm
+
+        # The gate is what makes the test above hold, so state it directly: a
+        # ray carrying an edge as strong as the capsule's best gets no pull at
+        # all, and the pull only reaches full strength at zero evidence.
+        strong = 1.0
+        for frac in (1.0, 0.9, mm.SHAPE_PRIOR_GATE):
+            weak = np.clip((mm.SHAPE_PRIOR_GATE - frac / strong)
+                           / mm.SHAPE_PRIOR_GATE, 0.0, 1.0)
+            assert weak == 0.0, f"a ray at {frac} of the strong edges is pulled"
+        assert np.clip((mm.SHAPE_PRIOR_GATE - 0.0) / mm.SHAPE_PRIOR_GATE,
+                       0.0, 1.0) == 1.0
+
+    def test_the_circle_it_pulls_toward_ignores_the_bad_stretches(self):
+        from models import microcapsule_membrane as mm
+
+        # The prior is only as good as its circle, and that circle is fitted to
+        # the very path whose bad stretches it exists to correct.
+        #
+        # Trimming alone cannot do it. The bad stretches are CONTIGUOUS arcs,
+        # and an arc pulled inward is indistinguishable from a circle whose
+        # centre has moved, so least squares absorbs it into the centre instead
+        # of flagging it as an outlier. Both halves are asserted here, because
+        # the failing one is the reason the `trust` argument exists.
+        angs = np.linspace(0, 2 * np.pi, 720, endpoint=False)
+        radial = np.full(720, 200.0)
+        radial[100:244] -= 25.0            # a fifth of the ring, dragged in
+        cap = mm.capsule_from_polygon(_ring_polygon(0.0, 0.0, 360.0))
+
+        blind = mm._fit_circle_radius(cap, angs, radial)
+        assert blind is not None
+        assert float(np.median(blind)) < 198.0, (
+            "the unweighted fit is expected to be dragged by a contiguous "
+            "arc; if it is not, this test no longer proves anything"
+        )
+
+        # The same evidence that gates the pull also selects the fit: the bad
+        # arc is where the edge was weak, so it is excluded.
+        trust = np.ones(720)
+        trust[100:244] = 0.05
+        fitted = mm._fit_circle_radius(cap, angs, radial, trust=trust)
+        assert fitted is not None
+        assert float(np.median(fitted)) == pytest.approx(200.0, abs=1.5), (
+            f"weighted fit came out at {np.median(fitted):.1f}"
+        )
+
+    def test_the_circle_fit_refuses_rather_than_inventing_one(self):
+        from models import microcapsule_membrane as mm
+
+        # Degenerate input must return None so the caller keeps pass 1's path,
+        # rather than a circle solved from a singular system.
+        angs = np.linspace(0, 2 * np.pi, 720, endpoint=False)
+        cap = mm.capsule_from_polygon(_ring_polygon(0.0, 0.0, 360.0))
+        assert mm._fit_circle_radius(cap, angs, np.zeros(720)) is None
