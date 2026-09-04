@@ -670,6 +670,23 @@ def test_a_failure_AFTER_the_rewrite_exits_with_the_fatal_code():
         assert "rewritten" in proc.stderr or "composed" in proc.stderr, proc.stderr
 
 
+def _result_json(stdout: str) -> dict:
+    """The helper's result object, read the way the real caller reads it.
+
+    ``correct_drift.py`` streams ``PROGRESS <0..1>`` lines while it works, so
+    the result is the last line that is NOT one — exactly the rule
+    ``pythonExtractor.runHelper`` applies. Parsing the whole of stdout as JSON
+    would pass only for as long as the helper stayed silent.
+    """
+    lines = [
+        line.strip()
+        for line in stdout.splitlines()
+        if line.strip() and not line.startswith("PROGRESS ")
+    ]
+    assert lines, f"no result JSON in stdout: {stdout!r}"
+    return json.loads(lines[-1])
+
+
 def test_correct_drift_cli_folds_the_shift_into_the_registration_sidecar():
     """End to end through the CLI the backend actually invokes.
 
@@ -707,7 +724,7 @@ def test_correct_drift_cli_folds_the_shift_into_the_registration_sidecar():
             capture_output=True, text=True,
         )
         assert proc.returncode == 0, proc.stderr
-        summary = json.loads(proc.stdout)
+        summary = _result_json(proc.stdout)
         assert summary["corrected"] is True
         assert summary["sourceChannel"] == "IRM"
 

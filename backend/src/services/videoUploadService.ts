@@ -50,6 +50,7 @@ import type {
   ExtractedPosition,
   ExtractionProgress,
   ExtractionResult,
+  ProgressCallback,
 } from './video/types';
 
 export interface VideoUploadProgressEvent {
@@ -306,7 +307,8 @@ async function withSparseFrameIds(
  */
 async function correctDriftForContainer(
   containerDir: string,
-  channels: { name: string; isSegmentationSource?: boolean }[]
+  channels: { name: string; isSegmentationSource?: boolean }[],
+  onProgress?: ProgressCallback
 ): Promise<void> {
   const source = resolveSegmentationSource(channels);
   if (!source) {
@@ -316,7 +318,8 @@ async function correctDriftForContainer(
     await correctDriftInContainer(
       containerDir,
       channels.map(c => c.name),
-      source
+      source,
+      onProgress
     );
   } catch (err) {
     // A KILLED helper (SIGKILL from the cgroup OOM killer is the realistic
@@ -597,7 +600,15 @@ export async function uploadVideoFromFile(options: {
         reportProgress(
           'extracting',
           0.1 + p.progress * 0.7,
-          p.message ?? `Frame ${p.currentFrame ?? '?'}`
+          // `Frame ?` was what this actually rendered: the helpers only ever
+          // sent a bare fraction, so `currentFrame` was always undefined and
+          // the literal question mark reached the card. They now send the
+          // counts too; fall back to the percentage rather than to a
+          // placeholder that reads like a bug.
+          p.message ??
+            (p.currentFrame !== undefined && p.totalFrames !== undefined
+              ? `Extracting frames ${p.currentFrame}/${p.totalFrames}`
+              : `Extracting frames (${Math.round(p.progress * 100)}%)`)
         ),
       registerChannels,
     });
@@ -605,10 +616,20 @@ export async function uploadVideoFromFile(options: {
     // 4a. Single-position / ordinary video: finalize the pre-created row.
     if (outcome.kind === 'single') {
       if (correctDrift) {
-        reportProgress('persisting', 0.82, 'Correcting stage drift');
-        await correctDriftForContainer(baseDir, outcome.result.channels);
+        reportProgress('persisting', 0.8, 'Correcting stage drift');
+        await correctDriftForContainer(baseDir, outcome.result.channels, p =>
+          // Drift correction is the longest step left once extraction is fast
+          // (48 s of the 621 s server-side phase measured on the 300-frame ND2,
+          // and the majority of it afterwards). Give it a real 0.8..0.95 band
+          // rather than a number that sits still while it runs.
+          reportProgress(
+            'persisting',
+            0.8 + p.progress * 0.15,
+            'Correcting stage drift'
+          )
+        );
       }
-      reportProgress('persisting', 0.85, 'Generating thumbnail');
+      reportProgress('persisting', 0.95, 'Generating thumbnail');
       await finalizeContainer({
         containerId,
         baseDir,
@@ -739,7 +760,13 @@ export async function uploadVideoFromFile(options: {
           0.85 + (i / positions.length) * 0.14,
           `Correcting stage drift (position ${i + 1}/${positions.length})`
         );
-        await correctDriftForContainer(cBaseDir, pos.result.channels);
+        await correctDriftForContainer(cBaseDir, pos.result.channels, dp =>
+          reportProgress(
+            'persisting',
+            0.85 + ((i + dp.progress) / positions.length) * 0.14,
+            `Correcting stage drift (position ${i + 1}/${positions.length})`
+          )
+        );
       }
 
       const originalStat = await fs.stat(originalDest);

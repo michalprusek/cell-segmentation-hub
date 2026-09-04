@@ -17,6 +17,7 @@ import {
   DEFAULT_CHUNKING_CONFIG,
   shouldRouteAsVideo,
 } from '@/lib/uploadUtils';
+import { VIDEO_UPLOAD_TRANSFER_SHARE } from '@/lib/constants';
 
 export interface UploadSession {
   id: string;
@@ -138,6 +139,14 @@ export const UploadProvider: React.FC<{ children: React.ReactNode }> = ({
   // Track active session ID
   const activeSessionIdRef = useRef<string | null>(null);
 
+  // Which video of the current batch is in flight, and how big a slice of the
+  // overall bar it owns. The `videoUploadProgress` socket events arrive while
+  // the POST is still open, so the handler needs the same (index, segment)
+  // arithmetic the transfer callback uses — but it runs outside that closure.
+  // Null whenever no video POST is open, which is what stops a late event from
+  // a previous file writing over the next one's progress.
+  const videoSliceRef = useRef<{ index: number; segment: number } | null>(null);
+
   // Derive active session from state — memoized to avoid
   // Object.values().find() on every render
   const activeSession = useMemo(
@@ -238,12 +247,67 @@ export const UploadProvider: React.FC<{ children: React.ReactNode }> = ({
       });
     };
 
+    // The SERVER-SIDE half of a video upload. `apiClient.uploadVideo`'s own
+    // progress callback stops at the last byte sent; everything after that —
+    // decoding the ND2/TIFF, writing N frame PNGs, drift correction — happens
+    // while the POST is still open and used to be completely invisible. This
+    // is the only signal the browser gets during it.
+    const handleVideoProgress = (data: {
+      videoContainerId: string;
+      filename: string;
+      phase: 'saving' | 'extracting' | 'persisting' | 'completed' | 'failed';
+      progress: number;
+      message?: string;
+      error?: string;
+    }) => {
+      const sessionId = activeSessionIdRef.current;
+      const slice = videoSliceRef.current;
+      if (!sessionId || !slice) return;
+      // 'failed' is reported by the POST rejecting; letting it drive the bar
+      // here would race the catch block that owns the session's final status.
+      if (data.phase === 'failed') return;
+
+      const serverFraction = Math.max(0, Math.min(1, data.progress));
+      const overall = Math.round(
+        slice.index * slice.segment +
+          slice.segment *
+            (VIDEO_UPLOAD_TRANSFER_SHARE +
+              (1 - VIDEO_UPLOAD_TRANSFER_SHARE) * serverFraction)
+      );
+
+      setSessions(prev => {
+        const session = prev[sessionId];
+        if (!session || session.status !== 'uploading') return prev;
+        const operation = data.message
+          ? `${data.message} — ${data.filename}`
+          : session.currentOperation;
+        if (
+          operation === session.currentOperation &&
+          overall <= session.overallProgress
+        ) {
+          return prev;
+        }
+        return {
+          ...prev,
+          [sessionId]: {
+            ...session,
+            // Monotonic: the transfer share is an estimate, so a server phase
+            // that maps below where the bar already is must not walk it back.
+            overallProgress: Math.max(session.overallProgress, overall),
+            currentOperation: operation,
+          },
+        };
+      });
+    };
+
     socket.on('uploadProgress', handleUploadProgress);
     socket.on('uploadCompleted', handleUploadCompleted);
+    socket.on('videoUploadProgress', handleVideoProgress);
 
     return () => {
       socket.off('uploadProgress', handleUploadProgress);
       socket.off('uploadCompleted', handleUploadCompleted);
+      socket.off('videoUploadProgress', handleVideoProgress);
     };
   }, [socket, isUploading]);
 
@@ -349,15 +413,23 @@ export const UploadProvider: React.FC<{ children: React.ReactNode }> = ({
                 },
               };
             });
+            // Treat each video as 1 / files.length share of overall.
+            const segment = 100 / Math.max(1, files.length);
+            // Published for the `videoUploadProgress` socket handler, which
+            // continues this file's slice once the transfer is done.
+            videoSliceRef.current = { index: i, segment };
             try {
               await apiClient.uploadVideo(
                 projectId,
                 vfile,
                 percent => {
-                  // Treat each video as 1 / videoFiles.length share of overall
-                  const segment = 100 / Math.max(1, files.length);
+                  // Only the TRANSFER share of the slice. The rest belongs to
+                  // the server-side extraction, which the POST does not return
+                  // until — filling the whole slice here is what left the bar
+                  // reading 100 % for the ten minutes that followed.
                   const overall = Math.round(
-                    i * segment + (percent * segment) / 100
+                    i * segment +
+                      (percent / 100) * segment * VIDEO_UPLOAD_TRANSFER_SHARE
                   );
                   setSessions(prev => {
                     const s = prev[sessionId];
@@ -367,6 +439,15 @@ export const UploadProvider: React.FC<{ children: React.ReactNode }> = ({
                       [sessionId]: {
                         ...s,
                         overallProgress: Math.max(s.overallProgress, overall),
+                        // Once the bytes are gone the browser has nothing more
+                        // to report; say what we are now waiting for instead of
+                        // leaving the last transfer message on screen. The
+                        // socket handler overwrites this as soon as the server
+                        // names its phase.
+                        currentOperation:
+                          percent >= 100
+                            ? `Processing on server: ${vfile.name}`
+                            : s.currentOperation,
                       },
                     };
                   });
@@ -405,6 +486,12 @@ export const UploadProvider: React.FC<{ children: React.ReactNode }> = ({
                 firstFailureMessage = `${vfile.name}: ${msg}`;
               }
               videoFailed++;
+            } finally {
+              // Closed either way (including the `break` above): a
+              // `videoUploadProgress` event that arrives after the POST
+              // settled belongs to a file that is no longer in flight and
+              // must not move the bar. `finally` runs before the break.
+              videoSliceRef.current = null;
             }
           }
           // If user only uploaded videos, finalize the session here so we

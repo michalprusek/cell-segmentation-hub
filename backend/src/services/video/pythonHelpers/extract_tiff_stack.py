@@ -13,7 +13,7 @@ The expected input axes are (in TIFF dimension priority):
 Anything else falls through to a single-frame interpretation.
 
 Stdout protocol:
-  "PROGRESS <0..1>"             # streamed during the loop
+  "PROGRESS <0..1> <done> <total>"   # streamed during the loop
   '{"frameCount": ..., ...}'    # final result, one JSON object on its own line
 """
 from __future__ import annotations
@@ -26,6 +26,7 @@ from pathlib import Path
 
 import numpy as np
 
+from frame_png import save_frame_png
 from channel_registration import (
     initial_reasons,
     register_plane,
@@ -390,8 +391,7 @@ def _to_png_dtype(arr: np.ndarray) -> np.ndarray:
 
 
 def _save_png(arr: np.ndarray, path: Path) -> None:
-    from PIL import Image
-    Image.fromarray(_to_png_dtype(arr)).save(path, format="PNG", optimize=True)
+    save_frame_png(_to_png_dtype(arr), path)
 
 
 def _detect_pixel_size_um(tf) -> float | None:
@@ -998,7 +998,7 @@ def main() -> int:
         reasons[t] = reason_row
         blanks[t] = blank_row
         if t % 5 == 0 or t == T - 1:
-            sys.stdout.write(f"PROGRESS {(t + 1) / T:.4f}\n")
+            sys.stdout.write(f"PROGRESS {(t + 1) / T:.4f} {t + 1} {T}\n")
             sys.stdout.flush()
 
     # Stage-drift correction is NOT done here. It has to be driven by the

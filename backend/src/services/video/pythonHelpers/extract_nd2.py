@@ -21,8 +21,8 @@ axis:
   and stage coordinates are read from the ND2 ``XYPosLoop`` metadata so a
   named well (e.g. ``"D03_0000"``) survives into the container name.
 
-Stdout protocol: ``PROGRESS <0..1>`` lines during the loop, then a single
-result-JSON object on its own line.
+Stdout protocol: ``PROGRESS <0..1> <done> <total>`` lines during the loop, then
+a single result-JSON object on its own line.
 """
 from __future__ import annotations
 
@@ -38,6 +38,7 @@ from pathlib import Path
 
 import numpy as np
 
+from frame_png import save_frame_png
 from channel_registration import (
     initial_reasons,
     register_plane,
@@ -132,11 +133,8 @@ def _to_png_dtype(arr: np.ndarray) -> np.ndarray:
 
 
 def _save_png(arr: np.ndarray, path: Path) -> None:
-    from PIL import Image
     # Materialise any lazy (dask) slice before PIL, which needs a real ndarray.
-    Image.fromarray(_to_png_dtype(np.asarray(arr))).save(
-        path, format="PNG", optimize=True
-    )
+    save_frame_png(_to_png_dtype(np.asarray(arr)), path)
 
 
 # Mirrors `CHANNEL_NAME_RE` in `backend/src/services/video/types.ts` (the
@@ -656,7 +654,7 @@ def _channels_with_coverage(
 
 def _progress(done: int, total: int) -> None:
     if total > 0 and (done % 5 == 0 or done == total):
-        sys.stdout.write(f"PROGRESS {done / total:.4f}\n")
+        sys.stdout.write(f"PROGRESS {done / total:.4f} {done} {total}\n")
         sys.stdout.flush()
 
 

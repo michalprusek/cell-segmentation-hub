@@ -234,6 +234,20 @@ const FloatingUploadProgress: React.FC = () => {
                 {Math.round(overallProgress)}%
               </span>
             </div>
+            {/* The phase, in the COLLAPSED card. A video upload spends minutes
+                in a server-side phase the percentage alone cannot describe —
+                "Extracting frames 143/300" is the difference between a bar that
+                looks stuck and one that is visibly working. It used to be
+                visible only after expanding the card, which nobody does while
+                watching an upload. */}
+            {currentOperation && (
+              <div
+                className="mt-1 text-xs text-gray-500 dark:text-gray-400 truncate"
+                title={currentOperation}
+              >
+                {currentOperation}
+              </div>
+            )}
           </div>
         )}
 
@@ -281,11 +295,8 @@ const FloatingUploadProgress: React.FC = () => {
                   </div>
                 )}
 
-                {currentOperation && (
-                  <div className="text-xs text-gray-400 dark:text-gray-500 truncate">
-                    {currentOperation}
-                  </div>
-                )}
+                {/* currentOperation is rendered under the progress bar in the
+                    always-visible section above, so it is not repeated here. */}
 
                 <Button
                   variant="outline"

@@ -437,6 +437,167 @@ describe('UploadContext — startUpload (video routing)', () => {
 
 // ─── startUpload: video-only outcomes ──────────────────────────────────────────
 
+describe('UploadContext — video server-side progress', () => {
+  // A video upload is ONE blocking POST. `onUploadProgress` finishes when the
+  // last byte is sent; the server then decodes the file and writes N frame PNGs
+  // before responding. Mapping the transfer alone onto the whole bar is what
+  // left a real 3.41 GB / 300-frame ND2 reading "100%" for 10 min 21 s. The
+  // transfer now owns VIDEO_UPLOAD_TRANSFER_SHARE of the file's slice and the
+  // `videoUploadProgress` socket event owns the rest.
+
+  /** Start a video upload whose POST never settles, and hand back the
+   *  transfer-progress callback the context passed to `uploadVideo`. Leaving
+   *  the POST open is the whole point: it is the window in which the server
+   *  phase happens. */
+  function pendingVideoUpload() {
+    let reportTransfer!: (percent: number) => void;
+    uploadVideoMock.mockImplementation(
+      (_pid: string, _f: File, onProgress: (p: number) => void) => {
+        reportTransfer = onProgress;
+        return new Promise(() => {});
+      }
+    );
+    return () => reportTransfer;
+  }
+
+  it('a completed transfer does NOT put the bar at 100%', async () => {
+    const { result } = renderHook(() => useUpload(), { wrapper });
+    const getTransfer = pendingVideoUpload();
+
+    await act(async () => {
+      result.current.startUpload('proj-1', [makeVideo('big.nd2')]);
+    });
+    await waitFor(() => expect(uploadVideoMock).toHaveBeenCalled());
+
+    await act(async () => {
+      getTransfer()(100);
+    });
+
+    const session = result.current.activeSession!;
+    // 55 %, not 100 %. This exact assertion is the reported bug.
+    expect(session.overallProgress).toBe(55);
+    expect(session.overallProgress).toBeLessThan(100);
+    // ...and it says what it is now waiting for, rather than leaving the last
+    // transfer message up.
+    expect(session.currentOperation).toContain('Processing on server');
+  });
+
+  it('the socket event drives the remaining share and names the phase', async () => {
+    const { result } = renderHook(() => useUpload(), { wrapper });
+    const getTransfer = pendingVideoUpload();
+
+    await act(async () => {
+      result.current.startUpload('proj-1', [makeVideo('big.nd2')]);
+    });
+    await waitFor(() => expect(uploadVideoMock).toHaveBeenCalled());
+    await act(async () => {
+      getTransfer()(100);
+    });
+
+    const onVideoProgress = getSocketHandler('videoUploadProgress');
+    expect(
+      onVideoProgress,
+      'the provider must subscribe to videoUploadProgress'
+    ).toBeDefined();
+
+    await act(async () => {
+      onVideoProgress!({
+        videoContainerId: 'c-1',
+        filename: 'big.nd2',
+        phase: 'extracting',
+        progress: 0.5,
+        message: 'Extracting frames 150/300',
+      });
+    });
+
+    // 55 + 45 * 0.5
+    expect(result.current.activeSession!.overallProgress).toBe(78);
+    expect(result.current.activeSession!.currentOperation).toBe(
+      'Extracting frames 150/300 — big.nd2'
+    );
+
+    await act(async () => {
+      onVideoProgress!({
+        videoContainerId: 'c-1',
+        filename: 'big.nd2',
+        phase: 'completed',
+        progress: 1,
+        message: 'Video ready',
+      });
+    });
+    expect(result.current.activeSession!.overallProgress).toBe(100);
+  });
+
+  it('never walks the bar backwards', async () => {
+    // The transfer share is a weighting, not a measurement, so a server phase
+    // can map below where the bar already sits. A bar that goes backwards
+    // reads as a fault.
+    const { result } = renderHook(() => useUpload(), { wrapper });
+    const getTransfer = pendingVideoUpload();
+
+    await act(async () => {
+      result.current.startUpload('proj-1', [makeVideo('big.nd2')]);
+    });
+    await waitFor(() => expect(uploadVideoMock).toHaveBeenCalled());
+    await act(async () => {
+      getTransfer()(100);
+    });
+
+    const onVideoProgress = getSocketHandler('videoUploadProgress')!;
+    await act(async () => {
+      onVideoProgress({
+        videoContainerId: 'c-1',
+        filename: 'big.nd2',
+        phase: 'extracting',
+        progress: 0.9,
+      });
+    });
+    const high = result.current.activeSession!.overallProgress;
+    await act(async () => {
+      onVideoProgress({
+        videoContainerId: 'c-1',
+        filename: 'big.nd2',
+        phase: 'saving',
+        progress: 0.05,
+      });
+    });
+    expect(result.current.activeSession!.overallProgress).toBe(high);
+  });
+
+  it('ignores server progress once no video POST is in flight', async () => {
+    // The events are addressed to the USER, not to a request. One that arrives
+    // after the POST settled belongs to a file that is no longer in flight and
+    // must not move the bar.
+    uploadVideoMock.mockResolvedValue({
+      videoContainerId: 'c-1',
+      frameCount: 5,
+      channels: [],
+    });
+    const { result } = renderHook(() => useUpload(), { wrapper });
+    const onBefore = getSocketHandler('videoUploadProgress');
+
+    await act(async () => {
+      result.current.startUpload('proj-1', [makeVideo('clip.mp4')]);
+    });
+    await waitForTerminal(() => result.current.sessions);
+
+    const onVideoProgress = getSocketHandler('videoUploadProgress') ?? onBefore;
+    const before = Object.values(result.current.sessions)[0];
+    await act(async () => {
+      onVideoProgress?.({
+        videoContainerId: 'c-1',
+        filename: 'clip.mp4',
+        phase: 'extracting',
+        progress: 0.1,
+        message: 'stale',
+      });
+    });
+    const after = Object.values(result.current.sessions)[0];
+    expect(after.currentOperation).toBe(before.currentOperation);
+    expect(after.overallProgress).toBe(before.overallProgress);
+  });
+});
+
 describe('UploadContext — startUpload (video outcomes)', () => {
   it('all videos succeed → status=completed, toast.success', async () => {
     uploadVideoMock.mockResolvedValue({
