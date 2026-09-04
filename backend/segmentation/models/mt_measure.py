@@ -43,7 +43,7 @@ loads the v7 wrapper and therefore torch, which measurement has no need of.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Sequence
+from typing import List, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -348,6 +348,49 @@ def dilate(mask: np.ndarray, radius: int) -> np.ndarray:
     return cv2.dilate(mask, kernel)
 
 
+def mask_bbox(mask: np.ndarray) -> Optional[Tuple[int, int, int, int]]:
+    """Half-open ``(y0, y1, x0, x1)`` bounding box of a 2-D mask's set pixels,
+    or ``None`` when nothing is set.
+
+    Two boolean ``any`` reductions plus ``argmax``, NOT ``np.nonzero``. That is
+    the identity :func:`vicinity_mask` has used since 2026-09-01 — the first
+    True row of ``mask.any(axis=1)`` IS ``ys.min()``, and no set pixel lies
+    outside the row span, so the column reduction can be restricted to it — and
+    the reason is measured: on 162 real microtubules of one 2048^2 essays
+    position, ``np.nonzero`` cost 1.190 s of that function's 1.220 s, because it
+    walks every frame pixel twice and materialises two int64 index arrays per
+    microtubule only for four order statistics to be taken off them. The
+    reductions give the identical four numbers for 0.058 s.
+
+    Hoisted out of ``vicinity_mask`` on 2026-09-04 so :func:`region_stats` can
+    use the same identity — it had the same shape of problem, gathering over a
+    whole frame to reach 0.03 % of it.
+
+    Works on a boolean mask or on a 0/1 integer band; ``any`` treats non-zero as
+    set, which is the same rule the callers' ``astype(bool)`` applies.
+    """
+    if mask.ndim != 2:
+        raise ValueError(f"mask_bbox expects a 2-D mask, got shape {mask.shape}")
+    if mask.size == 0:
+        # A zero-HEIGHT mask makes `rows` empty and `argmax` raise, where both
+        # callers previously answered "nothing set" — `region_stats` with an
+        # n=0 result and `vicinity_mask` with an empty ring. (A zero-WIDTH mask
+        # needs no guard: `any` over an empty axis is False, so it falls out
+        # below.) Kept explicit rather than left to chance: this helper is now
+        # shared by four modules, and an exception where there used to be a
+        # zero is a worse answer than either.
+        return None
+    rows = mask.any(axis=1)
+    y0 = int(rows.argmax())
+    if not rows[y0]:  # argmax on an all-False row mask means "empty"
+        return None
+    y1 = rows.size - int(rows[::-1].argmax())
+    cols = mask[y0:y1].any(axis=0)
+    x0 = int(cols.argmax())
+    x1 = cols.size - int(cols[::-1].argmax())
+    return y0, y1, x0, x1
+
+
 def vicinity_mask(
     band: np.ndarray, not_signal: np.ndarray, margin_radius: int
 ) -> np.ndarray:
@@ -370,22 +413,21 @@ def vicinity_mask(
     microtubule only for four order statistics to be taken off them; two boolean
     ``any`` reductions plus ``argmax`` give the identical four numbers for
     0.058 s (a 20x cut of the whole function, and the bounds agree exactly on all
-    162 bands). It is an identity, not an approximation: the first True row of
-    ``band.any(axis=1)`` IS ``ys.min()``, and no pixel lies outside the row span,
-    so the column reduction can be restricted to it.
+    162 bands). That reduction now lives in :func:`mask_bbox`, which
+    :func:`region_stats` shares; the arithmetic below is unchanged, expressed
+    against its half-open bounds instead of the inclusive ones it used to
+    compute inline (``y1_incl + margin + 1`` == ``y1_halfopen + margin``).
     """
     h, w = band.shape
     vicinity = np.zeros(band.shape, dtype=bool)
-    rows = band.any(axis=1)
-    ry0 = int(rows.argmax())
-    if not rows[ry0]:  # argmax on an all-False row mask means "empty band"
+    bbox = mask_bbox(band)
+    if bbox is None:
         return vicinity
-    ry1 = rows.size - 1 - int(rows[::-1].argmax())
-    cols = band[ry0:ry1 + 1].any(axis=0)
-    y0 = max(0, ry0 - margin_radius)
-    y1 = min(h, ry1 + margin_radius + 1)
-    x0 = max(0, int(cols.argmax()) - margin_radius)
-    x1 = min(w, cols.size - 1 - int(cols[::-1].argmax()) + margin_radius + 1)
+    by0, by1, bx0, bx1 = bbox
+    y0 = max(0, by0 - margin_radius)
+    y1 = min(h, by1 + margin_radius)
+    x0 = max(0, bx0 - margin_radius)
+    x1 = min(w, bx1 + margin_radius)
     capsule = dilate(band[y0:y1, x0:x1], margin_radius)
     vicinity[y0:y1, x0:x1] = (capsule > 0) & not_signal[y0:y1, x0:x1]
     return vicinity
@@ -476,8 +518,39 @@ def region_stats(image: np.ndarray, mask: np.ndarray) -> RegionStats:
     """Statistics of ``image`` under ``mask``, ImageJ-style.
 
     ``mask`` may be boolean or a 0/1 integer band; both index the same pixels.
+
+    The gather is WINDOWED to the mask's bounding box (:func:`mask_bbox`), which
+    is bit-identical and not merely close: boolean indexing yields the set
+    pixels in row-major order, and cropping to a box that contains all of them
+    yields the *same* 1-D array — same values, same order, same length — so
+    numpy's pairwise summation blocks identically and ``sum``/``mean``/
+    ``median``/``std`` cannot move. Verified elementwise on real production
+    geometry (see ``tests/test_mt_measure_region_stats.py``).
+
+    It matters because every caller hands this a FULL-FRAME mask describing a
+    sliver of it. Measured on frame 0 of production container 4972cad8
+    (1476x1924, 59 real microtubule polylines, the real 488 nm frame): a band
+    covers 0.05 % of the pixels its un-windowed gather visited and a ring
+    0.16 %, and the 118 calls cost **61.3 ms un-windowed against 22.2 ms
+    windowed** (2.8x), interleaved in one process — the box was under heavy
+    concurrent load, so the ratio is the number to trust, not the absolutes.
+    ``frap_select._spot_snr`` has the same shape and worse: it measures a
+    ~30 px window through this function once per CANDIDATE, thousands of times
+    per ``/frap/targets`` request.
+
+    Falls back to the whole-frame gather for anything that is not a 2-D mask
+    matching ``image``, so a shape mismatch still raises the IndexError it
+    always did rather than silently measuring a crop.
     """
-    pixels = image[mask.astype(bool)] if mask.dtype != bool else image[mask]
+    if mask.ndim != 2 or image.shape != mask.shape:
+        pixels = image[mask.astype(bool)] if mask.dtype != bool else image[mask]
+    else:
+        bbox = mask_bbox(mask)
+        if bbox is None:
+            return RegionStats(0, 0.0, 0.0, 0.0, 0.0)
+        y0, y1, x0, x1 = bbox
+        sub = mask[y0:y1, x0:x1]
+        pixels = image[y0:y1, x0:x1][sub if sub.dtype == bool else sub.astype(bool)]
     n = int(pixels.size)
     if n == 0:
         return RegionStats(0, 0.0, 0.0, 0.0, 0.0)

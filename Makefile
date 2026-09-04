@@ -271,6 +271,13 @@ test-py:
 # 2026-08-28. --asyncio-mode=auto is required; without pytest-asyncio the
 # test_api_segmentation tests error on an unhandled async fixture and look
 # broken when they are merely unplugged.
+#
+# `models/microtubule/tests` is listed EXPLICITLY because pytest is pointed at
+# `tests/` and would not otherwise reach it. That directory holds the
+# instancer's performance-identity proofs — every speedup compared against a
+# verbatim transcription of the code it replaced — and it ran nowhere at all
+# until 2026-09-04: not here, not in CI, not in the pre-commit hook. A proof
+# that nothing executes is a comment.
 test-ml:
 	@echo "🧠 ML suite (needs a GPU and the built ml image)"
 	@docker image inspect cell-segmentation-hub-ml:latest >/dev/null 2>&1 || \
@@ -285,7 +292,8 @@ test-ml:
 	  -e HF_TOKEN \
 	  cell-segmentation-hub-ml:latest -c '\
 	    pip install -q -r requirements-test.txt && \
-	    python -m pytest tests/ -q -p no:cacheprovider --asyncio-mode=auto \
+	    python -m pytest tests/ models/microtubule/tests \
+	      -q -p no:cacheprovider --asyncio-mode=auto \
 	      --timeout=90 --timeout-method=thread'
 
 test-ui:

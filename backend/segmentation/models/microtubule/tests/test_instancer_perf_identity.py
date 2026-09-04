@@ -1,12 +1,25 @@
-"""The two instancer speedups must be pure performance rewrites.
+"""The instancer speedups must be pure performance rewrites.
 
-Both replace an O(labels x frame) rescan with a single grouped pass, and both are
-only worth anything if they are *exactly* equivalent — this is a measuring
-instrument and its author reads the numbers. So each test compares against a
-literal transcription of the code that was there before, not against a
-remembered expectation.
+Each of them replaces work that was linear in the FRAME (or quadratic in the
+arms) with work linear in what it actually touches, and each is only worth
+anything if it is *exactly* equivalent — this is a measuring instrument and its
+author reads the numbers. So every test compares against a literal
+transcription of the code that was there before, not against a remembered
+expectation.
+
+Covered here:
+
+* ``oracle_instance_masks`` — bbox dilation instead of a full-frame one;
+* ``_group_coords_by_label`` — one grouped pass instead of a rescan per label;
+* ``_dilate_sparse`` — scattering the structuring element onto the few set
+  pixels instead of sweeping it over every pixel (2026-09-04);
+* ``matching._candidate_pairs`` — a KD-tree superset instead of measuring all
+  ``n(n-1)/2`` arm distances in Python (2026-09-04);
+* ``instance_a(return_masks=False)`` — not building masks no caller reads
+  (2026-09-04), including the assertion that ``wrapper.predict`` asks for that.
 
 Run directly (``python3 test_instancer_perf_identity.py``) or under pytest.
+``make test-ml`` collects this directory.
 """
 from __future__ import annotations
 
@@ -14,12 +27,19 @@ import sys
 from pathlib import Path
 
 import numpy as np
+from scipy import ndimage
 from scipy.ndimage import binary_dilation
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from instance import matching as M  # noqa: E402
 from instance import oracle as O  # noqa: E402
-from instance.skeleton_graph import _group_coords_by_label  # noqa: E402
+from instance.instancer_a import default_params, instance_a  # noqa: E402
+from instance.skeleton_graph import (  # noqa: E402
+    _disk,
+    _dilate_sparse,
+    _group_coords_by_label,
+)
 
 
 # --- reference implementations, verbatim from before the change ----------------
@@ -150,6 +170,245 @@ def test_grouping_handles_empty_and_gappy_labels():
     assert np.array_equal(got[3], np.array([[9, 9]]))
     assert got[4].shape == (0, 2)
     assert _group_coords_by_label(np.zeros((5, 5), np.int32), 3)[1].shape == (0, 2)
+
+
+# --- _dilate_sparse ------------------------------------------------------------
+#
+# Junction pixels are a sliver of the frame — 93 of 6.4 M on a real production
+# frame (container 4972cad8, frame 0 IRM at the 1.5x working scale) — and
+# ``ndimage.binary_dilation`` costs the frame regardless. Measured there,
+# interleaved in one process: 0.337 s dense against 0.012 s scattered (28x),
+# a fifth to a third of the whole instancer depending on machine load — the
+# single largest item in it. The scatter is the DEFINITION of dilation
+# (the union of the element's offsets translated onto every set pixel), so the
+# only way it can go wrong is in the bookkeeping: the origin, the border, or the
+# fallback.
+
+def _assert_dilation_identical(mask, structure, what):
+    got = _dilate_sparse(mask, structure)
+    want = ndimage.binary_dilation(mask, structure=structure)
+    assert got.dtype == want.dtype, f"{what}: dtype {got.dtype} vs {want.dtype}"
+    if not np.array_equal(got, want):
+        raise AssertionError(f"{what}: differs in {int((got != want).sum())} pixel(s)")
+
+
+def test_sparse_dilation_matches_scipy_on_edges_and_corners():
+    # Where an origin or border mistake shows: a set pixel whose disk hangs off
+    # each side. scipy's border_value=0 drops the overhang; so must the scatter.
+    h, w = 31, 43
+    disk = _disk(4.0)
+    for y in (0, 1, 3, h // 2, h - 4, h - 2, h - 1):
+        for x in (0, 1, 3, w // 2, w - 4, w - 2, w - 1):
+            m = np.zeros((h, w), dtype=bool)
+            m[y, x] = True
+            _assert_dilation_identical(m, disk, f"single px ({y},{x})")
+
+
+def test_sparse_dilation_matches_scipy_across_radii():
+    # radius 0 -> a 1x1 structure (identity); the even/odd shapes of _disk's
+    # 2r+1 side are all odd, but the radii between them change which cells are
+    # set, and an off-centre origin is only visible for r >= 1.
+    rng = np.random.default_rng(11)
+    h, w = 40, 37
+    m = np.zeros((h, w), dtype=bool)
+    ys = rng.integers(0, h, 9)
+    xs = rng.integers(0, w, 9)
+    m[ys, xs] = True
+    for radius in (0.0, 0.5, 1.0, 2.0, 3.0, 5.0, 7.5):
+        _assert_dilation_identical(m, _disk(radius), f"radius {radius}")
+
+
+def test_sparse_dilation_matches_scipy_on_an_asymmetric_structure():
+    # _disk is symmetric, so a swapped or negated offset would still pass on it.
+    # An L-shaped element pins that the offsets are applied in (row, col) with
+    # the origin at shape // 2.
+    structure = np.array(
+        [[1, 0, 0],
+         [1, 1, 0],
+         [1, 1, 1]], dtype=bool,
+    )
+    h, w = 17, 19
+    for y in (0, 1, 8, h - 2, h - 1):
+        for x in (0, 1, 9, w - 2, w - 1):
+            m = np.zeros((h, w), dtype=bool)
+            m[y, x] = True
+            _assert_dilation_identical(m, structure, f"L at ({y},{x})")
+
+
+def test_sparse_dilation_handles_empty_and_full_masks():
+    disk = _disk(3.0)
+    _assert_dilation_identical(np.zeros((20, 25), dtype=bool), disk, "empty")
+    _assert_dilation_identical(np.ones((20, 25), dtype=bool), disk, "full")
+    # An all-False structure: scipy dilates to nothing, and so must the early
+    # return that skips the scatter for it. `_disk` always sets its centre, so
+    # this guard is defensive — which is exactly why it needs an assertion.
+    empty_structure = np.zeros((3, 3), dtype=bool)
+    _assert_dilation_identical(
+        np.zeros((20, 25), dtype=bool), empty_structure, "empty mask + structure"
+    )
+    populated = np.zeros((20, 25), dtype=bool)
+    populated[4, 5] = populated[17, 22] = True
+    _assert_dilation_identical(populated, empty_structure, "empty structure")
+
+
+def test_sparse_dilation_falls_back_when_the_mask_is_dense():
+    """The scatter's index arrays are ``|set| * |structure|`` elements, so a
+    dense mask must go back to scipy rather than allocate more than the frame.
+
+    Asserts BOTH that the fallback is taken (scipy is actually called) and that
+    it still returns the right answer — a fallback that silently produced the
+    scatter's result would make the guard pointless."""
+    h, w = 40, 40
+    disk = _disk(3.0)                       # 29 cells; limit is 40*40 // 8 = 200
+    dense = np.zeros((h, w), dtype=bool)
+    dense[::2, ::2] = True                  # 400 set pixels -> 11 600 > 200
+    calls = []
+    real = ndimage.binary_dilation
+
+    def spy(*args, **kwargs):
+        calls.append(1)
+        return real(*args, **kwargs)
+
+    import instance.skeleton_graph as SG
+    original = SG.ndimage.binary_dilation
+    SG.ndimage.binary_dilation = spy
+    try:
+        got = _dilate_sparse(dense, disk)
+    finally:
+        SG.ndimage.binary_dilation = original
+    assert calls, "dense mask must fall back to scipy, not build a huge index array"
+    assert np.array_equal(got, real(dense, structure=disk))
+
+    sparse = np.zeros((h, w), dtype=bool)
+    sparse[5, 5] = sparse[20, 30] = True
+    calls.clear()
+    SG.ndimage.binary_dilation = spy
+    try:
+        _dilate_sparse(sparse, disk)
+    finally:
+        SG.ndimage.binary_dilation = original
+    assert not calls, "a sparse mask must NOT go through scipy"
+
+
+# --- matching._candidate_pairs -------------------------------------------------
+#
+# At the gap-linking call every free chain end in the frame is an arm, so the
+# nested loops measured n(n-1)/2 distances to keep a few dozen: 14 365 pairs ->
+# 44 kept on a real production frame. The KD-tree is a SUPERSET filter and the
+# original comparison is then re-applied, so the surviving set is defined by the
+# old expression rather than by scipy's rounding.
+
+def _arms_at(points):
+    return [
+        M.ArmEnd(arc_idx=i, which="start", theta=0.0, kappa=0.0,
+                 pos=np.asarray(p, dtype=float))
+        for i, p in enumerate(points)
+    ]
+
+
+def _candidate_pairs_reference(arms, max_gap):
+    """The pre-2026-09-04 enumeration, verbatim."""
+    out = []
+    n = len(arms)
+    for i in range(n):
+        for j in range(i + 1, n):
+            if max_gap is not None:
+                if float(np.linalg.norm(arms[i].pos - arms[j].pos)) > max_gap:
+                    continue
+            out.append((i, j))
+    return out
+
+
+def test_candidate_pairs_match_the_nested_loops_content_and_order():
+    """Order is load-bearing: edge insertion order is what
+    ``nx.max_weight_matching`` breaks exact ties on, so a permuted candidate
+    list could return a different (equally optimal) matching."""
+    rng = np.random.default_rng(77)
+    for trial in range(30):
+        n = int(rng.integers(2, 60))
+        pts = rng.uniform(0, 120, size=(n, 2))
+        arms = _arms_at(pts)
+        for max_gap in (0.5, 5.0, 20.0, 1000.0):
+            got = list(M._candidate_pairs(arms, max_gap))
+            want = _candidate_pairs_reference(arms, max_gap)
+            assert got == want, f"trial {trial} max_gap {max_gap}"
+
+
+def test_candidate_pairs_without_a_gap_is_every_pair_in_row_major_order():
+    arms = _arms_at(np.array([[0.0, 0.0], [1.0, 0.0], [2.0, 0.0], [3.0, 0.0]]))
+    assert list(M._candidate_pairs(arms, None)) == _candidate_pairs_reference(arms, None)
+    assert list(M._candidate_pairs(arms, None)) == [
+        (0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3)
+    ]
+
+
+def test_candidate_pairs_keeps_a_pair_sitting_exactly_on_the_gap():
+    """``> max_gap`` is a strict comparison, so a distance EQUAL to the gate is
+    kept. The KD query is widened by 1e-9 relative precisely so scipy cannot
+    drop such a pair before the exact test sees it."""
+    arms = _arms_at(np.array([[0.0, 0.0], [3.0, 4.0]]))   # distance exactly 5.0
+    assert list(M._candidate_pairs(arms, 5.0)) == [(0, 1)]
+    assert list(M._candidate_pairs(arms, 4.999999)) == []
+
+
+def test_candidate_pairs_handles_duplicate_positions():
+    # Coincident arms are a real shape (two chains ending on the same pixel) and
+    # query_pairs returns them at distance 0.
+    arms = _arms_at(np.array([[7.0, 7.0], [7.0, 7.0], [7.0, 7.0], [99.0, 99.0]]))
+    assert list(M._candidate_pairs(arms, 1.0)) == _candidate_pairs_reference(arms, 1.0)
+    assert list(M._candidate_pairs(arms, 1.0)) == [(0, 1), (0, 2), (1, 2)]
+
+
+# --- instance_a(return_masks=False) --------------------------------------------
+
+def _cross_mask(h=90, w=90):
+    m = np.zeros((h, w), dtype=bool)
+    m[44:47, 10:80] = True
+    m[10:80, 44:47] = True
+    return m
+
+
+def test_return_masks_false_changes_nothing_but_the_masks():
+    mask = _cross_mask()
+    params = default_params()
+    with_masks = instance_a(mask, 0.239, params)
+    without = instance_a(mask, 0.239, params, return_masks=False)
+    assert len(with_masks[0]) == len(without[0]) >= 1
+    for a, b in zip(with_masks[0], without[0]):
+        assert np.array_equal(a, b)
+    assert without[1] == []
+    assert len(with_masks[1]) == len(with_masks[0])
+
+
+def test_wrapper_asks_for_no_masks():
+    """Test the WIRING, not just the flag: the production path is
+    ``wrapper.predict`` and both callers (interactive segmentation and the
+    essays batch) reach the instancer only through it. A default that stays
+    True while nobody passes False would build 0.38 GB of masks per real frame
+    and this file would still be green."""
+    import instance.instancer_a as IA
+    import wrapper as W
+
+    seen = {}
+    real = IA.instance_a
+
+    def spy(*args, **kwargs):
+        seen.update(kwargs)
+        return real(*args, **kwargs)
+
+    model = W.MicrotubuleModel()
+    model._model = object()                    # predict() only checks it is not None
+    model._channels = lambda img01: np.zeros((1,) + img01.shape, dtype=np.float32)
+    IA.instance_a = spy
+    try:
+        out = model.predict(np.zeros((64, 64), dtype=np.float32))
+    finally:
+        IA.instance_a = real
+    assert seen.get("return_masks") is False, (
+        "wrapper.predict must ask instance_a NOT to build masks it discards; "
+        f"got {seen!r}"
+    )
+    assert out["centerlines_rc"] == []
 
 
 if __name__ == "__main__":

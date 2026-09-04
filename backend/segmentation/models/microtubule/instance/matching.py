@@ -22,6 +22,7 @@ outward likewise SUM to zero across a smooth continuation.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Iterable
 
 import networkx as nx
 import numpy as np
@@ -100,6 +101,56 @@ def pair_cost(a: ArmEnd, b: ArmEnd, gap_len: float | None = None,
     return cost, kappa_implied
 
 
+def _candidate_pairs(
+    arms: list[ArmEnd], max_gap: float | None
+) -> Iterable[tuple[int, int]]:
+    """``(i, j)`` index pairs, i < j, that :func:`match_junction` must price.
+
+    Without ``max_gap`` that is every pair, in the row-major order the nested
+    loops produced. WITH it — the gap-linking call, where every free chain end
+    in the frame is an arm — the pairs beyond ``max_gap`` are dropped, and a
+    KD-tree finds the survivors instead of measuring all ``n(n-1)/2`` distances
+    in Python.
+
+    The KD-tree is used as a SUPERSET filter and the original test is then
+    applied verbatim, so this is exact rather than merely near-exact.
+    ``query_pairs`` and ``np.linalg.norm`` both compute ``sqrt(dx^2 + dy^2)``
+    but by different code paths (norm on a bare 2-vector dispatches to a BLAS
+    kernel), so a pair sitting within an ULP of ``max_gap`` could in principle
+    be classified differently by the two. Querying a hair wider than the gate
+    and re-testing with the very expression the loops used removes that
+    question entirely: the surviving set is *defined* by the old comparison.
+
+    ``sorted()`` restores the row-major order, and that matters — edge
+    insertion order is what ``nx.max_weight_matching`` breaks exact ties on, so
+    a permuted candidate list could return a different (equally optimal)
+    matching. Verified pair-for-pair against the nested loops on real
+    production geometry — see ``tests/test_instancer_perf_identity.py``.
+
+    Why it earns a function: at the gap-linking call the arm count is twice the
+    CHAIN count, and chains are what a fragmented frame produces most of. On a
+    real production frame (container 4972cad8, frame 0 IRM) that is 85 chains ->
+    170 arms -> 14 365 pairs, of which **44** are within ``link_max_gap`` — 0.3 %
+    — and the quadratic is the shape that misbehaves: a frame with 3x the chains
+    pays 9x for candidates it will reject. Measured on that frame, interleaved,
+    min of 3: the gap-linking ``match_junction`` goes 0.100 s -> 0.009 s and
+    returns the identical 13 merge pairs.
+    """
+    n = len(arms)
+    if max_gap is None:
+        return ((i, j) for i in range(n) for j in range(i + 1, n))
+    from scipy.spatial import cKDTree
+
+    pos = np.asarray([a.pos for a in arms], dtype=float)
+    # 1 + 1e-9 is ~1e7 ULPs of slack at any magnitude these coordinates take,
+    # so the query cannot drop a pair the exact test below would keep.
+    near = cKDTree(pos).query_pairs(float(max_gap) * (1.0 + 1e-9))
+    return [
+        (i, j) for i, j in sorted(near)
+        if not float(np.linalg.norm(arms[i].pos - arms[j].pos)) > max_gap
+    ]
+
+
 def match_junction(arms: list[ArmEnd], kappa_max: float,
                    w_theta: float = 1.0, w_kappa: float = 10.0,
                    w_gap: float = 0.02, c_open: float = 1.2,
@@ -134,21 +185,17 @@ def match_junction(arms: list[ArmEnd], kappa_max: float,
 
     g = nx.Graph()
     g.add_nodes_from(range(n))
-    for i in range(n):
-        for j in range(i + 1, n):
-            if max_gap is not None:
-                if float(np.linalg.norm(arms[i].pos - arms[j].pos)) > max_gap:
-                    continue
-            if allow is not None and not allow(arms[i], arms[j]):
-                continue
-            cost, kappa_implied = pair_cost(arms[i], arms[j], gap_len,
-                                            w_theta, w_kappa, w_gap, w_ori, gap_floor)
-            if kappa_implied > kappa_max:
-                continue                      # physically impossible: forbidden, not costly
-            weight = (scorer(arms, i, j, n) - p_open) if scorer is not None \
-                else (2.0 * c_open - cost)
-            if weight > 0:
-                g.add_edge(i, j, weight=weight)
+    for i, j in _candidate_pairs(arms, max_gap):
+        if allow is not None and not allow(arms[i], arms[j]):
+            continue
+        cost, kappa_implied = pair_cost(arms[i], arms[j], gap_len,
+                                        w_theta, w_kappa, w_gap, w_ori, gap_floor)
+        if kappa_implied > kappa_max:
+            continue                          # physically impossible: forbidden, not costly
+        weight = (scorer(arms, i, j, n) - p_open) if scorer is not None \
+            else (2.0 * c_open - cost)
+        if weight > 0:
+            g.add_edge(i, j, weight=weight)
 
     if g.number_of_edges() == 0:
         return []
