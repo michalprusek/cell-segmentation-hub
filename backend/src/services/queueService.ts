@@ -760,35 +760,62 @@ export class QueueService {
     // processed queue items and prefer a pending item from a user not
     // in that window.  Falls back to plain priority/createdAt order
     // when only one user is contending.
-    const recentlyProcessed = await this.prisma.segmentationQueue.findMany({
-      where: { status: { in: ['processing', 'completed'] } },
-      orderBy: [{ completedAt: 'desc' }, { startedAt: 'desc' }],
-      take: 5,
-      select: { userId: true },
-    });
+    // The fairness window and the unrestricted candidate are independent, so
+    // they go out together. That matters because the queue worker calls this
+    // every 100 ms forever (`queueWorker.ts` intervalMs = 100) and an EMPTY
+    // queue used to cost three SERIAL round trips per tick — the `take: 5`
+    // window, the user-restricted candidate, then the unrestricted one — 30
+    // queries a second with nothing to do. The window query is also the one
+    // with no supporting index: `idx_queue_status_priority` is
+    // (status, priority, createdAt) and cannot serve
+    // `ORDER BY completedAt DESC, startedAt DESC`.
+    //
+    // `fallbackItem` is the same query the old code ran last, and its `where`
+    // is strictly wider than the restricted one, so `fallbackItem === null`
+    // proves the restricted lookup would also have found nothing: the early
+    // return below is the old `if (!firstItem) return []`, reached one query
+    // sooner.
+    //
+    // This is NOT an unconditional reduction, and the busy path is the one
+    // that pays. Idle: 3 queries / 3 round trips -> 2 / 1. Work present but no
+    // fairness window: 2 / 2 -> 2 / 1. Work present AND a fair item exists:
+    // 2 / 2 -> 3 / 2, because `fallbackItem` is then speculative. That last
+    // case is the one that immediately runs a 0.2-4.5 s ML inference, so an
+    // extra indexed findFirst is noise there, whereas the idle case runs 10
+    // times a second forever.
+    const [fallbackItem, recentlyProcessed] = await Promise.all([
+      this.prisma.segmentationQueue.findFirst({
+        where: whereClause,
+        orderBy: [{ priority: 'desc' }, { createdAt: 'asc' }],
+      }),
+      this.prisma.segmentationQueue.findMany({
+        where: { status: { in: ['processing', 'completed'] } },
+        orderBy: [{ completedAt: 'desc' }, { startedAt: 'desc' }],
+        take: 5,
+        select: { userId: true },
+      }),
+    ]);
+
+    if (!fallbackItem) {
+      return [];
+    }
+
     const recentUserIds = Array.from(
       new Set(recentlyProcessed.map(r => r.userId))
     );
 
-    let firstItem = null;
+    let firstItem = fallbackItem;
     if (recentUserIds.length > 0) {
-      firstItem = await this.prisma.segmentationQueue.findFirst({
+      const fairItem = await this.prisma.segmentationQueue.findFirst({
         where: {
           ...whereClause,
           userId: { notIn: recentUserIds },
         },
         orderBy: [{ priority: 'desc' }, { createdAt: 'asc' }],
       });
-    }
-    if (!firstItem) {
-      firstItem = await this.prisma.segmentationQueue.findFirst({
-        where: whereClause,
-        orderBy: [{ priority: 'desc' }, { createdAt: 'asc' }],
-      });
-    }
-
-    if (!firstItem) {
-      return [];
+      if (fairItem) {
+        firstItem = fairItem;
+      }
     }
 
     // Get batch size limit for this model

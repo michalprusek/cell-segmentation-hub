@@ -457,6 +457,92 @@ describe('ProjectService', () => {
 
       expect(result).toBeNull();
     });
+
+    it('returns null when the access check passes but the project row is gone', async () => {
+      mockHasProjectAccess.mockResolvedValueOnce({
+        hasAccess: true,
+        isOwner: true,
+      });
+      prismaMock.project.findUnique.mockResolvedValueOnce(null);
+      prismaMock.image.groupBy.mockResolvedValueOnce([] as any);
+      prismaMock.image.aggregate.mockResolvedValueOnce({
+        _sum: { fileSize: null },
+      } as any);
+      prismaMock.segmentation.count.mockResolvedValueOnce(0);
+
+      const result = await projectService.getProjectStats('gone', 'user-id');
+
+      expect(result).toBeNull();
+    });
+
+    it('derives the image total from the groupBy instead of a fifth query', async () => {
+      // `groupBy(segmentationStatus)` partitions every image row of the
+      // project, so its per-status counts already sum to the total. The
+      // separate `prisma.image.count({ where: { projectId } })` this replaces
+      // asked the same table the same question.
+      mockHasProjectAccess.mockResolvedValueOnce({
+        hasAccess: true,
+        isOwner: true,
+      });
+      prismaMock.project.findUnique.mockResolvedValueOnce({
+        id: 'project-id',
+        title: 'T',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as any);
+      prismaMock.image.groupBy.mockResolvedValueOnce([
+        { segmentationStatus: 'completed', _count: { id: 5 } },
+        { segmentationStatus: 'pending', _count: { id: 3 } },
+      ] as any);
+      prismaMock.image.aggregate.mockResolvedValueOnce({
+        _sum: { fileSize: 1000000n },
+      } as any);
+      prismaMock.segmentation.count.mockResolvedValueOnce(10);
+
+      const result = await projectService.getProjectStats(
+        'project-id',
+        'user-id'
+      );
+
+      expect(result?.images.total).toBe(8);
+      expect(result?.progress.remainingImages).toBe(3);
+      expect(result?.progress.completionPercentage).toBe(63);
+      expect(prismaMock.image.count).not.toHaveBeenCalled();
+    });
+
+    it('issues its four reads in ONE round trip, not four', async () => {
+      // The project row used to be awaited first and the three aggregates one
+      // after another. Nothing depends on anything else here, so blocking the
+      // project lookup must NOT stop the other three from being issued.
+      mockHasProjectAccess.mockResolvedValueOnce({
+        hasAccess: true,
+        isOwner: true,
+      });
+      let releaseProject!: (v: unknown) => void;
+      prismaMock.project.findUnique.mockReturnValueOnce(
+        new Promise(resolve => {
+          releaseProject = resolve;
+        })
+      );
+      prismaMock.image.groupBy.mockResolvedValueOnce([] as any);
+      prismaMock.image.aggregate.mockResolvedValueOnce({
+        _sum: { fileSize: null },
+      } as any);
+      prismaMock.segmentation.count.mockResolvedValueOnce(0);
+
+      const pending = projectService.getProjectStats('project-id', 'user-id');
+      // Drain the microtask queue so every synchronously-reachable call lands.
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(prismaMock.image.groupBy).toHaveBeenCalledTimes(1);
+      expect(prismaMock.image.aggregate).toHaveBeenCalledTimes(1);
+      expect(prismaMock.segmentation.count).toHaveBeenCalledTimes(1);
+
+      releaseProject(null);
+      await pending;
+    });
   });
 
 });
