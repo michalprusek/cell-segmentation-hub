@@ -516,6 +516,41 @@ describe('CanvasPolygon', () => {
       expect(screen.getByTestId('test-polygon')).toBeInTheDocument();
     });
 
+    it('repaints when parent_id changes and nothing else does', () => {
+      // `isInternal = parent_id || type === 'internal'` drives the group class,
+      // the fill/stroke colour and the dash pattern. `type` was in the memo
+      // comparator and `parent_id` was not, so a polygon that gained a parent
+      // while keeping its id, points and type kept painting as external.
+      const orphan = createMockPolygon({
+        id: 'reparented',
+        points: [
+          { x: 10, y: 10 },
+          { x: 50, y: 10 },
+          { x: 50, y: 50 },
+        ],
+      });
+      const { rerender } = renderPolygonInSvg(
+        <CanvasPolygon {...defaultProps} polygon={orphan} />
+      );
+      expect(screen.getByTestId('reparented').getAttribute('class')).toContain(
+        'external'
+      );
+
+      // Same id, same points, same type — only the parent link differs.
+      rerender(
+        <svg width="800" height="600" viewBox="0 0 800 600">
+          <CanvasPolygon
+            {...defaultProps}
+            polygon={{ ...orphan, parent_id: 'outer-1' }}
+          />
+        </svg>
+      );
+
+      const cls = screen.getByTestId('reparented').getAttribute('class') ?? '';
+      expect(cls).toContain('internal');
+      expect(cls).not.toMatch(/\bexternal\b/);
+    });
+
     it('handles viewport culling correctly', () => {
       const viewportBounds = {
         x: 0,

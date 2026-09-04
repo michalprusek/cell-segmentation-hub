@@ -639,6 +639,14 @@ const CanvasPolygon = React.memo(
       prevProps.polygon.id === nextProps.polygon.id &&
       samePoints &&
       prevProps.polygon.type === nextProps.polygon.type &&
+      // `parent_id` is the OTHER half of `isInternal` (line 205), which drives
+      // the fill/stroke colour, the `.internal`/`.external` group class and the
+      // dash pattern. `type` was compared and this was not, so a polygon that
+      // gained or lost a parent while keeping its id, points and type kept
+      // painting as external. Narrow trigger (only a reload whose `parentIds`
+      // changed under an otherwise identical polygon reaches it), but a
+      // comparator term can only ever cause MORE re-renders, never a stale one.
+      prevProps.polygon.parent_id === nextProps.polygon.parent_id &&
       prevProps.polygon.geometry === nextProps.polygon.geometry &&
       prevProps.polygon.partClass === nextProps.polygon.partClass &&
       prevProps.polygon.class === nextProps.polygon.class &&
