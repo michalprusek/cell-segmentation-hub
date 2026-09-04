@@ -317,8 +317,16 @@ class MicrotubuleModel:
         chans = self._channels(img01)
         prob_up = chans.max(axis=0)
 
+        # return_masks=False: this method reads only `polylines`, and so does
+        # every caller of it (interactive segmentation via
+        # ModelLoader.predict_microtubule, the essays batch via evaluate.py /
+        # infer.py) — all of them consume `centerlines_rc` and `prob`. Building
+        # one full-frame boolean mask per polyline only to drop it cost 0.38 GB
+        # and 0.133 s on a real 1476x1924 production frame, 2.84 GB on a dense
+        # 2048^2 essays position. See instance_a's docstring.
         polylines, _ = instance_a(
-            prob_up > thr, KAPPA_MAX, merged, channels=chans, prob=prob_up
+            prob_up > thr, KAPPA_MAX, merged, channels=chans, prob=prob_up,
+            return_masks=False,
         )
 
         # instance_a returns (x=col, y=row) at the 1.5x working scale. Every

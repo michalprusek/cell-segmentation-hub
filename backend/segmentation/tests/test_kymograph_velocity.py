@@ -487,12 +487,22 @@ def stub_binet(monkeypatch):
     return kb
 
 
+# Exactly what ``detect_tracks`` puts on a track dict. ``KymographTrack`` is
+# ``extra="forbid"``, so a key this set does not know about 500s the route; the
+# model's REMAINING fields (edge, the intensity trio, bright) are filled in
+# later by ``_finish_kymograph`` and are deliberately absent here.
+#
+# ``phases`` joined the set when segment_phases landed and this file was not
+# updated, so both assertions below have been failing ever since — which nothing
+# noticed, because ``make test-ml`` was the only thing that ran them and nobody
+# runs it in CI. Adding the key is the fix; the test is right to be exact.
 WIRE_KEYS = {
     "points",
     "net_pxframe",
     "snr",
     "total_run_time_frames",
     "total_run_displacement_px",
+    "phases",
 }
 
 
