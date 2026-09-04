@@ -315,7 +315,12 @@ describe('UploadContext — startUpload (chunked image batch)', () => {
       totalChunks: 2,
       filesInChunk: 5,
       overallProgress: 50,
-      currentOperation: 'Uploading chunk 1/2',
+      currentOperation: [
+        {
+          key: 'images.upload.op.uploadingChunk',
+          params: { index: 1, total: 2 },
+        },
+      ],
     };
     uploadImagesChunkedMock.mockImplementation(
       async (
@@ -479,7 +484,9 @@ describe('UploadContext — video server-side progress', () => {
     expect(session.overallProgress).toBeLessThan(100);
     // ...and it says what it is now waiting for, rather than leaving the last
     // transfer message up.
-    expect(session.currentOperation).toContain('Processing on server');
+    expect(session.currentOperation).toEqual([
+      { key: 'images.upload.op.processingOnServer', file: 'big.nd2' },
+    ]);
   });
 
   it('the socket event drives the remaining share and names the phase', async () => {
@@ -507,14 +514,23 @@ describe('UploadContext — video server-side progress', () => {
         phase: 'extracting',
         progress: 0.5,
         message: 'Extracting frames 150/300',
+        messageKey: 'images.upload.op.extractingFrames',
+        messageParams: { current: 150, total: 300 },
       });
     });
 
     // 55 + 45 * 0.5
     expect(result.current.activeSession!.overallProgress).toBe(78);
-    expect(result.current.activeSession!.currentOperation).toBe(
-      'Extracting frames 150/300 — big.nd2'
-    );
+    // The KEY travels, not the sentence: the state machine cannot translate
+    // (it lives outside LanguageProvider), so a rendered string here would be
+    // English whatever the user's locale.
+    expect(result.current.activeSession!.currentOperation).toEqual([
+      {
+        key: 'images.upload.op.extractingFrames',
+        params: { current: 150, total: 300 },
+        file: 'big.nd2',
+      },
+    ]);
 
     await act(async () => {
       onVideoProgress!({
@@ -793,9 +809,9 @@ describe('UploadContext — error handling', () => {
     });
 
     expect(result.current.sessions[sessionId].error).toBe('Network failure');
-    expect(result.current.sessions[sessionId].currentOperation).toBe(
-      'Upload failed'
-    );
+    expect(result.current.sessions[sessionId].currentOperation).toEqual([
+      { key: 'images.upload.failed' },
+    ]);
     expect(onComplete).not.toHaveBeenCalled();
   });
 
@@ -913,8 +929,8 @@ describe('UploadContext — WebSocket events', () => {
 
     await waitFor(() => {
       const op = result.current.sessions[sessionId]?.currentOperation;
-      expect(op).toContain('Uploading');
-      expect(op).toContain('frame.png');
+      expect(op?.[0].key).toBe('images.upload.op.uploadingFile');
+      expect(op?.[0].file).toBe('frame.png');
     });
   });
 
@@ -938,9 +954,9 @@ describe('UploadContext — WebSocket events', () => {
     });
 
     await waitFor(() => {
-      expect(result.current.sessions[sessionId]?.currentOperation).toContain(
-        'Processing'
-      );
+      expect(
+        result.current.sessions[sessionId]?.currentOperation?.[0].key
+      ).toBe('images.upload.op.processingFile');
     });
   });
 

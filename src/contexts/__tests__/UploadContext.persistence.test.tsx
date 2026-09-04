@@ -97,7 +97,9 @@ describe('UploadContext — persistence across page refresh', () => {
         failedCount: 0,
         overallProgress: 100,
         chunkProgress: null,
-        currentOperation: '3 files uploaded successfully',
+        currentOperation: [
+          { key: 'images.upload.op.uploadedOk', params: { count: 3 } },
+        ],
         startedAt: Date.now() - 60_000, // 1 minute ago
       },
     };
@@ -124,7 +126,9 @@ describe('UploadContext — persistence across page refresh', () => {
         failedCount: 0,
         overallProgress: 42,
         chunkProgress: null,
-        currentOperation: 'Uploading big.tif',
+        currentOperation: [
+          { key: 'images.upload.op.uploadingFile', file: 'big.tif' },
+        ],
         startedAt: Date.now() - 5_000,
       },
     };
@@ -139,9 +143,9 @@ describe('UploadContext — persistence across page refresh', () => {
     // gone with the previous page; surfacing 'uploading' would leave a
     // permanent spinner.
     expect(result.current.sessions['upload_2'].status).toBe('cancelled');
-    expect(result.current.sessions['upload_2'].currentOperation).toMatch(
-      /interrupted/i
-    );
+    expect(result.current.sessions['upload_2'].currentOperation).toEqual([
+      { key: 'images.upload.op.interrupted' },
+    ]);
     // activeSession only counts 'uploading' status, so the restored
     // cancelled session must not be treated as active.
     expect(result.current.activeSession).toBeNull();
@@ -159,7 +163,7 @@ describe('UploadContext — persistence across page refresh', () => {
         failedCount: 0,
         overallProgress: 100,
         chunkProgress: null,
-        currentOperation: 'done',
+        currentOperation: [{ key: 'images.upload.op.videoReady' }],
         startedAt: Date.now() - 60_000, // fresh
       },
       stale: {
@@ -171,7 +175,7 @@ describe('UploadContext — persistence across page refresh', () => {
         failedCount: 0,
         overallProgress: 100,
         chunkProgress: null,
-        currentOperation: 'done',
+        currentOperation: [{ key: 'images.upload.op.videoReady' }],
         startedAt: Date.now() - 25 * 60 * 60 * 1000, // 25h ago
       },
     };
@@ -226,7 +230,7 @@ describe('UploadContext — persistence across page refresh', () => {
         failedCount: 0,
         overallProgress: 100,
         chunkProgress: null,
-        currentOperation: 'done',
+        currentOperation: [{ key: 'images.upload.op.videoReady' }],
         startedAt: Date.now() - 10_000,
       },
     };
