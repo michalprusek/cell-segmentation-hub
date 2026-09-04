@@ -183,6 +183,7 @@ vi.mock('@/components/dashboard/ProjectsTab', () => ({
     onRenameFolder,
     onMoveFolder,
     onDeleteFolder,
+    folderId,
   }: {
     projects: Array<{ id: string; title?: string }>;
     loading: boolean;
@@ -193,8 +194,12 @@ vi.mock('@/components/dashboard/ProjectsTab', () => ({
     onRenameFolder: (id: string, name: string) => void;
     onMoveFolder: (id: string) => void;
     onDeleteFolder: (id: string, name: string) => void;
+    folderId?: string | null;
   }) => (
-    <div data-testid="projects-tab">
+    // `data-folder-id` is what the in-grid "+" card and the list-mode create
+    // card ultimately file a new project into — see
+    // ProjectCreateFolderPlacement.test.tsx for the rest of that chain.
+    <div data-testid="projects-tab" data-folder-id={folderId ?? 'root'}>
       {loading && <span data-testid="projects-loading">Loading...</span>}
       {projects.map(p => (
         <div key={p.id} data-testid={`project-${p.id}`}>
@@ -296,8 +301,19 @@ vi.mock('@/components/project/MoveToFolderDialog', () => ({
 }));
 
 vi.mock('@/components/NewProjectCard', () => ({
-  default: ({ isOpen }: { isOpen: boolean }) =>
-    isOpen ? <div data-testid="new-project-dialog" /> : null,
+  default: ({
+    isOpen,
+    folderId,
+  }: {
+    isOpen: boolean;
+    folderId?: string | null;
+  }) =>
+    isOpen ? (
+      <div
+        data-testid="new-project-dialog"
+        data-folder-id={folderId ?? 'root'}
+      />
+    ) : null,
 }));
 
 vi.mock('@/components/PageTransition', () => ({
@@ -587,6 +603,47 @@ describe('Dashboard page', () => {
           ? callArg
           : new URLSearchParams(callArg.toString());
       expect(params.get('folder')).toBeNull();
+    });
+  });
+
+  describe('folder placement for newly created projects', () => {
+    // Three create affordances exist — the header button, the in-grid "+"
+    // card and the list-mode create card. The last two live inside
+    // ProjectsTab and filed at the root until this prop was threaded, so both
+    // recipients are asserted here.
+    it('passes the open folder to ProjectsTab and to the header dialog', async () => {
+      const user = userEvent.setup();
+      _mockFolderById = new Map([
+        ['real-folder', { id: 'real-folder', name: 'Real', parentId: null }],
+      ]);
+      renderDashboard('folder=real-folder');
+
+      expect(screen.getByTestId('projects-tab')).toHaveAttribute(
+        'data-folder-id',
+        'real-folder'
+      );
+
+      await user.click(screen.getByTestId('new-project-btn'));
+      expect(screen.getByTestId('new-project-dialog')).toHaveAttribute(
+        'data-folder-id',
+        'real-folder'
+      );
+    });
+
+    it('passes no folder at the dashboard root', async () => {
+      const user = userEvent.setup();
+      renderDashboard();
+
+      expect(screen.getByTestId('projects-tab')).toHaveAttribute(
+        'data-folder-id',
+        'root'
+      );
+
+      await user.click(screen.getByTestId('new-project-btn'));
+      expect(screen.getByTestId('new-project-dialog')).toHaveAttribute(
+        'data-folder-id',
+        'root'
+      );
     });
   });
 
