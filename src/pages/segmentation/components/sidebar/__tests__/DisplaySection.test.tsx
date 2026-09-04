@@ -50,6 +50,9 @@ function makeCtx(
     windowMin: 0,
     windowMax: 255,
     windowRangeMax: 255,
+    // A decoded frame has reported its range, so the Min/Max rows are shown.
+    // The gating itself is covered below.
+    windowIsMeasured: true,
     brightness: 100,
     contrast: 100,
     setFrameIndex: vi.fn(),
@@ -280,6 +283,30 @@ describe('DisplaySection', () => {
       renderWithCtx(makeCtx({ resetDisplay }));
       await user.click(screen.getByRole('button', { name: /reset/i }));
       expect(resetDisplay).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Min/Max are gated on a real measurement
+  // -------------------------------------------------------------------------
+
+  describe('window rows are gated on a measurement', () => {
+    it('hides Min/Max when nothing has reported a range', () => {
+      // A plain 8-bit image renders as an <img> and never decodes its
+      // samples, so the cutoffs would move two sliders that change no pixel.
+      renderWithCtx(makeCtx({ windowIsMeasured: false }));
+
+      expect(screen.queryByText('Min')).not.toBeInTheDocument();
+      expect(screen.queryByText('Max')).not.toBeInTheDocument();
+    });
+
+    it('still offers Brightness and Contrast without a measurement', () => {
+      // Those are a CSS filter and DO apply to the <img>, which is why only
+      // the Min/Max pair is gated.
+      renderWithCtx(makeCtx({ windowIsMeasured: false }));
+
+      expect(screen.getByText('Brightness')).toBeInTheDocument();
+      expect(screen.getByText('Contrast')).toBeInTheDocument();
     });
   });
 });

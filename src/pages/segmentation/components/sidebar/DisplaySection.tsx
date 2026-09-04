@@ -85,6 +85,7 @@ export default function DisplaySection() {
     windowMin,
     windowMax,
     windowRangeMax,
+    windowIsMeasured,
     windowChannel,
     visibleChannels,
     channelColors,
@@ -101,6 +102,12 @@ export default function DisplaySection() {
   // Only worth the row when there is a choice to make. One channel (or none,
   // for a plain image) means the sliders can only mean that channel anyway.
   const showChannelTabs = visibleChannels.length > 1;
+
+  // Min/Max only reach pixels a canvas painted through a LUT. A plain 8-bit
+  // image renders as an <img> and never decodes its samples, so the cutoffs
+  // would be two sliders that change nothing. Brightness/Contrast are a CSS
+  // filter and DO apply there, which is why only this pair is gated.
+  const showWindow = windowIsMeasured;
 
   return (
     <div className="w-full shrink-0 bg-white dark:bg-gray-800 border-l border-b border-gray-200 dark:border-gray-700">
@@ -161,20 +168,24 @@ export default function DisplaySection() {
             </div>
           </div>
         )}
-        <DisplaySliderRow
-          label={t('editor.windowLevel.min')}
-          value={windowMin}
-          min={0}
-          max={windowRangeMax}
-          onChange={setWindowMin}
-        />
-        <DisplaySliderRow
-          label={t('editor.windowLevel.max')}
-          value={windowMax}
-          min={0}
-          max={windowRangeMax}
-          onChange={setWindowMax}
-        />
+        {showWindow && (
+          <>
+            <DisplaySliderRow
+              label={t('editor.windowLevel.min')}
+              value={windowMin}
+              min={0}
+              max={windowRangeMax}
+              onChange={setWindowMin}
+            />
+            <DisplaySliderRow
+              label={t('editor.windowLevel.max')}
+              value={windowMax}
+              min={0}
+              max={windowRangeMax}
+              onChange={setWindowMax}
+            />
+          </>
+        )}
         <DisplaySliderRow
           label={t('editor.windowLevel.brightness')}
           value={brightness}

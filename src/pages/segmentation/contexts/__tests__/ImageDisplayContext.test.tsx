@@ -748,12 +748,18 @@ describe('per-channel window/level', () => {
       max: 4145,
       rangeMax: 4145,
       dataMin: 2941,
+      // Set by a report: these windows came from decoded frames, not from
+      // the 8-bit placeholder. The sidebar shows Min/Max only when it is true.
+      measured: true,
     });
     expect(result.current.channelWindows.TIRF_491).toEqual({
       min: 489,
       max: 53927,
       rangeMax: 53927,
       dataMin: 489,
+      // Set by a report: these windows came from decoded frames, not from
+      // the 8-bit placeholder. The sidebar shows Min/Max only when it is true.
+      measured: true,
     });
   });
 
@@ -900,6 +906,9 @@ describe('per-channel window/level', () => {
       max: 900,
       rangeMax: 900,
       dataMin: 100,
+      // Set by a report: these windows came from decoded frames, not from
+      // the 8-bit placeholder. The sidebar shows Min/Max only when it is true.
+      measured: true,
     });
     // The old container's other channel is gone, not stale.
     expect(result.current.channelWindows.TIRF_491).toBeUndefined();
@@ -943,6 +952,30 @@ describe('per-channel window/level', () => {
     expect(result.current.windowChannel).toBe('');
     expect(result.current.windowMin).toBe(0);
     expect(result.current.windowMax).toBe(255);
+    // ...and that window is a placeholder, not a measurement. The distinction
+    // is not recoverable from the numbers: a 16-bit image topping out at 255
+    // would look identical, which is why it is carried as its own bit.
+    expect(result.current.windowIsMeasured).toBe(false);
+  });
+
+  it('marks the fallback window measured once a frame reports its range', () => {
+    // A standalone 16-bit image reports through the same no-channel key, and
+    // that is what makes the sidebar's Min/Max rows appear.
+    const { result } = renderHook(() => useImageDisplay(), {
+      wrapper: makeWrapper(),
+    });
+
+    act(() => {
+      result.current.reportChannelRanges(
+        { '': { min: 13137, max: 26602 } },
+        'image-1'
+      );
+    });
+
+    expect(result.current.windowChannel).toBe('');
+    expect(result.current.windowIsMeasured).toBe(true);
+    expect(result.current.windowMin).toBe(13137);
+    expect(result.current.windowMax).toBe(26602);
   });
 });
 
@@ -1149,6 +1182,9 @@ describe('a container that reports no id', () => {
       max: 60000,
       rangeMax: 60000,
       dataMin: 5000,
+      // Set by a report: these windows came from decoded frames, not from
+      // the 8-bit placeholder. The sidebar shows Min/Max only when it is true.
+      measured: true,
     });
   });
 });
@@ -1212,6 +1248,9 @@ describe('a channel whose first frame decodes flat', () => {
       max: 9000,
       rangeMax: 9000,
       dataMin: 0,
+      // Set by a report: these windows came from decoded frames, not from
+      // the 8-bit placeholder. The sidebar shows Min/Max only when it is true.
+      measured: true,
     });
   });
 

@@ -648,7 +648,7 @@ const SegmentationEditorLayout: React.FC<SegmentationEditorLayoutProps> = ({
                 style={{ ['--sidebar-w' as string]: `${sidebar.width}px` }}
                 data-sidebar-width={sidebar.width}
               >
-                {isVideoMode && video.container && (
+                {isVideoMode && video.container ? (
                   <>
                     <ChannelsSection
                       channels={video.container.channels}
@@ -656,6 +656,13 @@ const SegmentationEditorLayout: React.FC<SegmentationEditorLayoutProps> = ({
                     />
                     <DisplaySection />
                   </>
+                ) : (
+                  // Standalone images get the same panel minus the channel
+                  // list. Brightness/Contrast always apply here (CSS filter on
+                  // the <img>), and Min/Max appear once CanvasImage reports a
+                  // decoded 16-bit range — the reserve those extra bits buy is
+                  // worth nothing without a control that spends it.
+                  <DisplaySection />
                 )}
                 {/* Microtubule projects use the purpose-built Microtubule
                     Instances panel below (trackId order, per-instance colour,
