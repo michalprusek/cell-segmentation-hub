@@ -1,17 +1,20 @@
-"""Oracle (ground-truth-derived) masks and orientation channels.
+"""Oracle (ground-truth-derived) instance masks.
 
 These stand in for a perfect semantic model, so the instancer can be developed and tuned
-without the segmenter's errors in the loop. The orientation channels reproduce the amodal
-K=6 "overpass" representation of ``dino_seg_ori_v4b.pth``: each microtubule is painted into
-the channel of its LOCAL tangent bin, so a crossing writes into two different channels and
-the two filaments stay separable at the shared pixel.
+without the segmenter's errors in the loop.
+
+The module also carried ``oracle_mask`` (a union foreground mask) and
+``oracle_ori_channels`` (the amodal K=6 "overpass" orientation channels of the v7
+``dino_seg_ori_v4b.pth`` backbone) until they were removed as dead code in #387. v5H is a
+plain nnU-Net ResEnc-M with no orientation head, so nothing consumes either any more --
+which is why ``segment_angles`` is no longer imported here.
 """
 from __future__ import annotations
 
 import numpy as np
 from scipy.ndimage import binary_dilation
 
-from instance.geometry import resample, segment_angles
+from instance.geometry import resample
 
 # Sub-pixel step used when stamping polylines, so the rasterised centerline has no gaps
 # even on diagonal runs.

@@ -143,6 +143,38 @@ describe('ProjectsTab', () => {
     expect(capturedProjectsListProps?.onOpenFolder).toBe(onOpenFolder);
   });
 
+  it('forwards folderId to ProjectsList', () => {
+    // The create cards ProjectsList renders file a new project here; without
+    // this hop they filed at the root. See
+    // src/components/__tests__/ProjectCreateFolderPlacement.test.tsx.
+    // Props are spelled out rather than spread: `defaultProps.projects` is a
+    // DB-shaped fixture, not the view `Project` this component takes, and
+    // spreading it is a baselined type error these cases need not inherit.
+    render(
+      <ProjectsTab
+        projects={[]}
+        viewMode="grid"
+        loading={false}
+        onOpenProject={vi.fn()}
+        folderId="folder-7"
+      />
+    );
+    expect(capturedProjectsListProps?.folderId).toBe('folder-7');
+  });
+
+  it('forwards a null folderId (dashboard root) to ProjectsList', () => {
+    render(
+      <ProjectsTab
+        projects={[]}
+        viewMode="grid"
+        loading={false}
+        onOpenProject={vi.fn()}
+        folderId={null}
+      />
+    );
+    expect(capturedProjectsListProps?.folderId).toBeNull();
+  });
+
   it('forwards optional onDropItem callback', () => {
     const onDrop = vi.fn();
     render(<ProjectsTab {...defaultProps} onDropItem={onDrop} />);

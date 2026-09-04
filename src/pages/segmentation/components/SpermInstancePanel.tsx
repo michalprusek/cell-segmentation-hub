@@ -352,4 +352,25 @@ const SpermInstancePanel: React.FC<SpermInstancePanelProps> = ({
   );
 };
 
-export default SpermInstancePanel;
+/**
+ * Memoised with React's DEFAULT (shallow) comparator, deliberately: it compares
+ * every prop by construction, so it cannot go stale the way a hand-written
+ * comparator does when a prop is added — the repo's recurring `CanvasPolygon`
+ * footgun. Context updates (`useLanguage` here) still propagate through a memo,
+ * so translations are unaffected.
+ *
+ * It matters because `SegmentationEditorLayout` is deliberately NOT memoised
+ * while the editor's `transform` is React state that `handlePan` writes on every
+ * mousemove of a pan and the wheel zoom writes on a 16 ms throttle. So the whole
+ * layout re-renders continuously while the user drags the canvas, and without
+ * this the panel re-derived every row each time.
+ *
+ * Measured with 311 polylines: 6531 `calculatePolylineLength` calls over 21
+ * renders where 311 would do.
+ *
+ * The memo hits because every prop the layout passes is reference-stable across
+ * a pan: `handleSelectPolygon` is a `useCallback([])` in `usePolygonHandlers`,
+ * `onPartClassChange`/`onInstanceIdChange` are `useState` setters, and
+ * `editor.polygons` is replaced by `setPolygons`, never mutated.
+ */
+export default React.memo(SpermInstancePanel);

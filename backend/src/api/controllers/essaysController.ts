@@ -5,11 +5,8 @@ import { logger } from '../../utils/logger';
 import { AuthRequest } from '../../types/auth';
 import { EssaysService, EssayJobOptions } from '../../services/essaysService';
 import { recordExportEvent } from '../../services/exportAuditService';
-import {
-  issueDownloadToken,
-  verifyDownloadToken,
-  InvalidDownloadTokenError,
-} from '../../services/export/downloadTokenService';
+import { issueDownloadToken } from '../../services/export/downloadTokenService';
+import { resolveDownloadToken } from '../../services/export/downloadTokenAuth';
 
 const CTX = 'EssaysController';
 
@@ -205,51 +202,50 @@ export class EssaysController {
   async downloadJob(req: AuthRequest, res: Response): Promise<void> {
     try {
       const { jobId } = req.params;
-      const tokenParam = req.query.token;
-      // The SAME predicate the auth below uses. Testing `typeof token ===
-      // 'string'` separately made `?token=` (empty — a stale link, or a
-      // template that interpolated undefined) authenticate as the session user
-      // and be logged as a token pull, which is the exact distinction this
-      // field exists to draw.
-      const viaToken = typeof tokenParam === 'string' && tokenParam.length > 0;
+      // `resolveDownloadToken` is the SAME function this route's
+      // `downloadTokenAuth` middleware used to decide whether the session
+      // middleware runs, so the two cannot disagree about what counts as a
+      // token. The predicate used to be re-derived here, and when the two
+      // copies drifted, `?token=` (empty — a stale link, or a template that
+      // interpolated undefined) authenticated as the session user and was
+      // logged as a token pull, which is the exact distinction this field
+      // exists to draw. Every branch below reads the VERIFIED result, never
+      // `req.query`.
+      const auth = resolveDownloadToken(req.query.token);
 
       let userId: string | undefined;
-      if (viaToken) {
-        try {
-          const payload = verifyDownloadToken(tokenParam);
-          if (payload.jobId !== jobId || payload.projectId !== PROJECT_SENTINEL) {
-            // Valid signature, wrong resource — an edited or cross-purpose
-            // token. The subject is verified, so name them.
-            void recordExportEvent({
-              kind: 'essays',
-              event: 'denied',
-              userId: payload.userId,
-              jobId,
-              detail: 'token-resource-mismatch',
-            });
-            ResponseHelper.unauthorized(res, 'Invalid download token', CTX);
-            return;
-          }
-          userId = payload.userId;
-        } catch (e) {
-          if (e instanceof InvalidDownloadTokenError) {
-            void recordExportEvent({
-              kind: 'essays',
-              event: 'denied',
-              userId: req.user?.id ?? null,
-              jobId,
-              detail: `invalid-token: ${e.message}`,
-            });
-            ResponseHelper.unauthorized(res, 'Invalid download token', CTX);
-            return;
-          }
-          throw e;
+      if (auth.mode === 'invalid') {
+        void recordExportEvent({
+          kind: 'essays',
+          event: 'denied',
+          userId: req.user?.id ?? null,
+          jobId,
+          detail: `invalid-token: ${auth.reason}`,
+        });
+        ResponseHelper.unauthorized(res, 'Invalid download token', CTX);
+        return;
+      }
+      if (auth.mode === 'token') {
+        const { payload } = auth;
+        if (payload.jobId !== jobId || payload.projectId !== PROJECT_SENTINEL) {
+          // Valid signature, wrong resource — an edited or cross-purpose
+          // token. The subject is verified, so name them.
+          void recordExportEvent({
+            kind: 'essays',
+            event: 'denied',
+            userId: payload.userId,
+            jobId,
+            detail: 'token-resource-mismatch',
+          });
+          ResponseHelper.unauthorized(res, 'Invalid download token', CTX);
+          return;
         }
+        userId = payload.userId;
       } else {
         userId = req.user?.id;
       }
       // See the note in `exportController.downloadExport`: an anonymous
-      // request is stopped by `optionalJwtAuth` -> `authenticate` before this
+      // request is stopped by `downloadTokenAuth` -> `authenticate` before this
       // runs, so there is no export event to record here.
       if (!userId) {
         ResponseHelper.unauthorized(res, 'Unauthorized', CTX);
@@ -270,7 +266,7 @@ export class EssaysController {
         event: 'downloaded',
         userId,
         jobId,
-        detail: viaToken ? 'token' : 'jwt',
+        detail: auth.mode === 'token' ? 'token' : 'jwt',
       });
 
       res.setHeader('Content-Type', 'application/zip');
