@@ -1173,11 +1173,37 @@ class KymographRequest(BaseModel):
     include_csv: bool = True
 
 
+class KymographPhase(BaseModel):
+    """One motion or pause phase of a trajectory.
+
+    The phases of a track tile it end to end -- every frame belongs to exactly
+    one -- so a pause is as much a row as a run. ``direction`` is +1/-1 for
+    processive motion and 0 for a pause; a reversal ends a phase, because
+    reversing is a change of motion. Frames are indices into the kymograph's
+    time axis, and the Node backend converts them to seconds / µm with the
+    container calibration, exactly as it does the track totals.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    direction: int
+    t0: int
+    t1: int
+    v_pxframe: float
+    displacement_px: float
+    # Measured the same way as the track's, over this phase's frames only.
+    intensity_signal: Optional[float] = None
+    intensity_background: Optional[float] = None
+    intensity_minus_bg: Optional[float] = None
+
+
 class KymographTrack(BaseModel):
     """One moving particle detected on the kymograph.
 
-    Per-run detail is deliberately omitted: the run segmentation is internal to
-    ``detect_tracks`` and surfaces only as the two processive totals below.
+    ``phases`` carries the run segmentation that used to be internal to
+    ``detect_tracks`` and surface only as the two processive totals. The totals
+    are still the directed subset of that same list, computed by the same rule,
+    so the two can never disagree.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -1190,6 +1216,7 @@ class KymographTrack(BaseModel):
     # backend converts these to seconds / µm with the container calibration.
     total_run_time_frames: float = 0.0
     total_run_displacement_px: float = 0.0
+    phases: List[KymographPhase] = []
     # Does the trajectory reach a kymograph end (motor continues onto MT outside
     # the imaged segment). Literal both documents and enforces the closed set.
     edge: Literal["left", "right", "both", "none"] = "none"
@@ -2536,6 +2563,39 @@ def _finish_kymograph(
             for tr, vals in zip(raw_tracks, intensities):
                 tr["edge"] = edge_touch(tr["points"], n_samples)
                 tr.update(vals)
+            # Per-phase intensity, measured by the same estimator. Passing the
+            # phases as if they were tracks is not a shortcut: they tile the
+            # trajectories, so the union of their bands -- which is what the
+            # background ring excludes -- is identical to the union of the full
+            # tracks' bands. Each phase therefore gets the trajectory's own
+            # band restricted to its frames, against the same neighbour-free
+            # ring. Costs one extra pass; a failure nulls the phase fields
+            # without disturbing the track ones.
+            phase_spans: list = []
+            phase_owner: list = []
+            for ti, tr in enumerate(raw_tracks):
+                pts = tr["points"]
+                for ph in tr.get("phases", []):
+                    span = [p for p in pts if ph["t0"] <= p[0] <= ph["t1"]]
+                    if len(span) >= 2:
+                        phase_spans.append(span)
+                        phase_owner.append((ti, ph))
+            if phase_spans:
+                try:
+                    phase_vals = tracks_intensity(
+                        kymo,
+                        phase_spans,
+                        req.intensity_width,
+                        margin_multiplier=req.intensity_bg_margin,
+                        polarity=polarity,
+                    )
+                except Exception:
+                    logger.exception(
+                        "kymograph phase intensity failed; nulling phase fields"
+                    )
+                    phase_vals = [dict(EMPTY_INTENSITY) for _ in phase_spans]
+                for (_ti, ph), vals in zip(phase_owner, phase_vals):
+                    ph.update(vals)
             # Counted BEFORE the filters, so it describes what the measurement
             # managed rather than what survived the cut-offs. A degenerate
             # polyline yields EMPTY_INTENSITY on its own, so this is non-zero

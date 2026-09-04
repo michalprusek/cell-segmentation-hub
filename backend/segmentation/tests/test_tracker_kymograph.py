@@ -2474,3 +2474,66 @@ def test_an_even_width_band_is_centred_on_the_line(tmp_path):
             f"width {width} band is off-centre by "
             f"{np.mean(band - centre):+.4f} counts"
         )
+
+
+def test_kymograph_returns_motion_and_pause_phases(client, monkeypatch):
+    """The per-segment breakdown reaches the wire, pauses included.
+
+    Requested 2026-09-04: export a trajectory cut at its motion<->pause
+    transitions. The segmentation itself is unit-tested in
+    ``test_kymograph_phases.py``; what this pins is that it survives the
+    response model — ``KymographTrack.phases`` is a new field on a model with
+    ``extra="forbid"``, so a shape mistake is a 500, not a quiet omission.
+    """
+    from PIL import Image as PILImage
+
+    with tempfile.TemporaryDirectory() as td:
+        td_path = Path(td).resolve()
+        monkeypatch.setattr(tracker_kymograph, "_UPLOAD_ROOT", td_path)
+
+        # One bright spot that runs, pauses, runs back, pauses.
+        width, height, n_frames = 200, 24, 120
+        frames = []
+        pos = 40.0
+        xs = np.arange(width)
+        for k in range(n_frames):
+            speed = 0.9 if k < 30 else (0.0 if k < 60 else (-0.7 if k < 95 else 0.0))
+            pos += speed
+            row = np.clip(
+                40.0 + 200.0 * np.exp(-((xs - pos) ** 2) / (2 * 2.2**2)), 0, 255
+            )
+            arr = np.tile(row, (height, 1)).astype(np.uint8)
+            png = td_path / f"f{k:04d}.png"
+            PILImage.fromarray(arr, mode="L").save(png)
+            frames.append(
+                {
+                    "frame": k,
+                    "polyline_rc": [
+                        [float(height // 2), 2.0],
+                        [float(height // 2), float(width - 2)],
+                    ],
+                    "image_path": str(png),
+                }
+            )
+
+        r = client.post(
+            "/api/v1/kymograph",
+            json={"frames": frames, "detect_velocity": True},
+        )
+        assert r.status_code == 200, r.text
+        tracks = r.json().get("tracks") or []
+        assert tracks, "no trajectory detected on a synthetic moving spot"
+
+        phases = tracks[0]["phases"]
+        assert phases, "trajectory came back with no phases"
+        # Pauses are rows in their own right — the old output had only runs.
+        assert any(p["direction"] == 0 for p in phases)
+        assert any(p["direction"] != 0 for p in phases)
+        # And they tile the trajectory, so nothing is silently missing.
+        for prev, nxt in zip(phases, phases[1:]):
+            assert nxt["t0"] == prev["t1"] + 1
+        # The processive totals must be the directed subset of these phases.
+        directed = sum(
+            p["t1"] - p["t0"] for p in phases if p["direction"] != 0
+        )
+        assert directed == pytest.approx(tracks[0]["total_run_time_frames"])
