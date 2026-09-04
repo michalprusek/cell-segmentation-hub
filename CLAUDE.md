@@ -121,6 +121,18 @@ Three options, pick at least one:
 
 Common bug: backend exposes a field but the FE mapper strips it. Run BOTH the backend curl AND the FE state inspection to be sure.
 
+**A field present in the DATABASE proves nothing about the API.** The ML → DB
+write path does not go through `PolygonValidator`; both `parsePolygonData` call
+sites are READS, and `validateSinglePolygon` builds its output from the
+`OPTIONAL_POLYGON_FIELDS` whitelist. So an unregistered field survives in
+postgres, is stripped on the way OUT to the editor, and the editor's next save
+writes the loss back. `class` did exactly that until 2026-09-04, and
+`metricsCalculator` splits microcapsule membranes from capsules on it — a
+stripped `class` silently doubles every microcapsule export row.
+
+Diagnose by curling the endpoint, not by querying the table. The tell-tale data
+signature is a field present on every row EXCEPT the ones a user has edited.
+
 #### C. WebSocket / async / queue / state machine change
 
 - Trigger the action in the browser via Playwright.
@@ -198,22 +210,98 @@ If the change is going to production, **build the production bundle locally and 
 
 ## Test Suite Reality
 
-**Treat the test suite as currently broken.** Honest numbers as of 2026-05-15:
+The suite is GREEN and worth running. Measured 2026-09-04 (this section said
+"treat the test suite as currently broken, ~31% failures" from 2026-05-15 until
+then — if the numbers below look stale, re-measure before repeating them):
 
-| Suite                         | State                                                                                                                                                           |
-| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Vitest (frontend unit)        | ~31% failures (467/2543). Mostly webSocketManager, ND2 helpers, legacy editor tests. Healthy tests exist but mixed in; running the suite gives no clean signal. |
-| Playwright E2E (`tests/e2e/`) | Present, not regularly run, not in merge gate. Run manually via `make test-e2e`.                                                                                |
-| Backend Jest                  | Not validated regularly. Several `*.sperm.test.ts` files are untracked work-in-progress.                                                                        |
-| Python pytest                 | Not installed in the ML container. Test files parse but cannot run inside Docker.                                                                               |
+| Suite                         | State                                                                                                                                                    |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Vitest (frontend)             | **5037 pass / 5037**, 275 files, ~2 min. `npx vitest run`.                                                                                               |
+| Vitest (backend)              | **3740 pass / 3744** (4 skipped), 179 files, ~27 s. Not Jest. Must run in the container — see **Backend tests** below.                                   |
+| Python (ML + essays)          | **400 pass / 401** (1 skipped), ~26 s. Runs as step 7 of `make ci`; pytest is NOT in the ml image, `make ci` pip-installs it into a throwaway container. |
+| Playwright E2E (`tests/e2e/`) | Present, not regularly run, not in merge gate. Run manually via `make test-e2e`.                                                                         |
 
-**Consequence**: a passing `npm test` proves nothing about the feature. Don't rely on it.
+**So a red suite now means something, and a green one is a real gate — but it
+is still not a substitute for [Verification](#verification-rules).** Everything
+in that section still holds, and 2026-09-04 gave three fresh demonstrations in
+one day:
+
+- A localisation fix shipped with green tests, a green `make ci` and green CI —
+  and one of six upload phases still rendered English, found only by a real
+  300-frame upload in a browser with the locale set.
+- A membrane tracer was diagnosed against the _mean_ radial profile, which
+  peaked at the right radius while the per-ray maximum — the thing the code
+  actually uses — pointed 10 px elsewhere.
+- Two mutations survived a fully green new test file, and they were the two the
+  whole change rested on. See [Mutation testing](#mutation-testing) below.
+
+### Backend tests need the container
+
+Canvas ABI: host Node 22 vs container 20.
+
+```bash
+docker run --rm --user root --entrypoint /bin/sh \
+  -v $PWD/backend:/app -v /app/node_modules -w /app \
+  cell-segmentation-hub-backend -c "npx vitest run <path>"
+```
+
+`--user root` is needed to read `.env`; `-v /app/node_modules` keeps the image's
+modules instead of the host's. Bind-mounting the whole `backend` dir is what
+makes it test the WORKING TREE rather than the image's baked copy — the image
+bakes `src`, so without the mount you are testing whatever was last built.
+
+### Mutation testing
+
+**Revert the fix, confirm the test goes red, restore.** A test that passes with
+the fix removed is not evidence. This is not optional and it repeatedly earns
+its keep: on 2026-09-04 it caught, in one session, a test asserting only on
+state while the whole change was about rendered output, a test whose fixture
+could not distinguish the two branches, and an "invariant" test that passed
+against a deliberately quadratic implementation.
+
+Two rules learned the hard way:
+
+- **Verify the mutation actually applied.** Assert the anchor string is present
+  AND unique before replacing; a short anchor can match a different site (a
+  10-space indent is a substring of a 12-space one) and the result reads
+  exactly like a surviving mutant.
+- **A survived mutation means the test is too weak, not that the mutation is
+  equivalent.** Strengthen it until it fails, or delete the claim.
 
 ### When to write tests
 
 - **Pure utility function with a deterministic contract** → unit test. See `instanceColors.test.ts` for the pattern.
 - **Regression fix for a real production bug** → write a test that fails before the fix and passes after. The bug provided the spec; encode it.
 - **Cross-frame / cross-layer invariant** → integration test with mocked layer boundaries (see `test_rdp_preserves_embedding_alignment` for the pattern).
+
+### Timing assertions: check the clock before you trust the number
+
+**`performance.now()` resolves to a whole MILLISECOND under vitest/jsdom.**
+Measured 2026-09-04: over 2000 consecutive samples the only distinct delta is
+exactly `1`. Bare node in the same shell resolves microseconds, so this is the
+environment, not the machine.
+
+So any assertion built on a duration under ~10 ms is measuring the tick
+boundary. A ratio of two such durations is built from small integers — 1 ms vs
+4 ms is _exactly_ 0.5 — which is how `cancel-performance.test.ts` produced
+`expected 0.5 to be greater than 0.5` at roughly 1 run in 6 under load.
+
+**Repeating the work for a time budget fixes the resolution, and often reveals
+that the test could never have worked.** On that same file, with each volume
+repeated to 25 ms, a genuinely `O(n²)` implementation still passed: per-op cost
+is dominated by fixed per-pass overhead and _falls_ as volume rises. An
+absolute ceiling failed too — under a 10-core load clean runs span 3.5–62.5
+µs/op and a 2000×-work regression spans 6.1–320 µs/op, so the distributions
+**overlap** and no threshold exists.
+
+Before defending any timing threshold, **measure both distributions — clean and
+deliberately regressed — under realistic load.** If they overlap, tuning the
+number is self-deception; drop the timing claim and assert the deterministic
+behaviour instead (every operation actually cancelled, nothing left behind, the
+thing terminates). Loosening a flaky threshold only moves the coin flip.
+
+Also: a "performance" test driving a `vi.fn()` mock from the test helpers is not
+measuring production code, so its speed was never going to inform anything.
 
 ### When NOT to write tests
 
@@ -471,6 +559,10 @@ Batch microtubule assay of ND2 wells. `essays_api.py` is a thin FastAPI job runn
 
 All user-facing strings must exist in all 6 translation files (`/src/translations/{en,cs,es,de,fr,zh}.ts`). Validate: `node scripts/check-i18n.cjs`.
 
+**`t()` is not reachable everywhere.** `UploadProvider` is mounted OUTSIDE `LanguageProvider` in `App.tsx`, so nothing in the upload state machine can translate — for a long time every line of the upload card's status text was English in all six locales, and the validator could not see it because there was no key to check. Code in such a position must carry a translation KEY and let the render site resolve it (`UploadOperation` in `src/lib/uploadUtils.ts`, resolved in `FloatingUploadProgress`). **The server has the same problem** and for the same reason: it cannot know the browser's locale, so a progress event carries `messageKey`/`messageParams`, never a composed sentence. `videoUploadService.test.ts` scans the source and fails on any `reportProgress` without a key — four NESTED ones were missed on the first pass and shipped English onto a Czech UI.
+
+The i18n validator only checks that keys exist in every file. It cannot tell you a string was never keyed in the first place, so **grep for user-visible string literals in any code path you touch**.
+
 ### React patterns in this codebase
 
 - **React.memo with custom comparators** — used heavily in canvas (`CanvasPolygon`, `CanvasVertex`). When adding props, update the comparator. Missed comparator entries are a recurring bug.
@@ -491,6 +583,12 @@ The real PR gate is local: pre-commit hook + `make ci` + Playwright verification
 
 ## Deploy Gotchas
 
+- **The service images BAKE their source; only weights/uploads/caches are mounted.** `docker inspect spheroseg-ml` shows four mounts — `weights`, `sperm_final`, `uploads`, `.hf-cache` — and everything under `backend/segmentation/` is COPIED in. Same for `backend/src`. So **a merged PR does not reach production until that service is rebuilt**, and production can silently run older code than `main` while every file in git looks correct. Caught 2026-09-04: the ml container was built at 12:45 and matched commit `28144dba` exactly, two commits behind `main`, and a user-visible bug was nearly diagnosed against code they were not running. **Before diagnosing anything, pin the container to a commit:**
+  ```bash
+  docker exec spheroseg-ml md5sum /app/models/<file>.py
+  git show <commit>:backend/segmentation/models/<file>.py | md5sum
+  ```
+  To A/B the repo version without touching the running container, import it from a scratch path (`importlib.util.spec_from_file_location`) rather than overwriting `/app`.
 - **Production migrations use `prisma migrate deploy`**, never `migrate dev` (dev creates new files; deploy applies existing ones to a live DB).
 - **Bind-mounted configs need `--force-recreate`**, not just `nginx -s reload`. `sed -i` rewrites the inode; the running container holds the old one. Use `docker compose up -d --no-deps --force-recreate <service>`.
 - **HF cache bind-mount** (`backend/segmentation/.hf-cache`) must exist with `chown 999:999` before the ML container starts.
