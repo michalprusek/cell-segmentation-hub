@@ -263,7 +263,7 @@ huggingface_hub>=1.29.0
 # (mamba-ssm==2.2.4, causal-conv1d==1.4.0) are NOT listed here — they are built
 # in the dedicated CUDA-devel stage of docker/ml.optimized.Dockerfile (the slim
 # builder has no nvcc) and installed from those wheels in the runtime stage.
-einops>=0.7.0
+einops>=0.8.2  # floor records reality; the image already ships 0.8.2
 
 # Microcapsule model: a distilled U-Net (MobileNetV3-Small encoder, ~14.5 MB)
 # built with segmentation-models-pytorch (above) and scikit-image's h-maxima
