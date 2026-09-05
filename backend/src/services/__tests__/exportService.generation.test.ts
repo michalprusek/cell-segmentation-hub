@@ -1347,6 +1347,11 @@ describe('ExportService — generateMicrotubuleMetrics', () => {
       expect.any(Array),
       expect.any(String),
       expect.arrayContaining(['csv']),
+      expect.any(Array),
+      // Cross-channel competition, added 2026-09-05: an empty Map and an empty
+      // channel list on a fixture with no fluorescent pair, which is exactly
+      // the "sheet keeps its previous shape" guarantee.
+      expect.any(Map),
       expect.any(Array)
     );
   });

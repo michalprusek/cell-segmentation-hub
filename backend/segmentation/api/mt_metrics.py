@@ -54,7 +54,18 @@ from pydantic import BaseModel, ConfigDict, Field
 _MODELS_DIR = Path(__file__).resolve().parents[1] / "models"
 if str(_MODELS_DIR) not in sys.path:
     sys.path.append(str(_MODELS_DIR))
-import mt_measure  # noqa: E402  (needs the path set above)
+import mt_measure  # noqa: E402
+# The competition math, off the same models DIRECTORY and for the same reason.
+import mt_competition  # noqa: E402
+
+# The filament profile sampler, reused from the kymograph path. Private by name
+# because nothing outside this service should sample a polyline; shared anyway
+# because a second implementation would drift from ImageJ's conventions the
+# first one was measured against.
+from .tracker_kymograph import (  # noqa: E402
+    _arc_length_resample_polyline,
+    _sample_line_profiles,
+)
 
 from ._log_safe import scrub  # noqa: E402
 
@@ -176,6 +187,16 @@ class MTMetricsRequest(BaseModel):
     frames: List[MTFrameInput]
     thickness_px: int = Field(5, ge=1, le=100)
     margin_multiplier: float = Field(2.0, ge=0.0, le=10.0)
+    # Names of the channels that carry a FLUORESCENT label, in the caller's
+    # preferred order. Competition is only meaningful between two labelled
+    # proteins, so a label-free channel (IRM/BF/DIC/TL) must never appear here.
+    # That decision stays on the Node side, where the "IRM needs POSITIVE
+    # evidence" rule already lives; this endpoint does not re-derive it.
+    #
+    # Optional with a None default ON PURPOSE: this model is extra="forbid", so
+    # a field the Node has not learned to send yet would 422 the whole export.
+    # Absent, or fewer than two names, simply yields no competition rows.
+    fluorescent_channels: Optional[List[str]] = None
     # Per-frame per-channel translation applied at extraction (channel
     # registration). Keyed by frame_index (string) -> [[dy, dx], ...] aligned to
     # the FULL C-axis channel order (so index by C-axis channel index). Present
@@ -269,10 +290,44 @@ class MTChannelSummary(BaseModel):
     frames: int
 
 
+class MTCompetitionRow(BaseModel):
+    """How much two labelled proteins occupy DIFFERENT parts of one microtubule.
+
+    One row per (frame, microtubule, unordered channel pair). ``competition`` is
+    the total variation distance between the two unit-area intensity profiles —
+    equivalently ``1 - overlap`` — so 0 means "distributed alike" and 1 means
+    "disjoint supports". ``anticorrelation`` is the Pearson correlation of those
+    same two profiles: -1 is one protein falling exactly where the other rises,
+    which is what displacement looks like, +1 is colocalisation.
+
+    Both are null when they could not be measured, and they fail independently.
+    A null is NOT a zero: a channel lying entirely at background has no
+    distribution to compare, and 0.0 would read as "perfectly co-distributed",
+    the opposite of the truth.
+
+    ``channel_a``/``channel_b`` follow the caller's ``fluorescent_channels``
+    order, so a pair keeps one identity across frames. Both metrics are
+    symmetric, so that order carries no meaning beyond naming the columns.
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    frame_index: int
+    image_id: str
+    instance_id: str
+    track_id: Optional[str] = None
+    channel_a: str
+    channel_b: str
+    competition: Optional[float] = None
+    anticorrelation: Optional[float] = None
+
+
 class MTMetricsResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     rows: List[MTMetricsRow]
+    # Empty unless the caller named two or more `fluorescent_channels`.
+    # Defaulted so a consumer that predates this field still parses the body.
+    competition: List[MTCompetitionRow] = []
     # Per-channel whole-image totals over the whole video (one per requested
     # channel). Empty only when no channels were requested.
     channel_summaries: List[MTChannelSummary]
@@ -548,6 +603,88 @@ def _sparse_gaps(
     return out
 
 
+def _sample_polyline_profile(
+    frame_arr: np.ndarray,
+    points_xy: np.ndarray,
+    thickness: int,
+) -> Optional[np.ndarray]:
+    """Mean intensity along one microtubule, band-reduced, arc-length uniform.
+
+    Delegates to the KYMOGRAPH's sampler rather than growing a second one. That
+    is the same reasoning ``mt_measure`` exists for: this codebase has already
+    paid to get filament sampling right (bilinear like every ImageJ polyline
+    path, ``(w-1)/2`` band offsets for both parities, zero-fill outside the
+    frame, unmitred corners), and a competing implementation here would drift
+    from it silently. ``line_width`` is the metrics' own ``thickness_px``, so a
+    profile covers exactly the band the intensities are measured over.
+
+    Returns ``None`` for a degenerate polyline instead of raising: the export
+    receives whatever the editor stored, and one bad filament must not cost the
+    frame — the same contract ``frame_geometry`` already keeps.
+    """
+    pts = np.asarray(points_xy, dtype=np.float64)
+    if pts.ndim != 2 or pts.shape[1] != 2 or pts.shape[0] < 2:
+        return None
+    # The sampler works in (row, col); polylines are stored [x, y].
+    pts_rc = pts[:, ::-1]
+    seg = np.linalg.norm(np.diff(pts_rc, axis=0), axis=1)
+    total = float(seg.sum())
+    if not np.isfinite(total) or total <= 0.0:
+        return None
+    # `round(L) + 1` points at a ~1.0 px step: ImageJ's getEquidistantPoints,
+    # and the count `_seed_columns` feeds the kymograph.
+    n_samples = int(round(total)) + 1
+    if n_samples < 2:
+        return None
+    resampled = _arc_length_resample_polyline(pts_rc, n_samples)
+    return np.asarray(
+        _sample_line_profiles(frame_arr, resampled, max(1, int(thickness))).mean,
+        dtype=np.float64,
+    )
+
+
+def _emit_competition_rows(
+    profiles: Dict[str, List[Optional[np.ndarray]]],
+    backgrounds: Dict[str, List[Optional[float]]],
+    fluorescent: List[str],
+    fr: "MTFrameInput",
+    out: List["MTCompetitionRow"],
+) -> None:
+    """One row per (microtubule, unordered fluorescent channel pair).
+
+    Only channels this frame actually produced a profile for take part, so a
+    sparse channel whose plane is missing drops out of the pairing rather than
+    contributing a row of nulls.
+    """
+    present = [c for c in fluorescent if c in profiles]
+    if len(present) < 2:
+        return
+
+    for pl_idx, pl in enumerate(fr.polylines):
+        for i in range(len(present)):
+            for j in range(i + 1, len(present)):
+                ca, cb = present[i], present[j]
+                pa = profiles[ca][pl_idx]
+                pb = profiles[cb][pl_idx]
+                if pa is None or pb is None or pa.shape != pb.shape:
+                    continue
+                comp, corr = mt_competition.competition_pair(
+                    pa, pb,
+                    backgrounds[ca][pl_idx] or 0.0,
+                    backgrounds[cb][pl_idx] or 0.0,
+                )
+                out.append(MTCompetitionRow(
+                    frame_index=fr.frame_index,
+                    image_id=pl.image_id,
+                    instance_id=pl.instance_id,
+                    track_id=pl.track_id,
+                    channel_a=ca,
+                    channel_b=cb,
+                    competition=comp,
+                    anticorrelation=corr,
+                ))
+
+
 def _emit_channel_rows(
     frame_arr: np.ndarray,
     band_masks: List[np.ndarray],
@@ -557,6 +694,9 @@ def _emit_channel_rows(
     channel_name: str,
     rows: List["MTMetricsRow"],
     source_frame_index: int,
+    profiles_out: Optional[Dict[str, List[Optional[np.ndarray]]]] = None,
+    backgrounds_out: Optional[Dict[str, List[Optional[float]]]] = None,
+    thickness: int = 5,
 ) -> None:
     """Append one row per polyline for ``channel_name`` on frame ``fr``.
 
@@ -586,6 +726,16 @@ def _emit_channel_rows(
             (sig.mean - median_bg)
             if (sig.n and median_bg is not None) else None
         )
+
+        # Competition needs the PROFILE along the filament, which the band
+        # statistics above deliberately collapse. Sampled here rather than in a
+        # second pass so `frame_arr` — already shifted into registered space and
+        # cast to float64 — is read once.
+        if profiles_out is not None and backgrounds_out is not None:
+            profiles_out.setdefault(channel_name, []).append(
+                _sample_polyline_profile(frame_arr, np.asarray(pl.points), thickness)
+            )
+            backgrounds_out.setdefault(channel_name, []).append(median_bg)
 
         rows.append(MTMetricsRow(
             frame_index=fr.frame_index,
@@ -759,6 +909,15 @@ def _mt_metrics_sync(req: MTMetricsRequest) -> MTMetricsResponse:
         ))
 
     rows: List[MTMetricsRow] = []
+    # Competition is a CROSS-channel measure, so it can only be formed once a
+    # frame's channels have all been read. `fluorescent` keeps the caller's
+    # order so a pair names its columns the same way on every frame.
+    competition_rows: List[MTCompetitionRow] = []
+    fluorescent = [
+        c for c in (req.fluorescent_channels or [])
+        if c in set(req.channel_names) | set(req.png_channels)
+    ]
+    want_competition = len(fluorescent) >= 2
 
     for fr in req.frames:
         t = fr.frame_index
@@ -784,6 +943,12 @@ def _mt_metrics_sync(req: MTMetricsRequest) -> MTMetricsResponse:
         band_masks = geom.bands
         polyline_lengths = geom.lengths
         vicinity_masks = geom.vicinities
+
+        # Per-frame, per-channel filament profiles + their ring backgrounds.
+        # Only collected when a pair could actually be formed, so the ordinary
+        # single-channel export pays nothing for this.
+        frame_profiles: Dict[str, List[Optional[np.ndarray]]] = {}
+        frame_backgrounds: Dict[str, List[Optional[float]]] = {}
 
         # 4. Per-channel computations.
         for ci_idx, ci in enumerate(req.channel_indices):
@@ -817,6 +982,9 @@ def _mt_metrics_sync(req: MTMetricsRequest) -> MTMetricsResponse:
             _emit_channel_rows(
                 frame_arr, band_masks, polyline_lengths,
                 vicinity_masks, fr, channel_name, rows, src_t,
+                frame_profiles if want_competition else None,
+                frame_backgrounds if want_competition else None,
+                req.thickness_px,
             )
 
         # PNG-backed (added) channels: sampled from the per-frame PNG, already
@@ -830,6 +998,16 @@ def _mt_metrics_sync(req: MTMetricsRequest) -> MTMetricsResponse:
             _emit_channel_rows(
                 frame_arr, band_masks, polyline_lengths,
                 vicinity_masks, fr, name, rows, src_t,
+                frame_profiles if want_competition else None,
+                frame_backgrounds if want_competition else None,
+                req.thickness_px,
+            )
+
+        # 5. Every channel of this frame has been read, so the pairs can form.
+        if want_competition:
+            _emit_competition_rows(
+                frame_profiles, frame_backgrounds, fluorescent, fr,
+                competition_rows,
             )
 
     # Count rows whose per-MT vicinity ring came out empty (background nulled).
@@ -848,8 +1026,17 @@ def _mt_metrics_sync(req: MTMetricsRequest) -> MTMetricsResponse:
         "stand-in plane)",
         len(rows), len(req.frames), null_bg, propagated,
     )
+    if want_competition:
+        measured = sum(1 for r in competition_rows if r.competition is not None)
+        logger.info(
+            "mt-metrics: %d competition rows over %d fluorescent channels "
+            "(%d measured, %d unmeasurable)",
+            len(competition_rows), len(fluorescent), measured,
+            len(competition_rows) - measured,
+        )
     return MTMetricsResponse(
         rows=rows,
+        competition=competition_rows,
         channel_summaries=channel_summaries,
         frames_processed=len(req.frames),
         frame_height=int(H),
