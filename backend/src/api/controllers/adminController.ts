@@ -67,10 +67,11 @@ export const listUsers = asyncHandler(async (req: Request, res: Response) => {
  *   post:
  *     tags: [Admin]
  *     summary: Přihlásit se jako vybraný uživatel (pouze administrátor)
- *
- * Replaces the caller's auth cookies with a session for the target. The
- * response body carries the target user so the client can render the banner
- * without a second round-trip; it carries no token, exactly like /auth/login.
+ *     description: >-
+ *       Replaces the caller's auth cookies with a session for the target. The
+ *       response body carries the target user so the client can render the
+ *       banner without a second round-trip; it carries no token, exactly like
+ *       /auth/login.
  */
 export const impersonate = asyncHandler(
   async (req: Request, res: Response) => {
@@ -116,15 +117,14 @@ export const impersonate = asyncHandler(
  *   post:
  *     tags: [Admin]
  *     summary: Ukončit impersonaci a vrátit se ke svému účtu
- *
- * Deliberately NOT behind `requireAdmin`: the live session belongs to the
- * impersonated user, who is not an admin, so that gate would make the exit
- * unreachable — the trap that turns a support tool into a one-way door.
- *
- * It is not forgeable in its place, because the only thing that reaches this
- * handler is `req.impersonator`, which `authenticate` sets from a claim in
- * the SIGNED access token. A user who was never impersonated has no such
- * claim and gets a 400.
+ *     description: >-
+ *       Deliberately NOT behind `requireAdmin`: the live session belongs to
+ *       the impersonated user, who is not an admin, so that gate would make
+ *       the exit unreachable — the trap that turns a support tool into a
+ *       one-way door. It is not forgeable in its place, because the only
+ *       thing that reaches this handler is `req.impersonator`, which
+ *       `authenticate` sets from a claim in the SIGNED access token. A user
+ *       who was never impersonated has no such claim and gets a 400.
  */
 export const stopImpersonation = asyncHandler(
   async (req: Request, res: Response) => {
