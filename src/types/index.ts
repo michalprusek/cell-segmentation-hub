@@ -159,12 +159,16 @@ export function getErrorMessage(
     // The message is English while the UI may not be. That is a real cost and
     // the lesser one: a precise sentence the user can act on beats a
     // translated sentence that tells them nothing about a blocking failure.
+    // Stated as the rule rather than an enumeration: the first draft listed
+    // 400/409/422 plus `> 422`, which silently dropped 405 and 410 — every
+    // 4xx BELOW 422 that was not one of the three named. The exclusions are
+    // the interesting part, so they are the only thing spelled out.
+    const SUPPRESS_SERVER_MESSAGE = new Set([401, 403, 429]);
     const isInputError =
       statusCode !== undefined &&
-      (statusCode === 400 ||
-        statusCode === 409 ||
-        statusCode === 422 ||
-        (statusCode > 422 && statusCode < 500 && statusCode !== 429));
+      statusCode >= 400 &&
+      statusCode < 500 &&
+      !SUPPRESS_SERVER_MESSAGE.has(statusCode);
     if (isInputError && serverMessage) {
       return serverMessage;
     }

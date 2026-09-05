@@ -222,7 +222,10 @@ describe('getErrorMessage()', () => {
     message: 'Request failed with status code ' + status,
   });
 
-  it.each([400, 409, 422])(
+  // 405 and 410 are here because the first draft of the predicate enumerated
+  // 400/409/422 plus `> 422`, which dropped every 4xx below 422 that was not
+  // one of the three named ones.
+  it.each([400, 402, 405, 409, 410, 422, 451])(
     'surfaces the server message on %i instead of the generic string',
     status => {
       const t = (k: string) => `t:${k}`;
