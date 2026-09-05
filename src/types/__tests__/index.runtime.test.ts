@@ -203,6 +203,83 @@ describe('getErrorMessage()', () => {
     expect(getErrorMessage(err, t)).toBe('t:errors.validation');
   });
 
+  // --- The server's own message on an input error -------------------------
+  //
+  // The backend failure envelope is `{ success: false, error, code }` — the
+  // message lives in `error`, NOT `message` (`backend/src/utils/response.ts`).
+  // Reading the wrong field and then discarding it turned a precise diagnosis
+  // into "Invalid request" at all 86 call sites of this helper. The fixture
+  // below is the real 400 body observed in production on 2026-09-05.
+
+  const DIMENSION_MISMATCH =
+    'Dimension mismatch: the source is 2048×2048 but the target video is 1924×1476. Channels must share the same pixel grid.';
+
+  const apiFailure = (status: number, error?: string) => ({
+    response: {
+      status,
+      data: { success: false, error, code: 'GENERIC_ERROR' },
+    },
+    message: 'Request failed with status code ' + status,
+  });
+
+  // 405 and 410 are here because the first draft of the predicate enumerated
+  // 400/409/422 plus `> 422`, which dropped every 4xx below 422 that was not
+  // one of the three named ones.
+  it.each([400, 402, 405, 409, 410, 422, 451])(
+    'surfaces the server message on %i instead of the generic string',
+    status => {
+      const t = (k: string) => `t:${k}`;
+      expect(getErrorMessage(apiFailure(status, DIMENSION_MISMATCH), t)).toBe(
+        DIMENSION_MISMATCH
+      );
+    }
+  );
+
+  it('still surfaces it with no translation function', () => {
+    expect(getErrorMessage(apiFailure(400, DIMENSION_MISMATCH))).toBe(
+      DIMENSION_MISMATCH
+    );
+  });
+
+  it('falls back to the generic string when the body carries no message', () => {
+    // A 4xx with an empty body is the case the per-status text was written
+    // for, and it must keep working.
+    const t = (k: string) => `t:${k}`;
+    expect(getErrorMessage(apiFailure(400), t)).toBe('t:errors.validation');
+  });
+
+  it('still reads a legacy `data.message` body', () => {
+    // Not every producer uses ResponseHelper; accept both spellings.
+    const t = (k: string) => `t:${k}`;
+    const err = {
+      response: { status: 400, data: { message: 'legacy shape' } },
+      message: '',
+    };
+    expect(getErrorMessage(err, t)).toBe('legacy shape');
+  });
+
+  it.each([401, 403, 429])(
+    'keeps the generic sentence on %i even when a message is present',
+    status => {
+      // The status IS the whole story here, and the generic sentence is the
+      // better-written one. 401 additionally must not leak "Unauthorized".
+      const t = (k: string) => `t:${k}`;
+      const out = getErrorMessage(
+        { ...apiFailure(status, 'raw server text'), config: { url: '/api/x' } },
+        t
+      );
+      expect(out).not.toBe('raw server text');
+      expect(out.startsWith('t:errors.')).toBe(true);
+    }
+  );
+
+  it('keeps the generic sentence on 500 — a server message is an internal', () => {
+    const t = (k: string) => `t:${k}`;
+    expect(
+      getErrorMessage(apiFailure(500, 'ENOENT: /app/secret/path'), t)
+    ).toBe('t:errors.server');
+  });
+
   it('returns t("errors.sessionExpired") for status 401 (non-login URL)', () => {
     const t = (k: string) => `t:${k}`;
     const err = {
