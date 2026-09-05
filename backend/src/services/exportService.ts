@@ -1875,8 +1875,11 @@ export class ExportService {
       );
       rows = mtResult.rows;
       channelSummaries = mtResult.channelSummaries ?? [];
-      competition = mtResult.competition;
-      fluorescentChannels = mtResult.fluorescentChannels;
+      // `??` for the same reason as `channelSummaries` above: a partial return
+      // must degrade to "no competition columns", never to `undefined` flowing
+      // into the writers.
+      competition = mtResult.competition ?? new Map();
+      fluorescentChannels = mtResult.fluorescentChannels ?? [];
       for (const reason of mtResult.skipped) {
         addWarning(`MT intensity metrics skipped: ${reason}`);
       }
