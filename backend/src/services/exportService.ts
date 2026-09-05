@@ -1848,6 +1848,12 @@ export class ExportService {
     // Whole-video per-channel totals (independent of the MTs) → second sheet /
     // companion file. Empty on the geometry-only fallback.
     let channelSummaries: MTChannelSummaryRow[] = [];
+    // Cross-channel competition columns. Both stay empty unless a container
+    // carried two or more FLUORESCENT channels, so a single-label export
+    // writes exactly the sheet it always did.
+    let competition: ReadonlyMap<string, Record<string, number | null>> =
+      new Map();
+    let fluorescentChannels: readonly string[] = [];
     let intensityIncluded = false;
     // Set on every path that degrades to geometry-only, so the stamp written
     // below (and metadata.json / metrics_guide.md, via `mtIntensityStatus`)
@@ -1869,6 +1875,8 @@ export class ExportService {
       );
       rows = mtResult.rows;
       channelSummaries = mtResult.channelSummaries ?? [];
+      competition = mtResult.competition;
+      fluorescentChannels = mtResult.fluorescentChannels;
       for (const reason of mtResult.skipped) {
         addWarning(`MT intensity metrics skipped: ${reason}`);
       }
@@ -1922,7 +1930,14 @@ export class ExportService {
     }
 
     const metricsDir = path.join(exportDir, 'metrics');
-    await writeMTMetrics(rows, metricsDir, formats, channelSummaries);
+    await writeMTMetrics(
+      rows,
+      metricsDir,
+      formats,
+      channelSummaries,
+      competition,
+      fluorescentChannels
+    );
 
     // ALWAYS stamp the outcome directly beside metrics.* — durable and
     // self-describing even when the user didn't enable "include

@@ -32,7 +32,7 @@ import { prisma } from '../../db/prismaClient';
 import { getLabels as getMtTypeLabels } from '../mtTypeLabelService';
 import { config } from '../../utils/config';
 import { logger } from '../../utils/logger';
-import { isSafeChannelName } from '../video/types';
+import { isSafeChannelName, type ChannelType } from '../video/types';
 import {
   buildInstanceLabelMap,
   MICROTUBULE_LABEL_PREFIX,
@@ -201,11 +201,28 @@ export interface MTMetricsWideRow {
    * channel whose frame PNG is absent), and its columns are written blank.
    */
   channels: Record<string, Record<MTChannelMeasure, number | null>>;
+  /**
+   * Column name → value for the cross-channel competition measures, e.g.
+   * `competition_488_640` and `anticorrelation_488_640`. Empty unless the
+   * container has two or more fluorescent channels.
+   *
+   * A pair MISSING here was not measurable on this microtubule, and its cells
+   * are written blank rather than 0 — a zero competition means "the two
+   * proteins are distributed identically", which is a claim, not an absence.
+   */
+  competition: Record<string, number | null>;
 }
 
 interface VideoChannelMeta {
   name: string;
   displayName?: string;
+  /** `'irm'` for label-free (IRM/BF/DIC/TL), `'fluorescent'` for a labelled
+   *  channel. Optional because a `channels` JSON written before channel typing
+   *  has no field here; an untyped channel is simply never paired, which is the
+   *  safe default — competition between a protein and a label-free image is
+   *  meaningless. The union is imported rather than respelled so this cannot
+   *  drift from `services/video/types.ts`. */
+  type?: ChannelType;
   /** True for channels ADDED after upload (see addChannelService). Their
    *  pixels live only in the per-frame PNGs, not the original volume, so they
    *  are sampled via ``png_channels`` rather than a C-axis index. */
@@ -241,6 +258,16 @@ interface MLMTMetricsRequest {
   frames: FramePayload[];
   thickness_px: number;
   margin_multiplier: number;
+  /** Machine names of the channels carrying a FLUORESCENT label, in the order
+   *  the columns should appear. Competition compares two labelled proteins, so
+   *  a label-free channel (IRM/BF/DIC/TL) must never be listed here — the ML
+   *  side does not re-derive that, it trusts this list.
+   *
+   *  Omitted when the container has fewer than two fluorescent channels, which
+   *  is also what makes this safe against an un-recreated ML container: the
+   *  field is optional there too, so an older build ignores it rather than
+   *  422-ing on `extra="forbid"`. Deploy ml before backend, as always. */
+  fluorescent_channels?: string[];
   /** Per-frame per-channel translation applied at extraction (channel
    *  registration). Keyed by frame index; each value is `[dy, dx]` per C-axis
    *  channel index. Omitted for unregistered uploads. */
@@ -301,8 +328,27 @@ interface MLMTMetricsResponseChannelSummary {
   frames: number;
 }
 
+interface MLMTMetricsResponseCompetitionRow {
+  frame_index: number;
+  image_id: string;
+  instance_id: string;
+  track_id?: string | null;
+  channel_a: string;
+  channel_b: string;
+  /** Total variation distance between the two unit-area intensity profiles,
+   *  i.e. `1 - overlap`. 0 = distributed alike, 1 = disjoint. `null` when it
+   *  could not be measured — NOT 0, which would read as "co-distributed". */
+  competition: number | null;
+  /** Pearson correlation of the same two profiles. -1 is one protein falling
+   *  exactly where the other rises (displacement), +1 is colocalisation. */
+  anticorrelation: number | null;
+}
+
 interface MLMTMetricsResponse {
   rows: MLMTMetricsResponseRow[];
+  /** One row per (frame, MT, fluorescent channel pair). Optional so a stale ML
+   *  build that predates the field does not break the export. */
+  competition?: MLMTMetricsResponseCompetitionRow[];
   /** Whole-image per-channel totals over the whole video. Optional so a stale
    *  ML build (pre-channel-summary) doesn't break the export. */
   channel_summaries?: MLMTMetricsResponseChannelSummary[];
@@ -539,6 +585,12 @@ export async function computeMTMetrics(
   rows: MTMetricsRow[];
   skipped: string[];
   channelSummaries: MTChannelSummaryRow[];
+  /** Identity key (`imageName\0frameIndex\0instanceId`) -> pair column values.
+   *  Empty unless some container had two or more fluorescent channels. */
+  competition: Map<string, Record<string, number | null>>;
+  /** Fluorescent channel names that produced pair columns, in first-seen order.
+   *  Empty when fewer than two exist, so the sheet keeps its previous shape. */
+  fluorescentChannels: string[];
 }> {
   const skipped: string[] = [];
 
@@ -597,7 +649,13 @@ export async function computeMTMetrics(
       'mtMetricsExporter',
       { projectId }
     );
-    return { rows: [], skipped, channelSummaries: [] };
+    return {
+      rows: [],
+      skipped,
+      channelSummaries: [],
+      competition: new Map(),
+      fluorescentChannels: [],
+    };
   }
 
   // DB frame id → human-readable frame name, for the `imageName` output column.
@@ -628,6 +686,11 @@ export async function computeMTMetrics(
   const mlUrl = `${mlBaseUrl}/api/v1/mt-metrics`;
   const allRows: MTMetricsRow[] = [];
   const allChannelSummaries: MTChannelSummaryRow[] = [];
+  // identity key -> { columnName: value }. Filled only for containers with two
+  // or more fluorescent channels; empty otherwise, which is what keeps the
+  // ordinary single-label export byte-identical to before.
+  const allCompetition = new Map<string, Record<string, number | null>>();
+  const allFluorescent: string[] = [];
 
   for (const [videoId, frames] of framesByVideo.entries()) {
     const container = containerMap.get(videoId);
@@ -802,6 +865,21 @@ export async function computeMTMetrics(
     // Channels this container only acquired every N-th frame. Sent so the gap
     // frames are measured on the plane that stands in for them and stamped with
     // it, instead of on the constant fill the microscope left behind.
+    // Fluorescent channels ACTUALLY being sampled, in container order so the
+    // pair columns are stable across videos. Competition compares two labelled
+    // proteins; a label-free channel (IRM/BF/DIC/TL) carries no protein and is
+    // excluded here rather than on the ML side, because the "IRM needs POSITIVE
+    // evidence" typing rule lives in this codebase, not that one.
+    const sampledNames = new Set([...names, ...pngChannelNames]);
+    const fluorescentChannels = containerChannels
+      .filter(c => c.type === 'fluorescent' && sampledNames.has(c.name))
+      .map(c => c.name);
+    for (const name of fluorescentChannels) {
+      if (!allFluorescent.includes(name)) {
+        allFluorescent.push(name);
+      }
+    }
+
     const sparseFill = buildSparseFillRequest(containerChannels, [
       ...names,
       ...pngChannelNames,
@@ -818,6 +896,10 @@ export async function computeMTMetrics(
       channel_offsets: channelOffsets,
       png_channels: pngChannelNames.length ? pngChannelNames : undefined,
       sparse_fill: sparseFill,
+      // Omitted below two, so the ordinary single-label export sends a body
+      // byte-identical to before and an un-recreated ML container cannot 422.
+      fluorescent_channels:
+        fluorescentChannels.length >= 2 ? fluorescentChannels : undefined,
     };
 
     // Scale the timeout to this request's actual workload (frames x channels,
@@ -921,6 +1003,23 @@ export async function computeMTMetrics(
     // Whole-image per-channel totals for this video (sum of every pixel of the
     // channel across all frames — independent of the microtubules). `?? []`
     // keeps a stale pre-summary ML build from breaking the export.
+    // Competition is per (frame, MT, channel PAIR), so it cannot ride on the
+    // per-channel long rows. Keyed by the SAME identity the wide pivot uses —
+    // imageName + frameIndex + instanceId — so the join cannot drift from it.
+    for (const cr of mlResponse.competition ?? []) {
+      const imageName = frameNameById.get(cr.image_id) ?? cr.image_id;
+      const key = `${imageName}\u0000${cr.frame_index}\u0000${cr.instance_id}`;
+      let bucket = allCompetition.get(key);
+      if (!bucket) {
+        bucket = Object.create(null) as Record<string, number | null>;
+        allCompetition.set(key, bucket);
+      }
+      bucket[competitionColumn('competition', cr.channel_a, cr.channel_b)] =
+        cr.competition;
+      bucket[competitionColumn('anticorrelation', cr.channel_a, cr.channel_b)] =
+        cr.anticorrelation;
+    }
+
     for (const cs of mlResponse.channel_summaries ?? []) {
       allChannelSummaries.push({
         video: container.name ?? videoId,
@@ -943,7 +1042,15 @@ export async function computeMTMetrics(
       skippedVideos: skipped.length,
     }
   );
-  return { rows: allRows, skipped, channelSummaries: allChannelSummaries };
+  return {
+    rows: allRows,
+    skipped,
+    channelSummaries: allChannelSummaries,
+    competition: allCompetition,
+    // Only a pair can produce a column, so a lone fluorescent channel reports
+    // none and the sheet keeps its previous shape exactly.
+    fluorescentChannels: allFluorescent.length >= 2 ? allFluorescent : [],
+  };
 }
 
 /** Arc length in pixels = sum of consecutive segment lengths. */
@@ -1072,9 +1179,14 @@ function wideIdentityKey(row: MTMetricsRow): string {
  * @returns `channels` — every non-empty channel name seen, in column order —
  *          and the pivoted rows.
  */
-export function pivotMTMetricsWide(rows: readonly MTMetricsRow[]): {
+export function pivotMTMetricsWide(
+  rows: readonly MTMetricsRow[],
+  competition: ReadonlyMap<string, Record<string, number | null>> = new Map(),
+  fluorescent: readonly string[] = []
+): {
   channels: string[];
   rows: MTMetricsWideRow[];
+  fluorescent: string[];
 } {
   const channels: string[] = [];
   const channelSeen = new Set<string>();
@@ -1112,6 +1224,9 @@ export function pivotMTMetricsWide(rows: readonly MTMetricsRow[]): {
         // a plain object such a key would set the prototype instead of adding
         // an entry.
         channels: Object.create(null) as MTMetricsWideRow['channels'],
+        // Null-prototype for the same reason as `channels`: the keys embed
+        // channel names that came from file metadata.
+        competition: Object.create(null) as MTMetricsWideRow['competition'],
       };
       byKey.set(key, wide);
     } else {
@@ -1163,7 +1278,20 @@ export function pivotMTMetricsWide(rows: readonly MTMetricsRow[]): {
     );
   }
 
-  return { channels, rows: Array.from(byKey.values()) };
+  // Attach the pair values by the identity key the competition map was built
+  // with. A row with no entry keeps its empty map, so its pair cells stay blank.
+  const wideRows = Array.from(byKey.values());
+  if (competition.size) {
+    for (const wide of wideRows) {
+      const found = competition.get(
+        `${wide.imageName}\u0000${wide.frameIndex}\u0000${wide.instanceId}`
+      );
+      if (found) {
+        Object.assign(wide.competition, found);
+      }
+    }
+  }
+  return { channels, rows: wideRows, fluorescent: [...fluorescent] };
 }
 
 /** Wide column name for one channel's measure, e.g. ``IRM_meanIntensity``. */
@@ -1177,12 +1305,43 @@ function wideChannelColumn(channel: string, measure: MTChannelMeasure): string {
  * 16 384-column ceiling is only reached past ~2 045 distinct channel names, so
  * no cap is applied.
  */
-function wideHeaders(channels: readonly string[]): string[] {
+/** Unordered channel pairs, in the order their columns should appear. */
+export function competitionPairs(
+  channels: readonly string[]
+): Array<[string, string]> {
+  const out: Array<[string, string]> = [];
+  for (let i = 0; i < channels.length; i++) {
+    for (let j = i + 1; j < channels.length; j++) {
+      out.push([channels[i], channels[j]]);
+    }
+  }
+  return out;
+}
+
+/** `competition_<a>_<b>` / `anticorrelation_<a>_<b>`. */
+export function competitionColumn(
+  measure: 'competition' | 'anticorrelation',
+  a: string,
+  b: string
+): string {
+  return `${measure}_${a}_${b}`;
+}
+
+function wideHeaders(
+  channels: readonly string[],
+  fluorescent: readonly string[] = []
+): string[] {
   const headers: string[] = [...WIDE_SHARED_HEADERS];
   for (const channel of channels) {
     for (const measure of WIDE_CHANNEL_MEASURES) {
       headers.push(wideChannelColumn(channel, measure));
     }
+  }
+  // Cross-channel pair columns last, so a reader that predates them sees the
+  // familiar sheet with extra columns appended rather than shifted.
+  for (const [a, b] of competitionPairs(fluorescent)) {
+    headers.push(competitionColumn('competition', a, b));
+    headers.push(competitionColumn('anticorrelation', a, b));
   }
   return headers;
 }
@@ -1190,7 +1349,8 @@ function wideHeaders(channels: readonly string[]): string[] {
 /** Values of one wide row, positionally aligned with {@link wideHeaders}. */
 function wideRowValues(
   row: MTMetricsWideRow,
-  channels: readonly string[]
+  channels: readonly string[],
+  fluorescent: readonly string[] = []
 ): Array<string | number | null> {
   const values: Array<string | number | null> = WIDE_SHARED_HEADERS.map(
     h => row[h]
@@ -1200,6 +1360,14 @@ function wideRowValues(
     for (const measure of WIDE_CHANNEL_MEASURES) {
       values.push(measures ? measures[measure] : null);
     }
+  }
+  for (const [a, b] of competitionPairs(fluorescent)) {
+    // `?? null` and not `?? 0`: an unmeasurable pair is blank, because 0 would
+    // assert the two proteins are distributed identically.
+    values.push(row.competition[competitionColumn('competition', a, b)] ?? null);
+    values.push(
+      row.competition[competitionColumn('anticorrelation', a, b)] ?? null
+    );
   }
   return values;
 }
@@ -1212,11 +1380,12 @@ function wideRowValues(
  */
 function wideToJSONRows(
   rows: readonly MTMetricsWideRow[],
-  channels: readonly string[]
+  channels: readonly string[],
+  fluorescent: readonly string[] = []
 ): Array<Record<string, string | number | null>> {
-  const headers = wideHeaders(channels);
+  const headers = wideHeaders(channels, fluorescent);
   return rows.map(row => {
-    const values = wideRowValues(row, channels);
+    const values = wideRowValues(row, channels, fluorescent);
     const obj: Record<string, string | number | null> = {};
     headers.forEach((h, i) => {
       obj[h] = values[i];
@@ -1288,11 +1457,14 @@ function rowsToCSV(rows: MTMetricsRow[]): string {
 
 function wideToCSV(
   rows: readonly MTMetricsWideRow[],
-  channels: readonly string[]
+  channels: readonly string[],
+  fluorescent: readonly string[] = []
 ): string {
-  const lines: string[] = [wideHeaders(channels).map(csvCell).join(',')];
+  const lines: string[] = [
+    wideHeaders(channels, fluorescent).map(csvCell).join(','),
+  ];
   for (const row of rows) {
-    lines.push(wideRowValues(row, channels).map(csvCell).join(','));
+    lines.push(wideRowValues(row, channels, fluorescent).map(csvCell).join(','));
   }
   return lines.join('\n') + '\n';
 }
@@ -1361,7 +1533,11 @@ async function writeXLSX(
   rows: MTMetricsRow[],
   channelSummaries: MTChannelSummaryRow[],
   filePath: string,
-  wide: { channels: string[]; rows: MTMetricsWideRow[] },
+  wide: {
+    channels: string[];
+    rows: MTMetricsWideRow[];
+    fluorescent: string[];
+  },
   includeWideSheet: boolean
 ): Promise<void> {
   // exceljs is CJS; mirror the dynamic-import idiom used by exportService.
@@ -1384,12 +1560,12 @@ async function writeXLSX(
   // channel name can never clash with a column key.
   if (includeWideSheet) {
     const wideSheet = workbook.addWorksheet(WIDE_SHEET_NAME);
-    wideSheet.columns = wideHeaders(wide.channels).map(header => ({
+    wideSheet.columns = wideHeaders(wide.channels, wide.fluorescent).map(header => ({
       header,
       width: 20,
     }));
     for (const row of wide.rows) {
-      wideSheet.addRow(wideRowValues(row, wide.channels));
+      wideSheet.addRow(wideRowValues(row, wide.channels, wide.fluorescent));
     }
     wideSheet.getRow(1).font = { bold: true };
   }
@@ -1436,14 +1612,16 @@ export async function writeMTMetrics(
   rows: MTMetricsRow[],
   destDir: string,
   formats: ReadonlyArray<'excel' | 'csv' | 'json'>,
-  channelSummaries: MTChannelSummaryRow[] = []
+  channelSummaries: MTChannelSummaryRow[] = [],
+  competition: ReadonlyMap<string, Record<string, number | null>> = new Map(),
+  fluorescentChannels: readonly string[] = []
 ): Promise<void> {
   if (!rows.length || !formats.length) {
     return;
   }
   await fs.mkdir(destDir, { recursive: true });
 
-  const wide = pivotMTMetricsWide(rows);
+  const wide = pivotMTMetricsWide(rows, competition, fluorescentChannels);
   const writeWide = wide.channels.length > 0;
   // Too big to hold as exceljs cells → keep the numbers, drop only the sheet.
   const budget = maxWideXlsxCells();
@@ -1476,7 +1654,7 @@ export async function writeMTMetrics(
       if (writeWide) {
         await fs.writeFile(
           path.join(destDir, 'metrics_wide.csv'),
-          wideToCSV(wide.rows, wide.channels),
+          wideToCSV(wide.rows, wide.channels, wide.fluorescent),
           'utf8'
         );
       }
@@ -1496,7 +1674,11 @@ export async function writeMTMetrics(
       if (writeWide) {
         await fs.writeFile(
           path.join(destDir, 'metrics_wide.json'),
-          JSON.stringify(wideToJSONRows(wide.rows, wide.channels), null, 2),
+          JSON.stringify(
+            wideToJSONRows(wide.rows, wide.channels, wide.fluorescent),
+            null,
+            2
+          ),
           'utf8'
         );
       }
@@ -1518,7 +1700,7 @@ export async function writeMTMetrics(
       if (wideSheetTooBig) {
         await fs.writeFile(
           path.join(destDir, 'metrics_wide.csv'),
-          wideToCSV(wide.rows, wide.channels),
+          wideToCSV(wide.rows, wide.channels, wide.fluorescent),
           'utf8'
         );
       }
