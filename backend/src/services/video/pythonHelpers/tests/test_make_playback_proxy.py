@@ -51,19 +51,39 @@ class TestMapTo8Bit:
 
 
 class TestDeriveRangeMax:
-    def test_rounds_up_to_a_power_of_two(self):
-        assert derive_range_max(1566) == 2047
-        assert derive_range_max(8984) == 16383
-        assert derive_range_max(29636) == 32767
+    def test_is_the_peak_itself(self):
+        # Was `peak` rounded up to a power of two, which threw away up to half
+        # the proxy's levels. The old answers are named here so the change is
+        # legible: 1566 -> 2047, 8984 -> 16383, 29636 -> 32767.
+        assert derive_range_max(1566) == 1566
+        assert derive_range_max(8984) == 8984
+        assert derive_range_max(29636) == 29636
 
-    def test_never_narrows_below_eight_bits(self):
-        assert derive_range_max(0) == 255
-        assert derive_range_max(12) == 255
+    def test_the_worst_case_this_change_was_made_for(self):
+        # A real production IRM frame. Under the old rule this peak crossed
+        # into the 16-bit bucket and was encoded against 65535, so the
+        # brightest pixel reached level 130 of 255 and the frame showed 66
+        # distinct greys instead of 112.
+        assert derive_range_max(33557) == 33557
 
-    def test_matches_the_typescript_side_at_the_boundaries(self):
-        assert derive_range_max(2047) == 2047
-        assert derive_range_max(2048) == 4095
+    def test_floors_at_one_so_an_all_black_frame_has_a_usable_range(self):
+        # map_to_8bit refuses a zero range; an all-black frame has peak 0.
+        assert derive_range_max(0) == 1
+        # Below 255 the choice carries no information: 13 distinct values
+        # survive whether the range is 12 or 255.
+        assert derive_range_max(12) == 12
+
+    def test_caps_at_the_16_bit_ceiling(self):
         assert derive_range_max(65535) == 65535
+        assert derive_range_max(70000) == 65535
+
+    def test_no_longer_mirrors_the_typescript_side(self):
+        # The divergence is deliberate. `playbackProxyRange.deriveRangeMax`
+        # still rounds up because it is the CONTAINER figure, sampled from
+        # three frames of three hundred, where rounding up is what keeps a
+        # brighter frame elsewhere inside the estimate. This one sees the
+        # frame it is encoding, so it needs no margin.
+        assert derive_range_max(2048) == 2048  # the TS side answers 4095
 
 
 class TestConvertFrame:
@@ -75,8 +95,8 @@ class TestConvertFrame:
         result = convert_frame(png, frame_dir, "488_nm")
 
         assert result["status"] == "written"
-        assert result["rangeMax"] == 1023
-        assert os.path.exists(os.path.join(frame_dir, "488_nm.p1023.webp"))
+        assert result["rangeMax"] == 1000
+        assert os.path.exists(os.path.join(frame_dir, "488_nm.p1000.v2.webp"))
 
     def test_a_dim_frame_gets_its_own_narrow_range(self, tmp_path):
         # The point of per-frame: this frame would have had 30 of 256 levels
@@ -85,7 +105,35 @@ class TestConvertFrame:
         png = os.path.join(frame_dir, "488_nm.png")
         write_png(png, np.full((16, 16), 1950))
 
-        assert convert_frame(png, frame_dir, "488_nm")["rangeMax"] == 2047
+        assert convert_frame(png, frame_dir, "488_nm")["rangeMax"] == 1950
+
+    def test_the_brightest_pixel_reaches_the_top_of_the_ramp(self, tmp_path):
+        # The whole point. Under the power-of-two rule a frame peaking at
+        # 33557 was encoded against 65535 and its brightest pixel came out at
+        # 130; every level above that was unreachable, and the rest of the
+        # frame was squeezed into the bottom half.
+        frame_dir = str(tmp_path / "0000")
+        png = os.path.join(frame_dir, "IRM.png")
+        ramp = np.linspace(11349, 33557, 256).astype(np.uint16)
+        write_png(png, np.tile(ramp, (16, 1)))
+
+        result = convert_frame(png, frame_dir, "IRM")
+        assert result["rangeMax"] == 33557
+
+        # The claim, on the pure mapping: the peak lands exactly on 255. Under
+        # the old power-of-two rule the range was 65535 and this was 130.
+        assert int(map_to_8bit(np.array([33557], dtype=np.uint16), 33557)[0]) == 255
+        assert int(map_to_8bit(np.array([33557], dtype=np.uint16), 65535)[0]) == 130
+
+        from PIL import Image
+
+        out = np.array(Image.open(os.path.join(frame_dir, "IRM.p33557.v2.webp")))
+        if out.ndim == 3:
+            out = out[..., 0]
+        # The written file is lossy WEBP at quality 90, which moves the top
+        # pixel by a count — measured 254, not 255. The tolerance is here to
+        # record that, not to hide it; 130 is nowhere near either bound.
+        assert int(out.max()) >= 250
 
     def test_leaves_no_partial_file_behind(self, tmp_path):
         frame_dir = str(tmp_path / "0000")
@@ -108,10 +156,35 @@ class TestConvertFrame:
             convert_frame(png, frame_dir, "488_nm")["status"] == "skipped-exists"
         )
 
+    def test_ignores_a_v1_proxy_so_the_frame_is_re_encoded(self, tmp_path):
+        # v1 encoded against the peak rounded up to a power of two. Its name
+        # carries no clue — `p2047` is both a v1 file for a peak of 1566 and a
+        # perfectly ordinary v2 peak — so the scheme marker is the only signal,
+        # and without this the 6 838 proxies already on disk would be served
+        # forever and the change would do nothing.
+        frame_dir = str(tmp_path / "0000")
+        os.makedirs(frame_dir, exist_ok=True)
+        stale = os.path.join(frame_dir, "488_nm.p2047.webp")
+        with open(stale, "wb") as fh:
+            fh.write(b"not a real webp")
+
+        assert existing_proxy(frame_dir, "488_nm") is None
+
+        png = os.path.join(frame_dir, "488_nm.png")
+        write_png(png, np.full((16, 16), 1566))
+        result = convert_frame(png, frame_dir, "488_nm")
+
+        assert result["status"] == "written"
+        assert result["rangeMax"] == 1566
+        assert os.path.exists(os.path.join(frame_dir, "488_nm.p1566.v2.webp"))
+        # The stale file is left alone: it is not ours to delete mid-request,
+        # and a separate sweep can reclaim the space.
+        assert os.path.exists(stale)
+
     def test_finds_an_existing_proxy_by_prefix_not_exact_name(self, tmp_path):
         frame_dir = str(tmp_path / "0000")
         os.makedirs(frame_dir)
-        open(os.path.join(frame_dir, "488_nm.p4095.webp"), "w").close()
+        open(os.path.join(frame_dir, "488_nm.p4095.v2.webp"), "w").close()
 
         assert existing_proxy(frame_dir, "488_nm") is not None
         assert existing_proxy(frame_dir, "640_nm") is None
@@ -119,7 +192,7 @@ class TestConvertFrame:
     def test_does_not_mistake_another_channel_for_this_one(self, tmp_path):
         frame_dir = str(tmp_path / "0000")
         os.makedirs(frame_dir)
-        open(os.path.join(frame_dir, "488_nm_extra.p2047.webp"), "w").close()
+        open(os.path.join(frame_dir, "488_nm_extra.p2047.v2.webp"), "w").close()
 
         assert existing_proxy(frame_dir, "488_nm_extra") is not None
         # A channel whose name is a PREFIX of another must not match it.
@@ -150,7 +223,9 @@ class TestMain:
         assert [l["frame"] for l in lines] == ["0000", "0001", "0002"]
         assert [l["status"] for l in lines] == ["written"] * 3
         # Each frame carries the range it was mapped against.
-        assert [l["rangeMax"] for l in lines] == [511, 1023, 4095]
+        # Each frame's own peak now, not that peak rounded up to a power of
+        # two — which for these three fixtures answered 511 / 1023 / 4095.
+        assert [l["rangeMax"] for l in lines] == [500, 900, 2601]
 
     def test_frame_dirs_are_returned_in_frame_order(self, tmp_path):
         for name in ["0010", "0002", "0001"]:

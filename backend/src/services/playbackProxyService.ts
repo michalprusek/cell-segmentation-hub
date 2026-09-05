@@ -68,15 +68,23 @@ export function __resetRunningForTests(): void {
  * levels. Carrying the number in the name means the server can answer with it
  * without opening the file or keeping a side table that could fall out of step.
  */
+export const PROXY_FORMAT_SUFFIX = '.v2.webp';
+
 export function proxyRangeFromName(
   fileName: string,
   channel: string
 ): number | null {
   const prefix = `${channel}.p`;
-  if (!fileName.startsWith(prefix) || !fileName.endsWith('.webp')) {
+  // The `.v2` marker is REQUIRED. v1 files encoded against the peak rounded up
+  // to a power of two, and no range value can distinguish the two schemes — a
+  // v1 file for a peak of 1566 is named `p2047`, and 2047 is also an ordinary
+  // v2 peak. Returning null for one leaves the frame looking un-converted, so
+  // it is re-encoded and the original PNG is served until then. Mirrors
+  // `PROXY_FORMAT_SUFFIX` in `make_playback_proxy.py`.
+  if (!fileName.startsWith(prefix) || !fileName.endsWith(PROXY_FORMAT_SUFFIX)) {
     return null;
   }
-  const digits = fileName.slice(prefix.length, -'.webp'.length);
+  const digits = fileName.slice(prefix.length, -PROXY_FORMAT_SUFFIX.length);
   // Digits only: `488_nm.p2047.webp` yes, `488_nm.pXX.webp` no, and — the case
   // that matters — `488_nm_extra.p2047.webp` never matches channel `488_nm`,
   // because the prefix check already required the dot straight after the name.
