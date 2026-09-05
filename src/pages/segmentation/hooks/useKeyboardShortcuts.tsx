@@ -1,8 +1,14 @@
 import { logger } from '@/lib/logger';
 import { useEffect, useCallback, useRef } from 'react';
 import { EditMode } from '../types';
+import { annotationGeometryForProjectType } from '@/lib/polylineSemantics';
 
 interface UseKeyboardShortcutsProps {
+  /** Project type. `N`/`P` only enter the create mode this project actually
+   *  annotates — hiding the toolbar button while leaving its shortcut live
+   *  would be a worse gate than none, because the mode would be reachable with
+   *  no way to see you were in it. Undefined allows both. */
+  projectType?: string | null;
   // Current state
   editMode: EditMode;
   canUndo: boolean;
@@ -48,7 +54,10 @@ export const useKeyboardShortcuts = ({
   onEnter,
   onKeyDown,
   onShowHelp,
+  projectType,
 }: UseKeyboardShortcutsProps) => {
+  const geometry =
+    projectType == null ? null : annotationGeometryForProjectType(projectType);
   const isShiftPressed = useRef(false);
   const isCtrlPressed = useRef(false);
   const isAltPressed = useRef(false);
@@ -118,14 +127,14 @@ export const useKeyboardShortcuts = ({
           break;
 
         case 'n':
-          if (!isCtrlPressed.current) {
+          if (!isCtrlPressed.current && geometry !== 'polyline') {
             event.preventDefault();
             setEditMode(EditMode.CreatePolygon);
           }
           break;
 
         case 'p':
-          if (!isCtrlPressed.current) {
+          if (!isCtrlPressed.current && geometry !== 'polygon') {
             event.preventDefault();
             setEditMode(EditMode.CreatePolyline);
           }
@@ -286,6 +295,7 @@ export const useKeyboardShortcuts = ({
       onEnter,
       onKeyDown,
       onShowHelp,
+      geometry,
     ]
   );
 

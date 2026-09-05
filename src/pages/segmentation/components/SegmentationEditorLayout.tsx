@@ -358,6 +358,7 @@ const SegmentationEditorLayout: React.FC<SegmentationEditorLayoutProps> = ({
             onZoomOut={editor.handleZoomOut}
             onResetView={editor.handleResetView}
             hasExistingPolygons={editor.getPolygons().length > 0}
+            projectType={projectType}
           />
 
           {/* Center: Canvas and Top Toolbar */}

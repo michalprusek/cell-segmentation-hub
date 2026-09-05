@@ -70,6 +70,43 @@ export function polylineSemanticsForProjectType(
  * uses to choose the sperm vs microtubule panel — replacing the old per-polygon
  * `class`/`partClass`/`mt_`-prefix heuristic.
  */
+/** The ONE geometry a project type is annotated with. */
+export type AnnotationGeometry = 'polygon' | 'polyline';
+
+/**
+ * Which geometry may be drawn by hand in a project of this type.
+ *
+ * Every project type annotates exactly one thing, so the editor offers exactly
+ * one create tool. Before this, both were always offered and the wrong one was
+ * one mis-click away — measured on production 2026-09-05, a single stray
+ * polyline had reached one of 3 853 spheroid segmentations that way, while
+ * `sperm` (778) and `microtubules` (2 641) held ZERO closed polygons and
+ * `spheroid_invasive` (990), `microcapsule` (173) and `wound` (24) held zero
+ * polylines. The data already agreed with the rule; nothing enforced it.
+ *
+ *  - **polyline** — `sperm` (head/midpiece/tail carry `partClass`) and
+ *    `microtubules` (filaments carry `trackId`, and feed the kymograph and the
+ *    competition metric). These are the two types `polylineSemanticsForProjectType`
+ *    above gives a non-generic kind to, and that is not a coincidence.
+ *  - **polygon** — everything else: `spheroid`, `spheroid_invasive`, `wound`,
+ *    `microcapsule`, `neurite`.
+ *
+ * `neurite` is the one that looks wrong and is not. The name suggests a
+ * filament, but the neurite/soma model emits CLOSED POLYGONS for both of its
+ * classes — see `neuronClassStyle.ts` and the comment at `CanvasPolygon.tsx`
+ * ("Neuron classes (closed polygons from the neurite/soma model)"). Drawing a
+ * polyline there would produce something no metric in this codebase can read.
+ *
+ * This gates HAND-DRAWING only. It never filters what the models return, and it
+ * never touches geometry that already exists — the stray spheroid polyline
+ * above is still editable, just no longer reproducible.
+ */
+export function annotationGeometryForProjectType(
+  type: string | undefined | null
+): AnnotationGeometry {
+  return polylinePanelKind(type) === null ? 'polygon' : 'polyline';
+}
+
 export function polylinePanelKind(
   type: string | undefined | null
 ): 'sperm' | 'microtubule' | null {

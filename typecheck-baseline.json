@@ -421,7 +421,7 @@
         "TS2339: Property '__REACT_DEVTOOLS_GLOBAL_HOOK__' does not exist on type 'Window & typeof globalThis'.": 1,
         "TS2739: Type 'Mock<Procedure>' is missing the following properties from type '{new (url: URL | string, protocols?: string | string[] | undefined): WebSocket; prototype: WebSocket; readonly CONNECTING: 0; readonly OPEN: 1; readonly CLOSING: 2; readonly CLOSED: 3; }': CONNECTING, OPEN, CLOSING, CLOSED": 1,
         "TS2739: Type '{ getItem: Mock<Procedure>; setItem: Mock<Procedure>; removeItem: Mock<Procedure>; clear: Mock<Procedure>; }' is missing the following properties from type 'Storage': length, key": 1,
-        "TS2739: Type '{getItem: Mock<\"en\" | (key: string) => \"system\" | null>; setItem: Mock<Procedure>; removeItem: Mock<Procedure>; clear: Mock<Procedure>; }' is missing the following properties from type 'Storage': length, key": 1
+        "TS2739: Type '{getItem: Mock<\"system\" | (key: string) => \"en\" | null>; setItem: Mock<Procedure>; removeItem: Mock<Procedure>; clear: Mock<Procedure>; }' is missing the following properties from type 'Storage': length, key": 1
       }
     },
     "tsconfig.node.json": {
@@ -974,6 +974,9 @@
       "src/hooks/useWebSocketToasts.ts": {
         "TS6307: File 'src/lib/websocketEvents.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
       },
+      "src/lib/__tests__/annotationGeometry.test.ts": {
+        "TS6307: File 'src/lib/polylineSemantics.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
+      },
       "src/lib/__tests__/api-methods.test.ts": {
         "TS6307: File 'src/lib/__tests__/helpers/apiClientTestKit.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
       },
@@ -1043,9 +1046,6 @@
       },
       "src/lib/__tests__/polygonSlicing.test.ts": {
         "TS6307: File 'src/lib/polygonSlicing.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
-      },
-      "src/lib/__tests__/polylineSemantics.test.ts": {
-        "TS6307: File 'src/lib/polylineSemantics.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
       },
       "src/lib/__tests__/requestThrottle.test.ts": {
         "TS6307: File 'src/lib/requestThrottle.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1

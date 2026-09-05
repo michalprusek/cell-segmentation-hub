@@ -1021,6 +1021,7 @@ export const useEnhancedSegmentationEditor = ({
   }, []);
 
   const keyboardShortcuts = useKeyboardShortcuts({
+    projectType,
     editMode,
     canUndo,
     canRedo,

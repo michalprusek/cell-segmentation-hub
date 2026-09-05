@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { useLanguage } from '@/contexts/useLanguage';
 import { EditMode } from '../types';
+import { annotationGeometryForProjectType } from '@/lib/polylineSemantics';
 
 interface VerticalToolbarProps {
   editMode: EditMode;
@@ -25,6 +26,11 @@ interface VerticalToolbarProps {
   onZoomOut?: () => void;
   onResetView?: () => void;
   hasExistingPolygons?: boolean;
+  /** Project type, deciding WHICH create tool is offered. A project annotates
+   *  exactly one geometry, so the other button is not rendered at all — see
+   *  `annotationGeometryForProjectType`. Undefined keeps both, the behaviour
+   *  every caller had before this prop existed. */
+  projectType?: string | null;
 }
 
 /**
@@ -267,7 +273,13 @@ const VerticalToolbar: React.FC<VerticalToolbarProps> = ({
   onZoomOut,
   onResetView,
   hasExistingPolygons: _hasExistingPolygons = false,
+  projectType,
 }) => {
+  // A project annotates exactly one geometry; the other create tool is not
+  // rendered. Undefined projectType keeps BOTH, which is the behaviour every
+  // caller had before this prop existed.
+  const geometry =
+    projectType == null ? null : annotationGeometryForProjectType(projectType);
   const { t } = useLanguage();
 
   return (
@@ -299,22 +311,26 @@ const VerticalToolbar: React.FC<VerticalToolbarProps> = ({
         setEditMode={setEditMode}
         t={t}
       />
-      <ModeButton
-        mode={EditMode.CreatePolygon}
-        editMode={editMode}
-        selectedPolygonId={selectedPolygonId}
-        disabled={disabled}
-        setEditMode={setEditMode}
-        t={t}
-      />
-      <ModeButton
-        mode={EditMode.CreatePolyline}
-        editMode={editMode}
-        selectedPolygonId={selectedPolygonId}
-        disabled={disabled}
-        setEditMode={setEditMode}
-        t={t}
-      />
+      {geometry !== 'polyline' && (
+        <ModeButton
+          mode={EditMode.CreatePolygon}
+          editMode={editMode}
+          selectedPolygonId={selectedPolygonId}
+          disabled={disabled}
+          setEditMode={setEditMode}
+          t={t}
+        />
+      )}
+      {geometry !== 'polygon' && (
+        <ModeButton
+          mode={EditMode.CreatePolyline}
+          editMode={editMode}
+          selectedPolygonId={selectedPolygonId}
+          disabled={disabled}
+          setEditMode={setEditMode}
+          t={t}
+        />
+      )}
       <ModeButton
         mode={EditMode.Slice}
         editMode={editMode}
