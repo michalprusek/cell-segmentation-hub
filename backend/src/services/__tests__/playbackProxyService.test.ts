@@ -89,27 +89,39 @@ beforeEach(() => {
 
 describe('proxyRangeFromName', () => {
   it('reads the range a proxy was mapped against', () => {
-    expect(proxyRangeFromName('488_nm.p2047.webp', '488_nm')).toBe(2047);
+    expect(proxyRangeFromName('488_nm.p2047.v2.webp', '488_nm')).toBe(2047);
   });
 
   it('ignores the original and unrelated files', () => {
     expect(proxyRangeFromName('488_nm.png', '488_nm')).toBeNull();
-    expect(proxyRangeFromName('488_nm.p2047.webp.partial', '488_nm')).toBeNull();
+    expect(
+      proxyRangeFromName('488_nm.p2047.v2.webp.partial', '488_nm')
+    ).toBeNull();
+  });
+
+  it('rejects a v1 proxy so the frame is re-encoded', () => {
+    // v1 encoded against the peak rounded UP to a power of two, and the range
+    // in the name cannot tell the schemes apart: `p2047` is both a v1 file for
+    // a peak of 1566 and an ordinary v2 peak. Without the marker the 6 838
+    // proxies already on disk would be served forever and the encoding change
+    // would do nothing at all.
+    expect(proxyRangeFromName('488_nm.p2047.webp', '488_nm')).toBeNull();
+    expect(proxyRangeFromName('488_nm.p2047.v2.webp', '488_nm')).toBe(2047);
   });
 
   it('does not accept a channel whose name merely starts the same', () => {
     // `488_nm` must not claim `488_nm_extra`'s proxy, or a two-channel
     // container would draw one channel with the other's pixels.
-    expect(proxyRangeFromName('488_nm_extra.p2047.webp', '488_nm')).toBeNull();
-    expect(proxyRangeFromName('488_nm_extra.p2047.webp', '488_nm_extra')).toBe(
+    expect(proxyRangeFromName('488_nm_extra.p2047.v2.webp', '488_nm')).toBeNull();
+    expect(proxyRangeFromName('488_nm_extra.p2047.v2.webp', '488_nm_extra')).toBe(
       2047
     );
   });
 
   it('refuses a name whose range is not a positive number', () => {
     expect(proxyRangeFromName('488_nm.pXX.webp', '488_nm')).toBeNull();
-    expect(proxyRangeFromName('488_nm.p0.webp', '488_nm')).toBeNull();
-    expect(proxyRangeFromName('488_nm.p.webp', '488_nm')).toBeNull();
+    expect(proxyRangeFromName('488_nm.p0.v2.webp', '488_nm')).toBeNull();
+    expect(proxyRangeFromName('488_nm.p.v2.webp', '488_nm')).toBeNull();
   });
 });
 
@@ -117,7 +129,7 @@ describe('resolveFrameRepresentation', () => {
   it('serves the original when no proxy was asked for, even though one exists', async () => {
     // Export and measurement ask with wantProxy=false and must always get full
     // depth — the existence of a proxy must never change what they receive.
-    inDir('488_nm.png', '488_nm.p2047.webp');
+    inDir('488_nm.png', '488_nm.p2047.v2.webp');
 
     expect(await resolveFrameRepresentation(PNG, false)).toEqual({
       kind: 'png',
@@ -128,18 +140,18 @@ describe('resolveFrameRepresentation', () => {
   });
 
   it('serves the proxy and the range it was mapped against', async () => {
-    inDir('488_nm.png', '640_nm.png', '488_nm.p2047.webp');
+    inDir('488_nm.png', '640_nm.png', '488_nm.p2047.v2.webp');
 
     expect(await resolveFrameRepresentation(PNG, true)).toEqual({
       kind: 'proxy',
-      path: `${DIR}/488_nm.p2047.webp`,
+      path: `${DIR}/488_nm.p2047.v2.webp`,
       contentType: 'image/webp',
       rangeMax: 2047,
     });
   });
 
   it("picks THIS channel's proxy out of a directory holding several", async () => {
-    inDir('488_nm.p2047.webp', '640_nm.p1023.webp', 'irm.p32767.webp');
+    inDir('488_nm.p2047.v2.webp', '640_nm.p1023.v2.webp', 'irm.p32767.v2.webp');
 
     const rep = await resolveFrameRepresentation(PNG, true);
 
@@ -147,7 +159,7 @@ describe('resolveFrameRepresentation', () => {
   });
 
   it('falls back to the original when this frame has no proxy yet', async () => {
-    inDir('488_nm.png', '640_nm.p1023.webp');
+    inDir('488_nm.png', '640_nm.p1023.v2.webp');
 
     expect(await resolveFrameRepresentation(PNG, true)).toEqual({
       kind: 'png',
