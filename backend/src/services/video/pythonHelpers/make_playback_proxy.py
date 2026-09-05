@@ -94,7 +94,14 @@ def derive_range_max(peak: int) -> int:
     66 distinct grey levels reached the screen where the original 16-bit PNG,
     windowed identically, holds 167. Encoding against the peak gives 112. The
     other two channels of the same container went 82 -> 91 and 116 -> 131.
-    File size is unchanged — the same 8-bit array is encoded either way.
+
+    It costs storage, which an earlier draft of this comment denied. Spreading
+    the samples over the whole ramp leaves the lossy encoder more entropy to
+    preserve: measured on those same three channels, one frame's proxies went
+    59 kB -> 110 kB (1.85x), and production as a whole ~424 MB -> ~780 MB.
+    Cheap against the alternative — encoding losslessly instead was measured at
+    23-80x the bytes, moved IRM by 9 levels and made 488_nm WORSE (94 -> 89),
+    because the codec was never the dominant loss here. The range was.
 
     What the rounding bought was stable FILE NAMES across a series while frame
     maxima wobble by a few counts, and nothing depends on that:
