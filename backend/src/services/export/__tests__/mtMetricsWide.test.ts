@@ -277,7 +277,13 @@ describe('pivotMTMetricsWide — real two-channel rows', () => {
   });
 
   it('handles an empty input', () => {
-    expect(pivotMTMetricsWide([])).toEqual({ channels: [], rows: [] });
+    // `fluorescent` joined the return shape when the cross-channel competition
+    // columns were added; it is empty here because no pair was requested.
+    expect(pivotMTMetricsWide([])).toEqual({
+      channels: [],
+      rows: [],
+      fluorescent: [],
+    });
   });
 });
 
