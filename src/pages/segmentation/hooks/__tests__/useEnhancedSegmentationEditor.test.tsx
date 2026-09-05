@@ -25,6 +25,7 @@ import { useKeyboardShortcuts } from '../useKeyboardShortcuts';
 import { useAdvancedInteractions } from '../useAdvancedInteractions';
 import { EditMode } from '../../types';
 import { Polygon } from '@/lib/segmentation';
+import type { ProjectType } from '@/types';
 import { toast } from 'sonner';
 
 // ── MOCKS ─────────────────────────────────────────────────────────────────────
@@ -1204,6 +1205,95 @@ describe('useEnhancedSegmentationEditor', () => {
 
   // ────────────────────────────────────────────────────────────────────────────
   describe('Edit modes & escape', () => {
+    // The project type is undefined on every mount (`useProjectData` fills it
+    // when the fetch resolves) and can change under a live component, since
+    // the editor route carries no `key`. Both windows offer BOTH create tools,
+    // so a mode the project does not annotate can be selected and then become
+    // forbidden. These cover the drop back to View.
+    it('drops CreatePolyline when the project resolves as a polygon type', () => {
+      const { result, rerender } = renderHook(
+        (props: { projectType?: ProjectType }) =>
+          useEnhancedSegmentationEditor({ ...baseProps, ...props }),
+        { initialProps: {} }
+      );
+
+      act(() => result.current.setEditMode(EditMode.CreatePolyline));
+      expect(result.current.editMode).toBe(EditMode.CreatePolyline);
+
+      rerender({ projectType: 'spheroid' });
+      expect(result.current.editMode).toBe(EditMode.View);
+    });
+
+    it('drops CreatePolygon when the project resolves as a polyline type', () => {
+      const { result, rerender } = renderHook(
+        (props: { projectType?: ProjectType }) =>
+          useEnhancedSegmentationEditor({ ...baseProps, ...props }),
+        { initialProps: {} }
+      );
+
+      act(() => result.current.setEditMode(EditMode.CreatePolygon));
+      rerender({ projectType: 'microtubules' });
+      expect(result.current.editMode).toBe(EditMode.View);
+    });
+
+    it('leaves the ALLOWED create mode and every other mode alone', () => {
+      // The reset must be surgical: resetting to View on any project-type
+      // change would throw away a mode the user legitimately selected.
+      const { result, rerender } = renderHook(
+        (props: { projectType?: ProjectType }) =>
+          useEnhancedSegmentationEditor({ ...baseProps, ...props }),
+        { initialProps: {} }
+      );
+
+      act(() => result.current.setEditMode(EditMode.CreatePolygon));
+      rerender({ projectType: 'spheroid' });
+      expect(result.current.editMode).toBe(EditMode.CreatePolygon);
+
+      act(() => result.current.setEditMode(EditMode.Slice));
+      rerender({ projectType: 'wound' });
+      expect(result.current.editMode).toBe(EditMode.Slice);
+    });
+
+    it('keeps a legal create mode when the project type is LOST', () => {
+      // Failing open in the other direction. The naive shape of this reset —
+      // deriving the forbidden mode without first checking for null — reads
+      // `null !== 'polyline'` as "polygon project" and evicts the user from
+      // CreatePolyline. Losing the type is not evidence that the mode is
+      // wrong, and yanking someone out mid-draw would be worse.
+      //
+      // Note this direction is the ONLY one that exercises the null branch:
+      // going undefined -> undefined never changes the effect's dependency,
+      // so the effect does not re-run and the assertion would be vacuous.
+      const { result, rerender } = renderHook(
+        (props: { projectType?: ProjectType }) =>
+          useEnhancedSegmentationEditor({ ...baseProps, ...props }),
+        {
+          initialProps: { projectType: 'microtubules' } as {
+            projectType?: ProjectType;
+          },
+        }
+      );
+
+      act(() => result.current.setEditMode(EditMode.CreatePolyline));
+      expect(result.current.editMode).toBe(EditMode.CreatePolyline);
+
+      rerender({});
+      expect(result.current.editMode).toBe(EditMode.CreatePolyline);
+    });
+
+    it('hands the project type to the keyboard layer, so N/P are gated there too', () => {
+      // The gate lives in useKeyboardShortcuts; dropping `projectType` from
+      // this call site silently disables it, and was measured to pass all
+      // 5 025 frontend tests. This asserts the seam.
+      renderHook(() =>
+        useEnhancedSegmentationEditor({ ...baseProps, projectType: 'sperm' })
+      );
+
+      expect(
+        vi.mocked(useKeyboardShortcuts).mock.calls.at(-1)![0].projectType
+      ).toBe('sperm');
+    });
+
     it('enters EditVertices mode only after a polygon is selected', () => {
       const { result } = renderHook(() =>
         useEnhancedSegmentationEditor(baseProps)

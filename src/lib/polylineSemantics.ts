@@ -12,8 +12,11 @@
  * to the sperm panel.
  *
  * Mirrored on the backend at `backend/src/utils/polylineSemantics.ts`; keep the
- * kind mapping identical.
+ * kind mapping identical. `AnnotationGeometry` below is deliberately NOT
+ * mirrored — it gates a drawing tool, and the backend draws nothing.
  */
+
+import { isProjectType, type ProjectType } from '@/types';
 
 export type PolylineKind = 'sperm' | 'microtubule' | 'generic';
 
@@ -75,4 +78,60 @@ export function polylinePanelKind(
 ): 'sperm' | 'microtubule' | null {
   const { kind } = polylineSemanticsForProjectType(type);
   return kind === 'generic' ? null : kind;
+}
+
+/** The one geometry a project type is HAND-DRAWN with. */
+export type AnnotationGeometry = 'polygon' | 'polyline';
+
+/**
+ * Which create tool each project type offers. Exhaustive over `ProjectType` on
+ * purpose: an eighth project type fails to compile here until someone decides,
+ * where a `default` branch would silently hand it the polygon tool.
+ *
+ * Measured against production on 2026-09-05, and the data already agreed:
+ * `sperm` (778 segmentations) and `microtubules` (2 641) held ZERO closed
+ * polygons; `spheroid_invasive` (990), `microcapsule` (173) and `wound` (24)
+ * held zero polylines; `spheroid` held exactly ONE polyline across 3 853
+ * segmentations — which is what a mis-click looks like, though the cause was
+ * never confirmed and it is geometry the type has no metric for either way.
+ * `neurite` is the one type with no production row (it was new at the time);
+ * its mapping comes from the model instead, see below.
+ *
+ * These are exactly the two types `polylinePanelKind` returns non-null for —
+ * not by coincidence, but they are stated INDEPENDENTLY here so that asserting
+ * their agreement is a real test rather than a tautology. The coupling is
+ * load-bearing in both directions: giving a future type a polyline sidebar
+ * panel should also switch its create tool, and that is intended.
+ */
+const ANNOTATION_GEOMETRY: Record<ProjectType, AnnotationGeometry> = {
+  spheroid: 'polygon',
+  spheroid_invasive: 'polygon',
+  wound: 'polygon',
+  microcapsule: 'polygon',
+  // Looks wrong, is not: the neurite/soma model emits CLOSED POLYGONS for both
+  // of its classes — `FOREGROUND_CLASSES = ((1, 'neurite'), (2, 'soma'))` in
+  // `backend/segmentation/models/neurite_soma/wrapper.py`, emitted with
+  // `type='external'` by `predict_neurite_soma` (`ml/model_loader.py`). A
+  // hand-drawn polyline here would produce something no metric reads.
+  neurite: 'polygon',
+  sperm: 'polyline',
+  microtubules: 'polyline',
+};
+
+/**
+ * The create tool this project offers, or `null` when the answer is not known
+ * — an absent type (`useProjectData` starts `undefined` and fills it when the
+ * fetch resolves, so EVERY editor mount passes through this) or a string that
+ * is not a `ProjectType`. Both fail OPEN at the call sites: a rail with no
+ * create tool at all is a worse regression than a brief extra one, and an
+ * unrecognised type is not evidence about geometry in either direction.
+ *
+ * Scope: this gates HAND-DRAWING only. Nothing hides or rewrites geometry that
+ * already exists — the stray spheroid polyline above stays editable, it is
+ * just no longer reproducible.
+ */
+export function annotationGeometryForProjectType(
+  type: string | undefined | null
+): AnnotationGeometry | null {
+  return isProjectType(type) ? ANNOTATION_GEOMETRY[type] : null;
 }

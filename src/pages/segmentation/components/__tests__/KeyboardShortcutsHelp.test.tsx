@@ -198,4 +198,33 @@ describe('KeyboardShortcutsHelp', () => {
     );
     expect(container.firstChild).toHaveClass('my-custom-class');
   });
+
+  // ── Create-shortcut gating ────────────────────────────────────────────────
+
+  describe('lists only the create shortcut this project type has', () => {
+    // Advertising a key that silently does nothing is worse than omitting it:
+    // the reader presses N, no polygon appears, and blames themselves.
+    const keyRow = (key: string) =>
+      screen.queryAllByText(key, { selector: 'kbd' });
+
+    it('a polygon project shows N and not P', () => {
+      render(<KeyboardShortcutsHelp isOpen={true} projectType="spheroid" />);
+      expect(keyRow('N')).toHaveLength(1);
+      expect(keyRow('P')).toHaveLength(0);
+    });
+
+    it('a polyline project shows P and not N', () => {
+      render(
+        <KeyboardShortcutsHelp isOpen={true} projectType="microtubules" />
+      );
+      expect(keyRow('P')).toHaveLength(1);
+      expect(keyRow('N')).toHaveLength(0);
+    });
+
+    it('shows both when the project type has not loaded', () => {
+      render(<KeyboardShortcutsHelp isOpen={true} />);
+      expect(keyRow('N')).toHaveLength(1);
+      expect(keyRow('P')).toHaveLength(1);
+    });
+  });
 });

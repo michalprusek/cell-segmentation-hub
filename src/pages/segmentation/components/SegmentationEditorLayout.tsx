@@ -358,6 +358,7 @@ const SegmentationEditorLayout: React.FC<SegmentationEditorLayoutProps> = ({
             onZoomOut={editor.handleZoomOut}
             onResetView={editor.handleResetView}
             hasExistingPolygons={editor.getPolygons().length > 0}
+            projectType={projectType}
           />
 
           {/* Center: Canvas and Top Toolbar */}
@@ -729,7 +730,7 @@ const SegmentationEditorLayout: React.FC<SegmentationEditorLayoutProps> = ({
               it (the previous absolute-positioning hid the leftmost
               "polygons" label behind the button). */}
           <div className="flex items-center pl-2 pr-1 flex-shrink-0">
-            <KeyboardShortcutsHelp />
+            <KeyboardShortcutsHelp projectType={projectType} />
           </div>
 
           {/* Loading indicator overlay — spans the full footer */}

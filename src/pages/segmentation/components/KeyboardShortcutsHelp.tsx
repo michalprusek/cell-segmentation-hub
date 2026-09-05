@@ -3,18 +3,26 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Keyboard, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/contexts/exports';
+import { annotationGeometryForProjectType } from '@/lib/polylineSemantics';
 
 interface KeyboardShortcutsHelpProps {
   className?: string;
   isOpen?: boolean;
   onToggle?: (open: boolean) => void;
+  /** Project type, so the sheet lists only the create shortcut that works
+   *  here. Advertising a key that does nothing is worse than omitting it —
+   *  the reader blames themselves for the missing polygon. Undefined lists
+   *  both, matching the toolbar's fail-open. */
+  projectType?: string | null;
 }
 
 const KeyboardShortcutsHelp: React.FC<KeyboardShortcutsHelpProps> = ({
   className = '',
   isOpen: externalIsOpen,
   onToggle,
+  projectType,
 }) => {
+  const geometry = annotationGeometryForProjectType(projectType);
   const [internalIsOpen, setInternalIsOpen] = useState(false);
   const isOpen = externalIsOpen !== undefined ? externalIsOpen : internalIsOpen;
   const { t } = useLanguage();
@@ -70,8 +78,18 @@ const KeyboardShortcutsHelp: React.FC<KeyboardShortcutsHelpProps> = ({
           description: t('segmentation.shortcuts.addPoints'),
           condition: t('segmentation.shortcuts.requiresSelection'),
         },
-        { key: 'N', description: t('segmentation.shortcuts.createPolygon') },
-        { key: 'P', description: t('segmentation.mode.createPolyline') },
+        // Exactly the gate in `useKeyboardShortcuts` and `VerticalToolbar`.
+        ...(geometry === 'polyline'
+          ? []
+          : [
+              {
+                key: 'N',
+                description: t('segmentation.shortcuts.createPolygon'),
+              },
+            ]),
+        ...(geometry === 'polygon'
+          ? []
+          : [{ key: 'P', description: t('segmentation.mode.createPolyline') }]),
         { key: 'S', description: t('segmentation.shortcuts.sliceMode') },
         { key: 'D', description: t('segmentation.shortcuts.deleteMode') },
       ],

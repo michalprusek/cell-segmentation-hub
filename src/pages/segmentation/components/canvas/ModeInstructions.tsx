@@ -114,9 +114,10 @@ const ModeInstructions: React.FC<ModeInstructionsProps> = ({
         }
 
       case EditMode.CreatePolyline:
-        // Microtubule (open polyline) creation — committed with Enter, NOT by
-        // closing onto the first point. Falls back to the polygon "create"
-        // wording only if somehow used outside an MT project.
+        // Open-polyline creation — the sperm and microtubule project types,
+        // not just MT. Committed with Enter, NOT by closing onto the first
+        // point. Both branches below use polyline wording unconditionally;
+        // there is no polygon fallback here.
         if (tempPoints.length === 0) {
           return {
             title: t('segmentation.instructions.modes.createPolyline'),

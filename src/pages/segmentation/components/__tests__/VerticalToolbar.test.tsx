@@ -28,6 +28,12 @@ import { render } from '@/test/utils/test-utils';
 import VerticalToolbar from '../VerticalToolbar';
 import { EditMode } from '../../types';
 
+// Deliberately NO `projectType`: this file clicks buttons by INDEX, and the
+// annotation-geometry gate makes the rail's button count depend on the project
+// type. Adding one here would silently shift every index below by one — the
+// guard test at the top of the suite exists to make that loud instead. Gate
+// behaviour is covered by `VerticalToolbar.geometry.test.tsx`, which asserts on
+// accessible names and is neutral to order.
 const defaultProps = {
   editMode: EditMode.View,
   selectedPolygonId: null,
@@ -41,6 +47,22 @@ const defaultProps = {
 describe('VerticalToolbar', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it('renders the 10-button rail the positional clicks below assume', () => {
+    // One named failure here beats a dozen tests quietly clicking the wrong
+    // button because the rail gained, lost, or reordered an entry. Only the
+    // two create buttons are named: they are the pair the annotation-geometry
+    // gate can remove, and pinning all ten English labels would make this fail
+    // on any translation edit.
+    render(<VerticalToolbar {...defaultProps} />);
+    const labels = screen
+      .getAllByRole('button')
+      .map(b => b.getAttribute('aria-label') ?? '');
+
+    expect(labels).toHaveLength(10);
+    expect(labels[3]).toMatch(/polygon/i);
+    expect(labels[4]).toMatch(/polyline/i);
   });
 
   describe('Rendering', () => {
