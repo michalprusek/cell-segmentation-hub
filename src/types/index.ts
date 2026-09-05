@@ -78,6 +78,14 @@ export interface ApiError {
   status?: number;
   response?: {
     data?: {
+      /** Where `ResponseHelper.error` actually puts the message — see
+       *  `backend/src/utils/response.ts`: the failure envelope is
+       *  `{ success: false, error, code }`. This field was MISSING from this
+       *  type, so `getErrorMessage` read `message` (only ever set on a
+       *  SUCCESS response), found nothing, and every 4xx fell through to a
+       *  generic string. The type was enforcing the bug: reading `.error`
+       *  would not have compiled. */
+      error?: string;
       message?: string;
     };
     status?: number;
@@ -105,7 +113,9 @@ export function getErrorMessage(
     // `|| message` matters: an Error is also `typeof 'object'`, so this branch
     // runs for one too and used to overwrite the `error.message` captured above
     // -- with undefined, whenever the response carried no message of its own.
-    message = apiError.response?.data?.message || apiError.message || message;
+    const serverMessage =
+      apiError.response?.data?.error || apiError.response?.data?.message;
+    message = serverMessage || apiError.message || message;
     url = apiError.config?.url;
 
     // Special handling for authentication endpoints
@@ -132,6 +142,31 @@ export function getErrorMessage(
         return t('errors.emailAlreadyExists');
       }
       return 'This email is already registered. Try signing in or use a different email.';
+    }
+
+    // An input-error message is written FOR the user and is the only thing
+    // that says WHICH input was wrong — the controllers classify "known
+    // user-input failures" explicitly before choosing 400 (see the regex in
+    // `videoController.addChannel`), so these bodies are curated, not raw
+    // internals. Returning `t('errors.validation')` over the top of one threw
+    // away the entire diagnosis: "Dimension mismatch: the source is 2048×2048
+    // but the target video is 1924×1476" became "Invalid request".
+    //
+    // Deliberately NOT applied to 401 / 403 / 429, where the status itself is
+    // the whole story and the generic sentence is the better one, nor to 5xx,
+    // where the message is an internal detail.
+    //
+    // The message is English while the UI may not be. That is a real cost and
+    // the lesser one: a precise sentence the user can act on beats a
+    // translated sentence that tells them nothing about a blocking failure.
+    const isInputError =
+      statusCode !== undefined &&
+      (statusCode === 400 ||
+        statusCode === 409 ||
+        statusCode === 422 ||
+        (statusCode > 422 && statusCode < 500 && statusCode !== 429));
+    if (isInputError && serverMessage) {
+      return serverMessage;
     }
 
     // Map common HTTP status codes to user-friendly messages
