@@ -1,13 +1,17 @@
 import { logger } from '@/lib/logger';
 import { useEffect, useCallback, useRef } from 'react';
 import { EditMode } from '../types';
-import { annotationGeometryForProjectType } from '@/lib/polylineSemantics';
+import {
+  annotationGeometryForProjectType,
+  type AnnotationGeometry,
+} from '@/lib/polylineSemantics';
 
 interface UseKeyboardShortcutsProps {
-  /** Project type. `N`/`P` only enter the create mode this project actually
-   *  annotates — hiding the toolbar button while leaving its shortcut live
-   *  would be a worse gate than none, because the mode would be reachable with
-   *  no way to see you were in it. Undefined allows both. */
+  /** Project type. `N`/`P` — and Tab-cycling — only reach the create mode this
+   *  project actually annotates. Hiding the toolbar button alone would leave
+   *  the disallowed geometry one keystroke from being drawn: the hidden button
+   *  is the affordance, not the enforcement. An absent or unrecognised type
+   *  allows both, see `annotationGeometryForProjectType`. */
   projectType?: string | null;
   // Current state
   editMode: EditMode;
@@ -56,8 +60,7 @@ export const useKeyboardShortcuts = ({
   onShowHelp,
   projectType,
 }: UseKeyboardShortcutsProps) => {
-  const geometry =
-    projectType == null ? null : annotationGeometryForProjectType(projectType);
+  const geometry = annotationGeometryForProjectType(projectType);
   const isShiftPressed = useRef(false);
   const isCtrlPressed = useRef(false);
   const isAltPressed = useRef(false);
@@ -259,7 +262,8 @@ export const useKeyboardShortcuts = ({
               editMode,
               setEditMode,
               selectedPolygonId,
-              isShiftPressed.current
+              isShiftPressed.current,
+              geometry
             );
           }
           break;
@@ -330,18 +334,23 @@ export const useKeyboardShortcuts = ({
 };
 
 /**
- * Cycle through edit modes with Tab/Shift+Tab
+ * Cycle through edit modes with Tab/Shift+Tab.
+ *
+ * `geometry` drops the create mode this project does not annotate, so Tab
+ * cannot walk around the hidden toolbar button. `null` keeps both, matching
+ * the rail.
  */
 function cycleEditMode(
   currentMode: EditMode,
   setEditMode: (mode: EditMode) => void,
   selectedPolygonId: string | null,
-  reverse: boolean = false
+  reverse: boolean = false,
+  geometry: AnnotationGeometry | null = null
 ) {
   const allModes = [
     EditMode.View,
-    EditMode.CreatePolygon,
-    EditMode.CreatePolyline,
+    ...(geometry === 'polyline' ? [] : [EditMode.CreatePolygon]),
+    ...(geometry === 'polygon' ? [] : [EditMode.CreatePolyline]),
     EditMode.Slice, // Slice mode available always
     EditMode.DeletePolygon,
   ];
@@ -351,6 +360,11 @@ function cycleEditMode(
     allModes.splice(1, 0, EditMode.EditVertices, EditMode.AddPoints);
   }
 
+  // A mode absent from the list — the filtered-out create mode, or a
+  // selection-only mode after the selection was cleared — yields -1, and both
+  // branches below then leave it (View forward, the last mode in reverse).
+  // That is the escape hatch from a create mode entered before the project
+  // type had loaded; Tab can leave it and can never come back.
   const currentIndex = allModes.indexOf(currentMode);
   let nextIndex;
 

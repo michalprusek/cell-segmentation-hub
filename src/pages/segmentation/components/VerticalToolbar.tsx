@@ -28,8 +28,13 @@ interface VerticalToolbarProps {
   hasExistingPolygons?: boolean;
   /** Project type, deciding WHICH create tool is offered. A project annotates
    *  exactly one geometry, so the other button is not rendered at all — see
-   *  `annotationGeometryForProjectType`. Undefined keeps both, the behaviour
-   *  every caller had before this prop existed. */
+   *  `annotationGeometryForProjectType`.
+   *
+   *  Undefined keeps BOTH, which is both the pre-prop behaviour and the state
+   *  every mount passes through: `projectType` arrives with the `useProjectData`
+   *  fetch, so the rail can show two create tools for one paint and then
+   *  settle. Failing open is deliberate — a rail with no create tool at all
+   *  would be a worse regression than a brief extra one. */
   projectType?: string | null;
 }
 
@@ -275,11 +280,8 @@ const VerticalToolbar: React.FC<VerticalToolbarProps> = ({
   hasExistingPolygons: _hasExistingPolygons = false,
   projectType,
 }) => {
-  // A project annotates exactly one geometry; the other create tool is not
-  // rendered. Undefined projectType keeps BOTH, which is the behaviour every
-  // caller had before this prop existed.
-  const geometry =
-    projectType == null ? null : annotationGeometryForProjectType(projectType);
+  // null = type not loaded yet, or unrecognised → offer both; see the prop doc.
+  const geometry = annotationGeometryForProjectType(projectType);
   const { t } = useLanguage();
 
   return (

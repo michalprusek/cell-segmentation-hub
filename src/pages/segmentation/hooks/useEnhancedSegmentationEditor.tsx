@@ -18,6 +18,7 @@ import {
 import { useAdvancedInteractions } from './useAdvancedInteractions';
 import { usePolygonSlicing } from './usePolygonSlicing';
 import { useKeyboardShortcuts } from './useKeyboardShortcuts';
+import { annotationGeometryForProjectType } from '@/lib/polylineSemantics';
 import { usePolygonSelection } from './usePolygonSelection';
 import {
   calculateCenteringTransform,
@@ -138,6 +139,27 @@ export const useEnhancedSegmentationEditor = ({
     },
     []
   ); // CRITICAL: No dependencies to prevent stale closures!
+
+  // The project type arrives AFTER mount (`useProjectData` starts undefined),
+  // and the editor route carries no `key`, so it can also change under a live
+  // component when the user navigates to another project's image. Either window
+  // offers both create tools; leaving one selected when the answer lands would
+  // let the next click draw geometry this project has no metric for. The
+  // functional setter keeps `editMode` out of the deps — this runs when the
+  // geometry changes, not on every mode switch — and React bails out of the
+  // re-render when the mode is already allowed.
+  const annotationGeometry = annotationGeometryForProjectType(projectType);
+  useEffect(() => {
+    if (annotationGeometry === null) return;
+    const forbidden =
+      annotationGeometry === 'polyline'
+        ? EditMode.CreatePolygon
+        : EditMode.CreatePolyline;
+    setEditModeRaw(current =>
+      current === forbidden ? EditMode.View : current
+    );
+  }, [annotationGeometry]);
+
   const [tempPoints, setTempPoints] = useState<Point[]>([]);
   const [hoveredVertex, setHoveredVertex] = useState<{
     polygonId: string;

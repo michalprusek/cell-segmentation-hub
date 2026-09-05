@@ -225,7 +225,9 @@ vi.mock('../components/EditorHeader', () => ({
 }));
 
 vi.mock('../components/VerticalToolbar', () => ({
-  default: () => <div data-testid="vertical-toolbar" />,
+  default: ({ projectType }: { projectType?: string | null }) => (
+    <div data-testid="vertical-toolbar" data-project-type={projectType ?? ''} />
+  ),
 }));
 
 vi.mock('../components/TopToolbar', () => ({
@@ -259,7 +261,9 @@ vi.mock('../components/StatusBar', () => ({
 }));
 
 vi.mock('../components/KeyboardShortcutsHelp', () => ({
-  default: () => <div data-testid="keyboard-help" />,
+  default: ({ projectType }: { projectType?: string | null }) => (
+    <div data-testid="keyboard-help" data-project-type={projectType ?? ''} />
+  ),
 }));
 
 vi.mock('../components/canvas/CanvasContainer', () => ({
@@ -630,6 +634,38 @@ describe('polylineKind discriminator — sidebar panel selection', () => {
 });
 
 // ─── effectiveResegmentModel ──────────────────────────────────────────────────
+
+describe('the annotation-geometry gate reaches the rail', () => {
+  // The gate's own unit tests render VerticalToolbar with the prop directly.
+  // That leaves the SEAM untested: dropping `projectType={projectType}` in
+  // SegmentationEditorLayout turns the whole feature into a no-op and was
+  // measured to pass all 5 025 frontend tests. These assert the wiring.
+  beforeEach(() => {
+    // Without an image the editor renders the "no preview" placeholder and
+    // never reaches the rail at all.
+    mockProjectData.images = [
+      { id: 'img-1', name: 'x.jpg', segmentationStatus: 'completed' },
+    ];
+    mockParams.imageId = 'img-1';
+  });
+
+  it.each(['spheroid', 'sperm', 'microtubules', 'wound'])(
+    'hands %s down to the toolbar',
+    type => {
+      mockProjectData.projectType = type;
+      renderEditor();
+
+      expect(
+        screen.getByTestId('vertical-toolbar').getAttribute('data-project-type')
+      ).toBe(type);
+      // Same seam, second consumer: the shortcuts sheet must list only the
+      // create key that works, and it can only know from this prop.
+      expect(
+        screen.getByTestId('keyboard-help').getAttribute('data-project-type')
+      ).toBe(type);
+    }
+  );
+});
 
 describe('effectiveResegmentModel — project-type gating', () => {
   const base = {
