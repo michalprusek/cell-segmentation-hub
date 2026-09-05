@@ -22,9 +22,25 @@
 # against 9.1.1 on a real GPU -- see the note in
 # backend/requirements-pytest-ci.txt, and keep the two floors together.
 pytest>=9.1.1
-pytest-asyncio>=0.23
+# Floor records reality: >=0.23 already resolved to 1.4.0, so this changes
+# nothing at install time — it stops the floor drifting further behind.
+pytest-asyncio>=1.4.0
 pytest-timeout>=2.2
 asgi-lifespan>=2.1
-# httpx MUST stay <0.28: starlette 0.27's TestClient passes app= to
-# httpx.Client, a kwarg removed in httpx 0.28 (TypeError at setup otherwise).
-httpx<0.28
+# Was `httpx<0.28`, justified by "starlette 0.27's TestClient passes app= to
+# httpx.Client, a kwarg removed in httpx 0.28". That reason is gone: this stack
+# pins starlette 1.6.0 / fastapi 0.141.1 (requirements.txt:74-75), a full major
+# past the version the comment describes.
+#
+# Worse, the cap was actively harmful. The ml image ships httpx 0.28.1, so
+# `pip install -r requirements-test.txt` DOWNGRADED it at test time — the suite
+# ran against an httpx the service never uses. Removing the cap makes the test
+# environment match the runtime one.
+#
+# Measured 2026-09-05, and the cap turned out to be the CAUSE of the 11
+# "documented" async-fixture errors this suite carried for months:
+#   with httpx<0.28  ->  651 passed, 1 skipped, 11 errors
+#   with httpx 0.28.1 ->  662 passed, 1 skipped, 0 errors, 0 failed
+# starlette 1.6's TestClient needs the httpx it was written against; pinning
+# the test env a major behind the runtime env is what broke the fixtures.
+httpx<0.29
