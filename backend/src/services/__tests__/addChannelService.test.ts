@@ -424,6 +424,117 @@ describe('addChannelToFrames validation', () => {
     expect(result.alignment).toBeUndefined();
     expect(mockAlign).not.toHaveBeenCalled();
   });
+
+  /**
+   * A channel added by NAME must be typed the way the upload path types it.
+   *
+   * This shipped hardcoded as 'fluorescent', and the damage is not cosmetic:
+   * `mtMetricsExporter` chooses competition pairs with `type ===
+   * 'fluorescent'` exactly so a label-free channel — which carries no protein
+   * and cannot compete for anything — stays out. Measured on a production
+   * container 2026-09-06: an `IRM` channel added this way was typed
+   * fluorescent, so an export would have emitted competition_488_IRM and
+   * competition_640_IRM beside the one real pair.
+   */
+  const containerWith = (channels: unknown[]) => {
+    mockProject.mockResolvedValue({ id: 'p1', type: 'microtubules' });
+    mockDetectKind.mockReturnValue(null);
+    mockImageFindMany
+      .mockResolvedValueOnce([
+        {
+          id: 'f1',
+          parentVideoId: 'c1',
+          frameIndex: 0,
+          isVideoContainer: false,
+        },
+        {
+          id: 'f2',
+          parentVideoId: 'c1',
+          frameIndex: 1,
+          isVideoContainer: false,
+        },
+      ])
+      .mockResolvedValueOnce([
+        { id: 'c1', channels, width: 512, height: 512, frameCount: 2 },
+      ]);
+  };
+
+  const addedChannel = () =>
+    (prisma.image.update as ReturnType<typeof vi.fn>).mock.calls[0][0].data
+      .channels.at(-1);
+
+  it.each(['IRM', 'irm', 'IRM_widefield', 'BF', 'DIC', 'TL'])(
+    'types a channel named %s as irm, not fluorescent',
+    async name => {
+      // `IRM_widefield` is in the list because `\b` counts `_` as a word
+      // character — the detector normalises underscores for exactly this.
+      containerWith([
+        { name: '488_nm', type: 'fluorescent', isSegmentationSource: false },
+      ]);
+
+      await addChannelToFrames({ ...baseParams, channelName: name });
+
+      expect(addedChannel()).toMatchObject({ name, type: 'irm' });
+    }
+  );
+
+  it('still types a fluorophore name as fluorescent', async () => {
+    containerWith([
+      { name: '488_nm', type: 'fluorescent', isSegmentationSource: false },
+    ]);
+
+    await addChannelToFrames({ ...baseParams, channelName: 'GFP' });
+
+    expect(addedChannel()).toMatchObject({ name: 'GFP', type: 'fluorescent' });
+  });
+
+  it('adopts the added IRM as segmentation source when the container has NONE', async () => {
+    // The normal outcome for a stack whose channels could not be identified
+    // (see `buildChannelMeta`), and the reporter's actual container: two
+    // fluorescent channels, no source, so nothing could be segmented. A
+    // channel that CAN be identified is the evidence that was missing.
+    containerWith([
+      { name: '488_nm', type: 'fluorescent', isSegmentationSource: false },
+      { name: '640_nm', type: 'fluorescent', isSegmentationSource: false },
+    ]);
+
+    await addChannelToFrames({ ...baseParams, channelName: 'IRM' });
+
+    expect(addedChannel()).toMatchObject({
+      type: 'irm',
+      isSegmentationSource: true,
+    });
+  });
+
+  it('never takes the segmentation source away from a channel that has it', async () => {
+    // Additive only. Silently re-pointing segmentation at a new channel would
+    // change what the model reads without the user asking for it.
+    containerWith([
+      { name: 'oldIrm', type: 'irm', isSegmentationSource: true },
+    ]);
+
+    await addChannelToFrames({ ...baseParams, channelName: 'IRM' });
+
+    expect(addedChannel()).toMatchObject({
+      type: 'irm',
+      isSegmentationSource: false,
+    });
+  });
+
+  it('does not make a FLUORESCENT channel the segmentation source', async () => {
+    // Even with no source present. v5H is IRM-only, and on TIRF its output
+    // does not track image content at all — see CLAUDE.md.
+    containerWith([
+      { name: '488_nm', type: 'fluorescent', isSegmentationSource: false },
+    ]);
+
+    await addChannelToFrames({ ...baseParams, channelName: 'GFP' });
+
+    expect(addedChannel()).toMatchObject({
+      type: 'fluorescent',
+      isSegmentationSource: false,
+    });
+  });
 });
 
 describe('addChannelToFrames alignment reporting', () => {
