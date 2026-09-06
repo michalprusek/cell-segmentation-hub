@@ -88,6 +88,14 @@ Thumbs.db
 # harmless, just noise.)
 microtubules_v7_pysoax/
 
+# Same class of gap, different cause: `neurite-metrics/` DOES exclude itself,
+# with a nested `.gitignore` holding `*`. Prettier's `--ignore-path` defaults to
+# the ROOT `.gitignore` plus this file and never reads a nested one, so git sees
+# nothing there while `npx prettier --check .` — step 6 of the pre-commit hook —
+# sees four Markdown files and fails EVERY commit in the repo until they are
+# formatted. They are someone's working directory and not ours to reformat.
+neurite-metrics/
+
 # Python virtualenvs (see .gitignore)
 .venv*/
 venv/
