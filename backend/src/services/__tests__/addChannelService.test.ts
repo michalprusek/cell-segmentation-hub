@@ -521,6 +521,73 @@ describe('addChannelToFrames validation', () => {
     });
   });
 
+  it('flags exactly ONE source when a multi-channel IRM stack is added', async () => {
+    // A multi-channel source is named `<slug>_1`, `<slug>_2`, … so a stack the
+    // user calls `IRM` becomes `IRM_1` and `IRM_2` — and the detector matches
+    // BOTH, because it normalises underscores before testing `\bIRM\b`.
+    // Judging each against the unchanged `existing` array flagged both, and
+    // `isSegmentationSource` is radio behaviour: at most one true.
+    mockProject.mockResolvedValue({ id: 'p1', type: 'microtubules' });
+    // `...Once` for both: a persistent mock here leaks an nd2 two-channel
+    // source into the alignment suite below, which sets neither.
+    mockDetectKind.mockReturnValueOnce('nd2');
+    mockExtract.mockResolvedValueOnce({
+      kind: 'single',
+      result: {
+        frameCount: 1,
+        width: 512,
+        height: 512,
+        channels: [
+          { name: 'a', type: 'fluorescent', isSegmentationSource: false },
+          { name: 'b', type: 'fluorescent', isSegmentationSource: false },
+        ],
+      },
+    });
+    mockImageFindMany
+      .mockResolvedValueOnce([
+        {
+          id: 'f1',
+          parentVideoId: 'c1',
+          frameIndex: 0,
+          isVideoContainer: false,
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          id: 'c1',
+          channels: [
+            { name: '488_nm', type: 'fluorescent', isSegmentationSource: false },
+          ],
+          width: 512,
+          height: 512,
+          frameCount: 1,
+        },
+      ]);
+
+    await addChannelToFrames({
+      ...baseParams,
+      channelName: 'IRM',
+      imageIds: ['f1'],
+    });
+
+    const written = (prisma.image.update as ReturnType<typeof vi.fn>).mock
+      .calls[0][0].data.channels;
+    const added = written.filter((c: { name: string }) =>
+      c.name.startsWith('IRM')
+    );
+    expect(added.map((c: { name: string }) => c.name)).toEqual([
+      'IRM_1',
+      'IRM_2',
+    ]);
+    expect(added.every((c: { type: string }) => c.type === 'irm')).toBe(true);
+    // The invariant: exactly one, and it is the first.
+    expect(
+      written.filter((c: { isSegmentationSource: boolean }) => c.isSegmentationSource)
+    ).toHaveLength(1);
+    expect(added[0].isSegmentationSource).toBe(true);
+    expect(added[1].isSegmentationSource).toBe(false);
+  });
+
   it('does not make a FLUORESCENT channel the segmentation source', async () => {
     // Even with no source present. v5H is IRM-only, and on TIRF its output
     // does not track image content at all — see CLAUDE.md.

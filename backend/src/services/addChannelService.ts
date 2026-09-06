@@ -727,6 +727,13 @@ export async function addChannelToFrames(
       const coverageIds = fullCoverage ? undefined : targetFrameIds;
 
       const finalMeta: ChannelMeta[] = [];
+      // At most ONE channel may carry the flag — it is radio behaviour, and
+      // `buildChannelMeta` says so. A multi-channel source is named
+      // `<slug>_1`, `<slug>_2`, …, so a source the user calls `IRM` yields
+      // `IRM_1` AND `IRM_2`, both of which the detector matches once it
+      // normalises underscores. Judging each of them against the UNCHANGED
+      // `existing` array would flag both. Claimed once, here.
+      let sourceClaimed = existing.some(c => c.isSegmentationSource);
       source.channelMeta.forEach((srcMeta, ci) => {
         const multi = source.channelMeta.length > 1;
         const finalName = uniqueName(
@@ -750,23 +757,26 @@ export async function addChannelToFrames(
         // fluorescent, so an export would have emitted competition_488_IRM and
         // competition_640_IRM beside the one real pair.
         const isIrm = isIrmChannel(finalName, srcMeta.wavelengthNm ?? undefined);
+        const claimsSource = isIrm && !sourceClaimed;
+        if (claimsSource) {
+          sourceClaimed = true;
+        }
         finalMeta.push({
           name: finalName,
           displayName,
           type: isIrm ? 'irm' : 'fluorescent',
-          // Adopted as the segmentation source ONLY when NO channel carries
-          // the flag — additive, so a source the user already has is never
-          // silently switched out from under them. A container with no flagged
-          // source is the normal outcome for a stack whose channels could not
-          // be identified (see `buildChannelMeta`), and adding a channel that
-          // CAN be identified is exactly the evidence that was missing.
+          // Adopted as the segmentation source ONLY when nothing has claimed
+          // it — additive, so a source the user already has is never silently
+          // switched out from under them. A container with no flagged source
+          // is the normal outcome for a stack whose channels could not be
+          // identified (see `buildChannelMeta`), and adding a channel that CAN
+          // be identified is exactly the evidence that was missing.
           //
           // Tested against the FLAG, not `resolveSegmentationSource`: that
           // helper falls back to `channels[0]` so consumers always get a
           // channel, and is therefore never null for a container that has any
           // channels at all. Using it here made this branch dead.
-          isSegmentationSource:
-            isIrm && !existing.some(c => c.isSegmentationSource),
+          isSegmentationSource: claimsSource,
           pngBacked: true,
           // A single source image stamped onto every covered frame: every
           // frame shows the SAME picture, so segmenting it per frame repeats
