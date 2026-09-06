@@ -78,6 +78,9 @@ export type ExportProgressStage =
   // margin — a 300-frame export spent ~20 min in `kymographs` alone while the
   // bar sat frozen at 95%, because none of these four reported anything.
   | 'mt-metrics'
+  // Neurite-only. Same reasoning: on a neurite project this is the long pole,
+  // one ML round trip per frame at ~38 s for a 44 Mpx confocal field.
+  | 'neurite-metrics'
   | 'kymographs'
   | 'imagej-roi'
   | 'cvat'
@@ -110,9 +113,15 @@ export function countExportSteps(
      *  contract. `Partial` because the options are deserialised straight off
      *  the wire — an older frontend bundle sends a subset. */
     mtKymographs?: Partial<MTKymographOptions> | null;
+    /** Neurite-only per-cell metrics. `Partial` for the same wire reason. */
+    /** `readonly` because ExportOptions declares it so; a mutable
+     *  `unknown[]` here is not structurally assignable from it. */
+    neuriteMetrics?: { formats?: readonly unknown[] | null } | null;
   },
   isMicrotubuleProject: boolean,
-  hasImages: boolean
+  hasImages: boolean,
+  /** Defaulted so every existing caller keeps its current count. */
+  isNeuriteProject = false
 ): number {
   return [
     options.includeOriginalImages,
@@ -126,6 +135,7 @@ export function countExportSteps(
     isMicrotubuleProject && options.mtKymographs?.enabled,
     isMicrotubuleProject && hasImages,
     isMicrotubuleProject && hasImages,
+    isNeuriteProject && options.neuriteMetrics?.formats?.length && hasImages,
   ].filter(Boolean).length;
 }
 

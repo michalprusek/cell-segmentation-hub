@@ -54,6 +54,10 @@ import {
   type MTChannelSummaryRow,
 } from './export/mtMetricsExporter';
 import {
+  computeNeuriteMetrics,
+  writeNeuriteMetrics,
+} from './export/neuriteMetricsExporter';
+import {
   exportMicrotubuleKymographs,
   type MTKymographOptions,
 } from './export/mtKymographExporter';
@@ -119,6 +123,20 @@ export interface ExportOptions {
    * ``kymographs/``. Ignored for non-MT projects.
    */
   mtKymographs?: MTKymographOptions;
+  /**
+   * Neurite-only per-cell metrics. For ``neurite`` projects, asks the ML
+   * service to assign each neurite to a soma and writes the two sheets plus a
+   * README of the caveats. Ignored for every other project type.
+   */
+  neuriteMetrics?: {
+    formats: ReadonlyArray<'excel' | 'csv' | 'json'>;
+    /**
+     * Run the soma classifier. Default true; false changes the BIOLOGY, not
+     * the runtime — 47 % of expert `soma` polygons are not neuronal cell
+     * bodies and 76 % of detected connections lose an endpoint without it.
+     */
+    classify?: boolean;
+  };
 }
 
 // Define type for project with images and segmentation data
@@ -561,7 +579,8 @@ export class ExportService {
       const totalSteps = countExportSteps(
         options,
         isMicrotubuleProject,
-        Boolean(project.images?.length)
+        Boolean(project.images?.length),
+        project.type === 'neurite'
       );
 
       // Use 90% of progress for processing tasks, leaving 5% for ZIP creation
@@ -716,6 +735,29 @@ export class ExportService {
               jobId,
               5 + progressStep * progressIncrement,
               'mt-metrics'
+            );
+          })
+        );
+      }
+
+      // Neurite per-cell metrics — `neurite` projects only.
+      if (
+        project.type === 'neurite' &&
+        options.neuriteMetrics?.formats?.length &&
+        project.images?.length
+      ) {
+        exportTasks.push(
+          this.generateNeuriteMetrics(
+            project.images as ImageWithSegmentation[],
+            exportDir,
+            options.neuriteMetrics,
+            mlRequestGate
+          ).then(() => {
+            progressStep++;
+            this.updateJobProgress(
+              jobId,
+              5 + progressStep * progressIncrement,
+              'neurite-metrics'
             );
           })
         );
@@ -1795,6 +1837,57 @@ export class ExportService {
    * metadata) it falls back to length-only and records a user-facing warning
    * rather than silently emitting nothing.
    */
+  /**
+   * Per-cell neuron biology for a `neurite` project.
+   *
+   * Never throws: an unmeasurable frame is recorded on the "Skipped frames"
+   * sheet with its reason, and a total failure still writes empty sheets. An
+   * ABSENT file would be indistinguishable from an export that quietly
+   * measured nothing, and these ARE the metrics for this project type.
+   */
+  private async generateNeuriteMetrics(
+    images: ImageWithSegmentation[],
+    exportDir: string,
+    options: NonNullable<ExportOptions['neuriteMetrics']>,
+    mlGate?: Semaphore
+  ): Promise<void> {
+    try {
+      const result = await computeNeuriteMetrics(
+        images.map(img => ({
+          id: img.id,
+          name: img.name,
+          width: img.width,
+          height: img.height,
+          pixelSizeUm: img.pixelSizeUm,
+          originalPath: img.originalPath,
+          segmentation: img.segmentation,
+        })),
+        { formats: options.formats, classify: options.classify },
+        mlGate
+      );
+
+      await writeNeuriteMetrics(
+        result,
+        path.join(exportDir, 'neurite_metrics'),
+        options.formats
+      );
+
+      if (result.skipped.length) {
+        logger.warn(
+          `Neurite metrics: ${result.skipped.length} frame(s) skipped`,
+          'ExportService',
+          { skipped: result.skipped.slice(0, 10) }
+        );
+      }
+    } catch (error) {
+      logger.error(
+        'Neurite metrics failed',
+        error instanceof Error ? error : new Error(String(error)),
+        'ExportService'
+      );
+    }
+  }
+
   private async generateMicrotubuleMetrics(
     images: ImageWithSegmentation[],
     exportDir: string,

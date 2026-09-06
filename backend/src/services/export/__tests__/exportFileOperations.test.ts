@@ -295,6 +295,56 @@ describe('countExportSteps', () => {
     ).toBe(8);
   });
 
+  it('counts the neurite exporter for a neurite project', () => {
+    // Same contract the four MT exporters are held to: every
+    // `exportTasks.push` in generateExport must have exactly one entry here,
+    // under the same condition, or the bar freezes short of 100 %.
+    expect(
+      countExportSteps(
+        { ...generic, neuriteMetrics: { formats: ['excel'] } },
+        false,
+        true,
+        true
+      )
+    ).toBe(6);
+  });
+
+  it('does not count it for a project of another type', () => {
+    // The option can be present on the wire regardless of project type — the
+    // dispatch gates on the type, and the count has to gate identically.
+    expect(
+      countExportSteps(
+        { ...generic, neuriteMetrics: { formats: ['excel'] } },
+        false,
+        true,
+        false
+      )
+    ).toBe(5);
+  });
+
+  it('does not count it with no formats, or with no images', () => {
+    expect(
+      countExportSteps({ ...generic, neuriteMetrics: { formats: [] } }, false, true, true)
+    ).toBe(5);
+    expect(
+      countExportSteps(
+        { ...generic, neuriteMetrics: { formats: ['excel'] } },
+        false,
+        false,
+        true
+      )
+    ).toBe(5);
+  });
+
+  it('keeps every existing caller at its old count', () => {
+    // The neurite flag defaults to false precisely so adding a parameter could
+    // not shift an MT or generic project's denominator.
+    expect(countExportSteps(generic, false, true)).toBe(5);
+    expect(
+      countExportSteps({ ...generic, mtKymographs: { enabled: true } }, true, true)
+    ).toBe(9);
+  });
+
   it('omits every image-gated MT step when the project has no images', () => {
     // mt-metrics, ImageJ RoiSet and CVAT are all gated on images.
     expect(
