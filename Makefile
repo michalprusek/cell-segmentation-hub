@@ -263,7 +263,8 @@ test-py:
 	    backend/src/services/video/pythonHelpers/tests \
 	    backend/essays/tests \
 	    backend/essays/module/tests \
-	    backend/essays/module/focus_qc/tests'
+	    backend/essays/module/focus_qc/tests \
+	    backend/segmentation_cpu_tests'
 
 # The ML suite cannot run in CI: models/__init__ imports mamba_ssm -> Triton,
 # which raises "0 active drivers" at import time without a CUDA driver. So it

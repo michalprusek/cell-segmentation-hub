@@ -316,13 +316,18 @@ jobs:
       # the module's own tests/ directory, so the path above does not reach
       # them. They are the only thing pinning the focus descriptor's constants
       # and its 1.97x IRM separation margin.
-      - name: pytest (video helpers + essays)
+      # backend/segmentation_cpu_tests sits BESIDE backend/segmentation for the
+      # same class of reason: that tree's conftest imports torch and api.main at
+      # module scope, and pytest loads a parent conftest before any test under
+      # it, so a CPU-only suite nested there could never be collected here.
+      - name: pytest (video helpers + essays + neurite CPU)
         run: |
           python -m pytest -q -p no:cacheprovider \
             backend/src/services/video/pythonHelpers/tests \
             backend/essays/tests \
             backend/essays/module/tests \
-            backend/essays/module/focus_qc/tests
+            backend/essays/module/focus_qc/tests \
+            backend/segmentation_cpu_tests
 
   backend:
     name: backend

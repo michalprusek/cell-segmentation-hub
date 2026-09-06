@@ -12,9 +12,20 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+import sys
+from pathlib import Path
+
 import numpy as np
 
-from . import _DIR  # noqa: F401  -- importing the package puts _DIR on sys.path
+# The vendored modules import each other flatly, so this directory has to be on
+# the path. The package `__init__` does the same thing; it is repeated here so
+# this module can be imported DIRECTLY, without going through `models/__init__`
+# -- that one pulls the torch model zoo (mamba_ssm -> Triton), which raises
+# "0 active drivers" on any machine without a CUDA driver and would put every
+# test of this file behind a GPU. The route's own tests import it this way.
+_DIR = Path(__file__).resolve().parent
+if str(_DIR) not in sys.path:
+    sys.path.insert(0, str(_DIR))
 
 import metrics_export  # noqa: E402
 import pipeline  # noqa: E402
@@ -60,12 +71,25 @@ def analyse_frame(
     classify: bool = True,
     h_um: float = H_UM,
     threshold: float = CLASSIFIER_THRESHOLD,
+    soma_instances: np.ndarray | None = None,
 ) -> NeuriteMetricsResult:
     """Run the whole chain on one frame.
 
     ``semantic`` is the 3-class mask (0 background / 1 neurite / 2 soma).
     ``image`` is the raw frame the mask came from; it is REQUIRED when
     ``classify`` is true, because the classifier reads pixels, not the mask.
+
+    ``soma_instances`` is an OPTIONAL pre-computed labelling, one positive
+    integer per cell body. Pass it when the caller already knows which pixels
+    belong to which soma -- an editor where the user has drawn or corrected one
+    polygon per cell does -- and S1 is skipped entirely.
+
+    Getting this wrong is silent, which is why it is a parameter rather than an
+    inference. Handing in a labelled array and letting S1 run anyway returns
+    rows keyed by ids the caller never chose: measured on the packaged sample,
+    149 soma polygons went in and 168 S1 instances came out, so every attempt
+    to join a row back to a polygon was off by an unknowable amount while
+    looking perfectly well-formed.
 
     Passing ``classify=False`` is supported but changes the biology, not just
     the runtime: 47 % of the expert's own `soma` polygons are not neuronal cell
@@ -85,8 +109,15 @@ def analyse_frame(
             'pixel crops, not the mask'
         )
 
-    soma_bin = semantic == 2
-    inst = si.s1_dt_hmaxima(soma_bin, um_per_px, h_um)
+    if soma_instances is not None:
+        if soma_instances.shape != semantic.shape:
+            raise ValueError(
+                f'soma_instances shape {soma_instances.shape} does not match '
+                f'the semantic mask {semantic.shape}'
+            )
+        inst = soma_instances
+    else:
+        inst = si.s1_dt_hmaxima(semantic == 2, um_per_px, h_um)
 
     ids = [int(v) for v in np.unique(inst) if v]
     p_not_soma: dict[int, float] = {}
@@ -111,6 +142,7 @@ def analyse_frame(
     qc['n_soma_accepted'] = len(accepted)
     qc['soma_reject_rate'] = round(1 - len(accepted) / max(len(ids), 1), 4)
     qc['classifier_applied'] = bool(classify and ids)
+    qc['soma_instancing'] = 'caller' if soma_instances is not None else 's1'
 
     neurites, somas = metrics_export.build_tables(
         frame, res, inst, um_per_px, accepted, p_not_soma
