@@ -301,7 +301,7 @@ describe('countExportSteps', () => {
     // under the same condition, or the bar freezes short of 100 %.
     expect(
       countExportSteps(
-        { ...generic, neuriteMetrics: { formats: ['excel'] } },
+        { ...generic, neuriteMetrics: { enabled: true } },
         false,
         true,
         true
@@ -314,7 +314,7 @@ describe('countExportSteps', () => {
     // dispatch gates on the type, and the count has to gate identically.
     expect(
       countExportSteps(
-        { ...generic, neuriteMetrics: { formats: ['excel'] } },
+        { ...generic, neuriteMetrics: { enabled: true } },
         false,
         true,
         false
@@ -322,13 +322,18 @@ describe('countExportSteps', () => {
     ).toBe(5);
   });
 
-  it('does not count it with no formats, or with no images', () => {
+  it('does not count it when disabled, or with no images', () => {
     expect(
-      countExportSteps({ ...generic, neuriteMetrics: { formats: [] } }, false, true, true)
+      countExportSteps(
+        { ...generic, neuriteMetrics: { enabled: false } },
+        false,
+        true,
+        true
+      )
     ).toBe(5);
     expect(
       countExportSteps(
-        { ...generic, neuriteMetrics: { formats: ['excel'] } },
+        { ...generic, neuriteMetrics: { enabled: true } },
         false,
         false,
         true

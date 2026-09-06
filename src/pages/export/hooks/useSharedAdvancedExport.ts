@@ -9,6 +9,7 @@ import { useExportContext } from '@/contexts/ExportContext';
 import { useAbortController } from '@/hooks/shared/useAbortController';
 import { retryWithBackoff, RETRY_CONFIGS } from '@/lib/retryUtils';
 import type { MicrotubuleKymographsOptions } from '../components/MicrotubuleKymographsSection';
+import type { NeuriteMetricsOptions } from '../components/NeuriteMetricsSection';
 
 // Sanitize filename to remove/replace invalid characters
 const sanitizeFilename = (filename: string): string => {
@@ -120,6 +121,9 @@ export interface ExportOptions {
    * CSV.
    */
   mtKymographs?: MicrotubuleKymographsOptions;
+  /** Neurite-only per-cell metrics. Absent for every other project
+   *  type — the dialog only mounts the section for `neurite`. */
+  neuriteMetrics?: NeuriteMetricsOptions;
 }
 
 export const useSharedAdvancedExport = (

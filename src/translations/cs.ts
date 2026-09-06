@@ -1364,6 +1364,20 @@ export default {
     imagesDeleted_other: '{{count}} obrázky smazány',
   },
   export: {
+    // Neurite-only metric controls.
+    neuriteMetrics: {
+      title: 'Metriky neuritů',
+      description:
+        'Přiřadí každý neurit k somě a vyexportuje tabulky po buňkách včetně vývojového stadia.',
+      enable: 'Zahrnout metriky neuritů',
+      enableHint:
+        'Jeden běh na snímek na ML službě; velké konfokální pole trvá zhruba minutu.',
+      classify: 'Odfiltrovat neneuronální somy',
+      classifyHint:
+        'Doučený klasifikátor odmítne růstové kužely a fragmenty buněk. Odmítnuté objekty zůstanou v tabulce se soma_neuronal = 0.',
+      classifyOffWarning:
+        'Bez filtru vypadá neurit končící ve vlastním růstovém kuželu jako spojení dvou buněk. Spojení budou nadhodnocená a polovina délky se připíše špatnému objektu.',
+    },
     mtKymographs: {
       title: 'Analýza rychlosti z kymografu',
       description:

@@ -1375,6 +1375,20 @@ export default {
     imagesDeleted_other: '{{count}} images supprimées',
   },
   export: {
+    // Neurite-only metric controls.
+    neuriteMetrics: {
+      title: 'Métriques des neurites',
+      description:
+        'Attribue chaque neurite à un soma et exporte des tableaux par cellule avec le stade de développement.',
+      enable: 'Inclure les métriques des neurites',
+      enableHint:
+        'Une exécution par image sur le service ML ; un grand champ confocal prend environ une minute.',
+      classify: 'Filtrer les somas non neuronaux',
+      classifyHint:
+        'Un classifieur affiné rejette les cônes de croissance et les fragments cellulaires. Les objets rejetés restent dans le tableau avec soma_neuronal = 0.',
+      classifyOffWarning:
+        'Sans le filtre, un neurite se terminant dans le propre cône de croissance de la cellule ressemble à une connexion entre deux cellules. Les connexions seront surestimées et la moitié de chaque longueur attribuée au mauvais objet.',
+    },
     mtKymographs: {
       title: 'Analyse de vitesse par kymographie',
       description:

@@ -1382,6 +1382,20 @@ export default {
     imagesDeleted_other: '{{count}} Bilder gelöscht',
   },
   export: {
+    // Neurite-only metric controls.
+    neuriteMetrics: {
+      title: 'Neuriten-Metriken',
+      description:
+        'Ordnet jeden Neuriten einem Soma zu und exportiert Tabellen pro Zelle samt Entwicklungsstadium.',
+      enable: 'Neuriten-Metriken einbeziehen',
+      enableHint:
+        'Ein Durchlauf pro Bild im ML-Dienst; ein großes konfokales Feld dauert etwa eine Minute.',
+      classify: 'Nicht-neuronale Somata herausfiltern',
+      classifyHint:
+        'Ein feinabgestimmter Klassifikator verwirft Wachstumskegel und Zellfragmente. Verworfene Objekte bleiben mit soma_neuronal = 0 in der Tabelle.',
+      classifyOffWarning:
+        'Ohne den Filter sieht ein Neurit, der im eigenen Wachstumskegel der Zelle endet, wie eine Verbindung zwischen zwei Zellen aus. Verbindungen werden überschätzt und die Hälfte jeder Länge dem falschen Objekt zugeschrieben.',
+    },
     mtKymographs: {
       title: 'Kymograph-Geschwindigkeitsanalyse',
       description:

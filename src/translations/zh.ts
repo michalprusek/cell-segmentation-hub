@@ -1270,6 +1270,18 @@ export default {
     imagesDeleted_other: '已删除 {{count}} 张图片',
   },
   export: {
+    // Neurite-only metric controls.
+    neuriteMetrics: {
+      title: '神经突指标',
+      description: '将每条神经突归属到一个胞体，并导出带发育阶段的按细胞表格。',
+      enable: '包含神经突指标',
+      enableHint: 'ML 服务对每帧运行一次；较大的共聚焦视野约需一分钟。',
+      classify: '过滤非神经元胞体',
+      classifyHint:
+        '经微调的分类器会剔除生长锥和细胞碎片。被剔除的对象仍保留在表中，soma_neuronal = 0。',
+      classifyOffWarning:
+        '不启用过滤时，终止于本细胞生长锥的神经突看起来像是两个细胞之间的连接。连接数会被高估，且每段长度的一半会记到错误的对象上。',
+    },
     mtKymographs: {
       title: '微管图速度分析',
       description: '在每个微管的微管图上检测移动粒子并导出其速度。',

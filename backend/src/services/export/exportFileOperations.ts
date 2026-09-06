@@ -113,10 +113,8 @@ export function countExportSteps(
      *  contract. `Partial` because the options are deserialised straight off
      *  the wire — an older frontend bundle sends a subset. */
     mtKymographs?: Partial<MTKymographOptions> | null;
-    /** Neurite-only per-cell metrics. `Partial` for the same wire reason. */
-    /** `readonly` because ExportOptions declares it so; a mutable
-     *  `unknown[]` here is not structurally assignable from it. */
-    neuriteMetrics?: { formats?: readonly unknown[] | null } | null;
+    /** Neurite-only per-cell metrics. Formats come from `metricsFormats`. */
+    neuriteMetrics?: { enabled?: boolean } | null;
   },
   isMicrotubuleProject: boolean,
   hasImages: boolean,
@@ -135,7 +133,10 @@ export function countExportSteps(
     isMicrotubuleProject && options.mtKymographs?.enabled,
     isMicrotubuleProject && hasImages,
     isMicrotubuleProject && hasImages,
-    isNeuriteProject && options.neuriteMetrics?.formats?.length && hasImages,
+    isNeuriteProject &&
+      options.neuriteMetrics?.enabled &&
+      options.metricsFormats?.length &&
+      hasImages,
   ].filter(Boolean).length;
 }
 

@@ -129,7 +129,13 @@ export interface ExportOptions {
    * README of the caveats. Ignored for every other project type.
    */
   neuriteMetrics?: {
-    formats: ReadonlyArray<'excel' | 'csv' | 'json'>;
+    /**
+     * Opt-in: one ML round trip per frame, ~38 s for a 44 Mpx confocal field.
+     * The FILE FORMATS come from `metricsFormats`, not from here — a user
+     * picks Excel/CSV/JSON once for the whole export, and a second format
+     * choice that could disagree with it would be a bug waiting to happen.
+     */
+    enabled?: boolean;
     /**
      * Run the soma classifier. Default true; false changes the BIOLOGY, not
      * the runtime — 47 % of expert `soma` polygons are not neuronal cell
@@ -743,13 +749,15 @@ export class ExportService {
       // Neurite per-cell metrics — `neurite` projects only.
       if (
         project.type === 'neurite' &&
-        options.neuriteMetrics?.formats?.length &&
+        options.neuriteMetrics?.enabled &&
+        options.metricsFormats?.length &&
         project.images?.length
       ) {
         exportTasks.push(
           this.generateNeuriteMetrics(
             project.images as ImageWithSegmentation[],
             exportDir,
+            options.metricsFormats,
             options.neuriteMetrics,
             mlRequestGate
           ).then(() => {
@@ -1848,6 +1856,7 @@ export class ExportService {
   private async generateNeuriteMetrics(
     images: ImageWithSegmentation[],
     exportDir: string,
+    formats: ReadonlyArray<'excel' | 'csv' | 'json'>,
     options: NonNullable<ExportOptions['neuriteMetrics']>,
     mlGate?: Semaphore
   ): Promise<void> {
@@ -1862,14 +1871,14 @@ export class ExportService {
           originalPath: img.originalPath,
           segmentation: img.segmentation,
         })),
-        { formats: options.formats, classify: options.classify },
+        { formats, classify: options.classify },
         mlGate
       );
 
       await writeNeuriteMetrics(
         result,
         path.join(exportDir, 'neurite_metrics'),
-        options.formats
+        formats
       );
 
       if (result.skipped.length) {
