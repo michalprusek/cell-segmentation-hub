@@ -193,6 +193,16 @@ const ModeInstructions: React.FC<ModeInstructionsProps> = ({
           };
         }
 
+      case EditMode.MoveShape:
+        return {
+          title: t('segmentation.instructions.modes.moveShape'),
+          color: '#06b6d4', // cyan-500 to match the move border
+          instructions: [
+            t('segmentation.instructions.moveShape.dragShape'),
+            t('segmentation.instructions.moveShape.rigid'),
+          ],
+        };
+
       case EditMode.DeletePolygon:
         return {
           title: t('segmentation.instructions.modes.deletePolygon'),

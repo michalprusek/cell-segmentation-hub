@@ -76,6 +76,8 @@ const CanvasContainer = React.forwardRef<HTMLDivElement, CanvasContainerProps>(
       switch (editMode) {
         case EditMode.EditVertices:
           return 'border-purple-500'; // Purple for edit vertices mode
+        case EditMode.MoveShape:
+          return 'border-cyan-500'; // Cyan for move mode
         case EditMode.Slice:
           return 'border-amber-500'; // Amber for slicing mode
         case EditMode.AddPoints:
@@ -104,6 +106,10 @@ const CanvasContainer = React.forwardRef<HTMLDivElement, CanvasContainerProps>(
           return 'grab';
         case EditMode.EditVertices:
           return 'crosshair';
+        case EditMode.MoveShape:
+          // The cursor IS the affordance here: the whole mode is "grab a
+          // shape and drag it", and `move` is the only cursor that says so.
+          return 'move';
         case EditMode.AddPoints:
           return 'cell';
         case EditMode.CreatePolygon:

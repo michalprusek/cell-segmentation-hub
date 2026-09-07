@@ -73,6 +73,9 @@ const KeyboardShortcutsHelp: React.FC<KeyboardShortcutsHelpProps> = ({
           description: t('segmentation.shortcuts.editVertices'),
           condition: t('segmentation.shortcuts.requiresSelection'),
         },
+        // No `condition`: Move selects the shape it grabs, so unlike E and A
+        // it does not need a selection first.
+        { key: 'M', description: t('segmentation.shortcuts.moveShape') },
         {
           key: 'A',
           description: t('segmentation.shortcuts.addPoints'),

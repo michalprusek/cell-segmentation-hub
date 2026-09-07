@@ -4,6 +4,11 @@ import type { Point } from '@/lib/segmentation';
 export enum EditMode {
   View = 'view',
   EditVertices = 'edit-vertices',
+  /** Drag a whole shape to reposition it. Its own mode on purpose: the
+   *  gesture used to live in EditVertices, and because a click in View mode
+   *  auto-switches into EditVertices, users hit it without ever arming a tool
+   *  and moved microtubules by accident. */
+  MoveShape = 'move-shape',
   AddPoints = 'add-points',
   CreatePolygon = 'create-polygon',
   CreatePolyline = 'create-polyline',

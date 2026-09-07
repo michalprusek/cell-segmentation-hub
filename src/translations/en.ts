@@ -790,6 +790,7 @@ export default {
       view: 'View and navigate',
       edit: 'Edit',
       editVertices: 'Edit vertices',
+      moveShape: 'Move shape',
       addPoints: 'Add points',
       create: 'Create',
       createPolygon: 'Create polygon',
@@ -818,6 +819,7 @@ export default {
       viewMode: 'View mode',
       editVertices: 'Edit vertices mode',
       addPoints: 'Add points mode',
+      moveShape: 'Move shape mode',
       createPolygon: 'Create new polygon',
       sliceMode: 'Slice mode',
       deleteMode: 'Delete mode',
@@ -921,7 +923,7 @@ export default {
       saving: 'Saving...',
       save: 'Save',
       keyboardShortcuts:
-        'V: View • E: Edit • A: Add • N: New • S: Slice • D: Delete',
+        'V: View • E: Edit • M: Move • A: Add • N: New • S: Slice • D: Delete',
       nothingToSave: 'All changes saved',
     },
     status: {
@@ -992,6 +994,11 @@ export default {
         addPoints: 'Hold SHIFT and click a vertex to add points',
         deleteVertex: 'Double-click a vertex to delete it',
       },
+      moveShape: {
+        dragShape: 'Click and drag a shape to move it',
+        rigid:
+          'The whole shape moves — vertices keep their positions relative to each other',
+      },
       deletePolygon: {
         clickToDelete: 'Click on a polygon to delete it',
       },
@@ -1005,6 +1012,7 @@ export default {
         createPolyline: 'Create Microtubule Mode',
         addPoints: 'Add Points Mode',
         editVertices: 'Edit Vertices Mode',
+        moveShape: 'Move Mode',
         deletePolygon: 'Delete Polygon Mode',
         view: 'View Mode',
       },

@@ -327,6 +327,30 @@ describe('CanvasVertex', () => {
       expect(vertex).toHaveStyle({ cursor: 'grabbing' });
     });
 
+    it('shows the MOVE cursor in MoveShape, dragging or not', () => {
+      // In MoveShape a press on a vertex translates the whole shape — the
+      // vertex branch of `handleMouseDown` is gated to EditVertices — so
+      // `grab`/`grabbing` would advertise a per-point drag the mode does not
+      // have. Both states are asserted: the mode wins over `isDragging`.
+      const { rerender } = render(
+        <svg>
+          <CanvasVertex
+            {...defaultProps}
+            isInMoveShapeMode
+            isDragging={false}
+          />
+        </svg>
+      );
+      expect(document.querySelector('circle')).toHaveStyle({ cursor: 'move' });
+
+      rerender(
+        <svg>
+          <CanvasVertex {...defaultProps} isInMoveShapeMode isDragging />
+        </svg>
+      );
+      expect(document.querySelector('circle')).toHaveStyle({ cursor: 'move' });
+    });
+
     it('applies transitions correctly based on state', () => {
       const { rerender } = render(
         <svg>

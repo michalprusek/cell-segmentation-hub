@@ -774,32 +774,36 @@ export const useAdvancedInteractions = ({
           }
         }
 
-        // Grabbing the CONTOUR (not a vertex) translates the whole shape.
+        // Grabbing a shape translates it — ONLY in the dedicated MoveShape
+        // mode, armed from the toolbar (or M).
         //
-        // Requested 2026-09-04. Deliberately gated to EditVertices: that is
-        // the mode whose job is changing geometry, and it is where the
-        // gesture cannot be confused with anything else. In View mode a drag
-        // pans the canvas and a click selects — silently turning that into a
-        // shape move would be a trap. The vertex branch above runs FIRST, so
-        // a point still wins over the outline it sits on.
+        // It shipped gated to EditVertices (2026-09-04) and that was not a
+        // gate at all in practice: `usePolygonSelection` auto-switches
+        // View -> EditVertices on the first click on any shape, so after one
+        // click on a microtubule the user is in EditVertices without having
+        // asked, and the next press-and-drag on that microtubule moves it.
+        // Reported as "polylines and polygons shift by themselves". Putting
+        // the gesture behind a tool the user has to arm is the fix; the
+        // auto-switch itself is deliberate and stays.
+        //
+        // A VERTEX is a valid grab target here too, unlike in EditVertices
+        // where the vertex branch above wins. That branch is gated to
+        // EditVertices, so in MoveShape it never runs, and requiring
+        // `vertexIndex === undefined` would have made every vertex dot of the
+        // selected shape a dead spot in the one mode whose only gesture is
+        // "drag the shape". Move moves the whole shape, points included.
         //
         // NOT with Shift held. Shift+click is the ADDITIVE SELECTION gesture,
         // handled by `CanvasPolygon`'s onClick — and this branch would eat it
         // twice over: `onPolygonSelection` below is a SINGLE select, which
         // drops the whole multi-selection, and the `return` stops the event
-        // before the additive handler ever runs. Reported by a user as "Shift
-        // does not select several microtubules", and the reason another user
-        // could not reproduce it is that the editor auto-switches to
-        // EditVertices the moment you select something: shift-click from a
-        // clean View-mode canvas works, shift-click after any plain click does
-        // not. There is no translate gesture lost here — Shift+drag on a
-        // contour had no meaning of its own.
+        // before the additive handler ever runs. There is no translate
+        // gesture lost here — Shift+drag on a shape had no meaning of its own.
         if (
           target &&
           target.dataset &&
           target.dataset.polygonId &&
-          target.dataset.vertexIndex === undefined &&
-          editMode === EditMode.EditVertices &&
+          editMode === EditMode.MoveShape &&
           !e.shiftKey
         ) {
           const polygonId = target.dataset.polygonId;
@@ -861,6 +865,27 @@ export const useAdvancedInteractions = ({
         switch (editMode) {
           case EditMode.View:
             handleViewModeClick(imagePoint, e);
+            break;
+          case EditMode.MoveShape:
+            // Move has nothing of its own to do with EMPTY canvas — deselect
+            // if something is selected, else pan — which is exactly View's
+            // behaviour, so it borrows the handler instead of growing a copy.
+            //
+            // Only for a genuine miss, though. `CanvasPolygon` stops
+            // propagation on CLICK and binds no mousedown at all (that is how
+            // `data-polygon-id` reaches this handler in the first place), so a
+            // press ON a shape lands here too whenever the translate branch
+            // above declined it — which it does for Shift, the additive
+            // selection gesture. Deselecting there is bug #503 all over
+            // again: `applyAdditiveToggle` reads `selectedPolygonId` to absorb
+            // the previous single selection into the bulk set, and a null
+            // there silently drops it, so Shift+click would REPLACE the
+            // selection instead of adding to it. Unlike View, Move does not
+            // auto-switch away, so "armed with something selected" is its
+            // steady state and this would fire on every shift-click.
+            if (!target?.dataset?.polygonId) {
+              handleViewModeClick(imagePoint, e);
+            }
             break;
           case EditMode.CreatePolygon:
             handleCreatePolygonClick(imagePoint);
@@ -1238,6 +1263,32 @@ export const useAdvancedInteractions = ({
           // the same delta, which is the same delta the preview drew.
           const dx = grab ? coordinates.imageX - grab.x : 0;
           const dy = grab ? coordinates.imageY - grab.y : 0;
+
+          // A press that never moved commits nothing. `updatePolygons` sets
+          // `hasUnsavedChanges`, pushes an undo entry and hands every
+          // memoized polygon a new points array — for geometry identical to
+          // what was already there. It matters most in MoveShape, where
+          // clicking a shape IS how you select it: without this, looking at a
+          // microtubule marked the frame unsaved and left an undo step that
+          // undoes nothing.
+          if (dx === 0 && dy === 0) {
+            setVertexDragState({
+              isDragging: false,
+              polygonId: null,
+              vertexIndex: null,
+              dragOffset: undefined,
+              originalPosition: undefined,
+            });
+            setInteractionState({
+              ...interactionState,
+              isDraggingVertex: false,
+              draggedVertexInfo: null,
+              vertexGrabPoint: null,
+              originalVertexPosition: null,
+            });
+            return;
+          }
+
           const polygons = getPolygons();
           const updatedPolygons = polygons.map(polygon => {
             if (polygon.id === polygonId) {

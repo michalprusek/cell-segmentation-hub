@@ -137,6 +137,7 @@ const PolygonVertices = React.memo(
                   isStartPoint={originalIndex === 0}
                   isUndoRedoInProgress={isUndoRedoInProgress}
                   isInAddPointsMode={editMode === EditMode.AddPoints}
+                  isInMoveShapeMode={editMode === EditMode.MoveShape}
                 />
               </g>
             </VertexContextMenu>

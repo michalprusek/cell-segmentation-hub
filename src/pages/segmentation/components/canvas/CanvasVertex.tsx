@@ -15,6 +15,10 @@ interface CanvasVertexProps {
   isStartPoint?: boolean;
   isUndoRedoInProgress?: boolean;
   isInAddPointsMode?: boolean;
+  /** MoveShape is armed. A press on a vertex then translates the whole shape
+   *  (the vertex branch of `handleMouseDown` is gated to EditVertices), so
+   *  `grab` would advertise a per-point drag that this mode does not have. */
+  isInMoveShapeMode?: boolean;
 }
 
 // Vertex scaling configuration
@@ -124,6 +128,7 @@ const CanvasVertex = React.memo<CanvasVertexProps>(
     isStartPoint = false,
     isUndoRedoInProgress = false,
     isInAddPointsMode = false,
+    isInMoveShapeMode = false,
   }) => {
     // Calculate radius with improved scaling formula
     const finalRadius = calculateVertexRadius(
@@ -198,7 +203,7 @@ const CanvasVertex = React.memo<CanvasVertexProps>(
         data-vertex-index={vertexIndex}
         onMouseDown={handleMouseDown}
         style={{
-          cursor: isDragging ? 'grabbing' : 'grab',
+          cursor: isInMoveShapeMode ? 'move' : isDragging ? 'grabbing' : 'grab',
           transition:
             isDragging || isUndoRedoInProgress ? 'none' : 'all 0.15s ease-out',
           pointerEvents: 'all',
@@ -228,6 +233,7 @@ const CanvasVertex = React.memo<CanvasVertexProps>(
       prevProps.type === nextProps.type &&
       prevProps.isStartPoint === nextProps.isStartPoint &&
       prevProps.isInAddPointsMode === nextProps.isInAddPointsMode &&
+      prevProps.isInMoveShapeMode === nextProps.isInMoveShapeMode &&
       sameDragOffset
     );
   }
