@@ -29,6 +29,7 @@ import * as path from 'path';
 import { config } from '../../utils/config';
 import { logger } from '../../utils/logger';
 import type { Semaphore } from '../../utils/concurrency';
+import { neutraliseCsvFormula } from './csvSafety';
 
 /** One row of the neurite sheet, as the ML service returns it. */
 export interface NeuriteRow {
@@ -404,24 +405,9 @@ export function toCsv(
     if (value === null || value === undefined) {
       return '';
     }
-    let text = String(value);
-    // Neutralise a spreadsheet FORMULA before quoting it. Excel, LibreOffice
-    // and Sheets evaluate a cell whose first character is one of = + - @ (or a
-    // leading tab / CR), so a value like `=HYPERLINK("http://…")` runs on open.
-    //
-    // Reachable here, not theoretical: `frame` is `image.name ?? image.id`, and
-    // `image.name` is the filename the uploader chose. A project can be SHARED,
-    // so the person who named the file and the person who opens the CSV are not
-    // necessarily the same person.
-    //
-    // A leading apostrophe is the standard mitigation — every spreadsheet reads
-    // the rest as text and hides the quote. The cost is that a legitimate name
-    // starting with `-` (a plausible one: `-control.tif`) gains a visible `'`
-    // in a plain-text reader. Preferred over dropping or rewriting the
-    // character, which would lose which frame a row came from.
-    if (/^[=+\-@\t\r]/.test(text)) {
-      text = `'${text}`;
-    }
+    // Guard BEFORE quoting — see `neutraliseCsvFormula`. `frame` is
+    // `image.name ?? image.id`, so a filename reaches this column verbatim.
+    const text = neutraliseCsvFormula(String(value));
     return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
   };
   return [
