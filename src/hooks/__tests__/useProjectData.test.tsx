@@ -732,4 +732,74 @@ describe('useProjectData', () => {
       expect(result.current.images[0].segmentationResult).toBeUndefined();
     });
   });
+
+  describe('paging across an unstable order', () => {
+    // "Select All 300 images" selected 216. Offset pagination cannot survive a
+    // row being INSERTED or DELETED between two page fetches — an upload
+    // finishing mid-load does exactly that — so pages can overlap however
+    // stable the ORDER BY is. A duplicate inflates `filteredImages.length`
+    // while `selectedImageIds` (a Set) collapses it, and the two numbers then
+    // disagree on screen.
+    //
+    // The hook pages in hundreds, so a fixture small enough to read would
+    // never reach a second request — `hasMore` is `page * 100 < total`. These
+    // use real 100-row pages for that reason.
+    const page = (ids: string[], total: number) => ({
+      images: ids.map(id => ({
+        id,
+        name: `${id}.png`,
+        segmentationStatus: 'no_segmentation',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      })),
+      pagination: { total, page: 1, limit: 100, totalPages: 2 },
+    });
+    const ids = (from: number, count: number) =>
+      Array.from({ length: count }, (_, i) => `img-${from + i}`);
+
+    it('keeps one entry per image when two pages overlap', async () => {
+      vi.mocked(apiClient.getProject).mockResolvedValue({
+        id: 'project-9',
+        name: 'Overlapping',
+      } as never);
+      // 200 rows claimed. `img-99` comes back on BOTH pages and `img-199` on
+      // neither — the exact shape a shifted page boundary produces.
+      vi.mocked(apiClient.getProjectImagesWithThumbnails)
+        .mockResolvedValueOnce(page(ids(0, 100), 200) as never)
+        .mockResolvedValueOnce(page(ids(99, 100), 200) as never);
+
+      const { result } = renderHook(
+        () => useProjectData('project-9', 'user-1'),
+        { wrapper }
+      );
+      await waitFor(() => expect(result.current.loading).toBe(false));
+
+      const got = result.current.images.map(i => i.id);
+      // Without the dedupe this is 200 entries with 199 unique — the array
+      // length the label shows, against the Set size the selection holds.
+      expect(got.length).toBe(199);
+      expect(new Set(got).size).toBe(got.length);
+      expect(got.filter(id => id === 'img-99')).toHaveLength(1);
+    });
+
+    it('does not drop a legitimately distinct image', async () => {
+      // The control: the dedupe must key on the id, not collapse rows that
+      // merely look alike. Same name shape, same timestamps, different ids.
+      vi.mocked(apiClient.getProject).mockResolvedValue({
+        id: 'project-10',
+        name: 'Distinct',
+      } as never);
+      vi.mocked(apiClient.getProjectImagesWithThumbnails)
+        .mockResolvedValueOnce(page(ids(0, 100), 200) as never)
+        .mockResolvedValueOnce(page(ids(100, 100), 200) as never);
+
+      const { result } = renderHook(
+        () => useProjectData('project-10', 'user-1'),
+        { wrapper }
+      );
+      await waitFor(() => expect(result.current.loading).toBe(false));
+
+      expect(result.current.images).toHaveLength(200);
+    });
+  });
 });
