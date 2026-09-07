@@ -58,6 +58,9 @@ from channel_registration import (
     write_registration_sidecar,
 )
 from drift_correction import compose_into_registration_offsets, correct_drift_in_place
+from large_images import raise_pil_pixel_limit
+
+raise_pil_pixel_limit()
 
 #: The rewrite failed after moving pixels. Distinct from any other non-zero
 #: exit so the caller can tell "declined, nothing touched" from "half-written".

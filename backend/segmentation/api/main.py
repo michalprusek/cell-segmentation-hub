@@ -81,6 +81,20 @@ if torch.cuda.is_available():
     except Exception as e:
         logger.exception("GPU init: unexpected error — falling back to CPU mode: %s", e)
 
+from large_images import raise_pil_pixel_limit
+
+# Pillow's ceiling is a MODULE GLOBAL, so setting it once here covers every
+# `Image.open` this process will ever do -- /segment, /batch-segment, the
+# kymograph samplers, the MT metrics reader, FRAP. It must run before any of
+# those modules is imported, hence its position above them.
+#
+# Without it a 14000 x 14000 frame (196 Mpx) raises DecompressionBombError,
+# because the stock limit refuses anything past 2 x 89 478 485. Note the write
+# path is NOT affected -- `Image.fromarray(...).save()` never consults the
+# guard -- so before this, frame extraction happily produced PNGs that
+# everything downstream then refused to read.
+raise_pil_pixel_limit()
+
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware

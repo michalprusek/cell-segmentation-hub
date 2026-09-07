@@ -24,7 +24,13 @@ import sys
 import numpy as np
 from PIL import Image
 
-Image.MAX_IMAGE_PIXELS = None
+from large_images import raise_pil_pixel_limit
+
+# Do NOT go back to `Image.MAX_IMAGE_PIXELS = None`, which is what stood here:
+# it accepts ANY declared size, so a 20 MB PNG claiming 60000 x 60000 takes the
+# container with it. The shared ceiling is large enough for real microscopy and
+# is the same number every other Pillow reader in this project uses.
+raise_pil_pixel_limit()
 
 
 def _to_saveable(arr: np.ndarray) -> "tuple[np.ndarray, bool]":

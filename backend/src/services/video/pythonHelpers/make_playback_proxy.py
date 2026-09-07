@@ -66,6 +66,10 @@ import sys
 import numpy as np
 from PIL import Image
 
+from large_images import raise_pil_pixel_limit
+
+raise_pil_pixel_limit()
+
 #: WebP quality. 90 was measured at 141 kB/frame on production data; 85 and 95
 #: differ by under 1% on this content, so there is nothing to gain by moving it.
 WEBP_QUALITY = 90
