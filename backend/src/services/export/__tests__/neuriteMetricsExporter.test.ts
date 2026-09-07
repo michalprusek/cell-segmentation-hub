@@ -62,12 +62,20 @@ function image(overrides: Partial<NeuriteImageInput> = {}): NeuriteImageInput {
   };
 }
 
+// Every field the ML route declares, because it declares them all REQUIRED
+// (`NeuriteMetricsResponse`, no Optional and no defaults) — a fixture missing
+// one is a shape the service never sends, so a test built on it proves nothing
+// about the real response. `neurite_owners` was absent here until the envelope
+// check at the axios boundary made it visible.
 const okResponse = {
   data: {
     neurites: [{ frame: 'frame_0001', soma_id: 1, neurite_id: 'x' }],
     somas: [{ frame: 'frame_0001', soma_id: 1, stage: '2' }],
     qc: { n_soma_instances: 1 },
     soma_polygon_ids: { 1: 's1' },
+    neurite_owners: {
+      x: { soma_polygon_id: 's1', shared: false, owned_fraction: 1 },
+    },
   },
 };
 
@@ -263,6 +271,48 @@ describe('sheet shape', () => {
   it('keeps the stage reason, not just the stage', () => {
     // Without it a single cell's stage cannot be checked against its picture.
     expect(SOMA_HEADERS).toContain('stage_reason');
+  });
+});
+
+describe('the ML response envelope is checked at the boundary', () => {
+  // `axios.post<T>` is a compile-time cast and checks nothing at run time, so
+  // without this the shape is merely asserted and whatever arrived is written
+  // into the export file. Version skew between the ml container and the
+  // backend is a NORMAL operating state here — the deploy rule is "ml first" —
+  // so a changed envelope must surface as a reason, not as an unreadable sheet.
+  it.each([
+    ['neurites', 'not an array'],
+    ['somas', 'not an array'],
+    ['qc', 'not an object'],
+    ['soma_polygon_ids', 'not an object'],
+    ['neurite_owners', 'not an object'],
+  ])('rejects a response missing %s', async field => {
+    const broken = { data: { ...okResponse.data } };
+    delete (broken.data as Record<string, unknown>)[field];
+    post.mockResolvedValueOnce(broken);
+
+    const result = await computeNeuriteMetrics([image()], { formats: ['csv'] });
+
+    // Skipped with a reason NAMING the field, not silently empty — the reason
+    // is the only thing that tells an operator which side is out of date.
+    expect(result.skipped).toHaveLength(1);
+    expect(result.skipped[0].reason).toContain(field);
+    expect(result.neurites).toHaveLength(0);
+  });
+
+  it('accepts the envelope the ML route actually declares', () => {
+    // The control: every required field present must NOT be rejected, or the
+    // check above would pass by refusing everything.
+    const d = okResponse.data as Record<string, unknown>;
+    for (const k of [
+      'neurites',
+      'somas',
+      'qc',
+      'soma_polygon_ids',
+      'neurite_owners',
+    ]) {
+      expect(d[k]).toBeDefined();
+    }
   });
 });
 

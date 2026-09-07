@@ -103,6 +103,34 @@ export interface MLNeuriteResponse {
   >;
 }
 
+/**
+ * Check that what the ML service returned has the shape this module claims.
+ *
+ * Throws rather than returning null: a malformed envelope is a deployment
+ * fault, not "this frame could not be measured", and the two must not be
+ * reported the same way — the caller turns a throw into a skip reason naming
+ * the response, which is the thing an operator needs to see.
+ */
+function assertNeuriteEnvelope(data: unknown): MLNeuriteResponse {
+  const isObject = (v: unknown): v is Record<string, unknown> =>
+    typeof v === 'object' && v !== null && !Array.isArray(v);
+
+  if (!isObject(data)) {
+    throw new Error('neurite-metrics: response was not an object');
+  }
+  for (const key of ['neurites', 'somas'] as const) {
+    if (!Array.isArray(data[key])) {
+      throw new Error(`neurite-metrics: response.${key} was not an array`);
+    }
+  }
+  for (const key of ['qc', 'soma_polygon_ids', 'neurite_owners'] as const) {
+    if (!isObject(data[key])) {
+      throw new Error(`neurite-metrics: response.${key} was not an object`);
+    }
+  }
+  return data as unknown as MLNeuriteResponse;
+}
+
 /** Frames skipped, with the reason, so the caller can surface it. */
 export interface NeuriteMetricsResult {
   neurites: NeuriteRow[];
@@ -248,8 +276,20 @@ export async function computeNeuriteFrame(
 
   const send = async (): Promise<MLNeuriteResponse | null> => {
     try {
-      const response = await axios.post<MLNeuriteResponse>(url, body, { timeout });
-      return response.data;
+      const response = await axios.post(url, body, { timeout });
+      // `axios.post<T>` is a COMPILE-TIME cast and checks nothing at run time,
+      // so without this the shape is simply asserted and whatever arrived flows
+      // straight into the export file. That is not hypothetical here: the ml
+      // container and the backend are deployed separately (ml first, by rule),
+      // so a version skew returning a different envelope is a normal operating
+      // state, and the failure would surface as an unreadable sheet rather than
+      // an error naming the cause.
+      //
+      // The ENVELOPE only. `NeuriteRow`/`SomaRow` carry an open index signature
+      // on purpose — the ML service owns the column set and adding a column
+      // must not require a backend release — so validating individual columns
+      // would be asserting something this side does not decide.
+      return assertNeuriteEnvelope(response.data);
     } catch (error) {
       const detail =
         axios.isAxiosError(error) &&
