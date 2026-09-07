@@ -62,6 +62,9 @@ from channel_registration import (
     shift_frame,
 )
 from drift_correction import DRIFT_MAX_SHIFT_PX
+from large_images import raise_pil_pixel_limit
+
+raise_pil_pixel_limit()
 
 
 def _load_array(path: str) -> np.ndarray:
