@@ -998,6 +998,10 @@ export default {
       keyboardShortcuts:
         'V: Voir • E: Modifier • A: Ajouter • N: Nouveau • S: Découper • D: Supprimer',
       nothingToSave: 'Toutes les modifications sauvegardées',
+      sharedAcrossFrames:
+        'Enregistré et partagé avec les autres images ({{count}})',
+      sharedElsewhereReload:
+        "Un enregistrement sur une autre image a aussi modifié celle-ci. Vos modifications non enregistrées ont été conservées — rechargez l'image pour voir la mise à jour.",
     },
     status: {
       polygons: 'polygones',

@@ -376,6 +376,17 @@ const SegmentationEditor = () => {
     []
   );
 
+  // Late binding for the static-share follow-up inside `onSave` below.
+  //
+  // `handleStaticShare` is a useCallback that MUST be declared after
+  // `const video = useVideoFrames(...)` (CLAUDE.md failure pattern #11), i.e.
+  // ~600 lines further down. A ref is how this earlier closure reaches it
+  // without naming a `const` that has not been initialised yet. The default
+  // no-op keeps it callable on the first render.
+  const staticShareEffectRef = useRef<
+    (savedImageId: string, sharedFrameIds: string[]) => void
+  >(() => {});
+
   // Initialize enhanced editor
   const editor = useEnhancedSegmentationEditor({
     initialPolygons,
@@ -479,6 +490,18 @@ const SegmentationEditor = () => {
           saveHeight,
           signal ? { signal } : undefined
         );
+        // A frame whose segmentation channel is ONE picture stamped onto the
+        // whole container (`ChannelMeta.staticSource` — Denisa's single IRM
+        // frame glued onto 300 fluorescence timepoints) has no per-frame
+        // annotation to speak of: the server copies this save onto every
+        // sibling frame, so their cached segmentations are now stale. Evict
+        // BEFORE re-seeding the current frame below — the eviction sweeps every
+        // frame of the container, this one included.
+        const sharedFrameIds = updatedResult.staticShare?.frameIds ?? [];
+        if (sharedFrameIds.length > 0) {
+          staticShareEffectRef.current(saveToImageId, sharedFrameIds);
+        }
+
         // Keep the shared React Query cache in sync with the just-saved
         // server state. The editor's load path serves cache-first
         // (cache hit short-circuits the network), so without this a
@@ -492,7 +515,16 @@ const SegmentationEditor = () => {
         // Only update UI state if we're saving the current image (not autosave for different image)
         if (saveToImageId === imageId) {
           setSegmentationPolygons(updatedResult.polygons || []);
-          toast.success(t('toast.dataSaved'));
+          // Say so when the save went further than this frame — the whole
+          // point of the feature is that no action was needed, which without
+          // feedback is indistinguishable from nothing having happened.
+          toast.success(
+            sharedFrameIds.length > 0
+              ? t('segmentation.toolbar.sharedAcrossFrames', {
+                  count: sharedFrameIds.length,
+                })
+              : t('toast.dataSaved')
+          );
         } else {
           // This is an autosave for a different image, don't show success toast or update UI
           logger.debug('✅ Autosaved polygons for image:', saveToImageId);
@@ -1009,32 +1041,38 @@ const SegmentationEditor = () => {
   // exists regardless of staleness, so merely marking it stale would keep
   // showing the pre-op geometry until a full page reload. Removing the entry
   // forces the loader's cache-miss path to re-fetch from the server.
-  const evictVideoFrameSegmentationCaches = useCallback(() => {
-    const frames = video.container?.frames;
-    if (!frames) return;
-    for (const frame of frames) {
-      queryClient.removeQueries({
-        queryKey: segmentationPolygonsQueryKey(frame.id),
-      });
-    }
-  }, [video.container, queryClient]);
+  // `frameIds` narrows it to specific frames; omitted means every frame of the
+  // container, which is what a track op touches.
+  const evictVideoFrameSegmentationCaches = useCallback(
+    (frameIds?: readonly string[]) => {
+      const ids = frameIds ?? video.container?.frames?.map(f => f.id);
+      if (!ids) return;
+      for (const id of ids) {
+        queryClient.removeQueries({
+          queryKey: segmentationPolygonsQueryKey(id),
+        });
+      }
+    },
+    [video.container, queryClient]
+  );
 
-  // After a propagate, the following frames now have segmentation (created or
-  // updated). Bump their status in the in-memory project images so the frame
-  // loader's `hasSegmentation` gate passes on a scrub — otherwise a frame whose
-  // cached status is still `no_segmentation` (e.g. its annotations were just
-  // deleted) never re-fetches and stays blank until a full page reload.
-  const markFollowingFramesSegmented = useCallback(
-    (fromFrameIndex: number) => {
+  // A server-side write gave these frames a segmentation (created or updated).
+  // Bump their status in the in-memory project images so the frame loader's
+  // `hasSegmentation` gate passes on a scrub — otherwise a frame whose cached
+  // status is still `no_segmentation` (e.g. its annotations were just deleted)
+  // never re-fetches and stays blank until a full page reload.
+  //
+  // The predicate must describe frames the server actually WROTE. Marking one
+  // it did not sends the loader after segmentation that does not exist.
+  const markFramesSegmented = useCallback(
+    (covers: (frame: { id: string; frameIndex: number }) => boolean) => {
       const frames = video.container?.frames;
       if (!frames) return;
-      const followingIds = new Set(
-        frames.filter(f => f.frameIndex > fromFrameIndex).map(f => f.id)
-      );
-      if (followingIds.size === 0) return;
+      const coveredIds = new Set(frames.filter(covers).map(f => f.id));
+      if (coveredIds.size === 0) return;
       updateImages(prev =>
         prev.map(img =>
-          followingIds.has(img.id) && img.segmentationStatus !== 'segmented'
+          coveredIds.has(img.id) && img.segmentationStatus !== 'segmented'
             ? { ...img, segmentationStatus: 'segmented' }
             : img
         )
@@ -1042,6 +1080,56 @@ const SegmentationEditor = () => {
     },
     [video.container, updateImages]
   );
+
+  // A propagate only reaches the frames AFTER the source.
+  const markFollowingFramesSegmented = useCallback(
+    (fromFrameIndex: number) =>
+      markFramesSegmented(f => f.frameIndex > fromFrameIndex),
+    [markFramesSegmented]
+  );
+
+  // What the editor must do locally once the server reports a save was shared
+  // across a static channel's frames. `sharedFrameIds` is the exact set the
+  // server wrote — never "the whole container", which would over-claim on a
+  // channel that covers a subset or a frame whose alignment shift is unknown.
+  // Their cached polygons are stale (evict, so a scrub refetches) and any of
+  // them that had NO segmentation now has one (mark, so the loader's gate lets
+  // the refetch happen at all). Published through the ref because `onSave` is
+  // declared ~600 lines above this.
+  //
+  // The rest is for the frame-switch autosave. It saves the PREVIOUS frame
+  // while the editor is already loading the new one, and the new one's polygons
+  // have just been rewritten by the share — but its fetch resolves long before
+  // the ~2 s projection does, so it re-seeds the very cache entry evicted above
+  // and the canvas keeps the pre-edit geometry until the user scrubs away and
+  // back. That is the exact complaint this PR fixes, one frame over. Re-read
+  // it — but never on top of work in progress: repainting from the server would
+  // throw away edits the user has already started here, and there is no undo
+  // past a reload. Say so instead of doing either silently, because the next
+  // save from this frame will broadcast a state built on what it is showing.
+  const handleStaticShare = useCallback(
+    (savedImageId: string, sharedFrameIds: string[]) => {
+      const shared = new Set(sharedFrameIds);
+      evictVideoFrameSegmentationCaches(sharedFrameIds);
+      markFramesSegmented(f => shared.has(f.id));
+      if (savedImageId === imageId || !imageId || !shared.has(imageId)) {
+        return;
+      }
+      if (editorRef.current.hasUnsavedChanges) {
+        toast.warning(t('segmentation.toolbar.sharedElsewhereReload'));
+        return;
+      }
+      void reloadSegmentation();
+    },
+    [
+      evictVideoFrameSegmentationCaches,
+      markFramesSegmented,
+      imageId,
+      reloadSegmentation,
+      t,
+    ]
+  );
+  staticShareEffectRef.current = handleStaticShare;
 
   // Right-click "Propagate to following frames": stamp this microtubule's
   // current shape into every later frame of the video.

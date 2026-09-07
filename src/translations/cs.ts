@@ -835,6 +835,9 @@ export default {
       keyboardShortcuts:
         'V: Zobrazit • E: Upravit • A: Přidat • N: Nový • S: Rozřezat • D: Smazat',
       nothingToSave: 'Všechny změny uloženy',
+      sharedAcrossFrames: 'Uloženo a sdíleno s ostatními snímky ({{count}})',
+      sharedElsewhereReload:
+        'Uložení jiného snímku změnilo i tento. Vaše neuložené úpravy zůstaly — snímek načtěte znovu, abyste změnu viděli.',
     },
     status: {
       polygons: 'polygonů',

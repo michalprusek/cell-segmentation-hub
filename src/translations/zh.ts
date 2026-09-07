@@ -926,6 +926,9 @@ export default {
       keyboardShortcuts:
         'V: 查看 • E: 编辑 • A: 添加 • N: 新建 • S: 切割 • D: 删除',
       nothingToSave: '所有更改已保存',
+      sharedAcrossFrames: '已保存并共享到其他帧（{{count}}）',
+      sharedElsewhereReload:
+        '在另一帧上的保存也更新了此帧。您未保存的修改已保留 — 请重新加载该帧以查看更新。',
     },
     status: {
       polygons: '多边形',

@@ -993,6 +993,10 @@ export default {
       keyboardShortcuts:
         'V: Ver • E: Editar • A: Añadir • N: Nuevo • S: Cortar • D: Eliminar',
       nothingToSave: 'Todos los cambios guardados',
+      sharedAcrossFrames:
+        'Guardado y compartido con los demás fotogramas ({{count}})',
+      sharedElsewhereReload:
+        'Guardar en otro fotograma también actualizó este. Sus ediciones sin guardar se conservaron: vuelva a cargar el fotograma para ver el cambio.',
     },
     status: {
       polygons: 'polígonos',

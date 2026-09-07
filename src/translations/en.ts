@@ -923,6 +923,9 @@ export default {
       keyboardShortcuts:
         'V: View • E: Edit • A: Add • N: New • S: Slice • D: Delete',
       nothingToSave: 'All changes saved',
+      sharedAcrossFrames: 'Saved and shared with the other frames ({{count}})',
+      sharedElsewhereReload:
+        'A save on another frame also updated this one. Your unsaved edits were kept — reload the frame to see the update.',
     },
     status: {
       polygons: 'polygons',

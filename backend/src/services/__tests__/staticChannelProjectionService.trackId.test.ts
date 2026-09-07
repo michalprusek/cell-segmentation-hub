@@ -166,6 +166,9 @@ describe('projectStaticChannelResult — cross-frame identity on a static channe
 
     expect(outcome.applied).toBe(true);
     expect(outcome.projected).toBe(9);
+    // Not just how many — WHICH. A caller invalidating client state has to be
+    // able to tell a frame this wrote from one it deliberately left alone.
+    expect(outcome.projectedIds).toEqual(FRAMES.slice(1).map(f => f.id));
 
     const written = writtenByFrame();
     expect([...written.keys()]).toEqual(FRAMES.slice(1).map(f => f.id));
@@ -297,7 +300,12 @@ describe('projectStaticChannelResult — cross-frame identity on a static channe
 
     expect(segUpdate).not.toHaveBeenCalled();
     expect(segUpsert).not.toHaveBeenCalled();
-    expect(outcome).toEqual({ applied: false, projected: 0, skipped: 0 });
+    expect(outcome).toEqual({
+      applied: false,
+      projected: 0,
+      skipped: 0,
+      projectedIds: [],
+    });
   });
 
   it('keeps an id the user propagated by hand and mints only the rest', async () => {
@@ -356,7 +364,48 @@ describe('projectStaticChannelResult — cross-frame identity on a static channe
     });
 
     expect(segUpsert).not.toHaveBeenCalled();
-    expect(outcome).toEqual({ applied: false, projected: 0, skipped: 0 });
+    expect(outcome).toEqual({
+      applied: false,
+      projected: 0,
+      skipped: 0,
+      projectedIds: [],
+    });
+  });
+});
+
+describe('projectStaticChannelResult — a write that fails part way through', () => {
+  /** More than one chunk's worth (CHUNK is 50), so a failure can be partial. */
+  const MANY = Array.from({ length: 120 }, (_, i) => ({
+    id: `f${i}`,
+    frameIndex: i,
+  }));
+
+  it('reports the frames that COMMITTED, not zero', async () => {
+    // The frames written before the failure are in the database. Telling the
+    // caller "nothing applied" would leave its own view of those rows stale —
+    // for the editor, exactly the bug this whole feature is about.
+    imageFindMany.mockResolvedValue(MANY);
+    primeContainer({ name: 'IRM', staticSource: true, pngBacked: true });
+    let call = 0;
+    txn.mockImplementation(async () => {
+      if (++call === 2) {
+        throw new Error('deadlock detected');
+      }
+      return [];
+    });
+
+    const outcome = await projectStaticChannelResult({
+      containerId: CONTAINER,
+      sourceImageId: 'f0',
+      channel: 'IRM',
+    });
+
+    expect(outcome.projected).toBe(50);
+    expect(outcome.projectedIds).toEqual(MANY.slice(1, 51).map(f => f.id));
+    // Not a clean sweep, so the tracker must still run over the rest.
+    expect(outcome.applied).toBe(false);
+    // Stopped, not pressed on: a third chunk was never attempted.
+    expect(txn).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -416,7 +465,12 @@ describe('projectStaticChannelResult — containers with no static channel', () 
 
     expect(segUpdate).not.toHaveBeenCalled();
     expect(segUpsert).not.toHaveBeenCalled();
-    expect(outcome).toEqual({ applied: false, projected: 0, skipped: 0 });
+    expect(outcome).toEqual({
+      applied: false,
+      projected: 0,
+      skipped: 0,
+      projectedIds: [],
+    });
   });
 
   it('does not mint for a static channel whose coverage excludes every sibling', async () => {

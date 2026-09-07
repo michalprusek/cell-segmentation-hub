@@ -1000,6 +1000,10 @@ export default {
       keyboardShortcuts:
         'V: Anzeigen • E: Bearbeiten • A: Hinzufügen • N: Neu • S: Schneiden • D: Löschen',
       nothingToSave: 'Alle Änderungen gespeichert',
+      sharedAcrossFrames:
+        'Gespeichert und mit den übrigen Frames geteilt ({{count}})',
+      sharedElsewhereReload:
+        'Ein Speichern in einem anderen Frame hat auch diesen geändert. Ihre ungespeicherten Änderungen blieben erhalten — laden Sie den Frame neu, um die Änderung zu sehen.',
     },
     status: {
       polygons: 'Polygone',

@@ -34,6 +34,7 @@ import {
   sparseFollowers,
   withMintedTrackIds,
   type ProjectablePolygon,
+  type Shift,
   type StaticChannelLike,
 } from './staticChannelProjection';
 
@@ -64,12 +65,20 @@ export interface ProjectStaticChannelOutcome {
   projected: number;
   /** Frames deliberately left for normal segmentation (unknown shift). */
   skipped: number;
+  /** The frame Image ids actually written, `projected` of them. A caller that
+   *  has to invalidate client state needs to know WHICH frames changed, not
+   *  just how many: a channel with partial coverage (`frameIds`) leaves the
+   *  rest of the container untouched, and so does a frame whose shift was not
+   *  recorded, so "all frames of the container" would be a claim about rows
+   *  this never wrote. */
+  projectedIds: string[];
 }
 
 const NOT_APPLIED: ProjectStaticChannelOutcome = {
   applied: false,
   projected: 0,
   skipped: 0,
+  projectedIds: [],
 };
 
 function parsePolygons(raw: string): ProjectablePolygon[] | null {
@@ -226,45 +235,103 @@ export async function projectStaticChannelResult(
       }
     }
 
-    let projected = 0;
+    // One transaction per CHUNK of frames, not one per frame. The statements
+    // are identical either way; what changes is 299 round trips and 299
+    // commits against 6 of each.
+    //
+    // Measured against a stock postgres:15 on containers seeded to the exact
+    // shape of the two this feature exists for (20 points per polyline, the
+    // median real centerline after RDP). Per-frame vs chunks of 50, two runs
+    // each in one session so the PAIR is comparable — the absolute figures move
+    // with machine load:
+    //
+    //   5ac61392  300 frames x  68 polylines   1715-1970 ms -> 1186-1296 ms
+    //   aafdf846  299 frames x 146 polylines   2620-3140 ms -> 2005-2108 ms
+    //
+    // What is left is the payload itself — ~26 MB of polygon JSON for the
+    // second container — so a larger chunk buys little; 50 bounds the
+    // transaction to ~100 statements and a few MB held at once. The same win
+    // applies to the queue path this module was written for.
+    const CHUNK = 50;
+    const writable = targets.filter(
+      (t): t is { target: (typeof targets)[number]['target']; delta: Shift } =>
+        t.delta !== null
+      // A target with no delta has an unknown offset — counted into `skipped`
+      // above and left to segment normally.
+    );
 
-    for (const { target, delta } of targets) {
-      if (!delta) {
-        // Unknown offset — counted into `skipped` above and left to segment
-        // normally.
-        continue;
+    const projectedIds: string[] = [];
+    for (let i = 0; i < writable.length; i += CHUNK) {
+      const slice = writable.slice(i, i + CHUNK);
+      // Build the copy ONCE per distinct shift rather than once per frame:
+      // every frame sharing a delta gets a byte-identical payload, and with
+      // alignment off there is exactly one delta — [0, 0] — for the whole
+      // container, which is every static channel in production today. Scoped
+      // to the chunk on purpose. With alignment ON every frame has its own
+      // delta and the cache never hits, so a call-wide map would retain one
+      // full payload per frame (~26 MB on the container measured below) where
+      // this retains only what the pending transaction already holds.
+      const payloadByShift = new Map<string, string>();
+      const payloadFor = (delta: Shift): string => {
+        const key = `${delta[0]},${delta[1]}`;
+        let cached = payloadByShift.get(key);
+        if (cached === undefined) {
+          cached = JSON.stringify(projectPolygons(polygons, delta));
+          payloadByShift.set(key, cached);
+        }
+        return cached;
+      };
+      const ops = slice.flatMap(({ target, delta }) => {
+        const payload = payloadFor(delta);
+        return [
+          prisma.segmentation.upsert({
+            where: { imageId: target.id },
+            create: {
+              imageId: target.id,
+              polygons: payload,
+              model: source.model,
+              threshold: source.threshold,
+              confidence: source.confidence,
+              imageWidth: source.imageWidth,
+              imageHeight: source.imageHeight,
+            },
+            update: {
+              polygons: payload,
+              model: source.model,
+              threshold: source.threshold,
+              confidence: source.confidence,
+              imageWidth: source.imageWidth,
+              imageHeight: source.imageHeight,
+            },
+          }),
+          prisma.image.update({
+            where: { id: target.id },
+            data: { segmentationStatus: 'segmented' },
+          }),
+        ];
+      });
+      try {
+        await prisma.$transaction(ops);
+      } catch (chunkErr) {
+        // Report what COMMITTED, not nothing. The chunks before this one are in
+        // the database, and a caller that is told "nothing applied" would leave
+        // its own view of those frames stale — the editor would keep painting
+        // the rows it was about to evict. Stop here rather than press on: a
+        // failing write is not likely to succeed 50 rows later, and an accurate
+        // partial answer beats a longer inaccurate one.
+        logger.error(
+          `Static channel projection stopped after ${projectedIds.length} frame(s): ${(chunkErr as Error).message}`,
+          chunkErr as Error,
+          'StaticChannelProjection',
+          { containerId, sourceImageId, channel }
+        );
+        break;
       }
-      const moved = projectPolygons(polygons, delta);
-      const payload = JSON.stringify(moved);
-
-      await prisma.$transaction([
-        prisma.segmentation.upsert({
-          where: { imageId: target.id },
-          create: {
-            imageId: target.id,
-            polygons: payload,
-            model: source.model,
-            threshold: source.threshold,
-            confidence: source.confidence,
-            imageWidth: source.imageWidth,
-            imageHeight: source.imageHeight,
-          },
-          update: {
-            polygons: payload,
-            model: source.model,
-            threshold: source.threshold,
-            confidence: source.confidence,
-            imageWidth: source.imageWidth,
-            imageHeight: source.imageHeight,
-          },
-        }),
-        prisma.image.update({
-          where: { id: target.id },
-          data: { segmentationStatus: 'segmented' },
-        }),
-      ]);
-      projected++;
+      // Recorded only after the chunk commits.
+      projectedIds.push(...slice.map(({ target }) => target.id));
     }
+    const projected = projectedIds.length;
+    const incomplete = projected < writable.length;
 
     logger.info(
       `${isSparse ? 'Sparse' : 'Static'} channel '${channel}': projected ${polygons.length} polyline(s) from frame ${sourceImageId} onto ${projected} frame(s)` +
@@ -279,8 +346,14 @@ export async function projectStaticChannelResult(
 
     // Frames left for normal segmentation still need the tracker, so only a
     // clean sweep suppresses it — and a sparse channel never does, because its
-    // real frames are genuinely different timepoints.
-    return { applied: !isSparse && skipped === 0, projected, skipped };
+    // real frames are genuinely different timepoints. A run that stopped part
+    // way through is not a clean sweep either.
+    return {
+      applied: !isSparse && skipped === 0 && !incomplete,
+      projected,
+      skipped,
+      projectedIds,
+    };
   } catch (err) {
     logger.error(
       `Static channel projection failed: ${(err as Error).message}`,

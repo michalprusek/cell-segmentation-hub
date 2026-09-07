@@ -800,6 +800,23 @@ describe('segmentation', () => {
     );
   });
 
+  it('updateSegmentationResults — carries staticShare through, and only when present', async () => {
+    // CLAUDE.md failure pattern #2: the backend exposes a field and the FE
+    // mapper drops it. This one drives the editor's cache eviction after a
+    // static-channel save, so losing it here leaves every sibling frame
+    // painting stale polygons until a full page reload.
+    mockAxiosInstance.put.mockResolvedValue(
+      ok({ polygons: [], staticShare: { frameIds: ['f2', 'f3'] } })
+    );
+    const shared = await c().updateSegmentationResults('img-1', []);
+    expect(shared.staticShare).toEqual({ frameIds: ['f2', 'f3'] });
+
+    mockAxiosInstance.put.mockResolvedValue(ok({ polygons: [] }));
+    const plain = await c().updateSegmentationResults('img-1', []);
+    // Absent, not `{ projected: 0 }` — the caller tests it for truthiness.
+    expect('staticShare' in plain).toBe(false);
+  });
+
   it('updateSegmentationResults — array data backward-compat branch', async () => {
     const polys = [{ id: 'p1', points: [{ x: 0, y: 0 }], type: 'external' }];
     mockAxiosInstance.put.mockResolvedValue(ok(polys));
