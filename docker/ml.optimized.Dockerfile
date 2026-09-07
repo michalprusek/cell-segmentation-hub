@@ -120,6 +120,15 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 # Copy application code
 COPY --chown=app:app backend/segmentation/ .
 
+# The Pillow decompression-bomb ceiling has ONE definition, and it lives beside
+# the Node-side video helpers because those are the other Pillow readers in the
+# project. Copied flat onto PYTHONPATH (=/app), the same way the essays image
+# takes `channel_registration.py` from that directory. A missing or mistyped
+# path here is not silent: `api/main.py` imports it at startup, so the
+# container fails to boot rather than quietly running the stock 89 Mpx limit
+# and refusing every large microscopy frame.
+COPY --chown=app:app backend/src/services/video/pythonHelpers/large_images.py ./large_images.py
+
 # Copy entrypoint script for automatic weight management
 COPY --chown=app:app <<'EOF' /app/docker-entrypoint.sh
 #!/bin/bash
