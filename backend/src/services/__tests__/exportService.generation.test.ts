@@ -736,6 +736,20 @@ describe('ExportService — generateNeuriteMetrics scale', () => {
     const passed = vi.mocked(computeNeuriteMetrics).mock.calls[0][0][0];
     expect(passed.pixelSizeUm).toBeNull();
   });
+
+  // NOT tested here, deliberately: whether a modal entry beats the PROJECT's
+  // stored calibration. That precedence is resolved one level up, at the
+  // `exportTasks.push` call site (`options.pixelToMicrometerScale ??
+  // project.pixelSizeUm`), so by the time it reaches this method the two are
+  // already one number and a test at this seam could not tell them apart — it
+  // would pass whichever way the `??` was written. A first draft of this file
+  // did exactly that and asserted nothing.
+  it('an image row still outranks whatever scale was resolved for the batch', async () => {
+    const svc = new ExportService();
+    await callGenerateNeurite(svc, [row(0.09)], 0.18);
+    const passed = vi.mocked(computeNeuriteMetrics).mock.calls[0][0][0];
+    expect(passed.pixelSizeUm).toBe(0.09);
+  });
 });
 
 describe('ExportService — generateMetrics dispatch', () => {

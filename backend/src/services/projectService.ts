@@ -413,6 +413,12 @@ export async function updateProject(
         title: data.title,
         description: data.description,
         ...(data.type !== undefined && { type: data.type }),
+        // `undefined` means "not in this PATCH"; `null` means "clear the
+        // calibration". Spreading on `!== undefined` keeps both, where a plain
+        // assignment would wipe the scale on every title edit.
+        ...(data.pixelSizeUm !== undefined && {
+          pixelSizeUm: data.pixelSizeUm,
+        }),
         updatedAt: new Date(),
       },
       include: {

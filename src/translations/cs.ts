@@ -267,6 +267,11 @@ export default {
       '{{count}} existujících segmentací nemusí odpovídat exportnímu formátu "{{type}}". Re-segmentujte pro aktualizaci metrik.',
     verified: 'Ověřeno',
     toggleVerified: 'Přepnout ověření',
+    pixelSize: 'Měřítko:',
+    pixelSizeUnset: 'µm/px',
+    pixelSizeAria: 'Měřítko snímků projektu v mikrometrech na pixel',
+    pixelSizeHint:
+      'Mikrometry na pixel pro tento projekt. Potřebné pro měření v µm; nechte prázdné, pokud není známé.',
     projectVerified: 'Projekt byl označen jako ověřený',
     projectUnverified: 'Označení ověření projektu bylo zrušeno',
     failedToUpdateVerified: 'Nepodařilo se aktualizovat stav ověření',

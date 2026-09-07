@@ -2815,6 +2815,21 @@ export class SegmentationService {
       throw new Error('Image not found');
     }
 
+    // The scale, image first then project. Nothing fills the image column —
+    // measured 2026-09-07, all 10 857 production rows have it null — so the
+    // project's value is what actually arrives; the image's is kept ahead of it
+    // so a calibrated ND2 can win in future without a second change here.
+    //
+    // No fallback below that, deliberately. The soma splitting this drives is
+    // h-maxima at 2 um depth in the distance transform, so a guessed scale does
+    // not give approximate somas, it gives confidently wrong ones. Without a
+    // scale `computeNeuriteFrame` skips the frame and the reason reaches the
+    // user, which is the honest outcome.
+    const projectScale = await this.prisma.project.findUnique({
+      where: { id: image.projectId },
+      select: { pixelSizeUm: true },
+    });
+
     const segmentation = await this.prisma.segmentation.findUnique({
       where: { imageId },
       select: { id: true, polygons: true },
@@ -2830,7 +2845,7 @@ export class SegmentationService {
         name: image.name,
         width: image.width,
         height: image.height,
-        pixelSizeUm: image.pixelSizeUm,
+        pixelSizeUm: image.pixelSizeUm ?? projectScale?.pixelSizeUm ?? null,
         originalPath: image.originalPath,
         segmentation: { polygons: segmentation.polygons },
       },

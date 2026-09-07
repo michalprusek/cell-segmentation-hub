@@ -490,6 +490,9 @@ export class ExportService {
           id: true,
           title: true,
           type: true, // drives metric export dispatcher
+          // The project's calibration, used when neither the image row nor the
+          // export modal supplies one. See `generateNeuriteMetrics`.
+          pixelSizeUm: true,
           images: {
             where: options.selectedImageIds
               ? { id: { in: options.selectedImageIds } }
@@ -760,7 +763,7 @@ export class ExportService {
             options.metricsFormats,
             options.neuriteMetrics,
             mlRequestGate,
-            options.pixelToMicrometerScale
+            options.pixelToMicrometerScale ?? project.pixelSizeUm ?? undefined
           ).then(() => {
             progressStep++;
             this.updateJobProgress(
@@ -1864,8 +1867,12 @@ export class ExportService {
      *  of a pixel size in practice: measured 2026-09-07, not one of the 10 857
      *  production images carries `pixelSizeUm` — the column is null for every
      *  row of every project type. Reading only the column would make this
-     *  export skip every frame with "pixel size unknown". `mtMetricsExporter`
-     *  already takes the modal's entry as its sole source; this matches it. */
+     *  export skip every frame with "pixel size unknown".
+     *
+     *  The caller resolves modal-entry THEN project calibration, so a scale
+     *  typed for this one export still wins over the stored one; the stored
+     *  value is what makes the export work without typing anything. Absent
+     *  both, the frame is skipped rather than guessed. */
     pixelToMicrometerScale?: number
   ): Promise<void> {
     try {

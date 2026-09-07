@@ -74,6 +74,10 @@ interface AdvancedExportDialogProps {
   projectName: string;
   /** Used to gate microtubule-specific export controls. */
   projectType?: string | null;
+  /** The project's stored µm/px, used to prefill the scale box. In practice
+   *  this is the ONLY source: measured 2026-09-07, no production image row
+   *  carries `pixelSizeUm`, so the image-derived auto-fill below never fires. */
+  projectPixelSizeUm?: number | null;
   images: ProjectImage[];
   selectedImageIds?: string[];
   onExportingChange?: (isExporting: boolean) => void;
@@ -119,6 +123,7 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
       projectId,
       projectName,
       projectType,
+      projectPixelSizeUm,
       images,
       selectedImageIds,
       onExportingChange,
@@ -224,12 +229,24 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
         const calibrated = images.find(
           img => typeof img.pixelSizeUm === 'number' && img.pixelSizeUm > 0
         );
-        if (calibrated?.pixelSizeUm) {
-          updateExportOptions({
-            pixelToMicrometerScale: calibrated.pixelSizeUm,
-          });
+        // Image first, project second — an image that carries its own
+        // calibration is more specific than the project's. The backend applies
+        // the same precedence, so prefilling here shows the user the number the
+        // export would have used anyway rather than changing the outcome.
+        const prefill =
+          calibrated?.pixelSizeUm ??
+          (typeof projectPixelSizeUm === 'number' && projectPixelSizeUm > 0
+            ? projectPixelSizeUm
+            : undefined);
+        if (prefill) {
+          updateExportOptions({ pixelToMicrometerScale: prefill });
         }
-      }, [images, exportOptions.pixelToMicrometerScale, updateExportOptions]);
+      }, [
+        images,
+        projectPixelSizeUm,
+        exportOptions.pixelToMicrometerScale,
+        updateExportOptions,
+      ]);
 
       const handleExport = async () => {
         try {

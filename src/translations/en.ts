@@ -276,6 +276,11 @@ export default {
       '{{count}} existing segmentation(s) may no longer match the new "{{type}}" export format. Re-segment to refresh metrics.',
     verified: 'Verified',
     toggleVerified: 'Toggle verified',
+    pixelSize: 'Scale:',
+    pixelSizeUnset: 'µm/px',
+    pixelSizeAria: 'Project image scale in micrometres per pixel',
+    pixelSizeHint:
+      'Micrometres per pixel for this project. Needed for any measurement in µm; leave empty if unknown.',
     projectVerified: 'Project marked as verified',
     projectUnverified: 'Project verification removed',
     failedToUpdateVerified: 'Failed to update verification status',

@@ -63,6 +63,17 @@ export interface Project {
   image_count?: number;
   // "All annotations in the project have been reviewed and passed."
   verified?: boolean;
+  // µm per pixel for the whole project; null = not calibrated. Kept distinct
+  // from undefined and from 0 — every consumer refuses to compute rather than
+  // guess a scale.
+  //
+  // NOTE this interface is a SECOND `Project`, alongside the one in
+  // `@/types`; `mapProjectFields` returns this one while most components use
+  // that one, so a field has to be declared in BOTH or it type-errors at
+  // whichever call site reads the other. Same shape as the `Polygon` type
+  // proliferation recorded in CLAUDE.md; not unified here because that touches
+  // every consumer.
+  pixelSizeUm?: number | null;
 }
 
 /**
@@ -698,6 +709,12 @@ class ApiClient {
       updated_at:
         (project.updatedAt as string) || (project.updated_at as string),
       user_id: (project.userId as string) || (project.user_id as string),
+      // Listed HERE or it never reaches a component: this mapper is
+      // enumerative, which is the "FE mapper strips field" pattern in
+      // CLAUDE.md. `null` is preserved as null — it means "not calibrated" and
+      // must not collapse to undefined, which reads as "not sent".
+      pixelSizeUm:
+        typeof project.pixelSizeUm === 'number' ? project.pixelSizeUm : null,
     };
 
     // Add optional fields only if they exist
@@ -934,6 +951,8 @@ class ApiClient {
       name?: string;
       description?: string;
       type?: import('@/types').ProjectType;
+      /** µm per pixel for the whole project; `null` clears the calibration. */
+      pixelSizeUm?: number | null;
     }
   ): Promise<Project> {
     // Convert 'name' to 'title' if provided
