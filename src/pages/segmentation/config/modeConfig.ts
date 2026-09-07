@@ -20,6 +20,12 @@ export const MODE_BEHAVIOR_CONFIG = {
    * - AddPoints: user clicks polygon edges to add new vertices
    * - Slice: user clicks to place slice start/end points
    * - CreatePolygon / CreatePolyline: user clicks to place vertices
+   *
+   * MoveShape is deliberately NOT here. It is a single-gesture mode — press
+   * on a shape, drag, release — with nothing in flight that an empty-canvas
+   * click could abort, and its drag SELECTS whatever it grabs. Suppressing
+   * deselection would leave the user with no way to clear a selection without
+   * leaving the tool, for no benefit.
    */
   PREVENT_CANVAS_DESELECTION: [
     EditMode.AddPoints,

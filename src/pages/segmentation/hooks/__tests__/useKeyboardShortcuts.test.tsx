@@ -119,6 +119,27 @@ describe('useKeyboardShortcuts', () => {
       expect(props.setEditMode).not.toHaveBeenCalled();
     });
 
+    it('pressing M sets MoveShape mode, with NO selection required', () => {
+      // Unlike E and A: the mousedown that starts a translate selects the
+      // shape it grabbed, so gating M on a prior selection would make the
+      // tool unreachable from an empty canvas.
+      const props = makeProps({ selectedPolygonId: null });
+      renderHook(() => useKeyboardShortcuts(props));
+
+      pressKey('m');
+
+      expect(props.setEditMode).toHaveBeenCalledWith(EditMode.MoveShape);
+    });
+
+    it('pressing Ctrl+M does NOT set MoveShape mode (ctrl guard)', () => {
+      const props = makeProps();
+      renderHook(() => useKeyboardShortcuts(props));
+
+      pressKey('m', { ctrlKey: true });
+
+      expect(props.setEditMode).not.toHaveBeenCalled();
+    });
+
     it('pressing D sets DeletePolygon mode', () => {
       const props = makeProps();
       renderHook(() => useKeyboardShortcuts(props));
@@ -475,12 +496,17 @@ describe('useKeyboardShortcuts', () => {
   // -------------------------------------------------------------------------
   // Tab / Shift+Tab – cycleEditMode
   //
-  // No selection → cycle: [View, CreatePolygon, CreatePolyline, Slice, DeletePolygon]
-  // With selection → EditVertices + AddPoints are spliced in after View.
+  // No selection → cycle: [View, MoveShape, CreatePolygon, CreatePolyline,
+  //                         Slice, DeletePolygon]
+  // With selection → EditVertices lands before MoveShape and AddPoints after
+  // it, so the cycle matches the rail top to bottom.
   // -------------------------------------------------------------------------
 
   describe('Tab – cycleEditMode', () => {
-    it('Tab from View (no selection) advances to CreatePolygon', () => {
+    it('Tab from View (no selection) advances to MoveShape', () => {
+      // MoveShape is the first tool after View when nothing is selected: it
+      // selects the shape it grabs, so unlike EditVertices/AddPoints it is
+      // reachable with an empty selection.
       const props = makeProps({
         selectedPolygonId: null,
         editMode: EditMode.View,
@@ -489,7 +515,7 @@ describe('useKeyboardShortcuts', () => {
 
       pressKey('Tab');
 
-      expect(props.setEditMode).toHaveBeenCalledWith(EditMode.CreatePolygon);
+      expect(props.setEditMode).toHaveBeenCalledWith(EditMode.MoveShape);
     });
 
     it('Tab from View (with selection) advances to EditVertices (inserted first)', () => {
@@ -529,7 +555,7 @@ describe('useKeyboardShortcuts', () => {
       expect(props.setEditMode).toHaveBeenCalledWith(EditMode.View);
     });
 
-    it('Shift+Tab cycles backwards from CreatePolygon to View (no selection)', () => {
+    it('Shift+Tab cycles backwards from CreatePolygon to MoveShape (no selection)', () => {
       const props = makeProps({
         selectedPolygonId: null,
         editMode: EditMode.CreatePolygon,
@@ -538,7 +564,7 @@ describe('useKeyboardShortcuts', () => {
 
       pressKey('Tab', { shiftKey: true });
 
-      expect(props.setEditMode).toHaveBeenCalledWith(EditMode.View);
+      expect(props.setEditMode).toHaveBeenCalledWith(EditMode.MoveShape);
     });
 
     it('Shift+Tab from View (index 0) wraps to the last mode (no selection)', () => {

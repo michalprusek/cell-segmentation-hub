@@ -879,6 +879,7 @@ export default {
       view: '查看和导航',
       edit: '编辑',
       editVertices: '编辑顶点',
+      moveShape: '移动形状',
       addPoints: '添加点',
       create: '创建',
       createPolygon: '创建多边形',
@@ -931,7 +932,7 @@ export default {
       saving: '保存中...',
       save: '保存',
       keyboardShortcuts:
-        'V: 查看 • E: 编辑 • A: 添加 • N: 新建 • S: 切割 • D: 删除',
+        'V: 查看 • E: 编辑 • M: 移动 • A: 添加 • N: 新建 • S: 切割 • D: 删除',
       nothingToSave: '所有更改已保存',
       sharedAcrossFrames: '已保存并共享到其他帧（{{count}}）',
       sharedElsewhereReload:
@@ -976,6 +977,7 @@ export default {
       viewMode: '查看模式',
       editVertices: '编辑顶点模式',
       addPoints: '添加点模式',
+      moveShape: '移动形状模式',
       createPolygon: '创建新多边形',
       sliceMode: '切割模式',
       deleteMode: '删除模式',
@@ -1091,6 +1093,10 @@ export default {
         addPoints: '按住SHIFT并点击顶点以添加点',
         deleteVertex: '双击顶点删除它',
       },
+      moveShape: {
+        dragShape: '点击并拖动形状以移动它',
+        rigid: '整个形状一起移动 — 顶点之间的相对位置保持不变',
+      },
       deletePolygon: {
         clickToDelete: '点击多边形删除它',
       },
@@ -1104,6 +1110,7 @@ export default {
         createPolyline: '创建微管模式',
         addPoints: '点添加模式',
         editVertices: '顶点编辑模式',
+        moveShape: '移动模式',
         deletePolygon: '多边形删除模式',
         view: '查看模式',
       },

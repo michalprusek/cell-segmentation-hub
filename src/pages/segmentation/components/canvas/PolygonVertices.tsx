@@ -38,6 +38,7 @@ interface VertexWithMenuProps {
   isStartPoint: boolean;
   isUndoRedoInProgress: boolean;
   isInAddPointsMode: boolean;
+  isInMoveShapeMode: boolean;
   onDeleteVertex?: (polygonId: string, vertexIndex: number) => void;
 }
 
@@ -77,6 +78,7 @@ const VertexWithMenu = React.memo(function VertexWithMenu({
   isStartPoint,
   isUndoRedoInProgress,
   isInAddPointsMode,
+  isInMoveShapeMode,
   onDeleteVertex,
 }: VertexWithMenuProps) {
   const handleDelete = React.useCallback(
@@ -104,6 +106,7 @@ const VertexWithMenu = React.memo(function VertexWithMenu({
           isStartPoint={isStartPoint}
           isUndoRedoInProgress={isUndoRedoInProgress}
           isInAddPointsMode={isInAddPointsMode}
+          isInMoveShapeMode={isInMoveShapeMode}
         />
       </g>
     </VertexContextMenu>
@@ -216,6 +219,7 @@ const PolygonVertices = React.memo(
               isStartPoint={originalIndex === 0}
               isUndoRedoInProgress={isUndoRedoInProgress}
               isInAddPointsMode={editMode === EditMode.AddPoints}
+              isInMoveShapeMode={editMode === EditMode.MoveShape}
               onDeleteVertex={onDeleteVertex}
             />
           );

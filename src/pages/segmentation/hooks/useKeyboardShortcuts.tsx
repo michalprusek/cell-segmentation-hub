@@ -129,6 +129,16 @@ export const useKeyboardShortcuts = ({
           }
           break;
 
+        // Move: no selection gate. The mousedown that starts a translate
+        // selects whatever shape it grabbed, so the tool is usable from an
+        // empty selection — unlike E and A, which need a shape first.
+        case 'm':
+          if (!isCtrlPressed.current) {
+            event.preventDefault();
+            setEditMode(EditMode.MoveShape);
+          }
+          break;
+
         case 'n':
           if (!isCtrlPressed.current && geometry !== 'polyline') {
             event.preventDefault();
@@ -347,18 +357,20 @@ function cycleEditMode(
   reverse: boolean = false,
   geometry: AnnotationGeometry | null = null
 ) {
+  // Built in RAIL ORDER, so Tab walks the toolbar top to bottom. The two
+  // selection-gated tools are interleaved rather than appended, which is why
+  // this is a spread and not the `splice(1, 0, …)` it used to be: MoveShape
+  // sits BETWEEN them on the rail and needs no selection of its own.
   const allModes = [
     EditMode.View,
+    ...(selectedPolygonId ? [EditMode.EditVertices] : []),
+    EditMode.MoveShape,
+    ...(selectedPolygonId ? [EditMode.AddPoints] : []),
     ...(geometry === 'polyline' ? [] : [EditMode.CreatePolygon]),
     ...(geometry === 'polygon' ? [] : [EditMode.CreatePolyline]),
     EditMode.Slice, // Slice mode available always
     EditMode.DeletePolygon,
   ];
-
-  // Add selection-dependent modes if polygon is selected
-  if (selectedPolygonId) {
-    allModes.splice(1, 0, EditMode.EditVertices, EditMode.AddPoints);
-  }
 
   // A mode absent from the list — the filtered-out create mode, or a
   // selection-only mode after the selection was cleared — yields -1, and both

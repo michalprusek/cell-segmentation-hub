@@ -1076,4 +1076,93 @@ describe('CanvasPolygon', () => {
       expect(pathOf(container)).toBe('M0,0 L20,0 L30,0 Z');
     });
   });
+  // -------------------------------------------------------------------------
+  // The polyline hit-stroke advertises the move gesture — only where it exists
+  // -------------------------------------------------------------------------
+  describe('hit-stroke cursor', () => {
+    // `cursor: move` was unconditional, in every mode, on the invisible 12x
+    // hit stroke. It promised a gesture that only one mode has, on the
+    // microtubules users reported were "shifting by themselves".
+    const hitStroke = (container: HTMLElement) =>
+      container.querySelector('path[stroke="transparent"]') as SVGPathElement;
+
+    const renderPolyline = (editMode?: EditMode) =>
+      renderPolygonInSvg(
+        <CanvasPolygon
+          {...defaultProps}
+          polygon={createMockPolygon({
+            id: 'cursor-polyline',
+            geometry: 'polyline',
+            points: [
+              { x: 10, y: 10 },
+              { x: 40, y: 20 },
+              { x: 70, y: 15 },
+            ],
+          })}
+          editMode={editMode}
+        />
+      );
+
+    it('offers the move cursor in MoveShape mode', () => {
+      const { container } = renderPolyline(EditMode.MoveShape);
+      expect(hitStroke(container).style.cursor).toBe('move');
+    });
+
+    it.each([
+      EditMode.View,
+      EditMode.EditVertices,
+      EditMode.AddPoints,
+      EditMode.CreatePolyline,
+      EditMode.Slice,
+      EditMode.DeletePolygon,
+    ])('offers NO move cursor in %s', mode => {
+      const { container } = renderPolyline(mode);
+      expect(hitStroke(container).style.cursor).toBe('');
+    });
+
+    // The VISIBLE path is what the pointer actually meets — and for a closed
+    // polygon it is the only target at all, since there is no hit band. A
+    // cursor that lives only on a polyline's invisible halo is no affordance.
+    const visiblePath = (container: HTMLElement) =>
+      [...container.querySelectorAll('path')].find(
+        el => el.getAttribute('stroke') !== 'transparent'
+      ) as SVGPathElement;
+
+    it.each([
+      ['polyline', true],
+      ['polygon', false],
+    ])(
+      'gives the visible %s path the move cursor in MoveShape',
+      (_kind, poly) => {
+        const { container } = poly
+          ? renderPolyline(EditMode.MoveShape)
+          : renderPolygonInSvg(
+              <CanvasPolygon {...defaultProps} editMode={EditMode.MoveShape} />
+            );
+        const cls = visiblePath(container).getAttribute('class') ?? '';
+        expect(cls).toContain('cursor-move');
+        expect(cls).not.toContain('cursor-pointer');
+      }
+    );
+
+    it.each([EditMode.View, EditMode.EditVertices, EditMode.DeletePolygon])(
+      'keeps the plain pointer cursor on the visible path in %s',
+      mode => {
+        const { container } = renderPolygonInSvg(
+          <CanvasPolygon {...defaultProps} editMode={mode} />
+        );
+        const cls = visiblePath(container).getAttribute('class') ?? '';
+        expect(cls).toContain('cursor-pointer');
+        expect(cls).not.toContain('cursor-move');
+      }
+    );
+
+    it('offers no move cursor when the mode prop is absent', () => {
+      // `editMode` is optional on this component, and an undefined mode is not
+      // MoveShape — the cursor must fail closed rather than fall back to the
+      // old unconditional promise.
+      const { container } = renderPolyline(undefined);
+      expect(hitStroke(container).style.cursor).toBe('');
+    });
+  });
 });

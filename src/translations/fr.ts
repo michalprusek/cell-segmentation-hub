@@ -950,6 +950,7 @@ export default {
       view: 'Voir et naviguer',
       edit: 'Modifier',
       editVertices: 'Modifier les sommets',
+      moveShape: 'Déplacer la forme',
       addPoints: 'Ajouter des points',
       create: 'Créer',
       createPolygon: 'Créer un polygone',
@@ -1003,7 +1004,7 @@ export default {
       saving: 'Sauvegarde...',
       save: 'Sauvegarder',
       keyboardShortcuts:
-        'V: Voir • E: Modifier • A: Ajouter • N: Nouveau • S: Découper • D: Supprimer',
+        'V: Voir • E: Modifier • M: Déplacer • A: Ajouter • N: Nouveau • S: Découper • D: Supprimer',
       nothingToSave: 'Toutes les modifications sauvegardées',
       sharedAcrossFrames:
         'Enregistré et partagé avec les autres images ({{count}})',
@@ -1050,6 +1051,7 @@ export default {
       viewMode: 'Mode visualisation',
       editVertices: 'Mode édition des sommets',
       addPoints: 'Mode ajout de points',
+      moveShape: 'Mode déplacement de forme',
       createPolygon: 'Créer un nouveau polygone',
       sliceMode: 'Mode découpe',
       deleteMode: 'Mode suppression',
@@ -1179,6 +1181,11 @@ export default {
           'Maintenez SHIFT et cliquez sur un sommet pour ajouter des points',
         deleteVertex: 'Double-cliquez sur un sommet pour le supprimer',
       },
+      moveShape: {
+        dragShape: 'Cliquez et faites glisser une forme pour la déplacer',
+        rigid:
+          'La forme entière se déplace — les sommets gardent leurs positions relatives',
+      },
       deletePolygon: {
         clickToDelete: 'Cliquez sur un polygone pour le supprimer',
       },
@@ -1192,6 +1199,7 @@ export default {
         createPolyline: 'Mode création de microtubule',
         addPoints: 'Mode ajout de points',
         editVertices: 'Mode édition des sommets',
+        moveShape: 'Mode déplacement',
         deletePolygon: 'Mode suppression de polygone',
         view: 'Mode visualisation',
       },

@@ -183,6 +183,34 @@ describe('CanvasContainer', () => {
     });
   });
 
+  describe('Mode affordances', () => {
+    it('MoveShape shows the move cursor and its own border colour', () => {
+      // The cursor IS the affordance for this mode: its only gesture is
+      // "grab a shape and drag it", and every other mode falls through to
+      // crosshair/grab/pointer, none of which says that.
+      const { container } = render(
+        <CanvasContainer {...defaultProps} editMode={EditMode.MoveShape} />
+      );
+      const canvasContainer = container.firstChild as HTMLElement;
+
+      expect(canvasContainer).toHaveStyle({ cursor: 'move' });
+      // The border hue is the rail's cyan; sharing a colour with another mode
+      // is the confusion the amber/red swap already caused once.
+      expect(canvasContainer.className).toContain('border-cyan-500');
+    });
+
+    it.each([
+      [EditMode.View, 'grab'],
+      [EditMode.EditVertices, 'crosshair'],
+      [EditMode.DeletePolygon, 'pointer'],
+    ])('leaves %s on its own cursor (%s)', (mode, cursor) => {
+      const { container } = render(
+        <CanvasContainer {...defaultProps} editMode={mode} />
+      );
+      expect(container.firstChild as HTMLElement).toHaveStyle({ cursor });
+    });
+  });
+
   describe('Keyboard Event Handling', () => {
     it('sets up window event listeners on mount', () => {
       const addEventListenerSpy = vi.spyOn(window, 'addEventListener');

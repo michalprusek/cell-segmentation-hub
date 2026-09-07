@@ -945,6 +945,7 @@ export default {
       view: 'Ver y navegar',
       edit: 'Editar',
       editVertices: 'Editar vértices',
+      moveShape: 'Mover forma',
       addPoints: 'Añadir puntos',
       create: 'Crear',
       createPolygon: 'Crear polígono',
@@ -998,7 +999,7 @@ export default {
       saving: 'Guardando...',
       save: 'Guardar',
       keyboardShortcuts:
-        'V: Ver • E: Editar • A: Añadir • N: Nuevo • S: Cortar • D: Eliminar',
+        'V: Ver • E: Editar • M: Mover • A: Añadir • N: Nuevo • S: Cortar • D: Eliminar',
       nothingToSave: 'Todos los cambios guardados',
       sharedAcrossFrames:
         'Guardado y compartido con los demás fotogramas ({{count}})',
@@ -1045,6 +1046,7 @@ export default {
       viewMode: 'Modo vista',
       editVertices: 'Modo editar vértices',
       addPoints: 'Modo agregar puntos',
+      moveShape: 'Modo mover forma',
       createPolygon: 'Crear nuevo polígono',
       sliceMode: 'Modo cortar',
       deleteMode: 'Modo eliminar',
@@ -1172,6 +1174,11 @@ export default {
         addPoints: 'Mantén SHIFT y haz clic en un vértice para agregar puntos',
         deleteVertex: 'Doble clic en un vértice para eliminarlo',
       },
+      moveShape: {
+        dragShape: 'Haz clic y arrastra una forma para moverla',
+        rigid:
+          'Se mueve toda la forma: los vértices mantienen sus posiciones relativas',
+      },
       deletePolygon: {
         clickToDelete: 'Haz clic en un polígono para eliminarlo',
       },
@@ -1185,6 +1192,7 @@ export default {
         createPolyline: 'Modo crear microtúbulo',
         addPoints: 'Modo agregar puntos',
         editVertices: 'Modo editar vértices',
+        moveShape: 'Modo mover',
         deletePolygon: 'Modo eliminar polígono',
         view: 'Modo vista',
       },

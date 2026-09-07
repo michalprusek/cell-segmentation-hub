@@ -787,6 +787,7 @@ export default {
       view: 'Zobrazit a navigovat',
       edit: 'Upravit',
       editVertices: 'Upravit vrcholy',
+      moveShape: 'Přesunout tvar',
       addPoints: 'Přidat body',
       create: 'Vytvořit',
       createPolygon: 'Vytvořit polygon',
@@ -840,7 +841,7 @@ export default {
       saving: 'Ukládání...',
       save: 'Uložit',
       keyboardShortcuts:
-        'V: Zobrazit • E: Upravit • A: Přidat • N: Nový • S: Rozřezat • D: Smazat',
+        'V: Zobrazit • E: Upravit • M: Přesunout • A: Přidat • N: Nový • S: Rozřezat • D: Smazat',
       nothingToSave: 'Všechny změny uloženy',
       sharedAcrossFrames: 'Uloženo a sdíleno s ostatními snímky ({{count}})',
       sharedElsewhereReload:
@@ -886,6 +887,7 @@ export default {
       viewMode: 'Režim zobrazení',
       editVertices: 'Režim úpravy vrcholů',
       addPoints: 'Režim přidávání bodů',
+      moveShape: 'Režim přesouvání tvarů',
       createPolygon: 'Vytvořit nový polygon',
       sliceMode: 'Režim řezání',
       deleteMode: 'Režim mazání',
@@ -1009,6 +1011,10 @@ export default {
         addPoints: 'Držte SHIFT a klikněte na vrchol pro přidání bodů',
         deleteVertex: 'Dvojklik na vrchol pro jeho smazání',
       },
+      moveShape: {
+        dragShape: 'Klikněte na tvar a táhnutím jej přesuňte',
+        rigid: 'Přesune se celý tvar — vrcholy si zachovají vzájemné rozestupy',
+      },
       deletePolygon: {
         clickToDelete: 'Klikněte na polygon pro jeho smazání',
       },
@@ -1022,6 +1028,7 @@ export default {
         createPolyline: 'Režim tvorby mikrotubulu',
         addPoints: 'Režim přidávání bodů',
         editVertices: 'Režim úpravy vrcholů',
+        moveShape: 'Režim přesouvání',
         deletePolygon: 'Režim mazání polygonu',
         view: 'Režim zobrazení',
       },
