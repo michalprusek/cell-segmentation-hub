@@ -26,6 +26,10 @@ describe('Canvas deselection prevention', () => {
   it('allows deselection in view and single-click modes', () => {
     expect(shouldPreventCanvasDeselection(EditMode.View)).toBe(false);
     expect(shouldPreventCanvasDeselection(EditMode.EditVertices)).toBe(false);
+    // MoveShape is one press-drag-release; nothing is in flight for an
+    // empty-canvas click to abort, and suppressing deselection would leave no
+    // way to clear a selection without leaving the tool.
+    expect(shouldPreventCanvasDeselection(EditMode.MoveShape)).toBe(false);
     expect(shouldPreventCanvasDeselection(EditMode.DeletePolygon)).toBe(false);
   });
 
@@ -48,6 +52,7 @@ describe('Canvas deselection prevention', () => {
       [
         EditMode.View,
         EditMode.EditVertices,
+        EditMode.MoveShape,
         EditMode.AddPoints,
         EditMode.CreatePolygon,
         EditMode.CreatePolyline,

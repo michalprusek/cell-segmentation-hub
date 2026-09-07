@@ -12,6 +12,7 @@
  *  - isDragging + dragOffset propagate to the right CanvasVertex
  *  - isUndoRedoInProgress propagates
  *  - editMode=AddPoints propagates isInAddPointsMode=true
+ *  - editMode=MoveShape propagates isInMoveShapeMode=true (cursor affordance)
  *  - onDeleteVertex called with polygonId+index via VertexContextMenu
  *
  * Skipped (Radix focus-race / portal):
@@ -42,6 +43,7 @@ vi.mock('../CanvasVertex', () => ({
     isStartPoint,
     isUndoRedoInProgress,
     isInAddPointsMode,
+    isInMoveShapeMode,
     dragOffset,
     point,
   }: {
@@ -53,6 +55,7 @@ vi.mock('../CanvasVertex', () => ({
     isStartPoint: boolean;
     isUndoRedoInProgress: boolean;
     isInAddPointsMode: boolean;
+    isInMoveShapeMode: boolean;
     dragOffset?: { x: number; y: number };
     point: Point;
   }) => (
@@ -66,6 +69,7 @@ vi.mock('../CanvasVertex', () => ({
       data-is-start-point={String(isStartPoint)}
       data-undo-redo={String(isUndoRedoInProgress)}
       data-add-points-mode={String(isInAddPointsMode)}
+      data-move-shape-mode={String(isInMoveShapeMode)}
       data-drag-offset-x={dragOffset?.x ?? ''}
       data-drag-offset-y={dragOffset?.y ?? ''}
       cx={point.x}
@@ -426,6 +430,23 @@ describe('PolygonVertices', () => {
       );
       screen.getAllByTestId(/^vertex-/).forEach(v => {
         expect(v).toHaveAttribute('data-add-points-mode', 'false');
+      });
+    });
+  });
+
+  describe('isInMoveShapeMode from editMode', () => {
+    it.each([
+      [EditMode.MoveShape, 'true'],
+      [EditMode.EditVertices, 'false'],
+      [EditMode.View, 'false'],
+    ])('editMode=%s -> data-move-shape-mode=%s', (mode, expected) => {
+      render(
+        <svg>
+          <PolygonVertices {...DEFAULT_PROPS} editMode={mode} />
+        </svg>
+      );
+      screen.getAllByTestId(/^vertex-/).forEach(v => {
+        expect(v).toHaveAttribute('data-move-shape-mode', expected);
       });
     });
   });

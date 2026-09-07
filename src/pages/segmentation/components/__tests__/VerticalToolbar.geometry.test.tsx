@@ -57,6 +57,7 @@ const railLabels = () =>
 const ALWAYS = [
   'segmentation.mode.view',
   'segmentation.mode.editVertices',
+  'segmentation.mode.moveShape',
   'segmentation.mode.addPoints',
   'segmentation.mode.slice',
   'segmentation.mode.deletePolygon',

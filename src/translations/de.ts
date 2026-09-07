@@ -952,6 +952,7 @@ export default {
       view: 'Anzeigen und navigieren',
       edit: 'Bearbeiten',
       editVertices: 'Eckpunkte bearbeiten',
+      moveShape: 'Form verschieben',
       addPoints: 'Punkte hinzufügen',
       create: 'Erstellen',
       createPolygon: 'Polygon erstellen',
@@ -1005,7 +1006,7 @@ export default {
       saving: 'Speichern...',
       save: 'Speichern',
       keyboardShortcuts:
-        'V: Anzeigen • E: Bearbeiten • A: Hinzufügen • N: Neu • S: Schneiden • D: Löschen',
+        'V: Anzeigen • E: Bearbeiten • M: Verschieben • A: Hinzufügen • N: Neu • S: Schneiden • D: Löschen',
       nothingToSave: 'Alle Änderungen gespeichert',
     },
     status: {
@@ -1048,6 +1049,7 @@ export default {
       viewMode: 'Ansichtsmodus',
       editVertices: 'Eckpunkte bearbeiten-Modus',
       addPoints: 'Punkte hinzufügen-Modus',
+      moveShape: 'Form-Verschieben-Modus',
       createPolygon: 'Neues Polygon erstellen',
       sliceMode: 'Schnitt-Modus',
       deleteMode: 'Lösch-Modus',
@@ -1179,6 +1181,11 @@ export default {
           'SHIFT halten und auf einen Eckpunkt klicken, um Punkte hinzuzufügen',
         deleteVertex: 'Doppelklick auf einen Eckpunkt, um ihn zu löschen',
       },
+      moveShape: {
+        dragShape: 'Klicken und ziehen Sie eine Form, um sie zu verschieben',
+        rigid:
+          'Die gesamte Form bewegt sich — die Eckpunkte behalten ihre Lage zueinander',
+      },
       deletePolygon: {
         clickToDelete: 'Klicken Sie auf ein Polygon, um es zu löschen',
       },
@@ -1192,6 +1199,7 @@ export default {
         createPolyline: 'Mikrotubulus-Erstellmodus',
         addPoints: 'Punkte-Hinzufüge-Modus',
         editVertices: 'Eckpunkt-Bearbeitungs-Modus',
+        moveShape: 'Verschiebe-Modus',
         deletePolygon: 'Polygon-Lösch-Modus',
         view: 'Ansichts-Modus',
       },

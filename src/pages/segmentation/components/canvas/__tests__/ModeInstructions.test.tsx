@@ -16,6 +16,8 @@
  *  - AddPoints mode, isAddingPoints=true: shows "add points" instruction
  *  - EditVertices mode without polygon: shows "select polygon" instruction
  *  - EditVertices mode with polygon: shows "drag vertices" instruction
+ *  - MoveShape mode: shows the drag-to-move instruction, with or without a
+ *    selection (the drag selects what it grabs, so there is no "select first")
  *  - DeletePolygon mode: shows "click on a polygon to delete it" instruction
  *  - Shift indicator shown only during CreatePolygon with isShiftPressed=true
  *  - Shift indicator shown during AddPoints + isAddingPoints + isShiftPressed
@@ -332,6 +334,44 @@ describe('ModeInstructions', () => {
         />
       );
       expect(screen.getByText('Edit Vertices Mode')).toBeInTheDocument();
+    });
+  });
+
+  describe('MoveShape mode', () => {
+    it('title is "Move Mode"', () => {
+      render(
+        <ModeInstructions {...defaultProps} editMode={EditMode.MoveShape} />
+      );
+      expect(screen.getByText('Move Mode')).toBeInTheDocument();
+    });
+
+    it.each([null, 'poly-1'])(
+      'shows the drag-to-move instruction with selection %s',
+      selectedPolygonId => {
+        // Unlike EditVertices there is no "select a polygon first" variant:
+        // the mousedown that starts a translate selects the shape it grabbed.
+        render(
+          <ModeInstructions
+            {...defaultProps}
+            editMode={EditMode.MoveShape}
+            selectedPolygonId={selectedPolygonId}
+          />
+        );
+        expect(
+          screen.getByText('Click and drag a shape to move it')
+        ).toBeInTheDocument();
+      }
+    );
+
+    it('says the shape stays rigid, so it is not confused with vertex editing', () => {
+      render(
+        <ModeInstructions {...defaultProps} editMode={EditMode.MoveShape} />
+      );
+      expect(
+        screen.getByText(
+          'The whole shape moves — vertices keep their positions relative to each other'
+        )
+      ).toBeInTheDocument();
     });
   });
 
