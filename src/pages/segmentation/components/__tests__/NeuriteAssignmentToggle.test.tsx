@@ -31,6 +31,9 @@ function setup(
       colorBySoma={false}
       onSetColorBySoma={onSetColorBySoma}
       unassignedCount={0}
+      onAssign={vi.fn()}
+      isAssigning={false}
+      canAssign
       {...props}
     />
   );
@@ -64,6 +67,60 @@ describe('NeuriteAssignmentToggle', () => {
     setup({ colorBySoma: true, unassignedCount: 7 });
     expect(unassigned()).toBeTruthy();
     expect(unassigned()!.textContent).toContain('7');
+  });
+
+  it('runs the assignment when the button is pressed', async () => {
+    const user = userEvent.setup();
+    const onAssign = vi.fn();
+    render(
+      <NeuriteAssignmentToggle
+        colorBySoma={false}
+        onSetColorBySoma={vi.fn()}
+        unassignedCount={0}
+        onAssign={onAssign}
+        isAssigning={false}
+        canAssign
+      />
+    );
+
+    await user.click(screen.getByRole('button'));
+    expect(onAssign).toHaveBeenCalledTimes(1);
+  });
+
+  it('is disabled while a run is in flight', async () => {
+    // One run per frame takes tens of seconds on a large confocal field, and
+    // the endpoint serialises on a single-slot executor — a second click would
+    // only queue work behind the first.
+    const user = userEvent.setup();
+    const onAssign = vi.fn();
+    render(
+      <NeuriteAssignmentToggle
+        colorBySoma={false}
+        onSetColorBySoma={vi.fn()}
+        unassignedCount={0}
+        onAssign={onAssign}
+        isAssigning
+        canAssign
+      />
+    );
+
+    expect(screen.getByRole('button')).toBeDisabled();
+    await user.click(screen.getByRole('button'));
+    expect(onAssign).not.toHaveBeenCalled();
+  });
+
+  it('is disabled when the frame has no neurites to assign', () => {
+    render(
+      <NeuriteAssignmentToggle
+        colorBySoma={false}
+        onSetColorBySoma={vi.fn()}
+        unassignedCount={0}
+        onAssign={vi.fn()}
+        isAssigning={false}
+        canAssign={false}
+      />
+    );
+    expect(screen.getByRole('button')).toBeDisabled();
   });
 
   it('says nothing when every neurite was assigned', () => {

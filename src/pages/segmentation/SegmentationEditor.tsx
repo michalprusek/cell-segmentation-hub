@@ -19,6 +19,7 @@ import useDebounce from '@/hooks/useDebounce';
 import { polygonKey } from '@/lib/segmentation';
 import apiClient, { SegmentationPolygon } from '@/lib/api';
 import { toast } from 'sonner';
+import { getErrorMessage } from '@/types';
 import { logger } from '@/lib/logger';
 import { handleCancelledError } from '@/lib/errorUtils';
 import { transformSegmentationPolygons } from './utils/transformSegmentationPolygons';
@@ -782,6 +783,39 @@ const SegmentationEditor = () => {
       localStorage.setItem('neuriteColorBySoma', String(on));
     }
   }, []);
+
+  const [isAssigningNeurites, setIsAssigningNeurites] = useState(false);
+  const handleAssignNeurites = useCallback(async () => {
+    if (!imageId) return;
+    setIsAssigningNeurites(true);
+    try {
+      const result = await apiClient.assignNeuriteSomas(imageId);
+      // Reload rather than patch local state: the server is what decides the
+      // assignment, and a locally-applied guess would diverge from it the
+      // moment a polygon was attributed differently than expected.
+      await reloadSegmentation();
+      // Turn the colouring ON after a successful run. The user has just asked
+      // for an assignment; showing it in the colouring that does not display
+      // one would hide the very thing they waited for.
+      handleSetColorBySoma(true);
+      toast.success(
+        t('segmentation.neurite.assignDone', {
+          assigned: result.assigned,
+          unassigned: result.unassigned,
+        })
+      );
+    } catch (error) {
+      toast.error(
+        // `String(t(key))` because this file's `t` can answer a string ARRAY
+        // (plural forms), which `getErrorMessage` does not accept — the same
+        // adaptation `ProjectDetail` makes at its second call site.
+        getErrorMessage(error, key => String(t(key))) ||
+          String(t('segmentation.neurite.assignFailed'))
+      );
+    } finally {
+      setIsAssigningNeurites(false);
+    }
+  }, [imageId, reloadSegmentation, handleSetColorBySoma, t]);
 
   // Pure render-derivation pipeline (polyline/instance discrimination, legacy
   // edit-mode booleans, hidden/degenerate polygon filter — no viewport culling).
@@ -1647,6 +1681,8 @@ const SegmentationEditor = () => {
         mtColorMode={mtColorMode}
         colorBySoma={colorBySoma}
         onSetColorBySoma={handleSetColorBySoma}
+        onAssignNeurites={handleAssignNeurites}
+        isAssigningNeurites={isAssigningNeurites}
         onSetMtColorMode={handleSetMtColorMode}
         onChangeMtType={handleChangeMtType}
         onCreateMtLabel={handleCreateMtLabel}

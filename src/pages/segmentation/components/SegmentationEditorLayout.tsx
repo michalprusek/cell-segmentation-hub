@@ -175,6 +175,8 @@ export interface SegmentationEditorLayoutProps {
   /** Colour neurites by their soma. Neurite projects only. */
   colorBySoma: boolean;
   onSetColorBySoma: (on: boolean) => void;
+  onAssignNeurites: () => void;
+  isAssigningNeurites: boolean;
   onSetMtColorMode: (mode: 'instance' | 'semantic') => void;
   onChangeMtType: (polygonId: string, mtType: string | null) => void;
   onCreateMtLabel: (name: string, color: string) => Promise<MTTypeLabel | null>;
@@ -273,6 +275,8 @@ const SegmentationEditorLayout: React.FC<SegmentationEditorLayoutProps> = ({
   mtColorMode,
   colorBySoma,
   onSetColorBySoma,
+  onAssignNeurites,
+  isAssigningNeurites,
   onSetMtColorMode,
   onChangeMtType,
   onCreateMtLabel,
@@ -715,6 +719,11 @@ const SegmentationEditorLayout: React.FC<SegmentationEditorLayoutProps> = ({
                     unassignedCount={
                       editor.polygons.filter(isUnassignedNeurite).length
                     }
+                    onAssign={onAssignNeurites}
+                    isAssigning={isAssigningNeurites}
+                    canAssign={editor.polygons.some(
+                      p => p.partClass === 'neurite'
+                    )}
                   />
                 )}
                 {hasPolylines && polylineKind === 'microtubule' && (

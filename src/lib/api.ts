@@ -1962,6 +1962,29 @@ class ApiClient {
   }
 
   /**
+   * Compute which soma each neurite belongs to and store it on the polygons.
+   *
+   * Runs on the image's CURRENT polygons, so re-running after a correction
+   * reassigns what the user actually drew. `classify` defaults to true on the
+   * server; passing false over-reports connections between cells and should
+   * only come from an explicit choice.
+   */
+  async assignNeuriteSomas(
+    imageId: string,
+    options: { classify?: boolean } = {}
+  ): Promise<{ assigned: number; unassigned: number; changed: number }> {
+    const response = await this.instance.post(
+      `/segmentation/${imageId}/assign-neurites`,
+      options.classify === undefined ? {} : { classify: options.classify }
+    );
+    return this.extractData(response) as {
+      assigned: number;
+      unassigned: number;
+      changed: number;
+    };
+  }
+
+  /**
    * Set (or clear, with `mtType: null`) the microtubule type-label id on one or
    * more whole tracks across a video. Returns how many frames were written.
    */

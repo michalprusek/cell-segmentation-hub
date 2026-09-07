@@ -730,6 +730,12 @@ export default {
   segmentation: {
     // Neurite-only editor controls.
     neurite: {
+      assignDone:
+        'Přiřazeno {{assigned}} neuritů, {{unassigned}} se nepodařilo',
+      assignFailed: 'Přiřazení neuritů se nepodařilo',
+      assign: 'Přiřadit neurity k buňkám',
+      assignHint:
+        'Počítá z polygonů v aktuálním stavu, takže opravy se promítnou.',
       colorBySoma: 'Obarvit podle buňky',
       unassignedCount: '{{count}} neurit se nepodařilo přiřadit k buňce',
       unassignedCount_other: '{{count}} neuritů se nepodařilo přiřadit k buňce',

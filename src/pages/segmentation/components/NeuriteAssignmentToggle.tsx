@@ -1,6 +1,7 @@
 import React from 'react';
-import { Palette } from 'lucide-react';
+import { Palette, Loader2, Wand2 } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
+import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { useLanguage } from '@/contexts/useLanguage';
 
@@ -9,6 +10,11 @@ export interface NeuriteAssignmentToggleProps {
   onSetColorBySoma: (on: boolean) => void;
   /** Neurites carrying no `somaId`. Shown because it is a MEASUREMENT. */
   unassignedCount: number;
+  /** Run the pipeline on the CURRENT polygons and store the result. */
+  onAssign: () => void;
+  isAssigning: boolean;
+  /** Nothing to assign — no neurite polygons on this frame. */
+  canAssign: boolean;
 }
 
 /**
@@ -30,6 +36,9 @@ const NeuriteAssignmentToggle: React.FC<NeuriteAssignmentToggleProps> = ({
   colorBySoma,
   onSetColorBySoma,
   unassignedCount,
+  onAssign,
+  isAssigning,
+  canAssign,
 }) => {
   const { t } = useLanguage();
 
@@ -56,6 +65,23 @@ const NeuriteAssignmentToggle: React.FC<NeuriteAssignmentToggleProps> = ({
           })}
         </p>
       )}
+      <Button
+        variant="outline"
+        size="sm"
+        className="mt-3 w-full"
+        onClick={onAssign}
+        disabled={isAssigning || !canAssign}
+      >
+        {isAssigning ? (
+          <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+        ) : (
+          <Wand2 className="mr-2 h-3.5 w-3.5" />
+        )}
+        {t('segmentation.neurite.assign')}
+      </Button>
+      <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+        {t('segmentation.neurite.assignHint')}
+      </p>
     </div>
   );
 };

@@ -891,6 +891,12 @@ export default {
   segmentation: {
     // Neurite-only editor controls.
     neurite: {
+      assignDone:
+        "{{assigned}} neurites attribuées, {{unassigned}} n'ont pas pu l'être",
+      assignFailed: "Impossible d'attribuer les neurites",
+      assign: 'Attribuer les neurites aux cellules',
+      assignHint:
+        "S'exécute sur les polygones dans leur état actuel, les corrections sont donc prises en compte.",
       colorBySoma: 'Colorer par cellule',
       unassignedCount:
         "{{count}} neurite n'a pas pu être attribuée à une cellule",

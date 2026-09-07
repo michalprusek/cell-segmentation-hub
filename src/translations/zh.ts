@@ -829,6 +829,10 @@ export default {
   segmentation: {
     // Neurite-only editor controls.
     neurite: {
+      assignDone: '已归属 {{assigned}} 条神经突，{{unassigned}} 条未能归属',
+      assignFailed: '神经突归属失败',
+      assign: '将神经突归属到细胞',
+      assignHint: '基于当前状态的多边形运行，因此包含你的修改。',
       colorBySoma: '按细胞着色',
       unassignedCount: '{{count}} 条神经突无法归属到任何细胞',
       unassignedCount_other: '{{count}} 条神经突无法归属到任何细胞',
