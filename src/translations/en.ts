@@ -917,6 +917,13 @@ export default {
       zoomOut: 'Zoom Out',
       resetViewTooltip: 'Reset View (R)',
       resetView: 'Reset',
+      leaveConfirmTitle: 'Save changes before leaving?',
+      leaveConfirmDescription:
+        'This frame has unsaved changes. If you leave without saving, they will be lost.',
+      saveAndLeave: 'Save and leave',
+      leaveWithoutSaving: 'Leave without saving',
+      saveBeforeLeaveFailed:
+        'Saving failed. Your changes are still here — try again, or leave without saving.',
       unsavedChanges: 'Unsaved changes',
       saving: 'Saving...',
       save: 'Save',

@@ -920,6 +920,13 @@ export default {
       zoomOut: '缩小',
       resetViewTooltip: '重置视图 (R)',
       resetView: '重置',
+      leaveConfirmTitle: '离开前保存更改？',
+      leaveConfirmDescription:
+        '此帧有未保存的更改。如果不保存就离开，更改将会丢失。',
+      saveAndLeave: '保存并离开',
+      leaveWithoutSaving: '不保存并离开',
+      saveBeforeLeaveFailed:
+        '保存失败。您的更改仍在此处 — 请重试，或不保存直接离开。',
       unsavedChanges: '未保存的更改',
       saving: '保存中...',
       save: '保存',
