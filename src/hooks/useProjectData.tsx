@@ -70,7 +70,8 @@ export const useProjectData = (
         // Fetch all images by making multiple requests if needed.
         // Backend max is 100 per request; we use lod: 'low' which
         // returns only metadata counts (no polygon arrays) — fast & light.
-        let allImages: any[] = [];
+        const allImages: any[] = [];
+        const seenImageIds = new Set<string>();
         let aggregatedChannels: string[] = [];
         let page = 1;
         let hasMore = true;
@@ -93,7 +94,20 @@ export const useProjectData = (
               break;
             }
 
-            allImages = [...allImages, ...imagesResponse.images];
+            // Dedupe across pages. The backend now paginates on a TOTAL,
+            // immutable order (createdAt + id), which is the actual fix for
+            // the duplicates — but offset pagination still cannot survive a
+            // row being INSERTED or DELETED between two page fetches, and an
+            // upload finishing mid-load does exactly that. Without this, the
+            // duplicate inflates `filteredImages.length` while
+            // `selectedImageIds` (a Set) collapses it, so "Select All 300
+            // images" selects 216 and the missing rows are unreachable.
+            for (const img of imagesResponse.images) {
+              if (!seenImageIds.has(img.id)) {
+                seenImageIds.add(img.id);
+                allImages.push(img);
+              }
+            }
             // BE recomputes projectChannels on every page (it queries all
             // containers, not just the page slice), so keeping the last
             // response's list is safe and avoids needing a separate fetch.

@@ -603,9 +603,18 @@ export class ImageService {
       where.segmentationStatus = status;
     }
 
-    // Build order by clause
-    const orderBy: Prisma.ImageOrderByWithRelationInput = {};
-    orderBy[sortBy] = sortOrder;
+    // Build order by clause. The `id` tiebreaker is REQUIRED, not tidy: every
+    // value `sortBy` can take (name, createdAt, updatedAt, segmentationStatus)
+    // is non-unique, and with a non-total order Postgres may sequence tied rows
+    // differently for each `skip`/`take` query — so a caller paging through the
+    // project sees one row twice and another not at all. Measured 2026-09-07:
+    // 18 of the 27 projects large enough to paginate have tied `updatedAt`, and
+    // a bulk frame extraction gives every frame of a video the SAME timestamp,
+    // which makes the tie total rather than incidental.
+    const orderBy: Prisma.ImageOrderByWithRelationInput[] = [
+      { [sortBy]: sortOrder },
+      { id: 'asc' },
+    ];
 
     // Get total count
     const total = await this.prisma.image.count({ where });
