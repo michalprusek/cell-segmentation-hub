@@ -123,6 +123,58 @@ describe('MicrotubuleInstancePanel — multi-select checkboxes', () => {
     expect(onSelectPolygon).not.toHaveBeenCalled();
   });
 
+  // Reported by a user 2026-09-07: "shift does not select several
+  // microtubules". Reproduced in production — the row IGNORED the modifier and
+  // REPLACED the selection, so building a set in the list yielded exactly one
+  // MT however many were clicked, while the SAME gesture on the canvas worked.
+  // That asymmetry is why it read as "works for me".
+  describe('Shift+click on a row', () => {
+    it('adds to the multi-selection instead of replacing it', () => {
+      const { onToggleSelected, onSelectPolygon } = renderPanel();
+      fireEvent.click(screen.getByRole('button', { name: /Microtubule 2/ }), {
+        shiftKey: true,
+      });
+      expect(onToggleSelected).toHaveBeenCalledWith('mtB');
+      // The single-select path must NOT also fire, or the toggle is undone.
+      expect(onSelectPolygon).not.toHaveBeenCalledWith('mtB');
+    });
+
+    it('ABSORBS the currently single-selected MT into the set', () => {
+      // The canvas does this via `planAdditiveToggle`, and the list now calls
+      // the same function. Without it the previously selected MT is left
+      // behind as a separate selection and the bulk action misses it.
+      const { onToggleSelected, onSelectPolygon } = renderPanel({
+        selectedPolygonId: 'mtA',
+      });
+      fireEvent.click(screen.getByRole('button', { name: /Microtubule 2/ }), {
+        shiftKey: true,
+      });
+      expect(onSelectPolygon).toHaveBeenCalledWith(null);
+      expect(onToggleSelected).toHaveBeenCalledWith('mtA');
+      expect(onToggleSelected).toHaveBeenCalledWith('mtB');
+    });
+
+    it('shift-clicking the single-selected row just clears it', () => {
+      // Absorbing then toggling the same MT would cancel out and read as a
+      // dead click.
+      const { onToggleSelected, onSelectPolygon } = renderPanel({
+        selectedPolygonId: 'mtA',
+      });
+      fireEvent.click(screen.getByRole('button', { name: /Microtubule 1/ }), {
+        shiftKey: true,
+      });
+      expect(onSelectPolygon).toHaveBeenCalledWith(null);
+      expect(onToggleSelected).not.toHaveBeenCalled();
+    });
+
+    it('a PLAIN click still single-selects', () => {
+      const { onToggleSelected, onSelectPolygon } = renderPanel();
+      fireEvent.click(screen.getByRole('button', { name: /Microtubule 2/ }));
+      expect(onSelectPolygon).toHaveBeenCalledWith('mtB');
+      expect(onToggleSelected).not.toHaveBeenCalled();
+    });
+  });
+
   it('header select-all calls onSelectAll with every MT id when none selected', () => {
     const { onSelectAll } = renderPanel();
     fireEvent.click(screen.getByRole('checkbox', { name: /select all/i }));

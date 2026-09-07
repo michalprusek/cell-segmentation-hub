@@ -1,6 +1,7 @@
 import React, { useDeferredValue, useMemo, useState } from 'react';
 import { Spline, Eye, EyeOff, Trash2, Tag, Plus, Pencil } from 'lucide-react';
 import { useLanguage } from '@/contexts/useLanguage';
+import { planAdditiveToggle } from '../utils/multiSelect';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Polygon } from '@/lib/segmentation';
 import type { MTTypeLabel } from '@/lib/api';
@@ -356,7 +357,30 @@ const MicrotubuleInstancePanel: React.FC<MicrotubuleInstancePanelProps> = ({
                 <button
                   type="button"
                   className={`flex min-w-0 flex-1 items-center gap-2 rounded py-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${isHidden ? 'opacity-50' : ''}`}
-                  onClick={() => onSelectPolygon(isSelected ? null : mt.id)}
+                  onClick={e => {
+                    // Shift+click adds to the multi-selection, exactly as it
+                    // does on the CANVAS. Without this the row ignored the
+                    // modifier and REPLACED the selection, so a user building
+                    // a set in the list got one microtubule no matter how many
+                    // they clicked — while the same gesture on the picture
+                    // worked, which is why it read as "works for me".
+                    if (e.shiftKey && onToggleSelected) {
+                      // `planAdditiveToggle` rather than a bare toggle: it is
+                      // the SAME function the canvas uses, so the two surfaces
+                      // cannot drift. It also ABSORBS the currently
+                      // single-selected microtubule into the set, which a bare
+                      // toggle would leave behind as a separate selection.
+                      const plan = planAdditiveToggle(selectedPolygonId, mt.id);
+                      if (plan.clearSingle) {
+                        onSelectPolygon(null);
+                      }
+                      for (const id of plan.toggle) {
+                        onToggleSelected(id);
+                      }
+                      return;
+                    }
+                    onSelectPolygon(isSelected ? null : mt.id);
+                  }}
                 >
                   <span
                     className="inline-block w-3 h-3 rounded-sm border border-black/10 dark:border-white/10 flex-shrink-0"
