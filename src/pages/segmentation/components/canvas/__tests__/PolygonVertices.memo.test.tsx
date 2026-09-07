@@ -181,38 +181,51 @@ describe('PolygonVertices – memo comparator branches', () => {
 
   // ── viewportBounds changes ──────────────────────────────────────────────────
 
+  // A vertex now sits behind its own memo boundary (`VertexWithMenu` in
+  // PolygonVertices.tsx), so "a vertex re-rendered" is no longer a proxy for
+  // "the PolygonVertices comparator returned false" — a prop that changes
+  // nothing about any individual vertex reaches no vertex at all. These
+  // three assert the comparator branch through the culling it drives, which
+  // is strictly stronger: the visible SET can only change if the comparator
+  // let the re-render through. `CULLING_BOUNDS` is far enough from the
+  // fixture points (0,0)-(20,20) to clear the 100 px buffer.
+  const CULLING_BOUNDS = { x: 500, y: 500, width: 100, height: 100 };
+  const renderedVertexIds = (container: HTMLElement) =>
+    Array.from(container.querySelectorAll('[data-testid^="vertex-"]')).map(el =>
+      el.getAttribute('data-testid')
+    );
+
   describe('viewportBounds comparator', () => {
     it('re-renders when viewportBounds changes from undefined to a value', () => {
-      const { rerender } = render(
+      const { container, rerender } = render(
         <svg>
           <PolygonVertices {...DEFAULT_PROPS} viewportBounds={undefined} />
         </svg>
       );
 
-      const firstRenderCount = renderCount;
+      expect(renderedVertexIds(container)).toEqual([
+        'vertex-0',
+        'vertex-1',
+        'vertex-2',
+      ]);
 
       rerender(
         <svg>
-          <PolygonVertices
-            {...DEFAULT_PROPS}
-            viewportBounds={{ x: 0, y: 0, width: 100, height: 100 }}
-          />
+          <PolygonVertices {...DEFAULT_PROPS} viewportBounds={CULLING_BOUNDS} />
         </svg>
       );
 
-      expect(renderCount).toBeGreaterThan(firstRenderCount);
+      expect(renderedVertexIds(container)).toEqual([]);
     });
 
     it('re-renders when viewportBounds changes from a value to undefined', () => {
-      const bounds = { x: 0, y: 0, width: 100, height: 100 };
-
-      const { rerender } = render(
+      const { container, rerender } = render(
         <svg>
-          <PolygonVertices {...DEFAULT_PROPS} viewportBounds={bounds} />
+          <PolygonVertices {...DEFAULT_PROPS} viewportBounds={CULLING_BOUNDS} />
         </svg>
       );
 
-      const firstRenderCount = renderCount;
+      expect(renderedVertexIds(container)).toEqual([]);
 
       rerender(
         <svg>
@@ -220,7 +233,11 @@ describe('PolygonVertices – memo comparator branches', () => {
         </svg>
       );
 
-      expect(renderCount).toBeGreaterThan(firstRenderCount);
+      expect(renderedVertexIds(container)).toEqual([
+        'vertex-0',
+        'vertex-1',
+        'vertex-2',
+      ]);
     });
 
     it('does NOT re-render when viewportBounds object is identical (same coords)', () => {
@@ -248,7 +265,7 @@ describe('PolygonVertices – memo comparator branches', () => {
     });
 
     it('re-renders when viewportBounds coordinates change', () => {
-      const { rerender } = render(
+      const { container, rerender } = render(
         <svg>
           <PolygonVertices
             {...DEFAULT_PROPS}
@@ -257,18 +274,19 @@ describe('PolygonVertices – memo comparator branches', () => {
         </svg>
       );
 
-      const firstRenderCount = renderCount;
+      expect(renderedVertexIds(container)).toEqual([
+        'vertex-0',
+        'vertex-1',
+        'vertex-2',
+      ]);
 
       rerender(
         <svg>
-          <PolygonVertices
-            {...DEFAULT_PROPS}
-            viewportBounds={{ x: 10, y: 0, width: 100, height: 100 }}
-          />
+          <PolygonVertices {...DEFAULT_PROPS} viewportBounds={CULLING_BOUNDS} />
         </svg>
       );
 
-      expect(renderCount).toBeGreaterThan(firstRenderCount);
+      expect(renderedVertexIds(container)).toEqual([]);
     });
   });
 
@@ -533,8 +551,13 @@ describe('PolygonVertices – memo comparator branches', () => {
       expect(renderCount).toBeGreaterThan(firstRenderCount);
     });
 
-    it('re-renders when isHovered changes', () => {
-      const { rerender } = render(
+    it('costs no vertex render when isHovered changes', () => {
+      // `isHovered` is destructured as `_isHovered` — it is comparator-only,
+      // exactly like `isZooming`, and reaches no vertex. Before the per-vertex
+      // memo boundary a hover over the polygon re-rendered every vertex and
+      // its whole Radix context-menu tree for nothing. The set below is
+      // asserted too, so this cannot pass by rendering nothing.
+      const { container, rerender } = render(
         <svg>
           <PolygonVertices {...DEFAULT_PROPS} isHovered={false} />
         </svg>
@@ -548,7 +571,12 @@ describe('PolygonVertices – memo comparator branches', () => {
         </svg>
       );
 
-      expect(renderCount).toBeGreaterThan(firstRenderCount);
+      expect(renderCount).toBe(firstRenderCount);
+      expect(renderedVertexIds(container)).toEqual([
+        'vertex-0',
+        'vertex-1',
+        'vertex-2',
+      ]);
     });
 
     it('re-renders when isUndoRedoInProgress changes', () => {

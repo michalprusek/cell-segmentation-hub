@@ -363,7 +363,13 @@ describe('CanvasVertex', () => {
       );
 
       let vertex = document.querySelector('circle') as SVGCircleElement;
-      expect(vertex).toHaveStyle({ transition: 'all 0.15s ease-out' });
+      // Paint only — never `all`. `cx`/`cy` are SVG2 geometry properties and
+      // animate under `all`, so a dropped vertex glided into place instead of
+      // being there; see `vertexDragRendering.test.tsx`.
+      expect(vertex).toHaveStyle({
+        transition:
+          'fill 0.15s ease-out, r 0.15s ease-out, opacity 0.15s ease-out',
+      });
 
       rerender(
         <svg>

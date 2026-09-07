@@ -25,6 +25,94 @@ interface PolygonVerticesProps {
   isZooming?: boolean;
 }
 
+interface VertexWithMenuProps {
+  polygonId: string;
+  vertexIndex: number;
+  point: Point;
+  polygonType: 'external' | 'internal';
+  isSelected: boolean;
+  isHovered: boolean;
+  isDragging: boolean;
+  dragOffset?: { x: number; y: number };
+  zoom: number;
+  isStartPoint: boolean;
+  isUndoRedoInProgress: boolean;
+  isInAddPointsMode: boolean;
+  isInMoveShapeMode: boolean;
+  onDeleteVertex?: (polygonId: string, vertexIndex: number) => void;
+}
+
+/**
+ * One vertex plus its right-click menu, behind a memo boundary.
+ *
+ * This boundary is the whole point of the component. `PolygonVertices`
+ * re-renders on every frame of a drag (the drag offset changes), and it used
+ * to build a `<VertexContextMenu>` element per vertex inline, each with a
+ * freshly-allocated `onDelete` arrow. Every one of those re-rendered a full
+ * Radix `<ContextMenu>` tree — provider + `ContextMenuTrigger asChild` +
+ * `ContextMenuContent` — so a 4000-point microtubule polyline paid 4000 menu
+ * re-renders per pointer move to move ONE point. That, not the geometry, is
+ * what made dragging feel like it skipped.
+ *
+ * The boundary has to sit ABOVE the element creation: memoizing
+ * `VertexContextMenu` itself achieves nothing, because its `children` is a
+ * fresh React element on every render of whoever builds it, so the comparison
+ * can never bail out. Here every prop is a primitive, a value-stable object
+ * (`point` is the polygon's own point object; `dragOffset` is `undefined`
+ * except on the vertex actually being dragged) or an identity-stable callback
+ * (`onDeleteVertex` is a `useCallback(..., [])` in `usePolygonHandlers`), so
+ * the DEFAULT shallow comparison is both sufficient and complete by
+ * construction — no hand-written comparator to forget a prop in, which is a
+ * recurring bug in this file's neighbourhood.
+ */
+const VertexWithMenu = React.memo(function VertexWithMenu({
+  polygonId,
+  vertexIndex,
+  point,
+  polygonType,
+  isSelected,
+  isHovered,
+  isDragging,
+  dragOffset,
+  zoom,
+  isStartPoint,
+  isUndoRedoInProgress,
+  isInAddPointsMode,
+  isInMoveShapeMode,
+  onDeleteVertex,
+}: VertexWithMenuProps) {
+  const handleDelete = React.useCallback(
+    () => onDeleteVertex?.(polygonId, vertexIndex),
+    [onDeleteVertex, polygonId, vertexIndex]
+  );
+
+  return (
+    <VertexContextMenu
+      polygonId={polygonId}
+      vertexIndex={vertexIndex}
+      onDelete={handleDelete}
+    >
+      <g>
+        <CanvasVertex
+          point={point}
+          polygonId={polygonId}
+          vertexIndex={vertexIndex}
+          isSelected={isSelected}
+          isHovered={isHovered}
+          isDragging={isDragging}
+          dragOffset={dragOffset}
+          zoom={zoom}
+          type={polygonType}
+          isStartPoint={isStartPoint}
+          isUndoRedoInProgress={isUndoRedoInProgress}
+          isInAddPointsMode={isInAddPointsMode}
+          isInMoveShapeMode={isInMoveShapeMode}
+        />
+      </g>
+    </VertexContextMenu>
+  );
+});
+
 const PolygonVertices = React.memo(
   ({
     polygonId,
@@ -117,30 +205,23 @@ const PolygonVertices = React.memo(
             : undefined;
 
           return (
-            <VertexContextMenu
+            <VertexWithMenu
               key={`${polygonId}-vertex-${originalIndex}`}
               polygonId={polygonId}
               vertexIndex={originalIndex}
-              onDelete={() => onDeleteVertex?.(polygonId, originalIndex)}
-            >
-              <g>
-                <CanvasVertex
-                  point={point}
-                  polygonId={polygonId}
-                  vertexIndex={originalIndex}
-                  isSelected={isSelected || isMultiSelected}
-                  isHovered={isVertexHovered}
-                  isDragging={isDragging}
-                  dragOffset={dragOffset}
-                  zoom={zoom}
-                  type={polygonType}
-                  isStartPoint={originalIndex === 0}
-                  isUndoRedoInProgress={isUndoRedoInProgress}
-                  isInAddPointsMode={editMode === EditMode.AddPoints}
-                  isInMoveShapeMode={editMode === EditMode.MoveShape}
-                />
-              </g>
-            </VertexContextMenu>
+              point={point}
+              polygonType={polygonType}
+              isSelected={isSelected || isMultiSelected}
+              isHovered={isVertexHovered}
+              isDragging={isDragging}
+              dragOffset={dragOffset}
+              zoom={zoom}
+              isStartPoint={originalIndex === 0}
+              isUndoRedoInProgress={isUndoRedoInProgress}
+              isInAddPointsMode={editMode === EditMode.AddPoints}
+              isInMoveShapeMode={editMode === EditMode.MoveShape}
+              onDeleteVertex={onDeleteVertex}
+            />
           );
         })}
       </g>
