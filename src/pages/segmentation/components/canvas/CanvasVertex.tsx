@@ -199,8 +199,20 @@ const CanvasVertex = React.memo<CanvasVertexProps>(
         onMouseDown={handleMouseDown}
         style={{
           cursor: isDragging ? 'grabbing' : 'grab',
+          // POSITION IS NEVER TRANSITIONED. `cx`/`cy` are SVG2 geometry
+          // properties and therefore animatable, so the old `all 0.15s
+          // ease-out` made a vertex GLIDE to its committed position on drop
+          // instead of being there. Gating that on `isDragging` cannot help:
+          // the drop is precisely the commit where `isDragging` goes back to
+          // false and the point moves, so the animation ran on every single
+          // release and read as lag on top of whatever the drag itself cost.
+          // Naming the properties leaves the hover feedback (colour, radius)
+          // eased and the geometry instant; the drag and undo/redo cases keep
+          // easing nothing at all.
           transition:
-            isDragging || isUndoRedoInProgress ? 'none' : 'all 0.15s ease-out',
+            isDragging || isUndoRedoInProgress
+              ? 'none'
+              : 'fill 0.15s ease-out, r 0.15s ease-out, opacity 0.15s ease-out',
           pointerEvents: 'all',
         }}
       />
