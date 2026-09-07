@@ -29,6 +29,7 @@ vi.mock('axios', () => {
 import axios from 'axios';
 import {
   computeNeuriteMetrics,
+  toCsv,
   NEURITE_HEADERS,
   SOMA_HEADERS,
   type NeuriteImageInput,
@@ -262,6 +263,45 @@ describe('sheet shape', () => {
   it('keeps the stage reason, not just the stage', () => {
     // Without it a single cell's stage cannot be checked against its picture.
     expect(SOMA_HEADERS).toContain('stage_reason');
+  });
+});
+
+describe('CSV cells cannot become spreadsheet formulas', () => {
+  // `frame` is `image.name ?? image.id`, and the name is the filename the
+  // uploader chose. A project can be SHARED, so the person who named the file
+  // and the person who opens the CSV are not necessarily the same person.
+  const row = (frame: string) => toCsv(['frame'], [{ frame }]).split('\n')[1];
+
+  it.each(['=', '+', '-', '@'])(
+    'neutralises a value starting with %s',
+    lead => {
+      const out = row(`${lead}HYPERLINK("http://x")`);
+      // The apostrophe must be FIRST — anywhere else and the cell still
+      // evaluates.
+      expect(out.replace(/^"|"$/g, '').startsWith("'")).toBe(true);
+    }
+  );
+
+  it('neutralises a leading tab and CR too', () => {
+    // Excel strips these before deciding, so `\t=1+1` evaluates as well.
+    for (const lead of ['\t', '\r']) {
+      expect(row(`${lead}=1+1`).replace(/^"|"$/g, '').startsWith("'")).toBe(
+        true
+      );
+    }
+  });
+
+  it('leaves an ordinary filename untouched', () => {
+    // The control: the guard must not prefix every cell, which would corrupt
+    // every frame name in the sheet.
+    expect(row('r5_ctrl_0001.png')).toBe('r5_ctrl_0001.png');
+    expect(row('42')).toBe('42');
+  });
+
+  it('still quotes a value containing a comma', () => {
+    // The guard runs BEFORE quoting; if it ran after, the apostrophe would
+    // land outside the quotes and be read as part of the previous field.
+    expect(row('=a,b')).toBe('"\'=a,b"');
   });
 });
 

@@ -392,7 +392,11 @@ const README_LINES: ReadonlyArray<[string, string]> = [
   ],
 ];
 
-function toCsv(
+/**
+ * Exported so the formula-injection guard can be tested directly. It is the
+ * only CSV builder in this file, so testing it IS testing what reaches disk.
+ */
+export function toCsv(
   headers: readonly string[],
   rows: ReadonlyArray<Record<string, unknown>>
 ): string {
@@ -400,7 +404,24 @@ function toCsv(
     if (value === null || value === undefined) {
       return '';
     }
-    const text = String(value);
+    let text = String(value);
+    // Neutralise a spreadsheet FORMULA before quoting it. Excel, LibreOffice
+    // and Sheets evaluate a cell whose first character is one of = + - @ (or a
+    // leading tab / CR), so a value like `=HYPERLINK("http://…")` runs on open.
+    //
+    // Reachable here, not theoretical: `frame` is `image.name ?? image.id`, and
+    // `image.name` is the filename the uploader chose. A project can be SHARED,
+    // so the person who named the file and the person who opens the CSV are not
+    // necessarily the same person.
+    //
+    // A leading apostrophe is the standard mitigation — every spreadsheet reads
+    // the rest as text and hides the quote. The cost is that a legitimate name
+    // starting with `-` (a plausible one: `-control.tif`) gains a visible `'`
+    // in a plain-text reader. Preferred over dropping or rewriting the
+    // character, which would lose which frame a row came from.
+    if (/^[=+\-@\t\r]/.test(text)) {
+      text = `'${text}`;
+    }
     return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
   };
   return [
