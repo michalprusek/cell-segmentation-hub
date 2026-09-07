@@ -1003,6 +1003,40 @@ const SegmentationEditor = () => {
     ((video.container?.frameCount ?? 0) > 1 ||
       (video.container?.channels?.length ?? 0) > 0);
 
+  // The video's frame rows — `{ id, frameIndex }` for every frame of this
+  // container — WITHOUT requiring the container fetch to have landed.
+  //
+  // `video.container.frames` is the authoritative list (the whole container,
+  // never truncated) and stays the first choice. But it comes from a separate
+  // React Query that is null on a cold deep-link into a frame URL, and the
+  // cross-frame track ops below are reachable in exactly that state. The
+  // fallback is the frame rows the editor ALREADY has: `useProjectData` lists
+  // frame children (`getProjectImagesWithThumbnails` hides containers, not
+  // frames) with the same `Image.frameIndex` column, and it is the same fetch
+  // that gates this component rendering at all. It is second, not first,
+  // because that listing stops at 2000 images.
+  //
+  // `null`, not `[]`, when there is nothing: the consumers below distinguish
+  // "no frame list" from "a container with no frames".
+  const videoFrameRows = useMemo((): Array<{
+    id: string;
+    frameIndex: number;
+  }> | null => {
+    const fromContainer = video.container?.frames;
+    if (fromContainer?.length) {
+      return fromContainer.map(f => ({ id: f.id, frameIndex: f.frameIndex }));
+    }
+    if (!videoContainerId) return null;
+    const fromListing = projectImages
+      .filter(img => img.parentVideoId === videoContainerId)
+      .flatMap(img =>
+        typeof img.frameIndex === 'number'
+          ? [{ id: img.id, frameIndex: img.frameIndex }]
+          : []
+      );
+    return fromListing.length > 0 ? fromListing : null;
+  }, [video.container, videoContainerId, projectImages]);
+
   // ───────────────── Resegment chain ─────────────────
   // Lives HERE (after `const video = useVideoFrames`) to avoid the TDZ that
   // would result from passing video.container?.channels before `video` is
@@ -1049,11 +1083,15 @@ const SegmentationEditor = () => {
   // exists regardless of staleness, so merely marking it stale would keep
   // showing the pre-op geometry until a full page reload. Removing the entry
   // forces the loader's cache-miss path to re-fetch from the server.
+  //
   // `frameIds` narrows it to specific frames; omitted means every frame of the
-  // container, which is what a track op touches.
+  // container, which is what a track op touches. That "every frame" list comes
+  // from `videoFrameRows`, NOT `video.container`: a track op started from a
+  // cold deep-link now succeeds before the container query lands, and it must
+  // not silently skip the eviction for it.
   const evictVideoFrameSegmentationCaches = useCallback(
     (frameIds?: readonly string[]) => {
-      const ids = frameIds ?? video.container?.frames?.map(f => f.id);
+      const ids = frameIds ?? videoFrameRows?.map(f => f.id);
       if (!ids) return;
       for (const id of ids) {
         queryClient.removeQueries({
@@ -1061,7 +1099,7 @@ const SegmentationEditor = () => {
         });
       }
     },
-    [video.container, queryClient]
+    [videoFrameRows, queryClient]
   );
 
   // A server-side write gave these frames a segmentation (created or updated).
@@ -1072,9 +1110,14 @@ const SegmentationEditor = () => {
   //
   // The predicate must describe frames the server actually WROTE. Marking one
   // it did not sends the loader after segmentation that does not exist.
+  //
+  // The set it is applied to is `videoFrameRows` for the same reason as the
+  // eviction above: without the listing fallback a cold-deep-link propagate
+  // would write frames 8..N on the server and leave every one of them blank
+  // until a full page reload, which is the exact failure this prevents.
   const markFramesSegmented = useCallback(
     (covers: (frame: { id: string; frameIndex: number }) => boolean) => {
-      const frames = video.container?.frames;
+      const frames = videoFrameRows;
       if (!frames) return;
       const coveredIds = new Set(frames.filter(covers).map(f => f.id));
       if (coveredIds.size === 0) return;
@@ -1086,7 +1129,33 @@ const SegmentationEditor = () => {
         )
       );
     },
-    [video.container, updateImages]
+    [videoFrameRows, updateImages]
+  );
+
+  // Which frame of the video this editor is showing — derived WITHOUT the
+  // container fetch.
+  //
+  // `selectedImage` is the frame's OWN row from `useProjectData`, the same
+  // fetch that gates this whole component (`if (!selectedImage) return
+  // no_preview` below), so by the time any handler here can fire it is
+  // populated by construction. `video.container` is a separate React Query
+  // (`GET /images/:id/video-frames`) that is still null on a cold deep-link
+  // straight into a frame URL — which is exactly how a bookmark, a shared
+  // link, or "back to frame 1 of my video" behaves. Reading the index out of
+  // `video.container.frames` therefore made both propagate actions fail with
+  // "propagate failed" until that second query happened to land. Same hazard
+  // the `videoContainerId` comment on `useDeleteTrackScope` records.
+  //
+  // The frame-list lookup stays as a fallback rather than being deleted: every
+  // source reads the identical `Image.frameIndex` column, so they can never
+  // disagree — one just resolves later. It only covers a frame row that
+  // somehow reached the gallery listing without its own index.
+  const currentFrameIndex = useMemo(
+    () =>
+      typeof selectedImage?.frameIndex === 'number'
+        ? selectedImage.frameIndex
+        : videoFrameRows?.find(f => f.id === imageId)?.frameIndex,
+    [selectedImage, videoFrameRows, imageId]
   );
 
   // A propagate only reaches the frames AFTER the source.
@@ -1143,13 +1212,15 @@ const SegmentationEditor = () => {
   // current shape into every later frame of the video.
   const handlePropagateTrack = useCallback(
     async (polygonId: string) => {
-      const videoId = video.container?.id;
+      // `videoContainerId` + `currentFrameIndex`, NOT `video.container` —
+      // both come off the frame row the editor already has, so a cold
+      // deep-link into a frame URL can propagate immediately instead of
+      // erroring until the container query lands.
+      const videoId = videoContainerId;
       const source = editorRef.current
         .getPolygons()
         .find(p => p.id === polygonId);
-      const fromFrameIndex = video.container?.frames.find(
-        f => f.id === imageId
-      )?.frameIndex;
+      const fromFrameIndex = currentFrameIndex;
       const points = (source?.points ?? []).map(p => ({ x: p.x, y: p.y }));
       // Guard failures are unexpected (missing video/source) or a degenerate
       // polyline; always give feedback rather than a silent no-op.
@@ -1200,8 +1271,8 @@ const SegmentationEditor = () => {
       }
     },
     [
-      video.container,
-      imageId,
+      videoContainerId,
+      currentFrameIndex,
       handleUpdatePolygonField,
       evictVideoFrameSegmentationCaches,
       markFollowingFramesSegmented,
@@ -1542,11 +1613,22 @@ const SegmentationEditor = () => {
   // microtubule forward. Loops the single-track endpoint so each keeps its own
   // trackId + colour; ids read via ref to keep this handler stable.
   const handlePropagateSelected = useCallback(async () => {
-    const videoId = video.container?.id;
-    const fromFrameIndex = video.container?.frames.find(
-      f => f.id === imageId
-    )?.frameIndex;
-    if (!videoId || typeof fromFrameIndex !== 'number') return;
+    // Same cold-deep-link reasoning as `handlePropagateTrack` above.
+    const videoId = videoContainerId;
+    const fromFrameIndex = currentFrameIndex;
+    if (!videoId || typeof fromFrameIndex !== 'number') {
+      // Reported, not swallowed — the single-track twin above says the same
+      // thing for the same condition. `PolygonContextMenu` gates this item on
+      // `isMicrotubules && multiSelectCount >= 2` with no video gate, so on an
+      // MT project of standalone images the user confirms the dialog and a
+      // bare `return` would leave the gesture looking simply broken.
+      logger.warn('Cannot propagate selected microtubules', {
+        hasVideo: !!videoId,
+        fromFrameIndex,
+      });
+      toast.error(t('segmentation.trackOps.propagateFailed'));
+      return;
+    }
 
     const polys = editorRef.current.getPolygons();
     const sources = Array.from(selectedPolygonIdsRef.current)
@@ -1600,8 +1682,8 @@ const SegmentationEditor = () => {
       );
     }
   }, [
-    video.container,
-    imageId,
+    videoContainerId,
+    currentFrameIndex,
     handleUpdatePolygonField,
     evictVideoFrameSegmentationCaches,
     markFollowingFramesSegmented,
