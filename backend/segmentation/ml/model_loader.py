@@ -1569,6 +1569,23 @@ class ModelLoader:
             label = model.predict(image_np)  # (H, W) uint8: 0 bg / 1 neurite / 2 soma
 
             pp = PostprocessingService()
+            # The service-wide default of 50 px is wrong for neurites, and not
+            # by a cosmetic margin: a process is 2-3 px wide, so at the 0.180
+            # um/px these frames are acquired at, clearing 50 px takes a
+            # 3.6 um neurite -- while the staging rules count a neurite from
+            # 2 um. The filter was therefore deciding developmental stages.
+            #
+            # 20 was measured, not guessed. Pushing the model's own mask through
+            # polygonisation and back and running the whole metrics pipeline on
+            # the result (packaged sample, 6 664 x 6 657):
+            #
+            #     min_area   neurites recovered   cable length
+            #         50       275  (-4.2 %)        -0.81 %
+            #         20       285  (-0.7 %)        -0.83 %
+            #
+            # 4, 10 and 20 give byte-identical output, so the knee sits between
+            # 20 and 50; 20 is the top of that range and admits the least noise.
+            pp.min_area = 20
             emitted: List[Dict[str, Any]] = []
             counts: Dict[str, int] = {}
             coverage: Dict[str, float] = {}
