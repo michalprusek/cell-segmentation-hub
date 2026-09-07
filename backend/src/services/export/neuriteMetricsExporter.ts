@@ -88,11 +88,18 @@ interface MLPolygon {
   holes?: number[][][];
 }
 
-interface MLResponse {
+export interface MLNeuriteResponse {
   neurites: NeuriteRow[];
   somas: SomaRow[];
   qc: Record<string, unknown>;
   soma_polygon_ids: Record<string, string>;
+  /** neurite polygon_id -> which soma polygon owns it. `shared` marks a
+   *  polygon carrying cable from more than one cell, which is a real state
+   *  (a neurite bridging two somas) and not an error. */
+  neurite_owners: Record<
+    string,
+    { soma_polygon_id: string; shared: boolean; owned_fraction: number }
+  >;
 }
 
 /** Frames skipped, with the reason, so the caller can surface it. */
@@ -133,17 +140,23 @@ function toMLPolygon(poly: PolygonLike, index: number): MLPolygon | null {
 }
 
 /**
- * Ask the ML service for one frame's tables.
+ * Ask the ML service for one frame's tables AND its per-polygon assignment.
+ *
+ * Exported because the editor's "assign neurites" action needs exactly this,
+ * and a second implementation of it would drift from the export's. This repo
+ * has already paid for that once: the essays module and the project export
+ * kept separate copies of the microtubule band/ring metric and disagreed on
+ * net signal by a median of +9.9 % before they were unified.
  *
  * Returns null and records a reason rather than throwing, so one unmeasurable
  * frame cannot take an entire project's export down with it.
  */
-async function computeFrame(
+export async function computeNeuriteFrame(
   image: NeuriteImageInput,
   options: NeuriteMetricsOptions,
   skipped: Array<{ image: string; reason: string }>,
   mlGate?: Semaphore
-): Promise<MLResponse | null> {
+): Promise<MLNeuriteResponse | null> {
   const label = image.name ?? image.id;
 
   if (!image.segmentation?.polygons) {
@@ -232,9 +245,9 @@ async function computeFrame(
     Math.max(120_000, Math.round(megapixels * 4_000))
   );
 
-  const send = async (): Promise<MLResponse | null> => {
+  const send = async (): Promise<MLNeuriteResponse | null> => {
     try {
-      const response = await axios.post<MLResponse>(url, body, { timeout });
+      const response = await axios.post<MLNeuriteResponse>(url, body, { timeout });
       return response.data;
     } catch (error) {
       const detail =
@@ -275,7 +288,7 @@ export async function computeNeuriteMetrics(
   // anyway, so firing frames in parallel would only queue them there while
   // holding N decoded frames in Node's heap.
   for (const image of images) {
-    const result = await computeFrame(image, options, skipped, mlGate);
+    const result = await computeNeuriteFrame(image, options, skipped, mlGate);
     if (!result) {
       continue;
     }

@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { Agent as HttpAgent } from 'http';
 import { Agent as HttpsAgent } from 'https';
 import { logger } from '../utils/logger';
+import { computeNeuriteFrame } from './export/neuriteMetricsExporter';
 import { config } from '../utils/config';
 import type { JobStatus } from '../types';
 import { type KnownModelId } from '../constants/modelRegistry';
@@ -310,6 +311,50 @@ export function setPolygonsTrackType(
       delete copy.mtType;
     } else {
       copy.mtType = next;
+    }
+    return copy;
+  });
+  return { polygons, changed };
+}
+
+/**
+ * Write the neurite -> soma assignment onto one frame's polygons.
+ *
+ * `assignments` maps a NEURITE polygon's id to the id of the soma polygon that
+ * owns it; a polygon absent from the map has its `somaId` CLEARED. That is the
+ * right default rather than "leave it alone": the map is a whole-frame answer
+ * from one pipeline run, so a polygon the run did not attribute is one the
+ * pipeline could not attribute, and keeping a stale value from an earlier run
+ * would show the user an assignment nothing currently supports.
+ *
+ * Returns the new array plus how many polygons actually changed, so a caller
+ * can skip the DB write for a frame whose assignment is unchanged. Pure: never
+ * mutates its input.
+ */
+export function setPolygonsSomaId(
+  polys: unknown[],
+  assignments: ReadonlyMap<string, string>
+): { polygons: unknown[]; changed: number } {
+  let changed = 0;
+  const polygons = polys.map(p => {
+    const rec = p as Record<string, unknown>;
+    // Somas are never assigned to anything — they are what others are assigned
+    // TO — and other project types' polygons must not be touched at all.
+    if (rec.partClass !== 'neurite') {
+      return p;
+    }
+    const id = typeof rec.id === 'string' ? rec.id : undefined;
+    const current = typeof rec.somaId === 'string' ? rec.somaId : undefined;
+    const next = id ? assignments.get(id) : undefined;
+    if (current === next) {
+      return p; // no-op
+    }
+    changed++;
+    const copy = { ...rec };
+    if (next === undefined) {
+      delete copy.somaId;
+    } else {
+      copy.somaId = next;
     }
     return copy;
   });
@@ -2746,7 +2791,90 @@ export class SegmentationService {
     // rows created) — this is what the editor toast reports.
     return { trackId, framesUpdated: framesUpdated + framesCreated };
   }
+
+  /**
+   * Compute the neurite -> soma assignment for one image and store it.
+   *
+   * The pipeline runs on the CURRENT polygons, so a user who has corrected a
+   * segmentation and re-runs this gets an assignment of what they corrected,
+   * not of what the model originally produced. That is the point of doing it
+   * on demand rather than once at segmentation time.
+   *
+   * Reuses `computeNeuriteFrame`, the same function the export calls. A second
+   * implementation would drift: this repo already paid for that when the
+   * essays module and the project export kept separate copies of the
+   * microtubule band metric and disagreed on net signal by a median of 9.9 %.
+   */
+  async assignNeuriteSomas(
+    imageId: string,
+    userId: string,
+    options: { classify?: boolean } = {}
+  ): Promise<{ assigned: number; unassigned: number; changed: number }> {
+    const image = await this.imageService.getImageById(imageId, userId);
+    if (!image) {
+      throw new Error('Image not found');
+    }
+
+    const segmentation = await this.prisma.segmentation.findUnique({
+      where: { imageId },
+      select: { id: true, polygons: true },
+    });
+    if (!segmentation) {
+      throw new Error('Image has no segmentation to assign');
+    }
+
+    const skipped: Array<{ image: string; reason: string }> = [];
+    const result = await computeNeuriteFrame(
+      {
+        id: image.id,
+        name: image.name,
+        width: image.width,
+        height: image.height,
+        pixelSizeUm: image.pixelSizeUm,
+        originalPath: image.originalPath,
+        segmentation: { polygons: segmentation.polygons },
+      },
+      { formats: [], classify: options.classify },
+      skipped
+    );
+    if (!result) {
+      // The reason is the only thing that tells the user WHICH input was
+      // wrong — a missing pixel size reads very differently from a frame with
+      // no soma polygons.
+      throw new Error(
+        skipped[0]?.reason ?? 'Could not compute the neurite assignment'
+      );
+    }
+
+    const assignments = new Map<string, string>();
+    for (const [polygonId, info] of Object.entries(result.neurite_owners)) {
+      assignments.set(polygonId, info.soma_polygon_id);
+    }
+
+    const parsed = parsePolygonsJsonForDiff(segmentation.polygons, {
+      currentImageId: imageId,
+      parentVideoId: image.parentVideoId ?? null,
+    });
+    const { polygons, changed } = setPolygonsSomaId(parsed, assignments);
+
+    if (changed > 0) {
+      await this.prisma.segmentation.update({
+        where: { id: segmentation.id },
+        data: { polygons: JSON.stringify(polygons), updatedAt: new Date() },
+      });
+    }
+
+    const neuriteCount = parsed.filter(
+      p => (p as Record<string, unknown>).partClass === 'neurite'
+    ).length;
+    return {
+      assigned: assignments.size,
+      unassigned: Math.max(0, neuriteCount - assignments.size),
+      changed,
+    };
+  }
 }
+
 
 // Note: segmentationService should be instantiated with proper dependencies
 // export const segmentationService = new SegmentationService(prisma, imageService);
