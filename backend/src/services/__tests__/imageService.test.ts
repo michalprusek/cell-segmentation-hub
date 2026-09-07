@@ -392,6 +392,32 @@ describe('ImageService — getProjectImages', () => {
     );
   });
 
+  // Every value `sortBy` can take is NON-UNIQUE (name, createdAt, updatedAt,
+  // segmentationStatus), and with a non-total order Postgres may sequence tied
+  // rows differently for each `skip`/`take` query — so a caller paging through
+  // a project sees one row twice and another not at all. A bulk frame
+  // extraction gives every frame of a video the SAME timestamp, which makes
+  // the tie total rather than incidental.
+  it.each(['createdAt', 'updatedAt', 'name'] as const)(
+    'appends the id tiebreaker when sorting by %s, keeping the order total',
+    async sortBy => {
+      prismaMock.image.count.mockResolvedValueOnce(0);
+      prismaMock.image.findMany.mockResolvedValueOnce([]);
+
+      await service.getProjectImages('proj-1', 'user-1', {
+        ...paginationOpts,
+        sortBy: sortBy as never,
+      });
+
+      const orderBy = prismaMock.image.findMany.mock.calls[0][0].orderBy;
+      expect(Array.isArray(orderBy)).toBe(true);
+      // The caller's sort still leads — it is the API contract here, unlike the
+      // gallery endpoint whose order nothing reads.
+      expect(orderBy[0]).toEqual({ [sortBy]: paginationOpts.sortOrder });
+      expect(orderBy[orderBy.length - 1]).toEqual({ id: 'asc' });
+    }
+  );
+
   it('excludes video container rows (isVideoContainer:false in where)', async () => {
     prismaMock.image.count.mockResolvedValueOnce(0);
     prismaMock.image.findMany.mockResolvedValueOnce([]);

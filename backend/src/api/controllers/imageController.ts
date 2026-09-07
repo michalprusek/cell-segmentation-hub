@@ -955,9 +955,28 @@ export class ImageController {
         include: {
           segmentation: segmentationInclude,
         },
-        orderBy: {
-          updatedAt: 'desc',
-        },
+        // TOTAL order, and on an IMMUTABLE key. Both halves are load-bearing
+        // for `skip`/`take` pagination:
+        //
+        //  - Without the `id` tiebreaker the order is not total, and Postgres
+        //    is free to return tied rows in a different sequence for each
+        //    OFFSET query — so a row can land on two pages while another lands
+        //    on none. This is not hypothetical: measured 2026-09-07, 18 of the
+        //    27 projects large enough to paginate have tied `updatedAt`, 4823
+        //    images across five accounts, and two of them have ONE distinct
+        //    value for all 300 of their rows — a bulk frame extraction writes
+        //    them in a single statement, so every frame shares a timestamp.
+        //  - `updatedAt` MUTATES. Segmentation, tracking and thumbnail writes
+        //    all touch it, so ordering on it lets a row that page 1 already
+        //    returned jump back to the front and be returned again by page 2
+        //    while an unfetched row is pushed past the end. `createdAt` cannot
+        //    move.
+        //
+        // Changing the key is invisible to the user: `useProjectData` fetches
+        // every page and `useImageFilter` re-sorts the whole array client-side
+        // (forcing frameIndex ASC for the frames of one video), so this is a
+        // pagination key, not a display order. It is also the only caller.
+        orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
         skip: (pageNum - 1) * limitNum,
         take: limitNum,
       });

@@ -939,6 +939,41 @@ describe('ImageController', () => {
       });
     });
 
+    // "Select All 300 images" selected 216. `skip`/`take` over an order that is
+    // not TOTAL lets Postgres sequence tied rows differently for each OFFSET,
+    // so a row lands on two pages and another on none; the frontend then shows
+    // an array length and selects a Set. Measured on production 2026-09-07: 18
+    // of the 27 projects large enough to paginate have tied `updatedAt`, two of
+    // them with ONE distinct value for all 300 rows.
+    it('paginates on a TOTAL order — the last key is unique', async () => {
+      await request(mountAuthed('get', '/:id', handler))
+        .get(`/${PROJECT_ID}`)
+        .expect(200);
+
+      const orderBy = vi.mocked(prisma.image.findMany).mock.calls[0][0]?.orderBy;
+      expect(Array.isArray(orderBy)).toBe(true);
+      const keys = orderBy as Record<string, string>[];
+      // `id` is the only unique column on this table, so it is the only thing
+      // that can make the order total. Asserted as the LAST key: anywhere else
+      // and the keys after it would never be reached.
+      expect(keys[keys.length - 1]).toEqual({ id: 'asc' });
+    });
+
+    it('paginates on an IMMUTABLE key, so a concurrent write cannot reshuffle', async () => {
+      // Independent of the tie. Segmentation, tracking and thumbnail writes all
+      // touch `updatedAt`, so ordering on it lets a row page 1 already returned
+      // jump back to the front and be returned again by page 2 while an
+      // unfetched row is pushed past the end. `createdAt` cannot move.
+      await request(mountAuthed('get', '/:id', handler))
+        .get(`/${PROJECT_ID}`)
+        .expect(200);
+
+      const orderBy = vi.mocked(prisma.image.findMany).mock.calls[0][0]?.orderBy;
+      const keys = orderBy as Record<string, string>[];
+      expect(keys[0]).toEqual({ createdAt: 'desc' });
+      expect(JSON.stringify(keys)).not.toContain('updatedAt');
+    });
+
     it('aggregates distinct, sorted projectChannels from container rows', async () => {
       vi.mocked(prisma.image.findMany)
         .mockResolvedValueOnce([makePrismaImage()])
