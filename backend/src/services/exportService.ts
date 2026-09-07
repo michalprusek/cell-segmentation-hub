@@ -759,7 +759,8 @@ export class ExportService {
             exportDir,
             options.metricsFormats,
             options.neuriteMetrics,
-            mlRequestGate
+            mlRequestGate,
+            options.pixelToMicrometerScale
           ).then(() => {
             progressStep++;
             this.updateJobProgress(
@@ -1858,7 +1859,14 @@ export class ExportService {
     exportDir: string,
     formats: ReadonlyArray<'excel' | 'csv' | 'json'>,
     options: NonNullable<ExportOptions['neuriteMetrics']>,
-    mlGate?: Semaphore
+    mlGate?: Semaphore,
+    /** The scale the user typed on the export modal. This is the ONLY source
+     *  of a pixel size in practice: measured 2026-09-07, not one of the 10 857
+     *  production images carries `pixelSizeUm` — the column is null for every
+     *  row of every project type. Reading only the column would make this
+     *  export skip every frame with "pixel size unknown". `mtMetricsExporter`
+     *  already takes the modal's entry as its sole source; this matches it. */
+    pixelToMicrometerScale?: number
   ): Promise<void> {
     try {
       const result = await computeNeuriteMetrics(
@@ -1867,7 +1875,12 @@ export class ExportService {
           name: img.name,
           width: img.width,
           height: img.height,
-          pixelSizeUm: img.pixelSizeUm,
+          // The row's own value wins when it has one (a calibrated ND2 could
+          // fill it in future); the modal's entry is what actually arrives
+          // today. Either way an absent scale still SKIPS the frame rather
+          // than guessing — every staging threshold is in micrometres, so a
+          // guess yields confident wrong stages, not approximate ones.
+          pixelSizeUm: img.pixelSizeUm ?? pixelToMicrometerScale ?? null,
           originalPath: img.originalPath,
           segmentation: img.segmentation,
         })),
