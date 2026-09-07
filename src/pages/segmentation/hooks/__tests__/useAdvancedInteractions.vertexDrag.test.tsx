@@ -209,6 +209,18 @@ describe('vertex drag', () => {
 });
 
 /** A mousedown on the shape's CONTOUR — the outline, not a vertex. */
+const contourEvent = (clientX: number, clientY: number, shiftKey: boolean) =>
+  ({
+    button: 0,
+    clientX,
+    clientY,
+    shiftKey,
+    altKey: false,
+    target: { dataset: { polygonId: 'poly-1', polygonContour: 'true' } },
+    preventDefault: vi.fn(),
+    stopPropagation: vi.fn(),
+  }) as unknown as React.MouseEvent<HTMLDivElement>;
+
 const downOnContour = (clientX: number, clientY: number) =>
   ({
     button: 0,
@@ -335,5 +347,52 @@ describe('dragging the contour translates the whole shape', () => {
     act(() => result.current.handleMouseUp(at('mouseleave', -900, -900)));
     expect(updatePolygons).not.toHaveBeenCalled();
     expect(polygons[0].points).toEqual(polygon.points);
+  });
+
+  // Reported as "Shift does not select several microtubules", and irreproducible
+  // for a second user — because the editor auto-switches to EditVertices as soon
+  // as anything is selected. From a clean View-mode canvas Shift+click adds
+  // normally; after ANY plain click it lands here instead. Measured in
+  // production before the fix: click MT1 -> [MT1], Shift+click MT3 -> [MT3],
+  // Shift+click MT5 -> [MT5]. Each shift-click REPLACED the selection.
+  describe('Shift+click is a selection gesture, not a translate', () => {
+    it('does not single-select, which is what dropped the multi-selection', () => {
+      const { result } = setup(EditMode.EditVertices, null);
+      act(() => result.current.handleMouseDown(contourEvent(150, 120, true)));
+      // A single select here is the whole bug: it replaces the bulk set that
+      // every "…for N selected" action reads.
+      expect(onPolygonSelection).not.toHaveBeenCalled();
+    });
+
+    it('leaves the shape where it is — Shift+drag must not move geometry', () => {
+      const { result, rerender } = setup();
+      act(() => result.current.handleMouseDown(contourEvent(150, 120, true)));
+      rerender();
+      act(() => result.current.handleMouseUp(at('mouseup', 190, 145)));
+      // Without the guard this is the +40/+25 translation the plain-drag test
+      // above asserts, so the two tests cannot both pass by accident.
+      expect(polygons[0].points).toEqual(polygon.points);
+      expect(updatePolygons).not.toHaveBeenCalled();
+    });
+
+    it('does not arm a drag, so the additive handler downstream still runs', () => {
+      const { result } = setup();
+      act(() => result.current.handleMouseDown(contourEvent(150, 120, true)));
+      // `isDraggingVertex` is what the branch sets on its way to `return`;
+      // the `return` is what stops CanvasPolygon's onClick from ever firing.
+      expect(state.isDraggingVertex).toBe(false);
+    });
+
+    it('still translates WITHOUT Shift, so the gesture is not lost', () => {
+      const { result, rerender } = setup();
+      act(() => result.current.handleMouseDown(contourEvent(150, 120, false)));
+      rerender();
+      act(() => result.current.handleMouseUp(at('mouseup', 190, 145)));
+      expect(polygons[0].points).toEqual([
+        { x: 140, y: 125 },
+        { x: 240, y: 125 },
+        { x: 240, y: 225 },
+      ]);
+    });
   });
 });
