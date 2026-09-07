@@ -7,8 +7,8 @@
   "totals": {
     "tsconfig.app.json": 377,
     "tsconfig.node.json": 21,
-    "tsconfig.test.json": 1210,
-    "all": 1608
+    "tsconfig.test.json": 1214,
+    "all": 1612
   },
   "projects": {
     "tsconfig.app.json": {
@@ -1327,6 +1327,7 @@
         "TS2339: Property 'status' does not exist on type '{}'.": 2,
         "TS6307: File 'src/contexts/ExportContext.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
         "TS6307: File 'src/pages/export/components/MicrotubuleKymographsSection.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
+        "TS6307: File 'src/pages/export/components/NeuriteMetricsSection.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
         "TS7030: Not all code paths return a value.": 1
       },
       "src/pages/export/utils/__tests__/kymographGating.test.ts": {
@@ -1388,6 +1389,7 @@
         "TS6307: File 'src/pages/segmentation/components/EditorHeader.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
         "TS6307: File 'src/pages/segmentation/components/KeyboardShortcutsHelp.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
         "TS6307: File 'src/pages/segmentation/components/MicrotubuleInstancePanel.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
+        "TS6307: File 'src/pages/segmentation/components/NeuriteAssignmentToggle.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
         "TS6307: File 'src/pages/segmentation/components/PolygonListPanel.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
         "TS6307: File 'src/pages/segmentation/components/SpermInstancePanel.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
         "TS6307: File 'src/pages/segmentation/components/StatusBar.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
@@ -1564,6 +1566,9 @@
       "src/pages/segmentation/hooks/useVideoFrames.ts": {
         "TS2339: Property 'data' does not exist on type '{}'.": 1
       },
+      "src/pages/segmentation/utils/__tests__/assignmentClick.test.ts": {
+        "TS6307: File 'src/pages/segmentation/utils/assignmentClick.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
+      },
       "src/pages/segmentation/utils/__tests__/instanceLabels.test.ts": {
         "TS6307: File 'src/pages/segmentation/utils/instanceLabels.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
       },
@@ -1575,6 +1580,9 @@
       },
       "src/pages/segmentation/utils/__tests__/panelWidth.test.ts": {
         "TS6307: File 'src/pages/segmentation/utils/panelWidth.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
+      },
+      "src/pages/segmentation/utils/__tests__/somaAssignmentColor.test.ts": {
+        "TS6307: File 'src/pages/segmentation/utils/somaAssignmentColor.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
       },
       "src/pages/segmentation/utils/__tests__/transformSegmentationPolygons.test.ts": {
         "TS6307: File 'src/pages/segmentation/utils/transformSegmentationPolygons.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1

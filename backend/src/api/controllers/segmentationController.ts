@@ -543,6 +543,43 @@ class SegmentationController {
   };
 
   /**
+   * Compute and store the neurite -> soma assignment for one image.
+   *
+   * Runs on the CURRENT polygons, so a user who has corrected a segmentation
+   * and re-runs this gets an assignment of what they corrected. On demand
+   * rather than at segmentation time for exactly that reason.
+   */
+  assignNeuriteSomas = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const userId = this.validateUser(req, res);
+      if (!userId) {
+        return;
+      }
+      const { imageId } = req.params;
+      const classify =
+        typeof req.body?.classify === 'boolean' ? req.body.classify : undefined;
+
+      const result = await this.segmentationService.assignNeuriteSomas(
+        imageId,
+        userId,
+        { classify }
+      );
+      ResponseHelper.success(res, result);
+    } catch (error) {
+      // 400 rather than 500: every failure this can produce is a statement
+      // about the INPUT — no pixel size, no soma polygons, a frame whose file
+      // is missing — and the message is the only thing that says which.
+      const message =
+        error instanceof Error ? error.message : 'Assignment failed';
+      logger.warn(
+        `Neurite assignment failed: ${message}`,
+        'SegmentationController'
+      );
+      ResponseHelper.error(res, message, 400);
+    }
+  };
+
+  /**
    * Batch fetch segmentation results for multiple images
    * This is a critical performance optimization for large projects
    */

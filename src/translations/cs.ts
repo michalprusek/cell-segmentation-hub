@@ -267,6 +267,11 @@ export default {
       '{{count}} existujících segmentací nemusí odpovídat exportnímu formátu "{{type}}". Re-segmentujte pro aktualizaci metrik.',
     verified: 'Ověřeno',
     toggleVerified: 'Přepnout ověření',
+    pixelSize: 'Měřítko:',
+    pixelSizeUnset: 'µm/px',
+    pixelSizeAria: 'Měřítko snímků projektu v mikrometrech na pixel',
+    pixelSizeHint:
+      'Mikrometry na pixel pro tento projekt. Potřebné pro měření v µm; nechte prázdné, pokud není známé.',
     projectVerified: 'Projekt byl označen jako ověřený',
     projectUnverified: 'Označení ověření projektu bylo zrušeno',
     failedToUpdateVerified: 'Nepodařilo se aktualizovat stav ověření',
@@ -728,6 +733,23 @@ export default {
     system: 'Systémový',
   },
   segmentation: {
+    // Neurite-only editor controls.
+    neurite: {
+      assignDone:
+        'Přiřazeno {{assigned}} neuritů, {{unassigned}} se nepodařilo',
+      assignFailed: 'Přiřazení neuritů se nepodařilo',
+      assign: 'Přiřadit neurity k buňkám',
+      assignHint:
+        'Počítá z polygonů v aktuálním stavu, takže opravy se promítnou.',
+      color: {
+        label: 'Barva:',
+        byClass: 'Třída',
+        byCell: 'Buňka',
+      },
+      unassignedCount: '{{count}} neurit se nepodařilo přiřadit k buňce',
+      unassignedCount_other: '{{count}} neuritů se nepodařilo přiřadit k buňce',
+    },
+
     selection: {
       selectAll: 'Vybrat vše',
       deselectAll: 'Zrušit výběr',
@@ -1364,6 +1386,20 @@ export default {
     imagesDeleted_other: '{{count}} obrázky smazány',
   },
   export: {
+    // Neurite-only metric controls.
+    neuriteMetrics: {
+      title: 'Metriky neuritů',
+      description:
+        'Přiřadí každý neurit k somě a vyexportuje tabulky po buňkách včetně vývojového stadia.',
+      enable: 'Zahrnout metriky neuritů',
+      enableHint:
+        'Jeden běh na snímek na ML službě; velké konfokální pole trvá zhruba minutu.',
+      classify: 'Odfiltrovat neneuronální somy',
+      classifyHint:
+        'Doučený klasifikátor odmítne růstové kužely a fragmenty buněk. Odmítnuté objekty zůstanou v tabulce se soma_neuronal = 0.',
+      classifyOffWarning:
+        'Bez filtru vypadá neurit končící ve vlastním růstovém kuželu jako spojení dvou buněk. Spojení budou nadhodnocená a polovina délky se připíše špatnému objektu.',
+    },
     mtKymographs: {
       title: 'Analýza rychlosti z kymografu',
       description:

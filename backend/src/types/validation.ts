@@ -226,6 +226,20 @@ export const updateProjectSchema = z.object({
     .optional()
     .nullable(),
   type: projectTypeSchema.optional(),
+  // Image scale for the whole project, in micrometres per pixel. `null` clears
+  // it back to "not calibrated", which every consumer must keep distinguishing
+  // from a value: they refuse to compute rather than guess a scale.
+  //
+  // Bounds mirror the export modal's (`AdvancedExportDialog.tsx`): 0.001 is
+  // 1 nm/px, finer than any light microscope resolves; 1000 is a millimetre per
+  // pixel, coarser than any objective in use here. Kept in step deliberately —
+  // a value the modal accepts must not be refused here, and vice versa.
+  pixelSizeUm: z
+    .number()
+    .min(0.001, 'Měřítko musí být alespoň 0.001 µm/px')
+    .max(1000, 'Měřítko může být nejvýše 1000 µm/px')
+    .optional()
+    .nullable(),
 });
 
 /**

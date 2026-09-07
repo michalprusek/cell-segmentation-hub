@@ -165,6 +165,14 @@ export const OPTIONAL_POLYGON_FIELDS: readonly OptionalPolygonField[] = [
   // Preserve the user-assigned microtubule type-label id (resolved to a class
   // name/colour via the project's mtTypeLabels palette).
   { key: 'mtType', coerce: coerceNonEmptyString },
+  // Which soma a neurite polygon belongs to, as the id of that soma's polygon.
+  // Written by the neurite metrics run and overridable in the editor, and the
+  // editor colours neurites by it — so losing it does not degrade a number, it
+  // erases the assignment the user corrected. `class` was stripped on the READ
+  // path in exactly this way until 2026-09-04: the database kept it, the editor
+  // never saw it, and the next manual save persisted the loss.
+
+  { key: 'somaId', coerce: coerceNonEmptyString },
 ] as const;
 
 export interface ParsedPolygonResult {

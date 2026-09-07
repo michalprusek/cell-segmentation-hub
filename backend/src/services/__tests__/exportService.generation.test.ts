@@ -43,6 +43,18 @@ vi.mock('../sharingService', () => ({
   hasProjectAccess: vi.fn().mockResolvedValue({ hasAccess: true }),
 }));
 
+vi.mock('../export/neuriteMetricsExporter', () => ({
+  computeNeuriteMetrics: vi.fn().mockResolvedValue({
+    neurites: [],
+    somas: [],
+    qc: {},
+    skipped: [],
+  }),
+  writeNeuriteMetrics: vi.fn().mockResolvedValue(undefined),
+  NEURITE_HEADERS: [],
+  SOMA_HEADERS: [],
+}));
+
 vi.mock('../websocketService', () => ({
   WebSocketService: {
     getInstance: vi.fn(() => ({ emitToUser: vi.fn() })),
@@ -183,6 +195,7 @@ vi.mock('../../types/validation', () => ({
 // ─── Imports (after mocks) ────────────────────────────────────────────────────
 
 import { ExportService, type ExportJob } from '../exportService';
+import { computeNeuriteMetrics } from '../export/neuriteMetricsExporter';
 import {
   sanitizeFilename,
   getProgressMessage,
@@ -479,6 +492,31 @@ const callGenerateMT = (
     }
   ).generateMicrotubuleMetrics(images, '/tmp/mt', options, jobId);
 
+const callGenerateNeurite = (
+  svc: ExportService,
+  images: Record<string, unknown>[],
+  scale?: number
+) =>
+  (
+    svc as unknown as {
+      generateNeuriteMetrics(
+        images: unknown[],
+        exportDir: string,
+        formats: readonly string[],
+        options: unknown,
+        mlGate?: unknown,
+        pixelToMicrometerScale?: number
+      ): Promise<void>;
+    }
+  ).generateNeuriteMetrics(
+    images,
+    '/tmp/neurite',
+    ['csv'],
+    { enabled: true, classify: true },
+    undefined,
+    scale
+  );
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Pure helpers
 // ═══════════════════════════════════════════════════════════════════════════
@@ -654,6 +692,65 @@ describe('ExportService — copyOriginalImagesWithProgress', () => {
 // ═══════════════════════════════════════════════════════════════════════════
 // generateMetrics — project-type dispatch
 // ═══════════════════════════════════════════════════════════════════════════
+
+describe('ExportService — generateNeuriteMetrics scale', () => {
+  // The exporter SKIPS any frame without a pixel size, because every staging
+  // threshold is in micrometres and a guess yields confident wrong stages
+  // rather than approximate ones. Measured 2026-09-07: not one of the 10 857
+  // production images carries `pixelSizeUm` — the column is null for every row
+  // of every project type. So reading only the column would make this export
+  // skip EVERY frame, and the sheet would come out empty in production while
+  // every unit test with a hand-set fixture passed.
+  //
+  // The modal's entry is the real source, exactly as `mtMetricsExporter`
+  // already treats it.
+  const row = (pixelSizeUm: number | null) => ({
+    id: 'img-1',
+    name: 'a.png',
+    width: 100,
+    height: 100,
+    pixelSizeUm,
+    originalPath: '/x/a.png',
+    segmentation: { polygons: [] },
+  });
+
+  it('passes the scale the user typed on the modal', async () => {
+    const svc = new ExportService();
+    await callGenerateNeurite(svc, [row(null)], 0.18);
+    const passed = vi.mocked(computeNeuriteMetrics).mock.calls[0][0][0];
+    expect(passed.pixelSizeUm).toBe(0.18);
+  });
+
+  it("prefers the row's own value when it has one", async () => {
+    // A calibrated ND2 could fill the column in future; it must win over a
+    // modal entry typed for the batch.
+    const svc = new ExportService();
+    await callGenerateNeurite(svc, [row(0.09)], 0.18);
+    const passed = vi.mocked(computeNeuriteMetrics).mock.calls[0][0][0];
+    expect(passed.pixelSizeUm).toBe(0.09);
+  });
+
+  it('passes null when neither exists, so the frame is SKIPPED not guessed', async () => {
+    const svc = new ExportService();
+    await callGenerateNeurite(svc, [row(null)], undefined);
+    const passed = vi.mocked(computeNeuriteMetrics).mock.calls[0][0][0];
+    expect(passed.pixelSizeUm).toBeNull();
+  });
+
+  // NOT tested here, deliberately: whether a modal entry beats the PROJECT's
+  // stored calibration. That precedence is resolved one level up, at the
+  // `exportTasks.push` call site (`options.pixelToMicrometerScale ??
+  // project.pixelSizeUm`), so by the time it reaches this method the two are
+  // already one number and a test at this seam could not tell them apart — it
+  // would pass whichever way the `??` was written. A first draft of this file
+  // did exactly that and asserted nothing.
+  it('an image row still outranks whatever scale was resolved for the batch', async () => {
+    const svc = new ExportService();
+    await callGenerateNeurite(svc, [row(0.09)], 0.18);
+    const passed = vi.mocked(computeNeuriteMetrics).mock.calls[0][0][0];
+    expect(passed.pixelSizeUm).toBe(0.09);
+  });
+});
 
 describe('ExportService — generateMetrics dispatch', () => {
   let service: ExportService;

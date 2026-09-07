@@ -268,6 +268,11 @@ export default {
       '{{count}} bestehende Segmentierungen entsprechen möglicherweise nicht mehr dem Exportformat "{{type}}". Erneut segmentieren, um Metriken zu aktualisieren.',
     verified: 'Verifiziert',
     toggleVerified: 'Verifizierung umschalten',
+    pixelSize: 'Maßstab:',
+    pixelSizeUnset: 'µm/px',
+    pixelSizeAria: 'Bildmaßstab des Projekts in Mikrometern pro Pixel',
+    pixelSizeHint:
+      'Mikrometer pro Pixel für dieses Projekt. Für jede Messung in µm nötig; leer lassen, wenn unbekannt.',
     projectVerified: 'Projekt als verifiziert markiert',
     projectUnverified: 'Verifizierung des Projekts wurde entfernt',
     failedToUpdateVerified:
@@ -893,6 +898,23 @@ export default {
     },
   },
   segmentation: {
+    // Neurite-only editor controls.
+    neurite: {
+      assignDone: '{{assigned}} Neuriten zugeordnet, {{unassigned}} nicht',
+      assignFailed: 'Die Neuriten konnten nicht zugeordnet werden',
+      assign: 'Neuriten Zellen zuordnen',
+      assignHint:
+        'Läuft auf den Polygonen im aktuellen Zustand, Korrekturen werden also berücksichtigt.',
+      color: {
+        label: 'Farbe:',
+        byClass: 'Klasse',
+        byCell: 'Zelle',
+      },
+      unassignedCount: '{{count}} Neurit konnte keiner Zelle zugeordnet werden',
+      unassignedCount_other:
+        '{{count}} Neuriten konnten keiner Zelle zugeordnet werden',
+    },
+
     selection: {
       selectAll: 'Alle auswählen',
       deselectAll: 'Auswahl aufheben',
@@ -1382,6 +1404,20 @@ export default {
     imagesDeleted_other: '{{count}} Bilder gelöscht',
   },
   export: {
+    // Neurite-only metric controls.
+    neuriteMetrics: {
+      title: 'Neuriten-Metriken',
+      description:
+        'Ordnet jeden Neuriten einem Soma zu und exportiert Tabellen pro Zelle samt Entwicklungsstadium.',
+      enable: 'Neuriten-Metriken einbeziehen',
+      enableHint:
+        'Ein Durchlauf pro Bild im ML-Dienst; ein großes konfokales Feld dauert etwa eine Minute.',
+      classify: 'Nicht-neuronale Somata herausfiltern',
+      classifyHint:
+        'Ein feinabgestimmter Klassifikator verwirft Wachstumskegel und Zellfragmente. Verworfene Objekte bleiben mit soma_neuronal = 0 in der Tabelle.',
+      classifyOffWarning:
+        'Ohne den Filter sieht ein Neurit, der im eigenen Wachstumskegel der Zelle endet, wie eine Verbindung zwischen zwei Zellen aus. Verbindungen werden überschätzt und die Hälfte jeder Länge dem falschen Objekt zugeschrieben.',
+    },
     mtKymographs: {
       title: 'Kymograph-Geschwindigkeitsanalyse',
       description:

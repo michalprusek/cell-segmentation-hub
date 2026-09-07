@@ -268,6 +268,11 @@ export default {
       '{{count}} segmentations existantes peuvent ne plus correspondre au format d\'export "{{type}}". Re-segmentez pour mettre à jour les métriques.',
     verified: 'Vérifié',
     toggleVerified: 'Basculer la vérification',
+    pixelSize: 'Échelle :',
+    pixelSizeUnset: 'µm/px',
+    pixelSizeAria: "Échelle d'image du projet en micromètres par pixel",
+    pixelSizeHint:
+      'Micromètres par pixel pour ce projet. Nécessaire pour toute mesure en µm ; laisser vide si inconnue.',
     projectVerified: 'Projet marqué comme vérifié',
     projectUnverified: 'La vérification du projet a été supprimée',
     failedToUpdateVerified:
@@ -889,6 +894,25 @@ export default {
     },
   },
   segmentation: {
+    // Neurite-only editor controls.
+    neurite: {
+      assignDone:
+        "{{assigned}} neurites attribuées, {{unassigned}} n'ont pas pu l'être",
+      assignFailed: "Impossible d'attribuer les neurites",
+      assign: 'Attribuer les neurites aux cellules',
+      assignHint:
+        "S'exécute sur les polygones dans leur état actuel, les corrections sont donc prises en compte.",
+      color: {
+        label: 'Couleur :',
+        byClass: 'Classe',
+        byCell: 'Cellule',
+      },
+      unassignedCount:
+        "{{count}} neurite n'a pas pu être attribuée à une cellule",
+      unassignedCount_other:
+        "{{count}} neurites n'ont pas pu être attribuées à une cellule",
+    },
+
     selection: {
       selectAll: 'Tout sélectionner',
       deselectAll: 'Tout désélectionner',
@@ -1375,6 +1399,20 @@ export default {
     imagesDeleted_other: '{{count}} images supprimées',
   },
   export: {
+    // Neurite-only metric controls.
+    neuriteMetrics: {
+      title: 'Métriques des neurites',
+      description:
+        'Attribue chaque neurite à un soma et exporte des tableaux par cellule avec le stade de développement.',
+      enable: 'Inclure les métriques des neurites',
+      enableHint:
+        'Une exécution par image sur le service ML ; un grand champ confocal prend environ une minute.',
+      classify: 'Filtrer les somas non neuronaux',
+      classifyHint:
+        'Un classifieur affiné rejette les cônes de croissance et les fragments cellulaires. Les objets rejetés restent dans le tableau avec soma_neuronal = 0.',
+      classifyOffWarning:
+        'Sans le filtre, un neurite se terminant dans le propre cône de croissance de la cellule ressemble à une connexion entre deux cellules. Les connexions seront surestimées et la moitié de chaque longueur attribuée au mauvais objet.',
+    },
     mtKymographs: {
       title: 'Analyse de vitesse par kymographie',
       description:

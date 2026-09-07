@@ -489,6 +489,12 @@ export interface Project {
   // by the owner OR an accepted-share annotator via PATCH /projects/:id/verified
   // — unlike title/description/type, which stay owner-only.
   verified?: boolean;
+  // Image scale for the whole project, in micrometres per pixel; null/absent
+  // means "not calibrated". Every consumer must keep that distinct from a
+  // value — they refuse to compute rather than guess a scale, because the
+  // thresholds downstream are in micrometres and a guess yields confidently
+  // wrong numbers rather than approximate ones.
+  pixelSizeUm?: number | null;
 }
 
 export interface ProjectFolder {

@@ -19,6 +19,8 @@ import useDebounce from '@/hooks/useDebounce';
 import { polygonKey } from '@/lib/segmentation';
 import apiClient, { SegmentationPolygon } from '@/lib/api';
 import { toast } from 'sonner';
+import { getErrorMessage } from '@/types';
+import { assignmentClickAction } from './utils/assignmentClick';
 import { logger } from '@/lib/logger';
 import { handleCancelledError } from '@/lib/errorUtils';
 import { transformSegmentationPolygons } from './utils/transformSegmentationPolygons';
@@ -39,6 +41,7 @@ import SegmentationErrorBoundary from './components/SegmentationErrorBoundary';
 
 // Presentational render tree — pure component, all values threaded via props.
 import SegmentationEditorLayout from './components/SegmentationEditorLayout';
+import type { NeuriteColorMode } from './components/NeuriteAssignmentToggle';
 import { useMtTypeLabels } from './hooks/useMtTypeLabels';
 
 import { useVideoFrames } from './hooks/useVideoFrames';
@@ -766,6 +769,66 @@ const SegmentationEditor = () => {
     }
   }, []);
 
+  // What a neurite stroke means: its CLASS (neurite cyan / soma magenta) or the
+  // CELL it belongs to (a soma and its neurites share one colour). Persisted
+  // like `mtColorMode` and for the same reason: it is a way of LOOKING at the
+  // frame, not a property of it, so it should survive a reload and a frame
+  // scrub. Defaults to `class` — that colouring answers "is this segmentation
+  // right", which is the first question, and `assignment` answers "is this
+  // assignment right", which is the second.
+  //
+  // Reads the OLD boolean key on first load so a user who had the switch on
+  // does not silently lose it; nothing writes that key any more.
+  const [neuriteColorMode, setNeuriteColorMode] = useState<NeuriteColorMode>(
+    () => {
+      if (typeof localStorage === 'undefined') return 'class';
+      const stored = localStorage.getItem('neuriteColorMode');
+      if (stored === 'class' || stored === 'assignment') return stored;
+      return localStorage.getItem('neuriteColorBySoma') === 'true'
+        ? 'assignment'
+        : 'class';
+    }
+  );
+  const handleSetNeuriteColorMode = useCallback((mode: NeuriteColorMode) => {
+    setNeuriteColorMode(mode);
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('neuriteColorMode', mode);
+    }
+  }, []);
+
+  const [isAssigningNeurites, setIsAssigningNeurites] = useState(false);
+  const handleAssignNeurites = useCallback(async () => {
+    if (!imageId) return;
+    setIsAssigningNeurites(true);
+    try {
+      const result = await apiClient.assignNeuriteSomas(imageId);
+      // Reload rather than patch local state: the server is what decides the
+      // assignment, and a locally-applied guess would diverge from it the
+      // moment a polygon was attributed differently than expected.
+      await reloadSegmentation();
+      // Switch to the assignment colouring after a successful run. The user
+      // has just asked for an assignment; leaving them in the class colouring,
+      // which does not display one, would hide the very thing they waited for.
+      handleSetNeuriteColorMode('assignment');
+      toast.success(
+        t('segmentation.neurite.assignDone', {
+          assigned: result.assigned,
+          unassigned: result.unassigned,
+        })
+      );
+    } catch (error) {
+      toast.error(
+        // `String(t(key))` because this file's `t` can answer a string ARRAY
+        // (plural forms), which `getErrorMessage` does not accept — the same
+        // adaptation `ProjectDetail` makes at its second call site.
+        getErrorMessage(error, key => String(t(key))) ||
+          String(t('segmentation.neurite.assignFailed'))
+      );
+    } finally {
+      setIsAssigningNeurites(false);
+    }
+  }, [imageId, reloadSegmentation, handleSetNeuriteColorMode, t]);
+
   // Pure render-derivation pipeline (polyline/instance discrimination, legacy
   // edit-mode booleans, hidden/degenerate polygon filter — no viewport culling).
   // Extracted to usePolygonRenderProps for isolated unit testing.
@@ -1138,6 +1201,45 @@ const SegmentationEditor = () => {
       editorRef.current.handlePolygonClick(polygonId);
     },
     [applyAdditiveToggle, clearMultiSelect]
+  );
+
+  // Canvas click in the assignment view: with a neurite selected, clicking a
+  // soma reassigns it. The colouring toggle IS the mode — see
+  // `assignmentClickAction` for why this is not a new `EditMode`.
+  //
+  // Wraps the CANVAS handler, not the sidebar list one: the gesture is a click
+  // on the picture, and reassigning from a list row would be a different
+  // (and much less obvious) interaction.
+  //
+  // The change is LOCAL, exactly like a rename or an instance-id edit, so it
+  // joins the frame's unsaved changes and is written by the normal save.
+  // `somaId` is on the OPTIONAL_POLYGON_FIELDS whitelist, so it survives that
+  // round trip; without the registration the save would silently drop it.
+  const handleCanvasSelectWithAssignment = useCallback(
+    (polygonId: string | null, additive?: boolean) => {
+      // Additive (shift) clicks are multi-selection and must not reassign —
+      // building a selection is not the same gesture as retargeting one.
+      if (!additive) {
+        const polys = editorRef.current.getPolygons();
+        const action = assignmentClickAction(
+          polys.find(p => p.id === editorRef.current.selectedPolygonId),
+          polygonId ? polys.find(p => p.id === polygonId) : null,
+          projectType === 'neurite' && neuriteColorMode === 'assignment'
+        );
+        if (action.kind === 'reassign') {
+          handleUpdatePolygonField(action.neuriteId, { somaId: action.somaId });
+        }
+      }
+      // Select either way. After a reassignment that leaves the SOMA selected,
+      // so the next click behaves ordinarily and no state can get stuck.
+      handleCanvasSelect(polygonId, additive);
+    },
+    [
+      projectType,
+      neuriteColorMode,
+      handleUpdatePolygonField,
+      handleCanvasSelect,
+    ]
   );
 
   // Assign (or clear) a microtubule type label. When ≥2 MTs are multi-selected
@@ -1609,7 +1711,7 @@ const SegmentationEditor = () => {
         handleDeletePolygonFromFrame={handleDeletePolygonFromFrame}
         deleteScopeDialog={deleteScope.scopeDialog}
         handlePropagateTrack={handlePropagateTrack}
-        handleCanvasSelect={handleCanvasSelect}
+        handleCanvasSelect={handleCanvasSelectWithAssignment}
         handlePropagateSelected={handlePropagateSelected}
         handleDeleteSelected={handleDeleteSelected}
         handleDeleteSelectedFromFrame={handleDeleteSelectedFromFrame}
@@ -1628,6 +1730,10 @@ const SegmentationEditor = () => {
         mtLabelById={mtLabelById}
         mtColorById={mtColorById}
         mtColorMode={mtColorMode}
+        neuriteColorMode={neuriteColorMode}
+        onSetNeuriteColorMode={handleSetNeuriteColorMode}
+        onAssignNeurites={handleAssignNeurites}
+        isAssigningNeurites={isAssigningNeurites}
         onSetMtColorMode={handleSetMtColorMode}
         onChangeMtType={handleChangeMtType}
         onCreateMtLabel={handleCreateMtLabel}

@@ -108,6 +108,7 @@ from api.metrics_endpoint import router as metrics_router
 from api.monitoring import router as monitoring_router
 from api.tracker_kymograph import router as tracker_kymograph_router
 from api.mt_metrics import router as mt_metrics_router
+from api.neurite_metrics import router as neurite_metrics_router
 from api.frap_targets import router as frap_router
 from api._errors import internal_error
 from ml.model_loader import ModelLoader
@@ -233,6 +234,7 @@ app.include_router(monitoring_router, prefix="/api/v1")
 app.include_router(tracker_kymograph_router, prefix="/api/v1")
 # Microtubule per-channel intensity metrics (used by project export).
 app.include_router(mt_metrics_router, prefix="/api/v1")
+app.include_router(neurite_metrics_router, prefix="/api/v1")
 # FRAP targeting: synchronous segment-and-select for a JOBS-run microscope call.
 app.include_router(frap_router, prefix="/api/v1")
 

@@ -38,6 +38,9 @@ import {
 import { useSharedAdvancedExport } from './hooks/useSharedAdvancedExport';
 import { useLanguage } from '@/contexts/useLanguage';
 import { ProjectImage, isMicrotubuleProject } from '@/types';
+import NeuriteMetricsSection, {
+  type NeuriteMetricsOptions,
+} from './components/NeuriteMetricsSection';
 import { EXPORT_DEFAULTS } from '@/lib/export-config';
 import { ImageSelectionGrid } from './components/ImageSelectionGrid';
 import { MicrotubuleMetricsSection } from './components/MicrotubuleMetricsSection';
@@ -71,6 +74,10 @@ interface AdvancedExportDialogProps {
   projectName: string;
   /** Used to gate microtubule-specific export controls. */
   projectType?: string | null;
+  /** The project's stored µm/px, used to prefill the scale box. In practice
+   *  this is the ONLY source: measured 2026-09-07, no production image row
+   *  carries `pixelSizeUm`, so the image-derived auto-fill below never fires. */
+  projectPixelSizeUm?: number | null;
   images: ProjectImage[];
   selectedImageIds?: string[];
   onExportingChange?: (isExporting: boolean) => void;
@@ -79,6 +86,15 @@ interface AdvancedExportDialogProps {
 
 /** Default MT metrics tuning. Per-channel intensity (incl. the integrated sum)
  *  is always computed for every channel — these two only tune the band. */
+/** Neurite metrics are OFF by default: one ML round trip per frame, ~38 s for
+ *  a 44 Mpx confocal field. Kept here beside MT_METRICS_DEFAULTS rather than in
+ *  the section file, which would then export a non-component and break fast
+ *  refresh for the whole module. */
+const NEURITE_METRICS_DEFAULTS: NeuriteMetricsOptions = {
+  enabled: false,
+  classify: true,
+};
+
 const MT_METRICS_DEFAULTS = {
   thicknessPx: 5,
   marginMultiplier: 2,
@@ -107,6 +123,7 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
       projectId,
       projectName,
       projectType,
+      projectPixelSizeUm,
       images,
       selectedImageIds,
       onExportingChange,
@@ -116,6 +133,7 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
       // Shared predicate guards the plural-`microtubules`-vs-singular-
       // `microtubule`-model-id footgun that once silently hid this section.
       const isMTProject = isMicrotubuleProject(projectType);
+      const isNeuriteProject = projectType === 'neurite';
 
       // A kymograph needs a time axis (≥ 2 frames). The images listing returns
       // per-frame rows, not container rows, so this counts frames per container
@@ -211,12 +229,24 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
         const calibrated = images.find(
           img => typeof img.pixelSizeUm === 'number' && img.pixelSizeUm > 0
         );
-        if (calibrated?.pixelSizeUm) {
-          updateExportOptions({
-            pixelToMicrometerScale: calibrated.pixelSizeUm,
-          });
+        // Image first, project second — an image that carries its own
+        // calibration is more specific than the project's. The backend applies
+        // the same precedence, so prefilling here shows the user the number the
+        // export would have used anyway rather than changing the outcome.
+        const prefill =
+          calibrated?.pixelSizeUm ??
+          (typeof projectPixelSizeUm === 'number' && projectPixelSizeUm > 0
+            ? projectPixelSizeUm
+            : undefined);
+        if (prefill) {
+          updateExportOptions({ pixelToMicrometerScale: prefill });
         }
-      }, [images, exportOptions.pixelToMicrometerScale, updateExportOptions]);
+      }, [
+        images,
+        projectPixelSizeUm,
+        exportOptions.pixelToMicrometerScale,
+        updateExportOptions,
+      ]);
 
       const handleExport = async () => {
         try {
@@ -448,6 +478,17 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
                       }}
                       onChange={next =>
                         updateExportOptions({ mtMetrics: next })
+                      }
+                    />
+                  )}
+
+                  {isNeuriteProject && (
+                    <NeuriteMetricsSection
+                      value={
+                        exportOptions.neuriteMetrics ?? NEURITE_METRICS_DEFAULTS
+                      }
+                      onChange={next =>
+                        updateExportOptions({ neuriteMetrics: next })
                       }
                     />
                   )}

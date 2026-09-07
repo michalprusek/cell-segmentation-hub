@@ -38,6 +38,7 @@ import {
   MICROTUBULE_LABEL_PREFIX,
 } from '../../utils/instanceLabels';
 import { Semaphore, runGated } from '../../utils/concurrency';
+import { neutraliseCsvFormula } from './csvSafety';
 import {
   estimateMlRequestTimeoutMs,
   megapixelsFromFrames,
@@ -1440,7 +1441,12 @@ function csvCell(v: unknown): string {
     // for typical-range numbers.
     return Number.isInteger(v) ? String(v) : v.toFixed(6).replace(/\.?0+$/, '');
   }
-  const s = String(v);
+  // Guard BEFORE quoting — see `neutraliseCsvFormula`. The MT sheets carry
+  // image and frame NAMES, which are the filenames the uploader chose, so a
+  // name like `=HYPERLINK("http://…")` would otherwise run when the sheet is
+  // opened. Adopted 2026-09-07 alongside the neurite exporter so the two
+  // cannot drift; this changes the bytes of an export for such a name only.
+  const s = neutraliseCsvFormula(String(v));
   if (s.includes(',') || s.includes('"') || s.includes('\n')) {
     return `"${s.replace(/"/g, '""')}"`;
   }

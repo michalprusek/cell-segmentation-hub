@@ -314,6 +314,25 @@ router.post(
 );
 
 /**
+ * @route POST /api/segmentation/:imageId/assign-neurites
+ * @description Compute which soma each neurite belongs to, on the image's
+ *   CURRENT polygons, and store the result on them. Neurite projects only.
+ * @access Private
+ */
+router.post(
+  '/:imageId/assign-neurites',
+  authenticate,
+  [
+    param('imageId').isUUID(),
+    // Optional: absent means "classify", which is the safe default. Turning
+    // it off over-reports connections between cells.
+    body('classify').optional().isBoolean(),
+  ],
+  handleValidation,
+  segmentationController.assignNeuriteSomas
+);
+
+/**
  * @route POST /api/segmentation/kymograph
  * @description Build a kymograph for one microtubule polyline across all
  *   frames of its container video. The frontend KymographModal posts

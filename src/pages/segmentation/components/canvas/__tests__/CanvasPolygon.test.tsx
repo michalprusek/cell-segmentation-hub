@@ -8,6 +8,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import CanvasPolygon from '../CanvasPolygon';
 import { createMockPolygon } from '@/test-utils/segmentationTestUtils';
+import { colorFromInstanceId } from '../../../utils/instanceColors';
 import { EditMode, type VertexDragState } from '@/pages/segmentation/types';
 
 // Mock the heavy dependencies
@@ -173,6 +174,142 @@ describe('CanvasPolygon', () => {
 
   // Regression guard for the multi-select style unification (2026-08-28).
   // A Shift+click multi-selection must render EXACTLY like a single selection.
+  describe('Colouring neurites by the soma they belong to', () => {
+    const strokeOf = (props: Record<string, unknown>) => {
+      const { container, unmount } = render(
+        <svg width="800" height="600" viewBox="0 0 800 600">
+          <CanvasPolygon {...defaultProps} {...props} />
+        </svg>
+      );
+      const path = container.querySelector('path.polygon-path');
+      const stroke = path?.getAttribute('stroke') ?? null;
+      unmount();
+      return stroke;
+    };
+
+    const neurite = (extra: Record<string, unknown> = {}) =>
+      createMockPolygon({
+        id: 'n1',
+        partClass: 'neurite',
+        ...extra,
+      });
+
+    it('leaves the class colouring alone while the mode is off', () => {
+      // Cyan, the neurite class colour. This is the default view and it
+      // answers "is the segmentation right" — a different question.
+      const off = strokeOf({ polygon: neurite({ somaId: 's1' }) });
+      expect(off).toBe('#06b6d4');
+    });
+
+    it('paints a neurite with its SOMA colour when the mode is on', () => {
+      const on = strokeOf({
+        polygon: neurite({ somaId: 's1' }),
+        colorBySoma: true,
+      });
+      expect(on).not.toBe('#06b6d4');
+      expect(on).toBe(colorFromInstanceId('s1'));
+    });
+
+    it('gives a soma and its neurite the same stroke', () => {
+      // The pairing is the whole point: a cell and its processes have to read
+      // as one object.
+      const somaStroke = strokeOf({
+        polygon: createMockPolygon({ id: 's1', partClass: 'soma' }),
+        colorBySoma: true,
+      });
+      const neuriteStroke = strokeOf({
+        polygon: neurite({ somaId: 's1' }),
+        colorBySoma: true,
+      });
+      expect(neuriteStroke).toBe(somaStroke);
+    });
+
+    it('two cells do not share a stroke', () => {
+      const a = strokeOf({
+        polygon: neurite({ id: 'a', somaId: 's1' }),
+        colorBySoma: true,
+      });
+      const b = strokeOf({
+        polygon: neurite({ id: 'b', somaId: 's2' }),
+        colorBySoma: true,
+      });
+      expect(a).not.toBe(b);
+    });
+
+    it('recolours a LIVE component when the mode is switched', () => {
+      // The memo that computes the stroke lists individual polygon FIELDS
+      // rather than the object, so `colorBySoma` and `somaId` have to be named
+      // in it explicitly. Every other test here mounts fresh, and a fresh
+      // mount always recomputes — only a rerender can catch a stale memo.
+      // ESLint's exhaustive-deps found this before the tests did.
+      const poly = createMockPolygon({
+        id: 'n1',
+        partClass: 'neurite',
+        somaId: 's1',
+      });
+      const { container, rerender } = render(
+        <svg width="800" height="600" viewBox="0 0 800 600">
+          <CanvasPolygon {...defaultProps} polygon={poly} colorBySoma={false} />
+        </svg>
+      );
+      const stroke = () =>
+        container.querySelector('path.polygon-path')?.getAttribute('stroke');
+      expect(stroke()).toBe('#06b6d4');
+
+      rerender(
+        <svg width="800" height="600" viewBox="0 0 800 600">
+          <CanvasPolygon {...defaultProps} polygon={poly} colorBySoma={true} />
+        </svg>
+      );
+      expect(stroke()).toBe(colorFromInstanceId('s1'));
+    });
+
+    it('recolours a LIVE component when the neurite is reassigned', () => {
+      const { container, rerender } = render(
+        <svg width="800" height="600" viewBox="0 0 800 600">
+          <CanvasPolygon
+            {...defaultProps}
+            polygon={createMockPolygon({
+              id: 'n1',
+              partClass: 'neurite',
+              somaId: 's1',
+            })}
+            colorBySoma
+          />
+        </svg>
+      );
+      const stroke = () =>
+        container.querySelector('path.polygon-path')?.getAttribute('stroke');
+      expect(stroke()).toBe(colorFromInstanceId('s1'));
+
+      rerender(
+        <svg width="800" height="600" viewBox="0 0 800 600">
+          <CanvasPolygon
+            {...defaultProps}
+            polygon={createMockPolygon({
+              id: 'n1',
+              partClass: 'neurite',
+              somaId: 's2',
+            })}
+            colorBySoma
+          />
+        </svg>
+      );
+      expect(stroke()).toBe(colorFromInstanceId('s2'));
+    });
+
+    it('falls back to the class colour for an UNASSIGNED neurite', () => {
+      // Not a colour of its own: an unassigned process has to stay visibly
+      // different from an assigned one, or a user scanning for the cells the
+      // pipeline could not resolve would find nothing.
+      const stroke = strokeOf({
+        polygon: neurite(),
+        colorBySoma: true,
+      });
+      expect(stroke).toBe('#06b6d4');
+    });
+  });
+
   // Multi-select used to paint a dash-dot `6 3` stroke at 2.2x width and skip
   // the selected colour, the glow filter and the `.polygon-selected`
   // drop-shadow entirely, so it read as a different kind of selection.

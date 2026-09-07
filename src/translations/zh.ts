@@ -261,6 +261,11 @@ export default {
       '{{count}} 个现有分割可能不再符合 "{{type}}" 导出格式。重新分割以更新指标。',
     verified: '已验证',
     toggleVerified: '切换验证状态',
+    pixelSize: '比例：',
+    pixelSizeUnset: 'µm/px',
+    pixelSizeAria: '项目图像比例（微米每像素）',
+    pixelSizeHint:
+      '本项目每像素对应的微米数。任何以 µm 为单位的测量都需要它；未知时留空。',
     projectVerified: '项目已标记为已验证',
     projectUnverified: '已取消项目验证标记',
     failedToUpdateVerified: '无法更新验证状态',
@@ -827,6 +832,21 @@ export default {
     },
   },
   segmentation: {
+    // Neurite-only editor controls.
+    neurite: {
+      assignDone: '已归属 {{assigned}} 条神经突，{{unassigned}} 条未能归属',
+      assignFailed: '神经突归属失败',
+      assign: '将神经突归属到细胞',
+      assignHint: '基于当前状态的多边形运行，因此包含你的修改。',
+      color: {
+        label: '颜色：',
+        byClass: '类别',
+        byCell: '细胞',
+      },
+      unassignedCount: '{{count}} 条神经突无法归属到任何细胞',
+      unassignedCount_other: '{{count}} 条神经突无法归属到任何细胞',
+    },
+
     selection: {
       selectAll: '全选',
       deselectAll: '取消全选',
@@ -1270,6 +1290,18 @@ export default {
     imagesDeleted_other: '已删除 {{count}} 张图片',
   },
   export: {
+    // Neurite-only metric controls.
+    neuriteMetrics: {
+      title: '神经突指标',
+      description: '将每条神经突归属到一个胞体，并导出带发育阶段的按细胞表格。',
+      enable: '包含神经突指标',
+      enableHint: 'ML 服务对每帧运行一次；较大的共聚焦视野约需一分钟。',
+      classify: '过滤非神经元胞体',
+      classifyHint:
+        '经微调的分类器会剔除生长锥和细胞碎片。被剔除的对象仍保留在表中，soma_neuronal = 0。',
+      classifyOffWarning:
+        '不启用过滤时，终止于本细胞生长锥的神经突看起来像是两个细胞之间的连接。连接数会被高估，且每段长度的一半会记到错误的对象上。',
+    },
     mtKymographs: {
       title: '微管图速度分析',
       description: '在每个微管的微管图上检测移动粒子并导出其速度。',

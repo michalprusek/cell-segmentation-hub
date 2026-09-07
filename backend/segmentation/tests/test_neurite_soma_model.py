@@ -327,6 +327,46 @@ def test_emitted_polygons_carry_partclass_not_only_class():
     assert len({p["id"] for p in polys}) == 2
 
 
+def test_a_short_neurite_survives_the_min_area_filter():
+    """A 2 um process must reach the editor, not be filtered away as noise.
+
+    `PostprocessingService.min_area` defaults to 50 px service-wide. A neurite
+    is 2-3 px across, so at the 0.180 um/px these frames are acquired at,
+    clearing 50 px takes a 3.6 um process -- while the staging rules count a
+    neurite from 2 um. The default was therefore deciding developmental stages.
+
+    The blob below is 36 px: it fails the old filter and passes the new one, so
+    this test goes red the moment `pp.min_area = 20` is removed. A blob of any
+    other size could not tell the two apart.
+    """
+    torch = pytest.importorskip("torch")
+    if not torch.cuda.is_available():
+        pytest.skip("ml.model_loader imports mamba_ssm/Triton, which need CUDA")
+    from PIL import Image
+
+    from ml.model_loader import ModelLoader
+
+    label = np.zeros((200, 200), np.uint8)
+    label[20:26, 20:26] = 1  # 36 px: above 20, below 50
+    label[120:180, 120:180] = 2  # a soma, so the frame is a realistic one
+
+    class _StubNet:
+        def predict(self, image_np):
+            return label
+
+    loader = ModelLoader(base_path=str(SEG_ROOT))
+    loader.loaded_models["neurite_soma"] = _StubNet()
+
+    result = loader.predict_neurite_soma(
+        Image.fromarray(np.zeros((200, 200), np.uint8))
+    )
+
+    assert result["processing_info"]["num_per_class"]["neurite"] == 1, (
+        "a 36 px neurite was filtered away — min_area is back above it, and "
+        "every process shorter than 3.6 um is being dropped before staging"
+    )
+
+
 def test_registry_entry_points_at_a_directory_bundle():
     """Unique among the models here: the weights path is a DIRECTORY.
 

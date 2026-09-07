@@ -1,0 +1,26 @@
+# Ruff config.
+#
+# This file exists for ONE reason: `.lintstagedrc.json` runs
+# `ruff check --fix` on staged `*.py`, and that would REWRITE vendored research
+# code on commit.
+#
+# `backend/segmentation/models/neurite_metrics/` is a verbatim copy of the
+# runtime subset of the `neurite-metrics/` research package, carrying four
+# marked `VENDOR EDIT` deviations and nothing else. Staying byte-comparable is
+# the point: re-syncing with the research package has to be a file-by-file diff,
+# not a merge against whatever a formatter decided. Ruff reports 39 findings
+# there (mostly `EXE001` shebang-without-+x and import ordering); every one of
+# them is present upstream and none of them is a defect.
+#
+# Everything else keeps ruff's default rule set — this is an exclusion, not a
+# relaxation.
+#
+# `force-exclude` is the load-bearing half. Without it an exclusion is ignored
+# for paths passed EXPLICITLY on the command line, which is exactly how
+# lint-staged invokes ruff — it appends the staged filenames — so the vendored
+# files would still be rewritten. Verified both ways: `ruff check <the dir>`
+# reports 39 findings without it and 0 with it.
+force-exclude = true
+extend-exclude = [
+    "backend/segmentation/models/neurite_metrics",
+]

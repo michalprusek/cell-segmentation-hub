@@ -267,6 +267,11 @@ export default {
       '{{count}} segmentaciones existentes pueden no coincidir con el formato de exportación "{{type}}". Vuelva a segmentar para actualizar las métricas.',
     verified: 'Verificado',
     toggleVerified: 'Alternar verificación',
+    pixelSize: 'Escala:',
+    pixelSizeUnset: 'µm/px',
+    pixelSizeAria: 'Escala de imagen del proyecto en micrómetros por píxel',
+    pixelSizeHint:
+      'Micrómetros por píxel para este proyecto. Necesario para cualquier medición en µm; dejar vacío si se desconoce.',
     projectVerified: 'Proyecto marcado como verificado',
     projectUnverified: 'Se ha eliminado la verificación del proyecto',
     failedToUpdateVerified: 'Error al actualizar el estado de verificación',
@@ -885,6 +890,24 @@ export default {
     },
   },
   segmentation: {
+    // Neurite-only editor controls.
+    neurite: {
+      assignDone:
+        '{{assigned}} neuritas asignadas, {{unassigned}} no se pudieron',
+      assignFailed: 'No se pudieron asignar las neuritas',
+      assign: 'Asignar neuritas a células',
+      assignHint:
+        'Se ejecuta sobre los polígonos tal como están ahora, por lo que se incluyen las correcciones.',
+      color: {
+        label: 'Color:',
+        byClass: 'Clase',
+        byCell: 'Célula',
+      },
+      unassignedCount: '{{count}} neurita no pudo asignarse a una célula',
+      unassignedCount_other:
+        '{{count}} neuritas no pudieron asignarse a una célula',
+    },
+
     selection: {
       selectAll: 'Seleccionar todo',
       deselectAll: 'Deseleccionar todo',
@@ -1367,6 +1390,20 @@ export default {
     imagesDeleted_other: '{{count}} imágenes eliminadas',
   },
   export: {
+    // Neurite-only metric controls.
+    neuriteMetrics: {
+      title: 'Métricas de neuritas',
+      description:
+        'Asigna cada neurita a un soma y exporta tablas por célula con el estadio de desarrollo.',
+      enable: 'Incluir métricas de neuritas',
+      enableHint:
+        'Una ejecución por fotograma en el servicio de ML; un campo confocal grande tarda alrededor de un minuto.',
+      classify: 'Filtrar somas no neuronales',
+      classifyHint:
+        'Un clasificador ajustado rechaza conos de crecimiento y fragmentos celulares. Los objetos rechazados permanecen en la tabla con soma_neuronal = 0.',
+      classifyOffWarning:
+        'Sin el filtro, una neurita que termina en el propio cono de crecimiento de la célula parece una conexión entre dos células. Las conexiones se sobrestimarán y la mitad de cada longitud se atribuirá al objeto equivocado.',
+    },
     mtKymographs: {
       title: 'Análisis de velocidad por kimografía',
       description:

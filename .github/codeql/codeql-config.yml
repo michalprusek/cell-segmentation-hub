@@ -46,5 +46,22 @@ paths-ignore:
   # is enough noise to bury a genuine finding in our own code.
   - '**/vendor/**'
 
+  # The neurite-metrics research pipeline, vendored under the ML service for
+  # the same reason and with the same property: 5 of its 8 files are BYTE
+  # IDENTICAL to upstream and the other 3 carry only four marked `VENDOR EDIT`
+  # lines (import paths and the device ladder), so it can be re-synced without
+  # carrying a patch. Fixing a finding inside it would destroy exactly that.
+  #
+  # What is being excluded, checked individually rather than waved away:
+  #   - `py/hash-unhashable-value` (skeleton_graph.py:93) is a FALSE POSITIVE.
+  #     `seen.add(cur)` adds a value that traces back to `idx.get(...)`, whose
+  #     values are `enumerate` indices; measured in the ml container, every one
+  #     is a plain `int`. CodeQL cannot narrow `dict.get` here.
+  #   - `py/file-not-closed` (soma_instances.py:200) is real but sits in the
+  #     module's `__main__` evaluation harness, which the service never imports
+  #     and which exits immediately after.
+  #   - two `note`-level unused import / local findings.
+  - 'backend/segmentation/models/neurite_metrics/**'
+
 queries:
   - uses: security-and-quality

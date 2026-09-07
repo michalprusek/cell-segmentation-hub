@@ -38,6 +38,8 @@ interface ProjectToolbarProps {
   showExportButton?: boolean;
   projectName?: string;
   projectType?: string | null;
+  /** The project's stored µm/px, prefills the export modal's scale box. */
+  projectPixelSizeUm?: number | null;
   images?: unknown[];
   /** How many images the select-all checkbox actually acts on — the SEARCH-
    *  FILTERED count, which is not `images.length` whenever a search is active.
@@ -87,6 +89,7 @@ const ProjectToolbar = ({
   showExportButton = true,
   projectName = 'Project',
   projectType,
+  projectPixelSizeUm,
   images = [],
   selectableCount,
   selectedImageIds,
@@ -458,6 +461,7 @@ const ProjectToolbar = ({
           projectId={projectId}
           projectName={projectName}
           projectType={projectType ?? null}
+          projectPixelSizeUm={projectPixelSizeUm}
           images={images}
           selectedImageIds={selectedImageIds}
           onExportingChange={onExportingChange || setIsExporting}

@@ -95,6 +95,20 @@ model Project {
   verified          Boolean             @default(false)
   verifiedAt        DateTime?
   verifiedBy        String?
+  // Image scale in micrometres per pixel, for the whole project.
+  //
+  // Lives on the PROJECT, not the image, because nothing fills it per image:
+  // measured 2026-09-07, all 10 857 production images have `images.pixelSizeUm`
+  // null, in every project type. The only scale a user ever supplies is the one
+  // they type on the export modal, which meant it had to be retyped for every
+  // export and was unavailable anywhere else — so the editor's neurite
+  // assignment, whose soma splitting is calibrated in micrometres, could not
+  // run at all.
+  //
+  // An acquisition is one microscope at one objective, so one value per project
+  // is the right grain. An image row that DOES carry its own value still wins,
+  // leaving room for a calibrated ND2 to fill it in future.
+  pixelSizeUm       Float?
   images            Image[]
   exportLogs        ExportLog[]
   user              User                @relation(fields: [userId], references: [id], onDelete: Cascade)

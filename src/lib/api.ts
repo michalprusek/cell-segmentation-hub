@@ -63,6 +63,17 @@ export interface Project {
   image_count?: number;
   // "All annotations in the project have been reviewed and passed."
   verified?: boolean;
+  // µm per pixel for the whole project; null = not calibrated. Kept distinct
+  // from undefined and from 0 — every consumer refuses to compute rather than
+  // guess a scale.
+  //
+  // NOTE this interface is a SECOND `Project`, alongside the one in
+  // `@/types`; `mapProjectFields` returns this one while most components use
+  // that one, so a field has to be declared in BOTH or it type-errors at
+  // whichever call site reads the other. Same shape as the `Polygon` type
+  // proliferation recorded in CLAUDE.md; not unified here because that touches
+  // every consumer.
+  pixelSizeUm?: number | null;
 }
 
 /**
@@ -142,6 +153,9 @@ export interface SegmentationPolygon {
   /** User-assigned microtubule type-label id (references the project's
    *  `mtTypeLabels` palette). Set/cleared via the tracks/type endpoint. */
   mtType?: string;
+  /** Which soma this neurite belongs to, as the `id` of that soma's polygon.
+   *  Neurite projects only; registered in OPTIONAL_POLYGON_FIELDS. */
+  somaId?: string;
 }
 
 export interface SegmentationResultData {
@@ -695,6 +709,12 @@ class ApiClient {
       updated_at:
         (project.updatedAt as string) || (project.updated_at as string),
       user_id: (project.userId as string) || (project.user_id as string),
+      // Listed HERE or it never reaches a component: this mapper is
+      // enumerative, which is the "FE mapper strips field" pattern in
+      // CLAUDE.md. `null` is preserved as null — it means "not calibrated" and
+      // must not collapse to undefined, which reads as "not sent".
+      pixelSizeUm:
+        typeof project.pixelSizeUm === 'number' ? project.pixelSizeUm : null,
     };
 
     // Add optional fields only if they exist
@@ -931,6 +951,8 @@ class ApiClient {
       name?: string;
       description?: string;
       type?: import('@/types').ProjectType;
+      /** µm per pixel for the whole project; `null` clears the calibration. */
+      pixelSizeUm?: number | null;
     }
   ): Promise<Project> {
     // Convert 'name' to 'title' if provided
@@ -1956,6 +1978,29 @@ class ApiClient {
     );
     const data = this.extractData(response);
     return { removed: Number(data?.removed ?? 0) };
+  }
+
+  /**
+   * Compute which soma each neurite belongs to and store it on the polygons.
+   *
+   * Runs on the image's CURRENT polygons, so re-running after a correction
+   * reassigns what the user actually drew. `classify` defaults to true on the
+   * server; passing false over-reports connections between cells and should
+   * only come from an explicit choice.
+   */
+  async assignNeuriteSomas(
+    imageId: string,
+    options: { classify?: boolean } = {}
+  ): Promise<{ assigned: number; unassigned: number; changed: number }> {
+    const response = await this.instance.post(
+      `/segmentation/${imageId}/assign-neurites`,
+      options.classify === undefined ? {} : { classify: options.classify }
+    );
+    return this.extractData(response) as {
+      assigned: number;
+      unassigned: number;
+      changed: number;
+    };
   }
 
   /**

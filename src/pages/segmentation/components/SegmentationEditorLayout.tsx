@@ -2,6 +2,7 @@ import React from 'react';
 import { generateSafePolygonKey } from '@/lib/polygonIdUtils';
 import { ensureBrowserCompatibleUrl } from '@/lib/tiffUtils';
 import { isMicrotubuleProject } from '@/types';
+import { isUnassignedNeurite } from '../utils/somaAssignmentColor';
 import { resolveMtColor } from '../utils/instanceColors';
 
 import VerticalToolbar from './VerticalToolbar';
@@ -9,6 +10,9 @@ import TopToolbar from './TopToolbar';
 import PolygonListPanel from './PolygonListPanel';
 import SpermInstancePanel from './SpermInstancePanel';
 import MicrotubuleInstancePanel from './MicrotubuleInstancePanel';
+import NeuriteAssignmentToggle, {
+  type NeuriteColorMode,
+} from './NeuriteAssignmentToggle';
 import ChannelsSection from './sidebar/ChannelsSection';
 import { useSidebarWidth } from '../hooks/useSidebarWidth';
 import { MIN_PANEL_WIDTH, MAX_PANEL_WIDTH } from '../utils/panelWidth';
@@ -170,6 +174,12 @@ export interface SegmentationEditorLayoutProps {
   mtLabelById: Map<string, MTTypeLabel>;
   mtColorById: Map<string, string>;
   mtColorMode: 'instance' | 'semantic';
+  /** What a neurite stroke means: its CLASS, or the cell it belongs to.
+   *  Neurite projects only. */
+  neuriteColorMode: NeuriteColorMode;
+  onSetNeuriteColorMode: (mode: NeuriteColorMode) => void;
+  onAssignNeurites: () => void;
+  isAssigningNeurites: boolean;
   onSetMtColorMode: (mode: 'instance' | 'semantic') => void;
   onChangeMtType: (polygonId: string, mtType: string | null) => void;
   onCreateMtLabel: (name: string, color: string) => Promise<MTTypeLabel | null>;
@@ -266,6 +276,10 @@ const SegmentationEditorLayout: React.FC<SegmentationEditorLayoutProps> = ({
   mtLabelById,
   mtColorById,
   mtColorMode,
+  neuriteColorMode,
+  onSetNeuriteColorMode,
+  onAssignNeurites,
+  isAssigningNeurites,
   onSetMtColorMode,
   onChangeMtType,
   onCreateMtLabel,
@@ -525,6 +539,14 @@ const SegmentationEditorLayout: React.FC<SegmentationEditorLayoutProps> = ({
                               ? mtColorMode
                               : 'instance'
                           }
+                          // Gated to neurite projects: `somaAssignmentColor`
+                          // only answers for neurite/soma part classes, but
+                          // gating here keeps the flag from travelling on every
+                          // other project's polygons and re-rendering them.
+                          colorBySoma={
+                            projectType === 'neurite' &&
+                            neuriteColorMode === 'assignment'
+                          }
                           semanticColor={
                             // Only resolve the by-label colour when it will be
                             // used (semantic mode); in the default instance mode
@@ -694,6 +716,20 @@ const SegmentationEditorLayout: React.FC<SegmentationEditorLayoutProps> = ({
                     onPartClassChange={setActivePartClass}
                     activeInstanceId={activeInstanceId}
                     onInstanceIdChange={setActiveInstanceId}
+                  />
+                )}
+                {projectType === 'neurite' && (
+                  <NeuriteAssignmentToggle
+                    colorMode={neuriteColorMode}
+                    onSetColorMode={onSetNeuriteColorMode}
+                    unassignedCount={
+                      editor.polygons.filter(isUnassignedNeurite).length
+                    }
+                    onAssign={onAssignNeurites}
+                    isAssigning={isAssigningNeurites}
+                    canAssign={editor.polygons.some(
+                      p => p.partClass === 'neurite'
+                    )}
                   />
                 )}
                 {hasPolylines && polylineKind === 'microtubule' && (

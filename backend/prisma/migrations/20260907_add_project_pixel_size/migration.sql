@@ -1,0 +1,29 @@
+-- A per-project image scale, in micrometres per pixel.
+--
+-- WHY IT IS ON THE PROJECT AND NOT THE IMAGE. `images.pixelSizeUm` already
+-- exists and is filled by nothing: measured 2026-09-07 on this database, all
+-- 10 857 image rows have it null, across every project type (spheroid 4997,
+-- microtubules 3762, spheroid_invasive 1118, sperm 778, microcapsule 174,
+-- wound 24, neurite 4). The only scale a user ever supplies is the number they
+-- type on the export modal, which is discarded when the dialog closes.
+--
+-- That is why the neurite export skipped every frame with "pixel size unknown"
+-- and the editor's "Assign neurites to cells" button could never run: the soma
+-- splitting it depends on is calibrated in micrometres (h-maxima at 2 um depth
+-- in the distance transform), and guessing a scale there does not give
+-- approximate somas, it gives confidently wrong ones.
+--
+-- An acquisition is one microscope at one objective, so one value per project
+-- is the right grain. An image row that DOES carry its own value still wins in
+-- the read path, leaving room for a calibrated ND2 to fill it in future.
+--
+-- Hand-written rather than taken from `prisma migrate diff`, for the reason
+-- spelled out in `20260902_add_export_log/migration.sql`: the production schema
+-- has drifted from the migration history since 2026-06, and a diff against it
+-- proposes dropping real tables. Only the statement below is intended here.
+--
+-- Idempotent, so re-running against a database that already has the column is
+-- a no-op rather than a failed deploy. Nullable with no default: NULL means
+-- "not calibrated", which the read path must keep distinguishing from a value,
+-- because every consumer refuses to guess rather than producing wrong numbers.
+ALTER TABLE "projects" ADD COLUMN IF NOT EXISTS "pixelSizeUm" DOUBLE PRECISION;
