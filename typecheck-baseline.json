@@ -5,10 +5,10 @@
   "_doNotEditByHand": true,
   "typescriptVersion": "5.9.3",
   "totals": {
-    "tsconfig.app.json": 377,
+    "tsconfig.app.json": 376,
     "tsconfig.node.json": 21,
     "tsconfig.test.json": 1214,
-    "all": 1612
+    "all": 1611
   },
   "projects": {
     "tsconfig.app.json": {
@@ -368,7 +368,7 @@
         "TS2554: Expected 1-2 arguments, but got 4.": 2,
         "TS2554: Expected 1-2 arguments, but got 5.": 1,
         "TS2554: Expected 1-2 arguments, but got 6.": 1,
-        "TS7030: Not all code paths return a value.": 2
+        "TS7030: Not all code paths return a value.": 1
       },
       "src/pages/segmentation/hooks/usePolygonSelection.ts": {
         "TS2554: Expected 1-2 arguments, but got 4.": 1
@@ -1369,7 +1369,8 @@
       "src/pages/segmentation/components/EditorHeader.tsx": {
         "TS2322: Type 'string | string[]' is not assignable to type 'string | undefined'.": 1,
         "TS2339: Property 'position' does not exist on type 'QueueStats'.": 1,
-        "TS6307: File 'src/pages/segmentation/components/SegmentationStatusIndicator.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
+        "TS6307: File 'src/pages/segmentation/components/SegmentationStatusIndicator.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
+        "TS6307: File 'src/pages/segmentation/components/UnsavedChangesDialog.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
       },
       "src/pages/segmentation/components/KymographModal.tsx": {
         "TS2322: Type 'string | string[] | undefined' is not assignable to type 'string | undefined'.": 1,
@@ -1548,7 +1549,7 @@
         "TS2554: Expected 1-2 arguments, but got 6.": 1,
         "TS6307: File 'src/pages/segmentation/hooks/useKeyboardShortcuts.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
         "TS6307: File 'src/pages/segmentation/hooks/usePolygonSlicing.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
-        "TS7030: Not all code paths return a value.": 2
+        "TS7030: Not all code paths return a value.": 1
       },
       "src/pages/segmentation/hooks/usePolygonSelection.ts": {
         "TS2554: Expected 1-2 arguments, but got 4.": 1

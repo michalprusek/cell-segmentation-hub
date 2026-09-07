@@ -994,6 +994,13 @@ export default {
       zoomOut: 'Verkleinern',
       resetViewTooltip: 'Ansicht zurücksetzen (R)',
       resetView: 'Zurücksetzen',
+      leaveConfirmTitle: 'Änderungen vor dem Verlassen speichern?',
+      leaveConfirmDescription:
+        'Dieses Bild hat nicht gespeicherte Änderungen. Wenn Sie ohne Speichern gehen, gehen sie verloren.',
+      saveAndLeave: 'Speichern und verlassen',
+      leaveWithoutSaving: 'Ohne Speichern verlassen',
+      saveBeforeLeaveFailed:
+        'Speichern fehlgeschlagen. Ihre Änderungen sind noch da — versuchen Sie es erneut oder verlassen Sie die Seite ohne Speichern.',
       unsavedChanges: 'Nicht gespeicherte Änderungen',
       saving: 'Speichern...',
       save: 'Speichern',

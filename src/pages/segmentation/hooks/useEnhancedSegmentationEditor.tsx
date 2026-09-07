@@ -546,18 +546,26 @@ export const useEnhancedSegmentationEditor = ({
     canvasHeight,
   ]);
 
-  // Handle beforeunload - show warning when user leaves page with unsaved changes
-  // IMPORTANT: Fixed navigation freeze by removing event.preventDefault()
+  // Warn before a tab close / reload / real page navigation with unsaved edits.
+  //
+  // `beforeunload` never fires on a React Router navigation, so this handler
+  // cannot interfere with in-app routing — an older comment here claimed it
+  // did and dropped `preventDefault()` for that reason, which left the whole
+  // guard inert, because Chrome and Firefox both REQUIRE `preventDefault()` to
+  // raise the dialog. `returnValue` is set alongside it for Safari; the string
+  // is ignored by every current browser, which is why there is none to
+  // translate.
+  //
+  // The flip side of that is the coverage gap: the two breadcrumb exits are
+  // guarded by the editor's own prompt (`UnsavedChangesDialog`), but the
+  // browser BACK button is a `popstate` — no `beforeunload`, and no blocker,
+  // because `useBlocker` throws outside a data router and `App.tsx` mounts a
+  // plain `<BrowserRouter>`. Back still drops unsaved edits.
   useEffect(() => {
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
       if (hasUnsavedChanges) {
-        // CRITICAL FIX: Do NOT call event.preventDefault() as it blocks React Router navigation
-        // Only set returnValue to trigger browser's native unload warning
-        // This allows in-app navigation to work while still warning on page close/refresh
-        const message =
-          'You have unsaved changes. Are you sure you want to leave?';
-        event.returnValue = message;
-        return message;
+        event.preventDefault();
+        event.returnValue = '';
       }
     };
 
@@ -691,15 +699,23 @@ export const useEnhancedSegmentationEditor = ({
     }
   }, [canRedo, historyIndex, history, savedHistoryIndex, onPolygonsChange]);
 
-  // Save operation with cancellation support
-  const handleSave = useCallback(async () => {
+  // Save operation with cancellation support.
+  //
+  // Resolves `true` only when the polygons are known to be persisted (or there
+  // was nothing to persist). Callers that navigate away on the result — the
+  // editor's leave prompt — need to tell a real save from a failed or aborted
+  // one; before this returned anything, a failure was visible only as a toast.
+  const handleSave = useCallback(async (): Promise<boolean> => {
     if (!onSave || !hasUnsavedChanges) {
       logger.debug('💾 Save skipped', {
         hasOnSave: !!onSave,
         hasUnsavedChanges,
         reason: !onSave ? 'No save handler' : 'No unsaved changes',
       });
-      return;
+      // Nothing unsaved means nothing to lose. Unsaved edits with no save
+      // handler is the opposite: they can never be persisted, so the caller
+      // must not be told they were.
+      return !hasUnsavedChanges;
     }
 
     // Add detailed logging to track save triggers
@@ -719,21 +735,24 @@ export const useEnhancedSegmentationEditor = ({
       await onSave(polygons, imageId, undefined, signal);
 
       // Only update state if not cancelled
-      if (!signal.aborted) {
-        setHasUnsavedChanges(false);
-        // Update the saved history index to current position
-        setSavedHistoryIndex(historyIndex);
-        toast.success(t('toast.segmentation.saved'));
-        logger.debug('✅ Save completed successfully');
+      if (signal.aborted) {
+        return false;
       }
+      setHasUnsavedChanges(false);
+      // Update the saved history index to current position
+      setSavedHistoryIndex(historyIndex);
+      toast.success(t('toast.segmentation.saved'));
+      logger.debug('✅ Save completed successfully');
+      return true;
     } catch (error) {
       // Handle cancellation gracefully
       if (handleCancelledError(error, 'manual save')) {
-        return;
+        return false;
       }
 
       toast.error(t('toast.segmentation.failed'));
       logger.error('Save error:', error);
+      return false;
     } finally {
       setIsSaving(false);
     }

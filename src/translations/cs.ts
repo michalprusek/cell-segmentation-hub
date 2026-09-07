@@ -829,6 +829,13 @@ export default {
       zoomOut: 'Oddálit',
       resetViewTooltip: 'Resetovat pohled (R)',
       resetView: 'Reset',
+      leaveConfirmTitle: 'Uložit změny před odchodem?',
+      leaveConfirmDescription:
+        'Tento snímek má neuložené změny. Pokud odejdete bez uložení, budou ztraceny.',
+      saveAndLeave: 'Uložit a odejít',
+      leaveWithoutSaving: 'Odejít bez uložení',
+      saveBeforeLeaveFailed:
+        'Uložení se nezdařilo. Vaše změny jsou stále zde — zkuste to znovu, nebo odejděte bez uložení.',
       unsavedChanges: 'Neuložené změny',
       saving: 'Ukládání...',
       save: 'Uložit',
