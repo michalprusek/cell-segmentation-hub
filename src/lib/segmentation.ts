@@ -86,6 +86,12 @@ export interface Polygon {
    *  name/colour via the project's `mtTypeLabels` palette. Microtubule
    *  projects only; set/cleared via the tracks/type endpoint. */
   mtType?: string;
+  /** Which soma this neurite belongs to, as the `id` of that soma's polygon.
+   *  Neurite projects only. Written by the neurite metrics run and
+   *  overridable in the editor, which colours neurites by it. Registered in
+   *  `OPTIONAL_POLYGON_FIELDS` — without that it is stripped on the way out
+   *  and the next save persists the loss. */
+  somaId?: string;
 }
 
 export const isPolyline = (p: Polygon): boolean => p.geometry === 'polyline';

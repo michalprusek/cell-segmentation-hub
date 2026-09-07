@@ -60,6 +60,10 @@ class NeuriteMetricsResult:
     p_not_soma: dict[int, float] = field(default_factory=dict)
     #: The soma instance labelling, so callers can map a row back to pixels.
     soma_instances: np.ndarray | None = None
+    #: neurite-polygon label -> {soma_id, shared, length_um}. Empty unless the
+    #: caller passed `neurite_labels`. See `polygon_ownership` for what
+    #: "shared" costs to compute and why a majority is the honest answer.
+    polygon_owner: dict[int, dict[str, Any]] = field(default_factory=dict)
 
 
 def analyse_frame(
@@ -72,6 +76,7 @@ def analyse_frame(
     h_um: float = H_UM,
     threshold: float = CLASSIFIER_THRESHOLD,
     soma_instances: np.ndarray | None = None,
+    neurite_labels: np.ndarray | None = None,
 ) -> NeuriteMetricsResult:
     """Run the whole chain on one frame.
 
@@ -147,10 +152,76 @@ def analyse_frame(
     neurites, somas = metrics_export.build_tables(
         frame, res, inst, um_per_px, accepted, p_not_soma
     )
+    owner = (
+        polygon_ownership(res, neurite_labels)
+        if neurite_labels is not None
+        else {}
+    )
     return NeuriteMetricsResult(
         neurites=neurites,
         somas=somas,
         qc=qc,
         p_not_soma=p_not_soma,
         soma_instances=inst,
+        polygon_owner=owner,
     )
+
+
+def polygon_ownership(res, neurite_labels: np.ndarray) -> dict[int, dict[str, Any]]:
+    """Which soma owns each DRAWN neurite polygon.
+
+    The pipeline assigns per skeleton BRANCH, not per polygon, and the two do
+    not correspond: one drawn component routinely hosts several primary
+    neurites, and a neurite bridging two cells has branches owned by both. So
+    there is no exact per-polygon answer, and pretending otherwise would be the
+    lie -- this returns the MAJORITY owner by cable length plus a `shared` flag,
+    which is enough to colour a polygon and honest about when that colour is a
+    simplification.
+
+    Sampling the branch PATH rather than the polygon's pixels is what keeps this
+    cheap: a path is a few hundred coordinates, where a polygon can be tens of
+    thousands of pixels, and the skeleton is inside its own polygon by
+    construction.
+    """
+    height, width = neurite_labels.shape
+    per_polygon: dict[int, dict[int, float]] = {}
+
+    for bid, branch in res.graph.branches.items():
+        soma = res.owner.get(bid)
+        if soma is None:
+            continue
+        path = np.asarray(branch.path)
+        if path.size == 0:
+            continue
+        # `path` is (N, 2) as (row, col) float. Rounded and clipped rather than
+        # floored: a coordinate sitting on a boundary belongs to the nearer
+        # pixel, and a skeleton endpoint can land exactly on the frame edge.
+        rows = np.clip(np.rint(path[:, 0]).astype(np.int64), 0, height - 1)
+        cols = np.clip(np.rint(path[:, 1]).astype(np.int64), 0, width - 1)
+        labels = neurite_labels[rows, cols]
+        hit = labels[labels > 0]
+        if hit.size == 0:
+            # A bridge edge spans a GAP in the mask, so its path crosses
+            # background and belongs to no drawn polygon. Skipping it is right:
+            # it would otherwise credit whichever polygon its rounding happened
+            # to clip into.
+            continue
+        # Split the branch's length across the polygons it actually covers,
+        # proportionally, instead of giving all of it to the first one.
+        share = float(branch.length_um) / hit.size
+        for label in np.unique(hit):
+            n = int((hit == label).sum())
+            bucket = per_polygon.setdefault(int(label), {})
+            bucket[int(soma)] = bucket.get(int(soma), 0.0) + share * n
+
+    out: dict[int, dict[str, Any]] = {}
+    for label, by_soma in per_polygon.items():
+        best_soma, best_len = max(by_soma.items(), key=lambda kv: kv[1])
+        total = sum(by_soma.values())
+        out[label] = {
+            'soma_id': best_soma,
+            'shared': len(by_soma) > 1,
+            'length_um': round(best_len, 3),
+            'owned_fraction': round(best_len / total, 3) if total else 0.0,
+        }
+    return out

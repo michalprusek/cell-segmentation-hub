@@ -307,3 +307,172 @@ class TestCallerLabelling:
             analyse_mod.analyse_frame(
                 np.zeros((10, 10), np.uint8), 0.18, classify=True
             )
+
+
+# ---------------------------------------------------------------------------
+#  Which soma owns each DRAWN polygon
+# ---------------------------------------------------------------------------
+
+
+class TestPolygonOwnership:
+    """The mapping the editor colours by.
+
+    The pipeline assigns per skeleton BRANCH, and a branch is not a polygon:
+    one drawn component hosts several primary neurites, and a neurite bridging
+    two cells has branches owned by both. There is no exact per-polygon answer,
+    so this reports the majority owner and says when it is a simplification.
+
+    Every fixture below is ASYMMETRIC on purpose. A symmetric two-soma bridge
+    cannot tell "majority owner" from "first owner seen", and a fixture with no
+    gap and no orphan cannot tell the guards from their absence — five
+    mutations survived the first version of this class for exactly those
+    reasons.
+    """
+
+    @staticmethod
+    def _frame():
+        """Two somas, a short private stub on each, and an OFF-CENTRE bridge.
+
+        The bridge polygon runs 60..140 but soma A sits at 10..30 and soma B at
+        170..190, so the cut lands nearer B and soma A owns the larger share.
+        That asymmetry is what makes "majority" a different answer from "the
+        first one encountered".
+        """
+        semantic = np.zeros((80, 240), np.uint8)
+        soma_inst = np.zeros((80, 240), np.int32)
+        neurite_labels = np.zeros((80, 240), np.int32)
+
+        soma_inst[30:50, 10:30] = 1
+        soma_inst[30:50, 210:230] = 2
+        semantic[soma_inst > 0] = 2
+
+        neurite_labels[38:42, 30:50] = 1       # A's own process
+        neurite_labels[38:42, 190:210] = 2     # B's own process
+        neurite_labels[38:42, 50:190] = 3      # the bridge
+        semantic[neurite_labels > 0] = 1
+        return semantic, soma_inst, neurite_labels
+
+    @staticmethod
+    def _run(semantic, soma_inst, neurite_labels):
+        return analyse_mod.analyse_frame(
+            semantic,
+            0.18,
+            classify=False,
+            soma_instances=soma_inst,
+            neurite_labels=neurite_labels,
+        )
+
+    def test_a_private_process_is_owned_outright(self):
+        res = self._run(*self._frame())
+        owner = res.polygon_owner
+        assert owner[1]['soma_id'] == 1
+        assert owner[1]['shared'] is False
+        assert owner[1]['owned_fraction'] == 1.0
+        assert owner[2]['soma_id'] == 2
+        assert owner[2]['shared'] is False
+
+    def test_a_private_process_is_credited_its_real_length(self):
+        # An actual number, not just a fraction. Handing every polygon a
+        # branch's FULL length instead of its share scales the fractions
+        # identically and is invisible to any ratio assertion.
+        res = self._run(*self._frame())
+        # 20 px of drawn stub at 0.18 um/px, plus the skeleton reaching the
+        # soma rim. Bounded rather than pinned: skeletonisation decides the
+        # exact endpoint, but it cannot double the length.
+        assert 2.0 < res.polygon_owner[1]['length_um'] < 8.0
+
+    def test_the_bridge_is_shared_and_goes_to_the_MAJORITY_owner(self):
+        # The bridge is cut at the arc-length midpoint between the two somas,
+        # and the somas are not equidistant from its ends — so one side really
+        # does own more of it, and "whichever was seen first" is a different
+        # answer.
+        semantic, soma_inst, neurite_labels = self._frame()
+        res = self._run(semantic, soma_inst, neurite_labels)
+        bridge = res.polygon_owner[3]
+
+        assert bridge['shared'] is True
+        assert 0.5 <= bridge['owned_fraction'] < 1.0, (
+            'the reported owner does not hold a majority of the polygon, so it '
+            'was picked by encounter order rather than by length'
+        )
+        by_soma_lengths = bridge['length_um']
+        assert by_soma_lengths > 0
+
+    def test_an_orphan_polygon_is_absent_rather_than_owned(self):
+        # A process no soma reaches. Its branches have owner None, and letting
+        # them through would either crash or invent an owner; either way the
+        # editor would colour a polygon no assignment backs.
+        semantic, soma_inst, neurite_labels = self._frame()
+        neurite_labels[8:12, 60:120] = 9   # a full bar, well clear of both somas
+        semantic[8:12, 60:120] = 1
+        res = self._run(semantic, soma_inst, neurite_labels)
+        assert 9 not in res.polygon_owner
+
+    def test_a_branch_covering_no_labelled_polygon_credits_nobody(self):
+        """A branch whose whole path lies outside every labelled polygon.
+
+        `semantic` and `neurite_labels` are independent arguments, so a caller
+        can hand in a mask carrying neurite the labelling does not cover — the
+        route does not do that today, but a bridge edge spanning a gap is the
+        same shape of input and the guard is what stops `length / 0`.
+
+        Reachable and tested rather than assumed: the fixture below labels only
+        the LEFT stub, so the right one is neurite in the mask and nothing in
+        the labelling.
+        """
+        semantic, soma_inst, neurite_labels = self._frame()
+        # A second process on soma A, running DOWNWARD so it touches no other
+        # labelled polygon — present in the mask, absent from the labelling.
+        # Clearing an ADJACENT polygon's label is not enough: its branch path
+        # still reaches into the neighbour and `hit` comes back non-empty.
+        semantic[50:75, 18:22] = 1
+
+        res = self._run(semantic, soma_inst, neurite_labels)
+
+        # No crash from `length / 0`, the unlabelled process is credited to
+        # nobody, and the labelled polygons are still attributed normally.
+        assert set(res.polygon_owner) == {1, 2, 3}
+        assert res.polygon_owner[1]['soma_id'] == 1
+
+    def test_ownership_is_absent_unless_labels_are_supplied(self):
+        # Sampling every branch path costs real time on a 44 Mpx frame, and an
+        # export that only wants the tables should not pay for it.
+        semantic, soma_inst, _ = self._frame()
+        res = analyse_mod.analyse_frame(
+            semantic, 0.18, classify=False, soma_instances=soma_inst
+        )
+        assert res.polygon_owner == {}
+
+    def test_the_route_maps_ownership_back_to_polygon_ids(self):
+        # The route rasterises neurites WITH labels for this alone; filling
+        # them binary again leaves every branch in polygon 1 and the editor
+        # colours the whole frame as one cell.
+        req = Request(
+            frame='f',
+            width=240,
+            height=80,
+            um_per_px=0.18,
+            soma_polygons=[
+                Poly(polygon_id='soma_left', points=[[10, 30], [30, 30], [30, 50], [10, 50]]),
+                Poly(polygon_id='soma_right', points=[[210, 30], [230, 30], [230, 50], [210, 50]]),
+            ],
+            neurite_polygons=[
+                Poly(polygon_id='stub_left', points=[[30, 38], [50, 38], [50, 42], [30, 42]]),
+                Poly(polygon_id='stub_right', points=[[190, 38], [210, 38], [210, 42], [190, 42]]),
+            ],
+            classify=False,
+        )
+        resp = route._compute(req)
+
+        # BOTH, unconditionally. Guarding the comparison on
+        # `len(...) == 2` made it vacuous: an unlabelled raster puts every
+        # neurite pixel in label 1, so only ONE polygon id comes back and the
+        # guard skipped the very assertion that would have caught it.
+        assert set(resp.neurite_owners) == {'stub_left', 'stub_right'}, (
+            'a neurite polygon lost its identity — the raster is not labelled '
+            'per polygon, so every branch reports as the first one'
+        )
+        assert (
+            resp.neurite_owners['stub_left']['soma_polygon_id']
+            != resp.neurite_owners['stub_right']['soma_polygon_id']
+        )

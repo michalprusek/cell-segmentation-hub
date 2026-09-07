@@ -2426,6 +2426,9 @@ describe('polygon-field SSOT round-trip', () => {
     class: 'membrane',
     complete: true,
     mtType: 'mt-type-3',
+    // Which soma a neurite belongs to. Losing it does not degrade a
+    // number — it erases the assignment the user corrected by hand.
+    somaId: 'polygon_12',
     _embedding: [
       [1, 2, 3],
       [4, 5, 6],
@@ -2455,6 +2458,7 @@ describe('polygon-field SSOT round-trip', () => {
         'class',
         'complete',
         'mtType',
+        'somaId',
       ])
     );
     expect(keys).not.toContain('_embedding');
@@ -2520,6 +2524,7 @@ describe('polygon-field SSOT round-trip', () => {
     expect(p.class).toBe('membrane');
     expect(p.complete).toBe(true);
     expect(p.mtType).toBe('mt-type-3');
+    expect(p.somaId).toBe('polygon_12');
     expect(p.geometry).toBe('polyline');
     expect(p._embedding).toBeUndefined();
   });

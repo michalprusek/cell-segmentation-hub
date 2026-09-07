@@ -142,6 +142,9 @@ export interface SegmentationPolygon {
   /** User-assigned microtubule type-label id (references the project's
    *  `mtTypeLabels` palette). Set/cleared via the tracks/type endpoint. */
   mtType?: string;
+  /** Which soma this neurite belongs to, as the `id` of that soma's polygon.
+   *  Neurite projects only; registered in OPTIONAL_POLYGON_FIELDS. */
+  somaId?: string;
 }
 
 export interface SegmentationResultData {

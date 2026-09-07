@@ -57,6 +57,9 @@ export interface SegmentationPolygon {
    *  Set/cleared via the tracks/type endpoint; resolved to a class
    *  name/colour for the editor and exports. */
   mtType?: string;
+  /** Which soma this neurite belongs to, as the `id` of that soma's polygon.
+   *  Neurite projects only; see OPTIONAL_POLYGON_FIELDS. */
+  somaId?: string;
   /** The model's own semantic class (`microcapsule`, `membrane`, `sperm`, ...).
    *  `metricsCalculator` splits membranes from capsules on it. */
   class?: string;

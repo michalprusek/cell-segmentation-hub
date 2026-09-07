@@ -158,6 +158,12 @@ class NeuriteMetricsResponse(BaseModel):
     #: numbers somas 1..N in label order; this is what turns those back into
     #: records the editor can highlight.
     soma_polygon_ids: Dict[int, str]
+    #: neurite polygon_id -> which soma polygon owns it, for colouring the
+    #: editor. `shared` says the polygon carries cable from more than one cell,
+    #: which is a real state (a neurite bridging two somas) and not an error --
+    #: the colour is then the MAJORITY owner and `owned_fraction` says how much
+    #: of a simplification that is.
+    neurite_owners: Dict[str, Dict[str, Any]]
 
 
 def _rasterise(
@@ -200,7 +206,12 @@ def _compute(req: NeuriteMetricsRequest) -> NeuriteMetricsResponse:
 
     shape = (req.height, req.width)
     soma_inst = _rasterise(req.soma_polygons, shape, label_each=True)
-    neurite_bin = _rasterise(req.neurite_polygons, shape, label_each=False)
+    # Labelled, not binary: the pipeline assigns per skeleton branch, and
+    # mapping that back to the polygon the user drew needs to know WHICH
+    # polygon each pixel came from. The semantic mask below still collapses it
+    # to one class -- a neurite's identity comes from the graph, not the
+    # drawing.
+    neurite_labels = _rasterise(req.neurite_polygons, shape, label_each=True)
 
     classify = True if req.classify is None else req.classify
     image = None
@@ -233,7 +244,7 @@ def _compute(req: NeuriteMetricsRequest) -> NeuriteMetricsResponse:
     # `analyse_frame` wants the 3-class mask. Soma wins where the two overlap:
     # a pixel the user drew as both is a cell body with a process starting on
     # it, and counting it as neurite would grow a spur into the soma.
-    semantic = np.where(soma_inst > 0, 2, neurite_bin.astype(np.uint8) * 1)
+    semantic = np.where(soma_inst > 0, 2, (neurite_labels > 0).astype(np.uint8))
 
     # The labelling is handed IN. Without it `analyse_frame` re-derives its own
     # with S1 and the ids in the returned rows have nothing to do with the
@@ -247,6 +258,7 @@ def _compute(req: NeuriteMetricsRequest) -> NeuriteMetricsResponse:
         frame=req.frame,
         classify=classify,
         soma_instances=soma_inst,
+        neurite_labels=neurite_labels,
     )
 
     # The pipeline re-derives its own soma labels from the mask, but because we
@@ -261,11 +273,36 @@ def _compute(req: NeuriteMetricsRequest) -> NeuriteMetricsResponse:
         if i in present
     }
 
+    # Ownership comes back keyed by LABEL; the editor needs polygon ids. Built
+    # from the labels present in the rasterised array for the same reason as
+    # the soma map: a degenerate ring was skipped and would otherwise shift
+    # every id after it.
+    neurite_present = {int(v) for v in np.unique(neurite_labels) if v}
+    neurite_ids = {
+        i: poly.polygon_id
+        for i, poly in enumerate(req.neurite_polygons, start=1)
+        if i in neurite_present
+    }
+    neurite_owners: Dict[str, Dict[str, Any]] = {}
+    for label, info in result.polygon_owner.items():
+        polygon_id = neurite_ids.get(label)
+        if polygon_id is None:
+            continue
+        soma_polygon = soma_polygon_ids.get(int(info['soma_id']))
+        if soma_polygon is None:
+            continue
+        neurite_owners[polygon_id] = {
+            'soma_polygon_id': soma_polygon,
+            'shared': bool(info['shared']),
+            'owned_fraction': info['owned_fraction'],
+        }
+
     return NeuriteMetricsResponse(
         neurites=result.neurites,
         somas=result.somas,
         qc=result.qc,
         soma_polygon_ids=soma_polygon_ids,
+        neurite_owners=neurite_owners,
     )
 
 
@@ -290,6 +327,7 @@ async def neurite_metrics(request: NeuriteMetricsRequest) -> NeuriteMetricsRespo
             somas=[],
             qc={"n_soma_instances": 0, "n_soma_accepted": 0},
             soma_polygon_ids={},
+            neurite_owners={},
         )
     return await asyncio.get_running_loop().run_in_executor(
         _EXECUTOR, _compute, request
