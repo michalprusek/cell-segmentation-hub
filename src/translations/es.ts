@@ -988,6 +988,13 @@ export default {
       zoomOut: 'Alejar',
       resetViewTooltip: 'Restablecer vista (R)',
       resetView: 'Restablecer',
+      leaveConfirmTitle: '¿Guardar los cambios antes de salir?',
+      leaveConfirmDescription:
+        'Este fotograma tiene cambios sin guardar. Si sale sin guardar, se perderán.',
+      saveAndLeave: 'Guardar y salir',
+      leaveWithoutSaving: 'Salir sin guardar',
+      saveBeforeLeaveFailed:
+        'No se pudo guardar. Sus cambios siguen aquí: inténtelo de nuevo o salga sin guardar.',
       unsavedChanges: 'Cambios no guardados',
       saving: 'Guardando...',
       save: 'Guardar',

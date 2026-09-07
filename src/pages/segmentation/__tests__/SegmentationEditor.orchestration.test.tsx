@@ -18,6 +18,7 @@ import {
   act,
   cleanup,
   fireEvent,
+  waitFor,
 } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { BrowserRouter } from 'react-router-dom';
@@ -162,8 +163,16 @@ vi.mock('@/hooks/shared/useAbortController', () => ({
   }),
 }));
 
+// The hook is stubbed, but the PROPS the editor passes it are the real thing —
+// captured so a test can invoke the production `onSave` body instead of a mock
+// that behaves nothing like it.
+const capturedEditorProps = vi.hoisted(() => ({ current: null as any }));
+
 vi.mock('../hooks/useEnhancedSegmentationEditor', () => ({
-  useEnhancedSegmentationEditor: () => mockEditor,
+  useEnhancedSegmentationEditor: (props: any) => {
+    capturedEditorProps.current = props;
+    return mockEditor;
+  },
 }));
 
 vi.mock('../hooks/useSegmentationReload', () => ({
@@ -372,6 +381,57 @@ vi.mock('@/lib/tiffUtils', () => ({
 // vi.mock() calls above are hoisted before all imports, so this static import
 // correctly receives the mocked module graph.
 import SegmentationEditorDefault from '../SegmentationEditor';
+
+// ─── onSave wiring ────────────────────────────────────────────────────────────
+
+/**
+ * `useEnhancedSegmentationEditor.handleSave` infers "persisted" from "the
+ * `onSave` promise did not reject", and the editor's leave prompt navigates
+ * away on that answer. So the contract lives HERE, in the callback the editor
+ * actually passes down — a helper test with a rejecting mock proves nothing if
+ * production `onSave` swallows its errors, which it used to.
+ */
+describe('SegmentationEditor onSave contract', () => {
+  const callOnSave = () =>
+    capturedEditorProps.current.onSave(
+      [],
+      'img-1',
+      { width: 100, height: 100 },
+      undefined
+    );
+
+  it('rejects when the API call fails, rather than resolving', async () => {
+    renderEditor();
+    await waitFor(() => expect(capturedEditorProps.current).not.toBeNull());
+
+    mockApiClient.updateSegmentationResults.mockRejectedValueOnce(
+      new Error('500 from server')
+    );
+
+    await expect(callOnSave()).rejects.toThrow('500 from server');
+  });
+
+  it('rejects rather than silently no-op when the project id is missing', async () => {
+    mockParams.projectId = undefined as any;
+    renderEditor();
+    await waitFor(() => expect(capturedEditorProps.current).not.toBeNull());
+
+    await expect(callOnSave()).rejects.toThrow(/project id/i);
+    expect(mockApiClient.updateSegmentationResults).not.toHaveBeenCalled();
+  });
+
+  it('resolves on a successful save', async () => {
+    renderEditor();
+    await waitFor(() => expect(capturedEditorProps.current).not.toBeNull());
+
+    mockApiClient.updateSegmentationResults.mockResolvedValueOnce({
+      polygons: [],
+    });
+
+    await expect(callOnSave()).resolves.toBeUndefined();
+    expect(mockApiClient.updateSegmentationResults).toHaveBeenCalledTimes(1);
+  });
+});
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 

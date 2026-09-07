@@ -993,6 +993,13 @@ export default {
       zoomOut: 'Dézoomer',
       resetViewTooltip: 'Réinitialiser la vue (R)',
       resetView: 'Réinitialiser',
+      leaveConfirmTitle: 'Enregistrer les modifications avant de quitter ?',
+      leaveConfirmDescription:
+        'Cette image comporte des modifications non enregistrées. Si vous quittez sans enregistrer, elles seront perdues.',
+      saveAndLeave: 'Enregistrer et quitter',
+      leaveWithoutSaving: 'Quitter sans enregistrer',
+      saveBeforeLeaveFailed:
+        "L'enregistrement a échoué. Vos modifications sont toujours là — réessayez ou quittez sans enregistrer.",
       unsavedChanges: 'Modifications non sauvegardées',
       saving: 'Sauvegarde...',
       save: 'Sauvegarder',

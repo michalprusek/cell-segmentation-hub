@@ -12,7 +12,7 @@ interface TopToolbarProps {
   // Actions
   handleUndo: () => void;
   handleRedo: () => void;
-  handleSave: () => Promise<void>;
+  handleSave: () => Promise<boolean>;
 
   // Resegment action — rendered to the right of Undo/Redo when
   // provided. While `isResegmenting` is true the button is disabled

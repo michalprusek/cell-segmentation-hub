@@ -23,7 +23,7 @@ interface UseKeyboardShortcutsProps {
   setEditMode: (mode: EditMode) => void;
   handleUndo: () => void;
   handleRedo: () => void;
-  handleSave: () => Promise<void>;
+  handleSave: () => Promise<boolean>;
   handleZoomIn: () => void;
   handleZoomOut: () => void;
   handleResetView: () => void;
