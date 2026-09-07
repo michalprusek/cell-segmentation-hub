@@ -728,6 +728,13 @@ export default {
     system: 'Systémový',
   },
   segmentation: {
+    // Neurite-only editor controls.
+    neurite: {
+      colorBySoma: 'Obarvit podle buňky',
+      unassignedCount: '{{count}} neurit se nepodařilo přiřadit k buňce',
+      unassignedCount_other: '{{count}} neuritů se nepodařilo přiřadit k buňce',
+    },
+
     selection: {
       selectAll: 'Vybrat vše',
       deselectAll: 'Zrušit výběr',

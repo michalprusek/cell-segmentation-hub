@@ -893,6 +893,14 @@ export default {
     },
   },
   segmentation: {
+    // Neurite-only editor controls.
+    neurite: {
+      colorBySoma: 'Nach Zelle einfärben',
+      unassignedCount: '{{count}} Neurit konnte keiner Zelle zugeordnet werden',
+      unassignedCount_other:
+        '{{count}} Neuriten konnten keiner Zelle zugeordnet werden',
+    },
+
     selection: {
       selectAll: 'Alle auswählen',
       deselectAll: 'Auswahl aufheben',

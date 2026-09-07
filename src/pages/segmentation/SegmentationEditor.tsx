@@ -766,6 +766,23 @@ const SegmentationEditor = () => {
     }
   }, []);
 
+  // Colour neurites by the soma they belong to instead of by class. Persisted
+  // like `mtColorMode` and for the same reason: it is a way of LOOKING at the
+  // frame, not a property of it, so it should survive a reload and a frame
+  // scrub. Defaults OFF — the class colouring answers "is this segmentation
+  // right", which is the first question, and this one answers "is this
+  // assignment right", which is the second.
+  const [colorBySoma, setColorBySoma] = useState<boolean>(() => {
+    if (typeof localStorage === 'undefined') return false;
+    return localStorage.getItem('neuriteColorBySoma') === 'true';
+  });
+  const handleSetColorBySoma = useCallback((on: boolean) => {
+    setColorBySoma(on);
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('neuriteColorBySoma', String(on));
+    }
+  }, []);
+
   // Pure render-derivation pipeline (polyline/instance discrimination, legacy
   // edit-mode booleans, hidden/degenerate polygon filter — no viewport culling).
   // Extracted to usePolygonRenderProps for isolated unit testing.
@@ -1628,6 +1645,8 @@ const SegmentationEditor = () => {
         mtLabelById={mtLabelById}
         mtColorById={mtColorById}
         mtColorMode={mtColorMode}
+        colorBySoma={colorBySoma}
+        onSetColorBySoma={handleSetColorBySoma}
         onSetMtColorMode={handleSetMtColorMode}
         onChangeMtType={handleChangeMtType}
         onCreateMtLabel={handleCreateMtLabel}

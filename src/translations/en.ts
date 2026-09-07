@@ -731,6 +731,14 @@ export default {
     system: 'System',
   },
   segmentation: {
+    // Neurite-only editor controls.
+    neurite: {
+      colorBySoma: 'Colour by cell',
+      unassignedCount: '{{count}} neurite could not be assigned to a cell',
+      unassignedCount_other:
+        '{{count}} neurites could not be assigned to a cell',
+    },
+
     selection: {
       selectAll: 'Select all',
       deselectAll: 'Deselect all',

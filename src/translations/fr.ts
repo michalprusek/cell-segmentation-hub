@@ -889,6 +889,15 @@ export default {
     },
   },
   segmentation: {
+    // Neurite-only editor controls.
+    neurite: {
+      colorBySoma: 'Colorer par cellule',
+      unassignedCount:
+        "{{count}} neurite n'a pas pu être attribuée à une cellule",
+      unassignedCount_other:
+        "{{count}} neurites n'ont pas pu être attribuées à une cellule",
+    },
+
     selection: {
       selectAll: 'Tout sélectionner',
       deselectAll: 'Tout désélectionner',

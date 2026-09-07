@@ -1,6 +1,7 @@
 import React, { useMemo, useCallback } from 'react';
 import { cn } from '@/lib/utils';
 import { neuronClassStyle } from '../../utils/neuronClassStyle';
+import { somaAssignmentColor } from '../../utils/somaAssignmentColor';
 import { Polygon } from '@/lib/segmentation';
 import PolygonVertices from './PolygonVertices';
 import PolygonContextMenu from '../context-menu/PolygonContextMenu';
@@ -25,6 +26,10 @@ interface CanvasPolygonProps {
   hideVertices?: boolean;
   isHovered?: boolean;
   isUndoRedoInProgress?: boolean;
+  /** Colour neurites by the SOMA they belong to instead of by class. Neurite
+   *  projects only; see `somaAssignmentColor` for why the two colourings
+   *  cannot be shown at once. */
+  colorBySoma?: boolean;
   /** `additive` (Shift+click) toggles this polygon in the multi-selection
    *  instead of replacing the single selection. */
   onSelectPolygon?: (id: string, additive?: boolean) => void;
@@ -95,6 +100,7 @@ const CanvasPolygon = React.memo(
     hideVertices = false,
     isHovered = false,
     isUndoRedoInProgress = false,
+    colorBySoma = false,
     onSelectPolygon,
     isMultiSelected = false,
     multiSelectCount = 0,
@@ -269,6 +275,29 @@ const CanvasPolygon = React.memo(
       if (!isPolyline && polygon.partClass === 'core') {
         return isEffectivelySelected ? '#16a34a' : '#22c55e'; // green
       }
+      // Assignment colouring wins over the class colouring when it is on and
+      // the polygon is part of an assignment. `somaAssignmentColor` answers
+      // null for an unassigned neurite, which falls through to cyan below —
+      // that is deliberate: an unassigned process must stay visibly different
+      // from an assigned one, not get a colour of its own.
+      if (colorBySoma) {
+        // The three fields the helper reads, passed individually rather than
+        // as `polygon`. This memo's dependency list names FIELDS on purpose —
+        // a new object identity for an unchanged polygon must not recompute
+        // every stroke on the canvas — and handing it the whole object would
+        // make `polygon` a dependency and undo that.
+        const assigned = somaAssignmentColor(
+          {
+            id: polygon.id,
+            partClass: polygon.partClass,
+            somaId: polygon.somaId,
+          },
+          { selected: isEffectivelySelected }
+        );
+        if (assigned) {
+          return assigned;
+        }
+      }
       // Neuron classes (closed polygons from the neurite/soma model). The fill
       // comes from the CSS class below; this is the stroke.
       const neuronStyle = isPolyline
@@ -323,6 +352,13 @@ const CanvasPolygon = React.memo(
       polygon.trackId,
       polygon.complete,
       polygon.mtType,
+      // BOTH halves of the by-soma branch. The list names individual polygon
+      // fields rather than `polygon`, so `somaId` has to be added explicitly —
+      // and without `colorBySoma` the memo keeps the previous colour when the
+      // mode is switched on a LIVE component. Unit tests could not catch that:
+      // each render is a fresh mount, which always recomputes.
+      polygon.somaId,
+      colorBySoma,
       mtTypeLabels,
       isEffectivelySelected,
       isInternal,
@@ -690,6 +726,12 @@ const CanvasPolygon = React.memo(
       // by-label recolour; omitting these means an MT wouldn't re-colour when
       // its type or the palette colour changes (repo bug #5: incomplete memo).
       prevProps.polygon.mtType === nextProps.polygon.mtType &&
+      // Both halves of the by-soma recolour. `somaId` changes when the user
+      // reassigns a neurite, `colorBySoma` when they switch the mode — and
+      // omitting either leaves the canvas painted with the previous answer,
+      // which is repo bug #5 (incomplete memo comparator) exactly.
+      prevProps.polygon.somaId === nextProps.polygon.somaId &&
+      prevProps.colorBySoma === nextProps.colorBySoma &&
       prevProps.colorMode === nextProps.colorMode &&
       prevProps.semanticColor === nextProps.semanticColor &&
       prevProps.currentMtType === nextProps.currentMtType &&

@@ -827,6 +827,13 @@ export default {
     },
   },
   segmentation: {
+    // Neurite-only editor controls.
+    neurite: {
+      colorBySoma: '按细胞着色',
+      unassignedCount: '{{count}} 条神经突无法归属到任何细胞',
+      unassignedCount_other: '{{count}} 条神经突无法归属到任何细胞',
+    },
+
     selection: {
       selectAll: '全选',
       deselectAll: '取消全选',
