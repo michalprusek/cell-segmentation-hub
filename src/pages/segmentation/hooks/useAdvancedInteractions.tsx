@@ -782,12 +782,25 @@ export const useAdvancedInteractions = ({
         // pans the canvas and a click selects — silently turning that into a
         // shape move would be a trap. The vertex branch above runs FIRST, so
         // a point still wins over the outline it sits on.
+        //
+        // NOT with Shift held. Shift+click is the ADDITIVE SELECTION gesture,
+        // handled by `CanvasPolygon`'s onClick — and this branch would eat it
+        // twice over: `onPolygonSelection` below is a SINGLE select, which
+        // drops the whole multi-selection, and the `return` stops the event
+        // before the additive handler ever runs. Reported by a user as "Shift
+        // does not select several microtubules", and the reason another user
+        // could not reproduce it is that the editor auto-switches to
+        // EditVertices the moment you select something: shift-click from a
+        // clean View-mode canvas works, shift-click after any plain click does
+        // not. There is no translate gesture lost here — Shift+drag on a
+        // contour had no meaning of its own.
         if (
           target &&
           target.dataset &&
           target.dataset.polygonId &&
           target.dataset.vertexIndex === undefined &&
-          editMode === EditMode.EditVertices
+          editMode === EditMode.EditVertices &&
+          !e.shiftKey
         ) {
           const polygonId = target.dataset.polygonId;
           const polygon = getPolygons().find(p => p.id === polygonId);
