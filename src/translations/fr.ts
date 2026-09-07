@@ -897,7 +897,11 @@ export default {
       assign: 'Attribuer les neurites aux cellules',
       assignHint:
         "S'exécute sur les polygones dans leur état actuel, les corrections sont donc prises en compte.",
-      colorBySoma: 'Colorer par cellule',
+      color: {
+        label: 'Couleur :',
+        byClass: 'Classe',
+        byCell: 'Cellule',
+      },
       unassignedCount:
         "{{count}} neurite n'a pas pu être attribuée à une cellule",
       unassignedCount_other:

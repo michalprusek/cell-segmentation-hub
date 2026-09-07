@@ -1,13 +1,14 @@
 import React from 'react';
-import { Palette, Loader2, Wand2 } from 'lucide-react';
-import { Switch } from '@/components/ui/switch';
+import { Loader2, Wand2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
 import { useLanguage } from '@/contexts/useLanguage';
 
+/** What a stroke on a neurite frame MEANS. See the component docstring. */
+export type NeuriteColorMode = 'class' | 'assignment';
+
 export interface NeuriteAssignmentToggleProps {
-  colorBySoma: boolean;
-  onSetColorBySoma: (on: boolean) => void;
+  colorMode: NeuriteColorMode;
+  onSetColorMode: (mode: NeuriteColorMode) => void;
   /** Neurites carrying no `somaId`. Shown because it is a MEASUREMENT. */
   unassignedCount: number;
   /** Run the pipeline on the CURRENT polygons and store the result. */
@@ -20,10 +21,17 @@ export interface NeuriteAssignmentToggleProps {
 /**
  * Switches the canvas between the two colourings a neurite frame can have.
  *
- * OFF (default) is by CLASS — every neurite cyan, every soma magenta — which
- * answers "is this segmentation right". ON is by CELL, which answers "is this
- * assignment right". They cannot share a stroke, so this is a switch rather
- * than an overlay.
+ * `class` (default) is by CLASS — every neurite cyan, every soma magenta —
+ * which answers "is this segmentation right". `assignment` is by CELL, giving a
+ * soma and every neurite credited to it one shared colour, which answers "is
+ * this assignment right". They cannot share a stroke, so this is a switch
+ * rather than an overlay.
+ *
+ * Two NAMED modes rather than an on/off switch, deliberately: "Colour by cell"
+ * ON told the user what they were turning on and never what OFF meant, and the
+ * two colourings answer different questions rather than one being the absence
+ * of the other. It is the same control the microtubule panel already uses
+ * (Instance / Label), so a user meets one pattern in both project types.
  *
  * The unassigned count is not decoration either. A neurite with no soma is a
  * result, not a gap: the pipeline reports an owner for every polygon a skeleton
@@ -33,8 +41,8 @@ export interface NeuriteAssignmentToggleProps {
  * frame the assignment could not resolve.
  */
 const NeuriteAssignmentToggle: React.FC<NeuriteAssignmentToggleProps> = ({
-  colorBySoma,
-  onSetColorBySoma,
+  colorMode,
+  onSetColorMode,
   unassignedCount,
   onAssign,
   isAssigning,
@@ -44,21 +52,34 @@ const NeuriteAssignmentToggle: React.FC<NeuriteAssignmentToggleProps> = ({
 
   return (
     <div className="border-b border-gray-200 p-3 dark:border-gray-700">
-      <div className="flex items-center justify-between gap-3">
-        <Label
-          htmlFor="neurite-color-by-soma"
-          className="flex cursor-pointer items-center gap-2 text-sm font-normal"
-        >
-          <Palette className="h-4 w-4 shrink-0" />
-          {t('segmentation.neurite.colorBySoma')}
-        </Label>
-        <Switch
-          id="neurite-color-by-soma"
-          checked={colorBySoma}
-          onCheckedChange={onSetColorBySoma}
-        />
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-gray-500 dark:text-gray-400">
+          {t('segmentation.neurite.color.label')}
+        </span>
+        <div className="inline-flex overflow-hidden rounded-md border border-gray-300 dark:border-gray-600">
+          {(['class', 'assignment'] as const).map(mode => (
+            <button
+              key={mode}
+              type="button"
+              onClick={() => onSetColorMode(mode)}
+              aria-pressed={colorMode === mode}
+              className={`px-2.5 py-1 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${
+                colorMode === mode
+                  ? 'bg-violet-600 font-medium text-white'
+                  : 'bg-transparent text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700'
+              }`}
+            >
+              {mode === 'class'
+                ? t('segmentation.neurite.color.byClass')
+                : t('segmentation.neurite.color.byCell')}
+            </button>
+          ))}
+        </div>
       </div>
-      {colorBySoma && unassignedCount > 0 && (
+      {/* Only meaningful in the colouring that DISPLAYS an assignment: in
+          `class` every neurite is cyan whether or not it has a soma, so the
+          number would name something the user cannot see. */}
+      {colorMode === 'assignment' && unassignedCount > 0 && (
         <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
           {t('segmentation.neurite.unassignedCount', {
             count: unassignedCount,

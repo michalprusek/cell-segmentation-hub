@@ -893,7 +893,11 @@ export default {
       assign: 'Asignar neuritas a células',
       assignHint:
         'Se ejecuta sobre los polígonos tal como están ahora, por lo que se incluyen las correcciones.',
-      colorBySoma: 'Colorear por célula',
+      color: {
+        label: 'Color:',
+        byClass: 'Clase',
+        byCell: 'Célula',
+      },
       unassignedCount: '{{count}} neurita no pudo asignarse a una célula',
       unassignedCount_other:
         '{{count}} neuritas no pudieron asignarse a una célula',

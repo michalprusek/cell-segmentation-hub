@@ -900,7 +900,11 @@ export default {
       assign: 'Neuriten Zellen zuordnen',
       assignHint:
         'Läuft auf den Polygonen im aktuellen Zustand, Korrekturen werden also berücksichtigt.',
-      colorBySoma: 'Nach Zelle einfärben',
+      color: {
+        label: 'Farbe:',
+        byClass: 'Klasse',
+        byCell: 'Zelle',
+      },
       unassignedCount: '{{count}} Neurit konnte keiner Zelle zugeordnet werden',
       unassignedCount_other:
         '{{count}} Neuriten konnten keiner Zelle zugeordnet werden',

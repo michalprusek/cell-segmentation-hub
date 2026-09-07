@@ -738,7 +738,11 @@ export default {
       assign: 'Assign neurites to cells',
       assignHint:
         'Runs on the polygons as they are now, so corrections are included.',
-      colorBySoma: 'Colour by cell',
+      color: {
+        label: 'Colour:',
+        byClass: 'Class',
+        byCell: 'Cell',
+      },
       unassignedCount: '{{count}} neurite could not be assigned to a cell',
       unassignedCount_other:
         '{{count}} neurites could not be assigned to a cell',

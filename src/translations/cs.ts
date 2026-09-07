@@ -736,7 +736,11 @@ export default {
       assign: 'Přiřadit neurity k buňkám',
       assignHint:
         'Počítá z polygonů v aktuálním stavu, takže opravy se promítnou.',
-      colorBySoma: 'Obarvit podle buňky',
+      color: {
+        label: 'Barva:',
+        byClass: 'Třída',
+        byCell: 'Buňka',
+      },
       unassignedCount: '{{count}} neurit se nepodařilo přiřadit k buňce',
       unassignedCount_other: '{{count}} neuritů se nepodařilo přiřadit k buňce',
     },
