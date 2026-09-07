@@ -20,6 +20,7 @@ import { polygonKey } from '@/lib/segmentation';
 import apiClient, { SegmentationPolygon } from '@/lib/api';
 import { toast } from 'sonner';
 import { getErrorMessage } from '@/types';
+import { assignmentClickAction } from './utils/assignmentClick';
 import { logger } from '@/lib/logger';
 import { handleCancelledError } from '@/lib/errorUtils';
 import { transformSegmentationPolygons } from './utils/transformSegmentationPolygons';
@@ -1191,6 +1192,40 @@ const SegmentationEditor = () => {
     [applyAdditiveToggle, clearMultiSelect]
   );
 
+  // Canvas click in the assignment view: with a neurite selected, clicking a
+  // soma reassigns it. The colouring toggle IS the mode — see
+  // `assignmentClickAction` for why this is not a new `EditMode`.
+  //
+  // Wraps the CANVAS handler, not the sidebar list one: the gesture is a click
+  // on the picture, and reassigning from a list row would be a different
+  // (and much less obvious) interaction.
+  //
+  // The change is LOCAL, exactly like a rename or an instance-id edit, so it
+  // joins the frame's unsaved changes and is written by the normal save.
+  // `somaId` is on the OPTIONAL_POLYGON_FIELDS whitelist, so it survives that
+  // round trip; without the registration the save would silently drop it.
+  const handleCanvasSelectWithAssignment = useCallback(
+    (polygonId: string | null, additive?: boolean) => {
+      // Additive (shift) clicks are multi-selection and must not reassign —
+      // building a selection is not the same gesture as retargeting one.
+      if (!additive) {
+        const polys = editorRef.current.getPolygons();
+        const action = assignmentClickAction(
+          polys.find(p => p.id === editorRef.current.selectedPolygonId),
+          polygonId ? polys.find(p => p.id === polygonId) : null,
+          projectType === 'neurite' && colorBySoma
+        );
+        if (action.kind === 'reassign') {
+          handleUpdatePolygonField(action.neuriteId, { somaId: action.somaId });
+        }
+      }
+      // Select either way. After a reassignment that leaves the SOMA selected,
+      // so the next click behaves ordinarily and no state can get stuck.
+      handleCanvasSelect(polygonId, additive);
+    },
+    [projectType, colorBySoma, handleUpdatePolygonField, handleCanvasSelect]
+  );
+
   // Assign (or clear) a microtubule type label. When ≥2 MTs are multi-selected
   // the label applies to all of them; otherwise just the right-clicked polyline.
   // Reads the selection through the ref so this callback stays identity-stable
@@ -1660,7 +1695,7 @@ const SegmentationEditor = () => {
         handleDeletePolygonFromFrame={handleDeletePolygonFromFrame}
         deleteScopeDialog={deleteScope.scopeDialog}
         handlePropagateTrack={handlePropagateTrack}
-        handleCanvasSelect={handleCanvasSelect}
+        handleCanvasSelect={handleCanvasSelectWithAssignment}
         handlePropagateSelected={handlePropagateSelected}
         handleDeleteSelected={handleDeleteSelected}
         handleDeleteSelectedFromFrame={handleDeleteSelectedFromFrame}

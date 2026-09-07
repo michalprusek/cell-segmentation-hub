@@ -7,8 +7,8 @@
   "totals": {
     "tsconfig.app.json": 377,
     "tsconfig.node.json": 21,
-    "tsconfig.test.json": 1213,
-    "all": 1611
+    "tsconfig.test.json": 1214,
+    "all": 1612
   },
   "projects": {
     "tsconfig.app.json": {
@@ -1565,6 +1565,9 @@
       },
       "src/pages/segmentation/hooks/useVideoFrames.ts": {
         "TS2339: Property 'data' does not exist on type '{}'.": 1
+      },
+      "src/pages/segmentation/utils/__tests__/assignmentClick.test.ts": {
+        "TS6307: File 'src/pages/segmentation/utils/assignmentClick.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
       },
       "src/pages/segmentation/utils/__tests__/instanceLabels.test.ts": {
         "TS6307: File 'src/pages/segmentation/utils/instanceLabels.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
