@@ -295,7 +295,14 @@ describe('SegmentationService track ops (orchestration)', () => {
         create: vi.fn(x => x),
         findUnique: vi.fn(),
       },
-      image: { findMany: vi.fn(), update: vi.fn(x => x) },
+      // `findUnique` is the static-share channel lookup in
+      // `updateSegmentationResults`; undefined container => not shared, which is
+      // what every fixture in this file is.
+      image: {
+        findMany: vi.fn(),
+        findUnique: vi.fn(),
+        update: vi.fn(x => x),
+      },
       $transaction: vi.fn().mockResolvedValue([]),
     };
     imageServiceMock = { getImageById: vi.fn() };

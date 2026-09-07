@@ -168,6 +168,14 @@ export interface SegmentationResultData {
   processingTime?: number;
   createdAt?: string;
   updatedAt?: string;
+  /** Set by a SAVE onto a frame whose segmentation channel is one picture
+   *  stamped onto the whole container (`ChannelMeta.staticSource`): the server
+   *  copied this frame's annotation onto these sibling frames, so their cached
+   *  segmentations are stale. Ids rather than a count because the server writes
+   *  only the frames the channel covers and whose alignment shift it knows —
+   *  "every frame of the container" would be a claim about rows it never
+   *  touched. Absent on every other response. */
+  staticShare?: { frameIds: string[] };
 }
 
 export interface SegmentationResult {
@@ -1872,6 +1880,10 @@ class ApiClient {
         processingTime: data.processingTime,
         createdAt: data.createdAt,
         updatedAt: data.updatedAt,
+        // Only present when the server shared this save across a static
+        // channel's frames; leaving it undefined otherwise is what lets the
+        // caller test it as a plain truthiness check.
+        ...(data.staticShare ? { staticShare: data.staticShare } : {}),
       };
       return result;
     }

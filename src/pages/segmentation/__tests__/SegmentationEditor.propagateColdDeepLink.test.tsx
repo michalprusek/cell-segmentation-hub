@@ -368,9 +368,9 @@ import SegmentationEditorDefault from '../SegmentationEditor';
 const makeQueryClient = () =>
   new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
-const renderEditor = () =>
+const renderEditor = (queryClient = makeQueryClient()) =>
   render(
-    <QueryClientProvider client={makeQueryClient()}>
+    <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <SegmentationEditorDefault />
       </BrowserRouter>
@@ -591,6 +591,46 @@ describe('propagate on a cold deep-link (video.container still null)', () => {
       'img-0': 'no_segmentation', // before the source frame
       'other-1': 'no_segmentation', // another container entirely
     });
+  });
+
+  it('evicts the listing frames too, so a scrub refetches the new geometry', async () => {
+    // The eviction half of the same fallback. `evictVideoFrameSegmentationCaches`
+    // is shared with the static-share path, where an explicit `frameIds` list is
+    // passed; a track op passes nothing and means "every frame of the
+    // container", and that list has to survive a null container the same way
+    // the status bump does. Otherwise the propagate lands, the frame loader
+    // finds a cached pre-propagate segmentation and paints it — it serves any
+    // entry it has, staleness be damned.
+    const frame = (id: string, frameIndex: number) => ({
+      id,
+      name: `frame-${frameIndex}.png`,
+      isVideoContainer: false,
+      parentVideoId: 'vid-9',
+      frameIndex,
+      segmentationStatus: 'no_segmentation',
+    });
+    mockProjectData.images = [
+      COLD_DEEP_LINK_FRAME, // vid-9, frameIndex 7
+      frame('img-2', 8),
+      frame('other-1', 8), // overwritten below to a different container
+    ];
+    mockProjectData.images[2].parentVideoId = 'other-vid';
+    setPolygons([polyline({ trackId: 'track-3' })]);
+
+    const queryClient = makeQueryClient();
+    const removeQueries = vi.spyOn(queryClient, 'removeQueries');
+    renderEditor(queryClient);
+
+    await clickAndSettle('propagate-poly-1', () => {
+      expect(mockApiClient.propagateTrackForward).toHaveBeenCalledTimes(1);
+    });
+
+    const evicted = removeQueries.mock.calls.map(
+      c => ((c[0] as { queryKey?: unknown[] })?.queryKey ?? [])[1]
+    );
+    // Every frame of THIS container — the source frame included, because a
+    // propagate can rewrite it too — and nothing from another container.
+    expect(evicted.sort()).toEqual(['img-1', 'img-2']);
   });
 
   it('still refuses, loudly, when the row genuinely has no video container', async () => {

@@ -18,6 +18,14 @@ import { ThumbnailManager } from './thumbnailManager';
 import { getStorageProvider } from '../storage/index';
 import { safeMlFilename } from '../utils/mlFilename';
 import { mapWithConcurrency } from '../utils/concurrency';
+import {
+  findStaticChannel,
+  withMintedTrackIds,
+  type ProjectablePolygon,
+  type StaticChannelLike,
+} from './staticChannelProjection';
+import { projectStaticChannelResult } from './staticChannelProjectionService';
+import { resolveSegmentationSource } from './video/types';
 
 export interface SegmentationPoint {
   x: number;
@@ -1703,6 +1711,17 @@ export class SegmentationService {
     status: string;
     createdAt: Date;
     updatedAt: Date;
+    /** Present ONLY when this save was shared onto a static channel's other
+     *  frames — see `resolveStaticShareChannel`. Omitted otherwise, so the
+     *  response shape is unchanged for every image that is not a frame of a
+     *  static-source container.
+     *
+     *  The frame ids, not just a count: the client has to invalidate exactly
+     *  the frames that changed. A channel with partial coverage, or a frame
+     *  whose alignment shift was never recorded, is deliberately left alone,
+     *  and telling the editor those rows are now `segmented` would send its
+     *  loader after segmentation that does not exist. */
+    staticShare?: { frameIds: string[] };
   }> {
     // Verify image ownership
     const image = await this.imageService.getImageById(imageId, userId);
@@ -1710,17 +1729,46 @@ export class SegmentationService {
       throw new Error('Image not found or no access');
     }
 
+    // Is this frame's annotation SHARED with the rest of its container?
+    // Resolved before the write because it decides what gets written: an
+    // untracked polyline has to be given its cross-frame identity BEFORE the
+    // copies are made from it (see the minting below).
+    const shareChannel = await this.resolveStaticShareChannel(
+      imageId,
+      image.parentVideoId
+    );
+
     // Check if segmentation exists
     const existingSegmentation = await this.prisma.segmentation.findUnique({
       where: { imageId },
     });
+
+    // On a shared (static-source) frame, give every untracked polyline a
+    // `trackId` before it is stored.
+    //
+    // `projectStaticChannelResult` would mint them itself — but it does so on
+    // the row it reads back, so the ids would exist in the database and NOT in
+    // this response. The editor paints what the response returns, so its next
+    // save would send the same polylines untracked again: `diffTrackOps` would
+    // read the ids' absence as "the user deleted these tracks" and mirror the
+    // deletion, and the polylines would be re-minted under NEW ids on every
+    // single save. Anything keyed on `trackId` (the editor's hide/select state,
+    // an mtType label, a kymograph selection) would be orphaned each time.
+    // Minting here keeps the ids the copies carry identical to the ids the
+    // client is handed back.
+    const savedPolygons = shareChannel
+      ? withMintedTrackIds(
+          polygons as (SegmentationPolygon & ProjectablePolygon)[],
+          () => `mt_${uuidv4().replace(/-/g, '').slice(0, 8)}`
+        ).polygons
+      : polygons;
 
     // Transform SegmentationPolygon[] to database format. toDbPolygon spreads
     // every field through (so trackId, name, partClass and any future field
     // round-trip — they're the basis of cross-frame identity and the user-set
     // label) and collapses parentIds[] -> parent_id. No per-field edits needed
     // when a new optional field is added.
-    const dbPolygons = polygons.map(polygon =>
+    const dbPolygons = savedPolygons.map(polygon =>
       toDbPolygon(polygon as SegmentationPolygon & Record<string, unknown>)
     );
     const polygonsJson = JSON.stringify(dbPolygons);
@@ -1815,10 +1863,25 @@ export class SegmentationService {
         internalCount: internalPolygons.length,
       });
 
+      // Runs AFTER the row above is committed: the projection reads this
+      // frame's stored polygons and copies them out, so it must see the edit.
+      //
+      // The sibling ops the transaction just applied are NOT skipped when this
+      // is going to run, even though it overwrites the same rows. They are not
+      // redundant: `skipped` frames (unrecorded alignment shift) and frames
+      // outside the channel's coverage are deliberately left unprojected, and
+      // a rename or delete still has to reach them. The double write costs
+      // something only on a save that carries a track op, which is rare.
+      const staticShare = await this.shareStaticAnnotation(
+        imageId,
+        image.parentVideoId,
+        shareChannel
+      );
+
       return {
         id: updated.id,
         imageId: updated.imageId,
-        polygons: polygons,
+        polygons: savedPolygons,
         model: updated.model,
         threshold: updated.threshold,
         confidence: updated.confidence,
@@ -1827,9 +1890,17 @@ export class SegmentationService {
         status: 'completed',
         createdAt: updated.createdAt,
         updatedAt: updated.updatedAt,
+        ...(staticShare ? { staticShare } : {}),
       };
     } else {
-      // Create new segmentation record
+      // Create new segmentation record.
+      //
+      // On a static container `model: 'manual'` then travels to every sibling,
+      // because `projectStaticChannelResult` copies the anchor's model along
+      // with its polygons and overwrites what was there. That is accurate
+      // rather than lossy — after the share every frame's polygons ARE this
+      // hand-drawn set — but it does mean a container whose row was deleted and
+      // redrawn no longer records which model first segmented it.
       const createData: Prisma.SegmentationCreateInput = {
         image: {
           connect: { id: imageId },
@@ -1882,10 +1953,16 @@ export class SegmentationService {
         internalCount: internalPolygons.length,
       });
 
+      const staticShare = await this.shareStaticAnnotation(
+        imageId,
+        image.parentVideoId,
+        shareChannel
+      );
+
       return {
         id: created.id,
         imageId: created.imageId,
-        polygons: polygons,
+        polygons: savedPolygons,
         model: created.model,
         threshold: created.threshold,
         confidence: created.confidence,
@@ -1894,7 +1971,141 @@ export class SegmentationService {
         status: 'completed',
         createdAt: created.createdAt,
         updatedAt: created.updatedAt,
+        ...(staticShare ? { staticShare } : {}),
       };
+    }
+  }
+
+  /**
+   * The container channel this frame's annotation is SHARED through, or null.
+   *
+   * A `staticSource` channel is one picture stamped onto every frame it covers
+   * (see `ChannelMeta.staticSource`) — an IRM snapshot glued over a 300-frame
+   * fluorescence time-lapse being the case this exists for. When such a channel
+   * is what the segmenter reads, every frame's annotation is an annotation of
+   * the SAME image, so there is one annotation, not N. `queueService` already
+   * treats it that way for machine segmentation (`projectStaticChannelResult`
+   * right after a queue item completes); nothing did for a manual edit, so a
+   * user's correction stayed on the frame they made it on. The production
+   * signature of that: container 5ac61392 with 67 polylines on frame 0 and 68
+   * on frames 1-299, and container aafdf846 with 21 hand-drawn microtubules
+   * that exist on frame 0 alone. The user's workaround was 21 consecutive
+   * `tracks/propagate` calls at ~4 s each, and it could still only ADD.
+   *
+   * Deliberately NOT extended to `sparseSource`: there the frames in between
+   * share a picture but the real frames are genuinely different timepoints, so
+   * one shared annotation would be wrong.
+   *
+   * Which channel the segmenter reads is `resolveSegmentationSource` — the same
+   * SSOT the extractor and the frame-data route use. A per-batch channel
+   * OVERRIDE (Segment All with an explicit channel) is not recorded on the
+   * `Segmentation` row, so it cannot be honoured here; a container flagged
+   * static is one whose next machine segmentation would collapse to a single
+   * frame anyway, so treating its default source as authoritative matches what
+   * the rest of the system already does with it.
+   *
+   * The frame being saved must itself be one the channel COVERS. "Add channel"
+   * can stamp its picture onto a user-chosen subset (`ChannelMeta.frameIds`),
+   * and a frame outside that subset was segmented from something else entirely
+   * — its geometry was drawn against a different picture. Without this check
+   * the projection would still apply it, because with alignment off
+   * `projectionDelta` returns [0, 0] for every pair and nothing downstream
+   * looks at where the SOURCE came from.
+   */
+  private async resolveStaticShareChannel(
+    imageId: string,
+    parentVideoId: string | null | undefined
+  ): Promise<StaticChannelLike | null> {
+    if (!parentVideoId) {
+      return null;
+    }
+    try {
+      const container = await this.prisma.image.findUnique({
+        where: { id: parentVideoId },
+        select: { channels: true },
+      });
+      const declared = container?.channels as unknown as
+        | (StaticChannelLike & { isSegmentationSource?: boolean })[]
+        | null;
+      if (!Array.isArray(declared)) {
+        return null;
+      }
+      const meta = findStaticChannel(
+        declared,
+        resolveSegmentationSource(declared)
+      );
+      // `frameIds` is OMITTED when the channel covers the whole container, so
+      // its absence means full coverage, not none.
+      if (meta?.frameIds && !meta.frameIds.includes(imageId)) {
+        return null;
+      }
+      return meta;
+    } catch (err) {
+      // A container lookup that fails must not fail the SAVE. The frame's own
+      // polygons are what the user asked to store; sharing them is an extra.
+      logger.error(
+        `Static-share channel lookup failed: ${(err as Error).message}`,
+        err as Error,
+        'SegmentationService',
+        { parentVideoId }
+      );
+      return null;
+    }
+  }
+
+  /**
+   * Copy the just-saved frame onto every other frame the static channel covers.
+   *
+   * Reuses the exact path machine segmentation takes, so an edited container
+   * and a freshly segmented one end up in the same state. Returns undefined
+   * when nothing was written, which is what keeps `staticShare` off the wire
+   * for every ordinary save.
+   *
+   * NEVER throws: `projectStaticChannelResult` already degrades every internal
+   * failure to "leave those frames alone", and the try/catch here covers the
+   * call itself. A save that stored the user's polygons must report success
+   * even if the sharing half of it did not happen.
+   */
+  private async shareStaticAnnotation(
+    imageId: string,
+    parentVideoId: string | null | undefined,
+    channel: StaticChannelLike | null
+  ): Promise<{ frameIds: string[] } | undefined> {
+    if (!channel || !parentVideoId) {
+      return undefined;
+    }
+    try {
+      const outcome = await projectStaticChannelResult({
+        containerId: parentVideoId,
+        sourceImageId: imageId,
+        channel: channel.name,
+      });
+      if (outcome.projectedIds.length === 0) {
+        return undefined;
+      }
+      logger.info(
+        `Manual edit shared across ${outcome.projected} frame(s) of static channel '${channel.name}'` +
+          (outcome.skipped
+            ? `, ${outcome.skipped} left alone (no recorded shift)`
+            : ''),
+        'SegmentationService',
+        {
+          imageId,
+          parentVideoId,
+          projected: outcome.projected,
+          skipped: outcome.skipped,
+          applied: outcome.applied,
+        }
+      );
+      return { frameIds: outcome.projectedIds };
+    } catch (err) {
+      logger.error(
+        `Sharing a manual edit across a static channel failed: ${(err as Error).message}`,
+        err as Error,
+        'SegmentationService',
+        { imageId, parentVideoId, channel: channel.name }
+      );
+      return undefined;
     }
   }
 
