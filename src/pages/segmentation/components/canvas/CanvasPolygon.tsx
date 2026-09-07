@@ -560,7 +560,12 @@ const CanvasPolygon = React.memo(
               // same dataset channel the vertices already use.
               data-polygon-id={id}
               data-polygon-contour="true"
-              style={{ cursor: 'move' }}
+              // Only MoveShape can actually translate the shape, so only
+              // MoveShape may advertise it. Painting `move` in every mode
+              // promised a gesture that six of the eight modes do not have.
+              style={
+                editMode === EditMode.MoveShape ? { cursor: 'move' } : undefined
+              }
             />
           )}
 
@@ -573,7 +578,15 @@ const CanvasPolygon = React.memo(
                 : undefined
             }
             className={cn(
-              'polygon-path cursor-pointer transition-colors',
+              'polygon-path transition-colors',
+              // The visible path is what the pointer actually meets — for a
+              // closed polygon its INTERIOR as well, since pointerEvents is
+              // 'all' below. Leaving `cursor-pointer` here meant the move
+              // affordance existed only on a polyline's invisible hit band,
+              // i.e. nowhere a user looks.
+              editMode === EditMode.MoveShape
+                ? 'cursor-move'
+                : 'cursor-pointer',
               isPolyline
                 ? 'polyline-path'
                 : polygon.partClass === 'core'

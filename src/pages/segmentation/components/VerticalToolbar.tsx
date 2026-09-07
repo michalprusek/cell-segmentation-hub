@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import {
   MousePointer,
   Edit3,
+  Move,
   Plus,
   Pentagon,
   Spline,
@@ -79,6 +80,15 @@ const MODE_ACCENTS: Record<EditMode, ModeAccent> = {
     active:
       'bg-purple-100 dark:bg-purple-900/60 text-purple-700 dark:text-purple-100 ring-1 ring-inset ring-purple-400 dark:ring-purple-500',
     bar: 'bg-purple-500',
+  },
+  [EditMode.MoveShape]: {
+    icon: Move,
+    labelKey: 'segmentation.mode.moveShape',
+    shortcut: 'M',
+    idle: 'text-gray-600 dark:text-gray-300 hover:bg-cyan-100 dark:hover:bg-cyan-900/40 hover:text-cyan-700 dark:hover:text-cyan-200',
+    active:
+      'bg-cyan-100 dark:bg-cyan-900/60 text-cyan-700 dark:text-cyan-100 ring-1 ring-inset ring-cyan-400 dark:ring-cyan-500',
+    bar: 'bg-cyan-500',
   },
   [EditMode.AddPoints]: {
     icon: Plus,
@@ -299,6 +309,19 @@ const VerticalToolbar: React.FC<VerticalToolbarProps> = ({
       />
       <ModeButton
         mode={EditMode.EditVertices}
+        editMode={editMode}
+        selectedPolygonId={selectedPolygonId}
+        disabled={disabled}
+        setEditMode={setEditMode}
+        t={t}
+      />
+      {/* Move sits next to Edit vertices: both reshape an EXISTING shape,
+          one point at a time or all of them at once. Deliberately NOT in
+          `isRequiredSelectionMode` — the mousedown that starts a translate
+          selects the shape it grabbed, so demanding a prior selection would
+          leave the tool greyed out with no way to arm it. */}
+      <ModeButton
+        mode={EditMode.MoveShape}
         editMode={editMode}
         selectedPolygonId={selectedPolygonId}
         disabled={disabled}

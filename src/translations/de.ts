@@ -952,6 +952,7 @@ export default {
       view: 'Anzeigen und navigieren',
       edit: 'Bearbeiten',
       editVertices: 'Eckpunkte bearbeiten',
+      moveShape: 'Form verschieben',
       addPoints: 'Punkte hinzufügen',
       create: 'Erstellen',
       createPolygon: 'Polygon erstellen',
@@ -994,11 +995,18 @@ export default {
       zoomOut: 'Verkleinern',
       resetViewTooltip: 'Ansicht zurücksetzen (R)',
       resetView: 'Zurücksetzen',
+      leaveConfirmTitle: 'Änderungen vor dem Verlassen speichern?',
+      leaveConfirmDescription:
+        'Dieses Bild hat nicht gespeicherte Änderungen. Wenn Sie ohne Speichern gehen, gehen sie verloren.',
+      saveAndLeave: 'Speichern und verlassen',
+      leaveWithoutSaving: 'Ohne Speichern verlassen',
+      saveBeforeLeaveFailed:
+        'Speichern fehlgeschlagen. Ihre Änderungen sind noch da — versuchen Sie es erneut oder verlassen Sie die Seite ohne Speichern.',
       unsavedChanges: 'Nicht gespeicherte Änderungen',
       saving: 'Speichern...',
       save: 'Speichern',
       keyboardShortcuts:
-        'V: Anzeigen • E: Bearbeiten • A: Hinzufügen • N: Neu • S: Schneiden • D: Löschen',
+        'V: Anzeigen • E: Bearbeiten • M: Verschieben • A: Hinzufügen • N: Neu • S: Schneiden • D: Löschen',
       nothingToSave: 'Alle Änderungen gespeichert',
     },
     status: {
@@ -1041,6 +1049,7 @@ export default {
       viewMode: 'Ansichtsmodus',
       editVertices: 'Eckpunkte bearbeiten-Modus',
       addPoints: 'Punkte hinzufügen-Modus',
+      moveShape: 'Form-Verschieben-Modus',
       createPolygon: 'Neues Polygon erstellen',
       sliceMode: 'Schnitt-Modus',
       deleteMode: 'Lösch-Modus',
@@ -1172,6 +1181,11 @@ export default {
           'SHIFT halten und auf einen Eckpunkt klicken, um Punkte hinzuzufügen',
         deleteVertex: 'Doppelklick auf einen Eckpunkt, um ihn zu löschen',
       },
+      moveShape: {
+        dragShape: 'Klicken und ziehen Sie eine Form, um sie zu verschieben',
+        rigid:
+          'Die gesamte Form bewegt sich — die Eckpunkte behalten ihre Lage zueinander',
+      },
       deletePolygon: {
         clickToDelete: 'Klicken Sie auf ein Polygon, um es zu löschen',
       },
@@ -1185,6 +1199,7 @@ export default {
         createPolyline: 'Mikrotubulus-Erstellmodus',
         addPoints: 'Punkte-Hinzufüge-Modus',
         editVertices: 'Eckpunkt-Bearbeitungs-Modus',
+        moveShape: 'Verschiebe-Modus',
         deletePolygon: 'Polygon-Lösch-Modus',
         view: 'Ansichts-Modus',
       },

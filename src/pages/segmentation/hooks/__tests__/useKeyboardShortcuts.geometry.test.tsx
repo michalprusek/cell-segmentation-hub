@@ -132,6 +132,9 @@ describe('Tab cycling cannot reach the forbidden create mode', () => {
 
   it('skips CreatePolyline in a polygon project', () => {
     expect(walkCycle(makeProps({ projectType: 'spheroid' }))).toEqual([
+      // MoveShape needs no selection, so it sits in the ungated part of the
+      // cycle, between View and the create tools — the rail's own order.
+      EditMode.MoveShape,
       EditMode.CreatePolygon,
       EditMode.Slice,
       EditMode.DeletePolygon,
@@ -140,6 +143,7 @@ describe('Tab cycling cannot reach the forbidden create mode', () => {
 
   it('skips CreatePolygon in a polyline project', () => {
     expect(walkCycle(makeProps({ projectType: 'microtubules' }))).toEqual([
+      EditMode.MoveShape,
       EditMode.CreatePolyline,
       EditMode.Slice,
       EditMode.DeletePolygon,
@@ -153,11 +157,13 @@ describe('Tab cycling cannot reach the forbidden create mode', () => {
       EditMode.DeletePolygon,
       EditMode.Slice,
       EditMode.CreatePolygon,
+      EditMode.MoveShape,
     ]);
   });
 
   it('visits both when the type has not loaded', () => {
     expect(walkCycle(makeProps({ projectType: undefined }))).toEqual([
+      EditMode.MoveShape,
       EditMode.CreatePolygon,
       EditMode.CreatePolyline,
       EditMode.Slice,

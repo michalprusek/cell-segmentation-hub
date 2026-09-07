@@ -945,6 +945,7 @@ export default {
       view: 'Ver y navegar',
       edit: 'Editar',
       editVertices: 'Editar vértices',
+      moveShape: 'Mover forma',
       addPoints: 'Añadir puntos',
       create: 'Crear',
       createPolygon: 'Crear polígono',
@@ -987,11 +988,18 @@ export default {
       zoomOut: 'Alejar',
       resetViewTooltip: 'Restablecer vista (R)',
       resetView: 'Restablecer',
+      leaveConfirmTitle: '¿Guardar los cambios antes de salir?',
+      leaveConfirmDescription:
+        'Este fotograma tiene cambios sin guardar. Si sale sin guardar, se perderán.',
+      saveAndLeave: 'Guardar y salir',
+      leaveWithoutSaving: 'Salir sin guardar',
+      saveBeforeLeaveFailed:
+        'No se pudo guardar. Sus cambios siguen aquí: inténtelo de nuevo o salga sin guardar.',
       unsavedChanges: 'Cambios no guardados',
       saving: 'Guardando...',
       save: 'Guardar',
       keyboardShortcuts:
-        'V: Ver • E: Editar • A: Añadir • N: Nuevo • S: Cortar • D: Eliminar',
+        'V: Ver • E: Editar • M: Mover • A: Añadir • N: Nuevo • S: Cortar • D: Eliminar',
       nothingToSave: 'Todos los cambios guardados',
     },
     status: {
@@ -1034,6 +1042,7 @@ export default {
       viewMode: 'Modo vista',
       editVertices: 'Modo editar vértices',
       addPoints: 'Modo agregar puntos',
+      moveShape: 'Modo mover forma',
       createPolygon: 'Crear nuevo polígono',
       sliceMode: 'Modo cortar',
       deleteMode: 'Modo eliminar',
@@ -1161,6 +1170,11 @@ export default {
         addPoints: 'Mantén SHIFT y haz clic en un vértice para agregar puntos',
         deleteVertex: 'Doble clic en un vértice para eliminarlo',
       },
+      moveShape: {
+        dragShape: 'Haz clic y arrastra una forma para moverla',
+        rigid:
+          'Se mueve toda la forma: los vértices mantienen sus posiciones relativas',
+      },
       deletePolygon: {
         clickToDelete: 'Haz clic en un polígono para eliminarlo',
       },
@@ -1174,6 +1188,7 @@ export default {
         createPolyline: 'Modo crear microtúbulo',
         addPoints: 'Modo agregar puntos',
         editVertices: 'Modo editar vértices',
+        moveShape: 'Modo mover',
         deletePolygon: 'Modo eliminar polígono',
         view: 'Modo vista',
       },

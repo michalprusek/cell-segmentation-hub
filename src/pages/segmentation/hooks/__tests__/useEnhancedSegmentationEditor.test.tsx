@@ -1106,7 +1106,14 @@ describe('useEnhancedSegmentationEditor', () => {
       expect(result.current.hasUnsavedChanges).toBe(true);
     });
 
-    it('beforeunload sets event.returnValue when there are unsaved changes', () => {
+    // `preventDefault()` is the assertion that matters: Chrome and Firefox
+    // both require it to raise the leave dialog and ignore `returnValue`'s
+    // string entirely. The handler shipped without it for months behind a
+    // comment claiming it "blocks React Router navigation" — it cannot,
+    // because beforeunload never fires on an SPA route change — so the whole
+    // guard was inert. The event must be constructed `cancelable`, or
+    // `preventDefault()` is a silent no-op and this test can never fail.
+    it('beforeunload cancels the unload when there are unsaved changes', () => {
       const { result } = renderHook(() =>
         useEnhancedSegmentationEditor(baseProps)
       );
@@ -1114,29 +1121,154 @@ describe('useEnhancedSegmentationEditor', () => {
       act(() => result.current.updatePolygons([makePolygon('p2')]));
       expect(result.current.hasUnsavedChanges).toBe(true);
 
-      const event = new Event('beforeunload') as BeforeUnloadEvent;
+      const event = new Event('beforeunload', {
+        cancelable: true,
+      }) as BeforeUnloadEvent;
       Object.defineProperty(event, 'returnValue', {
         writable: true,
-        value: '',
+        value: 'untouched',
       });
 
       window.dispatchEvent(event);
 
-      expect(event.returnValue).toBeTruthy();
+      expect(event.defaultPrevented).toBe(true);
+      expect(event.returnValue).toBe('');
     });
 
-    it('beforeunload does not set returnValue when there are no unsaved changes', () => {
+    it('beforeunload leaves the unload alone when there are no unsaved changes', () => {
       renderHook(() => useEnhancedSegmentationEditor(baseProps));
 
-      const event = new Event('beforeunload') as BeforeUnloadEvent;
+      const event = new Event('beforeunload', {
+        cancelable: true,
+      }) as BeforeUnloadEvent;
       Object.defineProperty(event, 'returnValue', {
         writable: true,
-        value: '',
+        value: 'untouched',
       });
 
       window.dispatchEvent(event);
 
-      expect(event.returnValue).toBe('');
+      expect(event.defaultPrevented).toBe(false);
+      expect(event.returnValue).toBe('untouched');
+    });
+
+    // The editor's leave prompt navigates away on this boolean, so a wrong
+    // answer here is silent data loss rather than a failed assertion.
+    it('handleSave resolves true once the polygons are persisted', async () => {
+      const onSave = vi.fn().mockResolvedValue(undefined);
+      const { result } = renderHook(() =>
+        useEnhancedSegmentationEditor({ ...baseProps, onSave })
+      );
+
+      act(() => result.current.updatePolygons([makePolygon('p2')]));
+
+      let saved: boolean | undefined;
+      await act(async () => {
+        saved = await result.current.handleSave();
+      });
+
+      expect(saved).toBe(true);
+      expect(onSave).toHaveBeenCalledTimes(1);
+      expect(result.current.hasUnsavedChanges).toBe(false);
+    });
+
+    it('handleSave resolves false when the save rejects', async () => {
+      const onSave = vi.fn().mockRejectedValue(new Error('save failed'));
+      const { result } = renderHook(() =>
+        useEnhancedSegmentationEditor({ ...baseProps, onSave })
+      );
+
+      act(() => result.current.updatePolygons([makePolygon('p2')]));
+
+      let saved: boolean | undefined;
+      await act(async () => {
+        saved = await result.current.handleSave();
+      });
+
+      expect(saved).toBe(false);
+      expect(result.current.hasUnsavedChanges).toBe(true);
+    });
+
+    it('handleSave reports failure when the save is aborted mid-flight', async () => {
+      // This is the exact shape that used to lose edits: the editor unmounts,
+      // its unmount effect calls abortAll(), and the in-flight manual save is
+      // cancelled. The promise still RESOLVES, so only `signal.aborted`
+      // separates it from a real save — report success here and the leave
+      // prompt navigates away from unsaved work.
+      const created: AbortController[] = [];
+      const RealAbortController = globalThis.AbortController;
+      class SpyAbortController extends RealAbortController {
+        constructor() {
+          super();
+          created.push(this);
+        }
+      }
+      vi.stubGlobal('AbortController', SpyAbortController);
+      try {
+        let release: () => void = () => {};
+        // The parameters are spelled out so `mock.calls[0][3]` is typed as the
+        // AbortSignal the hook hands down, rather than an empty tuple.
+        const onSave = vi.fn(
+          (
+            _polygons: Polygon[],
+            _imageId?: string,
+            _dimensions?: { width: number; height: number },
+            _signal?: AbortSignal
+          ) =>
+            new Promise<void>(resolve => {
+              release = resolve;
+            })
+        );
+        const { result } = renderHook(() =>
+          useEnhancedSegmentationEditor({ ...baseProps, onSave })
+        );
+
+        act(() => result.current.updatePolygons([makePolygon('p2')]));
+
+        let savePromise: Promise<boolean> | undefined;
+        act(() => {
+          savePromise = result.current.handleSave();
+        });
+        expect(onSave).toHaveBeenCalledTimes(1);
+
+        const signal = onSave.mock.calls[0][3];
+        const controller = created.find(c => c.signal === signal);
+        expect(controller).toBeDefined();
+
+        let saved: boolean | undefined;
+        await act(async () => {
+          controller?.abort();
+          release();
+          saved = await savePromise;
+        });
+
+        expect(saved).toBe(false);
+        expect(result.current.hasUnsavedChanges).toBe(true);
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    });
+
+    it('handleSave resolves true with nothing to save, false with no handler', async () => {
+      const { result } = renderHook(() =>
+        useEnhancedSegmentationEditor({ ...baseProps, onSave: undefined })
+      );
+
+      // Clean: nothing to lose, so leaving is safe.
+      let clean: boolean | undefined;
+      await act(async () => {
+        clean = await result.current.handleSave();
+      });
+      expect(clean).toBe(true);
+
+      // Dirty with no way to persist: leaving would drop the edits.
+      act(() => result.current.updatePolygons([makePolygon('p2')]));
+      let dirty: boolean | undefined;
+      await act(async () => {
+        dirty = await result.current.handleSave();
+      });
+      expect(dirty).toBe(false);
+      expect(result.current.hasUnsavedChanges).toBe(true);
     });
 
     it('autosaves the previous image when imageId changes with unsaved changes', async () => {

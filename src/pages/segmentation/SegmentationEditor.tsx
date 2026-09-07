@@ -399,7 +399,13 @@ const SegmentationEditor = () => {
     onRequestDeletePolygon: handleRequestDeletePolygon,
     onSave: async (polygons, targetImageId, targetDimensions, signal) => {
       const saveToImageId = targetImageId || imageId;
-      if (!projectId || !saveToImageId) return;
+      if (!projectId || !saveToImageId) {
+        // Returning here would RESOLVE, and `handleSave` reads "did not
+        // reject" as "persisted" — which the leave prompt then navigates on.
+        throw new Error(
+          'Cannot save segmentation without a project id and an image id'
+        );
+      }
 
       // Determine the correct dimensions to use
       let saveWidth: number | undefined;
@@ -498,21 +504,23 @@ const SegmentationEditor = () => {
           logger.debug('✅ Autosaved polygons for image:', saveToImageId);
         }
       } catch (error) {
-        // Handle cancellation gracefully
-        if (handleCancelledError(error, 'segmentation save')) {
-          return;
-        }
-
+        // Do NOT swallow. `handleSave` infers "persisted" from "this promise
+        // did not reject", and the leave prompt navigates away on that answer
+        // — so a swallowed 500 used to clear `hasUnsavedChanges`, raise a
+        // success toast and drop the user's edits on the floor. Both callers
+        // already classify cancellations (`handleCancelledError`) and raise
+        // their own toast, so rethrowing reports the failure exactly once.
         logger.error('Failed to save segmentation:', error);
-        toast.error(t('toast.operationFailed'));
+        throw error;
       }
     },
     // IMPORTANT: onPolygonsChange is intentionally NOT provided
     // to prevent any automatic saving when polygons change.
     // Saving only happens on:
-    // 1. Manual save (Ctrl+S or Save button)
+    // 1. Manual save (Ctrl+S, the Save button, or "Save and leave")
     // 2. Switching images (autosaveBeforeReset)
-    // 3. Leaving the editor (unmount autosave)
+    // There is NO unmount autosave — leaving the editor with unsaved edits
+    // raises `UnsavedChangesDialog` and the user decides.
   });
 
   // Listen for segmentation completion and auto-reload polygons (debounced) with cancellation

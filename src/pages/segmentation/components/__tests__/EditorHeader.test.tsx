@@ -17,17 +17,17 @@
  *  - Video mode: Play button rendered when videoIsPlaying=false
  *  - Video mode: Pause button rendered when videoIsPlaying=true
  *  - Video mode: Play/Pause button calls onVideoToggle
+ *  - Unsaved-changes prompt: opens instead of navigating, save-then-leave
+ *    ordering, discard, cancel, and a failed save holding the dialog open
  *
  * NOT tested:
- *  - Background save race (setTimeout/Promise.race) — pure async infra,
- *    no observable DOM output in JSDOM; tested separately in integration tests.
  *  - startTransition side-effects — no observable JSDOM output.
  *  - framer-motion animation values (CSS, not DOM-queryable).
  */
 
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, fireEvent } from '@testing-library/react';
+import { act, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { render } from '@/test/utils/test-utils';
 import EditorHeader from '../EditorHeader';
@@ -357,6 +357,194 @@ describe('EditorHeader', () => {
       expect(
         screen.queryByRole('spinbutton', { name: /frame/i })
       ).not.toBeInTheDocument();
+    });
+  });
+
+  // ---- Unsaved-changes prompt ---------------------------------------------
+
+  /**
+   * These replace the behaviour this component used to have: navigate FIRST,
+   * then fire `onSave()` into a `Promise.race` against a 3 s timeout. The
+   * editor unmounts on navigation and aborts the `manual-save` signal, so that
+   * save was routinely cancelled mid-flight and the loss surfaced only as a
+   * `logger.warn`. Nothing must navigate before a save has reported success.
+   */
+  describe('unsaved changes prompt', () => {
+    const dirtyProps = (onSave: () => Promise<boolean>) => ({
+      ...baseProps,
+      hasUnsavedChanges: true,
+      onSave,
+    });
+
+    const clickFolderButton = async (
+      user: ReturnType<typeof userEvent.setup>
+    ) =>
+      user.click(
+        screen.getByText('My Project').closest('button') as HTMLButtonElement
+      );
+
+    it('opens the prompt instead of navigating when there are unsaved changes', async () => {
+      const user = userEvent.setup();
+      const onSave = vi.fn().mockResolvedValue(true);
+      render(<EditorHeader {...dirtyProps(onSave)} />);
+
+      await clickFolderButton(user);
+
+      // Positive assertion: the dialog and all three of its choices are up.
+      expect(
+        screen.getByRole('heading', { name: 'Save changes before leaving?' })
+      ).toBeInTheDocument();
+      expect(screen.getByTestId('unsaved-changes-save')).toBeInTheDocument();
+      expect(screen.getByTestId('unsaved-changes-discard')).toBeInTheDocument();
+      expect(mockNavigate).not.toHaveBeenCalled();
+      expect(onSave).not.toHaveBeenCalled();
+    });
+
+    it('navigates immediately when there is nothing unsaved', async () => {
+      const user = userEvent.setup();
+      const onSave = vi.fn().mockResolvedValue(true);
+      render(
+        <EditorHeader
+          {...baseProps}
+          hasUnsavedChanges={false}
+          onSave={onSave}
+        />
+      );
+
+      await clickFolderButton(user);
+
+      expect(mockNavigate).toHaveBeenCalledWith('/project/proj-1');
+      expect(onSave).not.toHaveBeenCalled();
+    });
+
+    it('waits for the save to resolve BEFORE navigating', async () => {
+      const user = userEvent.setup();
+      let resolveSave: (ok: boolean) => void = () => {};
+      const onSave = vi.fn(
+        () =>
+          new Promise<boolean>(resolve => {
+            resolveSave = resolve;
+          })
+      );
+      render(<EditorHeader {...dirtyProps(onSave)} />);
+
+      await clickFolderButton(user);
+      await user.click(screen.getByTestId('unsaved-changes-save'));
+
+      // The save is in flight: it has been called, and the route has NOT
+      // changed. This is the ordering assertion — no wall-clock involved.
+      expect(onSave).toHaveBeenCalledTimes(1);
+      expect(mockNavigate).not.toHaveBeenCalled();
+      expect(screen.getByTestId('unsaved-changes-save')).toBeDisabled();
+
+      await act(async () => {
+        resolveSave(true);
+      });
+
+      expect(mockNavigate).toHaveBeenCalledWith('/project/proj-1');
+    });
+
+    it('keeps the prompt open and reports the failure when the save rejects', async () => {
+      const user = userEvent.setup();
+      const onSave = vi.fn().mockRejectedValue(new Error('boom'));
+      render(<EditorHeader {...dirtyProps(onSave)} />);
+
+      await clickFolderButton(user);
+      await user.click(screen.getByTestId('unsaved-changes-save'));
+
+      await screen.findByTestId('unsaved-changes-save-failed');
+      expect(mockNavigate).not.toHaveBeenCalled();
+      // Still offering the same three choices, so the user can retry.
+      expect(screen.getByTestId('unsaved-changes-save')).toBeEnabled();
+      expect(screen.getByTestId('unsaved-changes-discard')).toBeInTheDocument();
+    });
+
+    it('keeps the prompt open when the save resolves anything but true', async () => {
+      const user = userEvent.setup();
+      // `handleSave` resolves false when the save was aborted or had no
+      // handler — navigating on that is the data loss this dialog prevents.
+      const onSave = vi.fn().mockResolvedValue(false);
+      render(<EditorHeader {...dirtyProps(onSave)} />);
+
+      await clickFolderButton(user);
+      await user.click(screen.getByTestId('unsaved-changes-save'));
+
+      await screen.findByTestId('unsaved-changes-save-failed');
+      expect(mockNavigate).not.toHaveBeenCalled();
+    });
+
+    it('"leave without saving" navigates and never calls onSave', async () => {
+      const user = userEvent.setup();
+      const onSave = vi.fn().mockResolvedValue(true);
+      render(<EditorHeader {...dirtyProps(onSave)} />);
+
+      await clickFolderButton(user);
+      await user.click(screen.getByTestId('unsaved-changes-discard'));
+
+      expect(mockNavigate).toHaveBeenCalledWith('/project/proj-1');
+      expect(onSave).not.toHaveBeenCalled();
+    });
+
+    it('Cancel closes the prompt and stays in the editor', async () => {
+      const user = userEvent.setup();
+      const onSave = vi.fn().mockResolvedValue(true);
+      render(<EditorHeader {...dirtyProps(onSave)} />);
+
+      await clickFolderButton(user);
+      await user.click(screen.getByRole('button', { name: 'Cancel' }));
+
+      await waitFor(() =>
+        expect(
+          screen.queryByTestId('unsaved-changes-save')
+        ).not.toBeInTheDocument()
+      );
+      expect(mockNavigate).not.toHaveBeenCalled();
+      expect(onSave).not.toHaveBeenCalled();
+      // The header is still mounted and usable.
+      expect(screen.getByText('cell_001.tif')).toBeInTheDocument();
+    });
+
+    it('prompts even when there is no save handler, offering only discard', async () => {
+      // `onSave` is optional on the props. Falling through to navigate here
+      // would drop the edits with no prompt at all — the exact outcome this
+      // dialog exists to prevent — so the prompt still opens and simply has
+      // nothing to offer but leaving or staying.
+      const user = userEvent.setup();
+      render(<EditorHeader {...baseProps} hasUnsavedChanges={true} />);
+
+      await clickFolderButton(user);
+
+      expect(
+        screen.getByRole('heading', { name: 'Save changes before leaving?' })
+      ).toBeInTheDocument();
+      expect(screen.getByTestId('unsaved-changes-discard')).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: 'Cancel' })
+      ).toBeInTheDocument();
+      // No Save button, because there is no handler that could save.
+      expect(
+        screen.queryByTestId('unsaved-changes-save')
+      ).not.toBeInTheDocument();
+      expect(mockNavigate).not.toHaveBeenCalled();
+
+      await user.click(screen.getByTestId('unsaved-changes-discard'));
+      expect(mockNavigate).toHaveBeenCalledWith('/project/proj-1');
+    });
+
+    it('the Home button routes to /dashboard through the same prompt', async () => {
+      const user = userEvent.setup();
+      const onSave = vi.fn().mockResolvedValue(true);
+      render(<EditorHeader {...dirtyProps(onSave)} />);
+
+      await user.click(screen.getByRole('button', { name: 'Dashboard' }));
+      expect(mockNavigate).not.toHaveBeenCalled();
+
+      await user.click(screen.getByTestId('unsaved-changes-save'));
+
+      await waitFor(() =>
+        expect(mockNavigate).toHaveBeenCalledWith('/dashboard')
+      );
+      expect(mockNavigate).toHaveBeenCalledTimes(1);
     });
   });
 });
