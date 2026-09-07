@@ -256,7 +256,7 @@ nd2>=0.10.0
 # resolve that could not happen. 1.29.0 is what the running ml container holds.
 # The <2.0 ceiling stays where it belongs -- on transformers, which owns it.
 # Keep identical to backend/essays/module/requirements.txt.
-huggingface_hub>=1.29.0
+huggingface_hub>=1.30.0
 
 # Mamba-UNet dependency. einops is a pure-Python runtime dep of mamba_ssm and is
 # safe to build in the slim wheel-builder. The CUDA-compiled kernels themselves
