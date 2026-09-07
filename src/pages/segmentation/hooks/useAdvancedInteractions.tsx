@@ -1,4 +1,4 @@
-import { startTransition, useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { Point, Polygon } from '@/lib/segmentation';
 import {
   EditMode,
@@ -119,6 +119,12 @@ export const useAdvancedInteractions = ({
   // first mousemove after (re)selection or drag-end skips the check and
   // hover stays stuck on an index from the previous target.
   const lastHoverCheckPoint = useRef<Point | null>(null);
+
+  // `timeStamp` of the newest pointer move already drawn as a drag offset.
+  // A vertex drag is fed by two schedules — the canvas's rAF-deferred
+  // onMouseMove and the synchronous window listener — so an older event can
+  // arrive after a newer one has been drawn. See `handleMouseMove`.
+  const lastDragMoveAt = useRef(0);
 
   useEffect(() => {
     lastHoverCheckPoint.current = null;
@@ -951,6 +957,24 @@ export const useAdvancedInteractions = ({
       ) {
         const { polygonId, vertexIndex } = interactionState.draggedVertexInfo;
 
+        // Drop a move that is OLDER than one already drawn. Two paths feed
+        // this branch and they do not run on the same schedule: the canvas's
+        // own onMouseMove goes through `enhancedHandleMouseMove`, which
+        // defers into a coalesced requestAnimationFrame, while the window
+        // listener below applies its event synchronously. So crossing the
+        // canvas edge sequences as: move to A schedules rAF(A) -> pointer
+        // leaves to B -> window listener draws B -> rAF(A) fires and would
+        // redraw the STALE A, flicking the vertex backwards for exactly one
+        // frame at the moment the pointer leaves. `timeStamp` is a
+        // monotonically increasing DOMHighResTimeStamp on both the synthetic
+        // and the native event (React copies it off the native one), and the
+        // ref is only read here, so a non-drag move can never be dropped.
+        const moveAt = e.timeStamp;
+        if (typeof moveAt === 'number') {
+          if (moveAt < lastDragMoveAt.current) return;
+          lastDragMoveAt.current = moveAt;
+        }
+
         // Move the vertex BY the drag delta, not TO the cursor. Measured on
         // production 2026-09-04: grabbing a vertex 4 px off centre and
         // dragging by (120, 60) landed it 3.35 px away from the delta,
@@ -1266,17 +1290,26 @@ export const useAdvancedInteractions = ({
           // mousemove may skip the hit test and leave hover stuck.
           lastHoverCheckPoint.current = null;
 
-          // The polygons-array rebuild re-renders every memoized child.
-          // For a 4000-point polygon that's the most expensive part of a
-          // vertex drag. Marking it non-urgent lets the pointerup event
-          // finish on the synchronous cycle and the heavy re-render run
-          // in React's idle time, avoiding a visible stutter.
-          startTransition(() => {
-            updatePolygons(updatedPolygons);
-          });
+          // The committed points and the cleared drag offset MUST land in
+          // the SAME commit. They used to not: `updatePolygons` was wrapped
+          // in `startTransition` while `setVertexDragState` stayed urgent, so
+          // React flushed the urgent one first and rendered at least one
+          // frame carrying the OLD points with NO drag offset. On screen the
+          // vertex snapped back to where the drag began and only jumped
+          // forward when the transition committed — the "points jump" report.
+          // It got WORSE the bigger the polygon, because a slower transition
+          // widens the window that wrong frame is on screen, which is exactly
+          // the case the transition was added to help.
+          //
+          // Both are urgent now, so React 18's automatic batching folds them
+          // into one render — for the synthetic mouseup and for the native
+          // window mouseup below alike. Proven by frame recording rather than
+          // by inspection: see
+          // `useAdvancedInteractions.dragResponsiveness.test.tsx`, which
+          // captures every (points, dragOffset) pair the canvas was asked to
+          // draw and asserts the old-points-without-offset pair never occurs.
+          updatePolygons(updatedPolygons);
 
-          // Drag state itself must clear synchronously so the UI stops
-          // drawing the drag offset immediately.
           setVertexDragState({
             isDragging: false,
             polygonId: null,
@@ -1321,6 +1354,46 @@ export const useAdvancedInteractions = ({
     window.addEventListener('mouseup', onWindowMouseUp);
     return () => window.removeEventListener('mouseup', onWindowMouseUp);
   }, [interactionState.isDraggingVertex]);
+
+  // ...and the PREVIEW has to survive leaving the canvas too. The canvas div
+  // is the only element carrying an onMouseMove, so the moment the pointer
+  // crossed its edge the drag offset stopped updating and froze at the last
+  // in-canvas position — while `handleMouseUp` went on committing the ACTUAL
+  // release coordinates, unclamped. The preview said one thing and the commit
+  // did another, which reads as the point jumping on release.
+  //
+  // Only moves React's own handler CANNOT see are taken: a move whose target
+  // is inside the canvas already reaches `handleMouseMove` through the React
+  // tree, and running it a second time here would double the renders per
+  // frame — a responsiveness regression, not a fix. Bound only while a vertex
+  // is actually being dragged, and removed on teardown.
+  //
+  // Applied SYNCHRONOUSLY rather than through the rAF the in-canvas path
+  // uses. That is the lower-latency half of the point, and it costs nothing:
+  // one native mousemove produces one `setVertexDragState`, React 18 batches
+  // a dispatch into one render, and browsers already deliver mousemove at
+  // most once per frame (which is why `getCoalescedEvents` exists at all).
+  // The out-of-order hazard the two schedules create is handled where it
+  // belongs, by the `timeStamp` guard in `handleMouseMove`.
+  //
+  // This path deliberately does NOT feed `cursorPosition`: that drives the
+  // temporary-geometry previews of CreatePolygon/AddPoints, which have no
+  // business tracking a pointer that is off the canvas.
+  const mouseMoveRef = useRef(handleMouseMove);
+  mouseMoveRef.current = handleMouseMove;
+  useEffect(() => {
+    if (!interactionState.isDraggingVertex) return;
+    const onWindowMouseMove = (e: MouseEvent) => {
+      const canvas = canvasRef.current;
+      if (canvas && e.target instanceof Node && canvas.contains(e.target)) {
+        return;
+      }
+      // handleMouseMove reads only clientX/clientY off the event.
+      mouseMoveRef.current(e as unknown as React.MouseEvent<HTMLDivElement>);
+    };
+    window.addEventListener('mousemove', onWindowMouseMove);
+    return () => window.removeEventListener('mousemove', onWindowMouseMove);
+  }, [interactionState.isDraggingVertex, canvasRef]);
 
   return {
     handleMouseDown,
