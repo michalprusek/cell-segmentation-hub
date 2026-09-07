@@ -81,6 +81,9 @@ const mockProjectData = vi.hoisted(() => ({
   images: [] as any[],
   loading: false,
   refreshImageSegmentation: vi.fn(),
+  // Used by `markFramesSegmented` — a server-side write that gave sibling
+  // frames a segmentation has to lift their in-memory status too.
+  updateImages: vi.fn(),
 }));
 
 /** Mutable video stub. */
@@ -163,9 +166,13 @@ vi.mock('@/hooks/shared/useAbortController', () => ({
   }),
 }));
 
-// The hook is stubbed, but the PROPS the editor passes it are the real thing —
-// captured so a test can invoke the production `onSave` body instead of a mock
-// that behaves nothing like it.
+/**
+ * The props the editor handed to `useEnhancedSegmentationEditor` on the last
+ * render. The hook is stubbed, but these props are the real thing — captured
+ * so a test can invoke the production `onSave` body instead of a mock that
+ * behaves nothing like it. `onSave` is the whole save path and is not
+ * otherwise reachable, since the hook that would call it is mocked away.
+ */
 const capturedEditorProps = vi.hoisted(() => ({ current: null as any }));
 
 vi.mock('../hooks/useEnhancedSegmentationEditor', () => ({
@@ -175,10 +182,13 @@ vi.mock('../hooks/useEnhancedSegmentationEditor', () => ({
   },
 }));
 
+/** Stable across renders so assertions can count calls. */
+const mockReloadSegmentation = vi.hoisted(() => vi.fn());
+
 vi.mock('../hooks/useSegmentationReload', () => ({
   useSegmentationReload: () => ({
     isReloading: false,
-    reloadSegmentation: vi.fn(),
+    reloadSegmentation: mockReloadSegmentation,
     cleanupReloadOperations: vi.fn(),
   }),
 }));
@@ -193,6 +203,12 @@ const mockSetCached = vi.hoisted(() => vi.fn());
 vi.mock('../hooks/segmentationPolygonCache', () => ({
   getCachedSegmentationPolygons: mockGetCached,
   setCachedSegmentationPolygons: mockSetCached,
+  // The real key, not a stand-in: the eviction assertions below compare the
+  // key the editor removes against the one the loader would look up.
+  segmentationPolygonsQueryKey: (imageId: string) => [
+    'segmentation-results',
+    imageId,
+  ],
 }));
 
 vi.mock('@/lib/api', () => ({
@@ -462,6 +478,7 @@ beforeEach(() => {
   mockEditor.polygons = [];
   mockEditor.editMode = 'view';
   mockEditor.selectedPolygonId = null;
+  mockEditor.hasUnsavedChanges = false;
   mockEditor.getPolygons.mockReturnValue([]);
 
   mockVideo.container = null;
@@ -1177,5 +1194,157 @@ describe('microtubule type labels', () => {
     expect(mockEditor.updatePolygons).not.toHaveBeenCalled();
     expect(toast.error).toHaveBeenCalled();
     expect(toast.success).not.toHaveBeenCalled();
+  });
+});
+
+// ─── static-channel share on save ────────────────────────────────────────────
+
+/**
+ * A container whose segmentation channel is one picture stamped onto every
+ * frame (`ChannelMeta.staticSource`) has ONE annotation, not N. The server now
+ * copies a manual save onto the sibling frames and reports WHICH ones it wrote;
+ * the editor has to act on that, because its frame loader paints any cache
+ * entry it finds regardless of staleness — without an eviction a scrub would
+ * keep showing the pre-save geometry until a full page reload.
+ */
+describe('static-channel share on save', () => {
+  const FRAMES = [
+    { id: 'img-1', frameIndex: 0 },
+    { id: 'f2', frameIndex: 1 },
+    { id: 'f3', frameIndex: 2 },
+  ];
+
+  const renderWithFrames = () => {
+    mockProjectData.images = [
+      { id: 'img-1', name: 'frame 0', segmentationStatus: 'segmented' },
+      { id: 'f2', name: 'frame 1', segmentationStatus: 'no_segmentation' },
+      { id: 'f3', name: 'frame 2', segmentationStatus: 'no_segmentation' },
+    ];
+    mockVideo.container = { id: 'vid-1', frames: FRAMES, channels: [] };
+    mockVideo.currentFrame = FRAMES[0];
+    const queryClient = makeQueryClient();
+    const removeQueries = vi.spyOn(queryClient, 'removeQueries');
+    renderEditor(queryClient);
+    return removeQueries;
+  };
+
+  /** `frameIds` is what the SERVER says it wrote — never the anchor itself. */
+  const respondWith = (frameIds?: string[]) =>
+    mockApiClient.updateSegmentationResults.mockResolvedValue({
+      polygons: [],
+      ...(frameIds ? { staticShare: { frameIds } } : {}),
+    });
+
+  const save = (targetImageId: string) =>
+    act(async () => {
+      await capturedEditorProps.current.onSave(
+        [],
+        targetImageId,
+        { width: 10, height: 10 },
+        undefined
+      );
+    });
+
+  const evictedFrames = (removeQueries: ReturnType<typeof vi.spyOn>) =>
+    removeQueries.mock.calls.map((c: any) => (c[0]?.queryKey ?? [])[1]);
+
+  it('evicts exactly the frames the server wrote, and says how far the save reached', async () => {
+    respondWith(['f2', 'f3']);
+    const removeQueries = renderWithFrames();
+
+    await save('img-1');
+
+    // Exactly those, and NOT the whole container: a static channel can cover a
+    // subset, and a frame with no recorded alignment shift is left alone. The
+    // saved frame is absent because the response already carries its polygons.
+    expect(evictedFrames(removeQueries)).toEqual(['f2', 'f3']);
+    // The frames that had no segmentation now have one; without this the
+    // loader's `hasSegmentation` gate never lets the refetch happen.
+    expect(mockProjectData.updateImages).toHaveBeenCalledTimes(1);
+    // The displayed frame IS the saved frame — a re-read would be wasted.
+    expect(mockReloadSegmentation).not.toHaveBeenCalled();
+
+    const { toast } = await import('sonner');
+    expect(toast.success).toHaveBeenCalledWith(
+      'segmentation.toolbar.sharedAcrossFrames'
+    );
+  });
+
+  it('leaves a frame the server did NOT write alone', async () => {
+    // Same save, partial coverage: only f3 was rewritten. Marking f2 segmented
+    // would send the loader after a segmentation row that does not exist.
+    respondWith(['f3']);
+    const removeQueries = renderWithFrames();
+
+    await save('img-1');
+
+    expect(evictedFrames(removeQueries)).toEqual(['f3']);
+    const marked = (mockProjectData.updateImages.mock.calls[0][0] as any)(
+      mockProjectData.images
+    );
+    expect(marked.map((i: any) => i.segmentationStatus)).toEqual([
+      'segmented',
+      'no_segmentation',
+      'segmented',
+    ]);
+  });
+
+  it('does none of it when the response carries no staticShare', async () => {
+    // Identical fixture, one field removed — the ordinary single-frame save.
+    respondWith();
+    const removeQueries = renderWithFrames();
+
+    await save('img-1');
+
+    expect(removeQueries).not.toHaveBeenCalled();
+    expect(mockProjectData.updateImages).not.toHaveBeenCalled();
+    const { toast } = await import('sonner');
+    expect(toast.success).toHaveBeenCalledWith('toast.dataSaved');
+  });
+
+  it('re-reads the DISPLAYED frame after a frame-switch autosave, silently', async () => {
+    // Switching frames autosaves the previous one while the editor is already
+    // showing the new one. Evicting its cache is not enough: its fetch resolved
+    // long before the ~2 s projection did, so the canvas is holding pre-share
+    // geometry that nothing would replace until the user scrubbed away and
+    // back. Autosave stays silent, so no toast.
+    respondWith(['img-1', 'f3']);
+    renderWithFrames();
+
+    await save('f2');
+
+    expect(mockReloadSegmentation).toHaveBeenCalledTimes(1);
+    const { toast } = await import('sonner');
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(toast.warning).not.toHaveBeenCalled();
+  });
+
+  it('does not re-read a displayed frame the share did not touch', async () => {
+    // The autosave went to f2 and the server rewrote only f3; the frame on
+    // screen (img-1) is unchanged, so its canvas is not stale.
+    respondWith(['f3']);
+    renderWithFrames();
+
+    await save('f2');
+
+    expect(mockReloadSegmentation).not.toHaveBeenCalled();
+  });
+
+  it('warns instead of re-reading over work in progress', async () => {
+    // Same autosave, except the user has already started editing the frame they
+    // scrubbed to. Repainting from the server would throw that away and there
+    // is no undo past a reload — but staying silent is what let the original
+    // bug through, and their next save will broadcast what this canvas shows.
+    mockEditor.hasUnsavedChanges = true;
+    respondWith(['img-1', 'f3']);
+    renderWithFrames();
+
+    await save('f2');
+
+    expect(mockReloadSegmentation).not.toHaveBeenCalled();
+    const { toast } = await import('sonner');
+    expect(toast.warning).toHaveBeenCalledWith(
+      'segmentation.toolbar.sharedElsewhereReload'
+    );
   });
 });

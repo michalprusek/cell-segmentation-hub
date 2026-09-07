@@ -207,7 +207,12 @@ describe('projectStaticChannelResult — sparse channel', () => {
     });
 
     expect(segUpsert).not.toHaveBeenCalled();
-    expect(outcome).toEqual({ applied: false, projected: 0, skipped: 0 });
+    expect(outcome).toEqual({
+      applied: false,
+      projected: 0,
+      skipped: 0,
+      projectedIds: [],
+    });
   });
 
   it('still projects a STATIC channel onto every covered frame', async () => {
