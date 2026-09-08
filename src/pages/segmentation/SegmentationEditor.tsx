@@ -859,6 +859,28 @@ const SegmentationEditor = () => {
     }
   }, []);
 
+  // Arming the assignment tool switches the canvas to the by-cell colouring.
+  //
+  // Without this the mode is silent: the user clicks a neurite and two somas,
+  // the data is written correctly — and nothing on screen changes, because the
+  // default class colouring paints every neurite the same cyan and shows no
+  // assignment at all. Verified on production 2026-09-08, and it is the same
+  // reasoning the automatic run already applies after it finishes ("leaving
+  // them in the class colouring would hide the very thing they waited for").
+  //
+  // One-way on purpose. Leaving the mode does NOT switch back: the user is
+  // then looking at the assignment they just made, which is exactly when they
+  // want to check it, and yanking the colouring away would undo the feedback
+  // the moment they picked another tool.
+  useEffect(() => {
+    if (
+      editor.editMode === EditMode.AssignNeurite &&
+      projectType === 'neurite'
+    ) {
+      handleSetNeuriteColorMode('assignment');
+    }
+  }, [editor.editMode, projectType, handleSetNeuriteColorMode]);
+
   const [isAssigningNeurites, setIsAssigningNeurites] = useState(false);
   const handleAssignNeurites = useCallback(async () => {
     if (!imageId) return;

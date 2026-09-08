@@ -1348,3 +1348,59 @@ describe('static-channel share on save', () => {
     );
   });
 });
+
+describe('arming the neurite assignment tool', () => {
+  // A mode whose effect is invisible is indistinguishable from a mode that did
+  // nothing. The default class colouring paints every neurite the same cyan and
+  // shows NO assignment, so a user could click a neurite and two somas, have
+  // the data written correctly, and see the canvas not move. Found on
+  // production 2026-09-08 after the mode shipped.
+  //
+  // Asserts the SETTER call rather than a later `getItem`: the shared
+  // localStorage mock is reset between tests by the global `beforeEach`, so a
+  // read-back tests the harness, not the editor.
+  const setItemCalls = () =>
+    ((localStorage.setItem as unknown as { mock: { calls: string[][] } }).mock
+      ?.calls ?? []) as string[][];
+
+  beforeEach(() => {
+    mockEditor.editMode = 'view';
+    mockProjectData.projectType = 'spheroid';
+    // The editor needs an image to mount past its loading gate; the global
+    // beforeEach clears the list.
+    mockProjectData.images = [
+      { id: 'img-1', name: 'frame.png', segmentationStatus: 'completed' },
+    ];
+  });
+
+  it('switches the canvas to the by-cell colouring', () => {
+    mockProjectData.projectType = 'neurite';
+    mockEditor.editMode = 'assign-neurite';
+    renderEditor();
+    expect(setItemCalls()).toContainEqual(['neuriteColorMode', 'assignment']);
+  });
+
+  it('leaves the colouring alone in every other mode', () => {
+    // Otherwise arming any tool at all would hijack a view setting the user
+    // chose deliberately.
+    mockProjectData.projectType = 'neurite';
+    mockEditor.editMode = 'edit-vertices';
+    renderEditor();
+    expect(setItemCalls()).not.toContainEqual([
+      'neuriteColorMode',
+      'assignment',
+    ]);
+  });
+
+  it('leaves it alone on a project type that has no somas', () => {
+    // The mode is unreachable there, but a stale editMode from a previous
+    // project must not recolour a microtubule canvas.
+    mockProjectData.projectType = 'microtubules';
+    mockEditor.editMode = 'assign-neurite';
+    renderEditor();
+    expect(setItemCalls()).not.toContainEqual([
+      'neuriteColorMode',
+      'assignment',
+    ]);
+  });
+});
