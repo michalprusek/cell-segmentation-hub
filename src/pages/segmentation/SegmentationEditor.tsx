@@ -50,6 +50,10 @@ import {
   segmentationPolygonsQueryKey,
 } from './hooks/segmentationPolygonCache';
 
+/** Whether the last save fanned out to a whole static container, and which
+ *  frame produced it. `null` means "no save has reported yet". */
+type SaveShareOutcome = { imageId: string; frameCount: number } | null;
+
 const SegmentationEditor = () => {
   const { projectId, imageId } = useParams<{
     projectId: string;
@@ -383,6 +387,18 @@ const SegmentationEditor = () => {
   // ~600 lines further down. A ref is how this earlier closure reaches it
   // without naming a `const` that has not been initialised yet. The default
   // no-op keeps it callable on the first render.
+  // What the LAST save did, read by the propagate handlers below.
+  //
+  // On a `staticSource` container the save writes EVERY frame — forwards and
+  // backwards — and mints a `trackId` server-side for any polyline drawn by
+  // hand that did not have one. Propagating afterwards would therefore be
+  // both redundant and WRONG: the editor does not adopt the save's response
+  // when the polygon count is unchanged (the same-count staleness in
+  // CLAUDE.md #13), so a freshly drawn microtubule still looks untracked
+  // here, and `propagateTrackForward` would mint a SECOND id for it and
+  // append a duplicate alongside the copy the save already wrote.
+  const lastSaveShareRef = useRef<SaveShareOutcome>(null);
+
   const staticShareEffectRef = useRef<
     (savedImageId: string, sharedFrameIds: string[]) => void
   >(() => {});
@@ -504,6 +520,10 @@ const SegmentationEditor = () => {
         // BEFORE re-seeding the current frame below — the eviction sweeps every
         // frame of the container, this one included.
         const sharedFrameIds = updatedResult.staticShare?.frameIds ?? [];
+        lastSaveShareRef.current = {
+          imageId: saveToImageId,
+          frameCount: sharedFrameIds.length,
+        };
         if (sharedFrameIds.length > 0) {
           staticShareEffectRef.current(saveToImageId, sharedFrameIds);
         }
@@ -1211,6 +1231,43 @@ const SegmentationEditor = () => {
 
   // Right-click "Propagate to following frames": stamp this microtubule's
   // current shape into every later frame of the video.
+  // Commit the frame BEFORE propagating from it.
+  //
+  // `propagateTrackGeometryForward` writes `frameIndex > fromFrameIndex` —
+  // STRICTLY greater, so it never writes the frame you drew on. Propagating an
+  // unsaved edit therefore left the source frame holding the OLD geometry while
+  // every later frame held the new one, and as soon as the user scrubbed away
+  // the unsaved edit was discarded and the frame they had just corrected
+  // snapped back. Reported 2026-09-08 as "propagate does nothing".
+  //
+  // The frame-switch autosave used to paper over this by saving on the way out;
+  // it was removed the same day because it cancelled its own in-flight writes,
+  // which is what made the underlying gap visible.
+  //
+  // 'failed' means the frame could not be persisted, and the caller must NOT
+  // propagate: writing the new shape to later frames while the source frame
+  // keeps the old one is exactly the inconsistency above.
+  const commitBeforePropagate = useCallback(async (): Promise<
+    'ready' | 'already-shared' | 'failed'
+  > => {
+    const saved = await editorRef.current.handleSave();
+    if (!saved) {
+      return 'failed';
+    }
+    // Deliberately NOT reset before the save. A container cannot stop being
+    // static, so "the last save of THIS frame fanned out" stays true whether
+    // that save just happened or `handleSave` short-circuited because the
+    // frame was already clean — and in both cases propagating is redundant.
+    const share = lastSaveShareRef.current;
+    // A static container's save already reached every frame in both
+    // directions, so there is nothing left to propagate — and doing it anyway
+    // would duplicate a hand-drawn polyline (see `lastSaveShareRef`).
+    if (share && share.imageId === imageId && share.frameCount > 0) {
+      return 'already-shared';
+    }
+    return 'ready';
+  }, [imageId]);
+
   const handlePropagateTrack = useCallback(
     async (polygonId: string) => {
       // `videoContainerId` + `currentFrameIndex`, NOT `video.container` —
@@ -1242,6 +1299,16 @@ const SegmentationEditor = () => {
       }
 
       try {
+        const commit = await commitBeforePropagate();
+        if (commit === 'failed') {
+          toast.error(t('segmentation.trackOps.propagateFailed'));
+          return;
+        }
+        if (commit === 'already-shared') {
+          // The save reported the fan-out itself; a second toast would claim
+          // the work happened twice.
+          return;
+        }
         const result = await apiClient.propagateTrackForward(
           videoId,
           fromFrameIndex,
@@ -1274,6 +1341,7 @@ const SegmentationEditor = () => {
     [
       videoContainerId,
       currentFrameIndex,
+      commitBeforePropagate,
       handleUpdatePolygonField,
       evictVideoFrameSegmentationCaches,
       markFollowingFramesSegmented,
@@ -1631,6 +1699,23 @@ const SegmentationEditor = () => {
       return;
     }
 
+    // Persist the frame ONCE, before the loop — not per microtubule. Same
+    // reason as the single-track twin: the endpoint never writes the source
+    // frame, so propagating an unsaved edit would leave it behind.
+    const commit = await commitBeforePropagate();
+    if (commit === 'failed') {
+      toast.error(t('segmentation.trackOps.propagateFailed'));
+      return;
+    }
+    if (commit === 'already-shared') {
+      // Every frame already has this frame's annotation, all of them, in both
+      // directions — which is strictly more than this loop could do.
+      return;
+    }
+
+    // Read the polygons AFTER the save: it is the save that gives a
+    // hand-drawn polyline its identity, and propagating the pre-save snapshot
+    // would send stale ones.
     const polys = editorRef.current.getPolygons();
     const sources = Array.from(selectedPolygonIdsRef.current)
       .map(pid => polys.find(p => p.id === pid))
@@ -1685,6 +1770,7 @@ const SegmentationEditor = () => {
   }, [
     videoContainerId,
     currentFrameIndex,
+    commitBeforePropagate,
     handleUpdatePolygonField,
     evictVideoFrameSegmentationCaches,
     markFollowingFramesSegmented,
