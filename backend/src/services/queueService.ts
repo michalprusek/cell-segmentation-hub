@@ -254,6 +254,53 @@ export class QueueService {
    * Add multiple images to queue in batch
    */
   /**
+   * Neurite → soma assignment, run automatically once a frame is segmented.
+   *
+   * Only for `neurite` projects; every other project type has no somas to
+   * assign to and the ML route would refuse anyway.
+   *
+   * Deliberately swallows its own failures. `assignNeuriteSomas` throws for
+   * every bad-input case — no pixel size, no soma polygons, a frame whose file
+   * is gone — and by the time this runs the segmentation is already saved and
+   * the queue item deleted. Turning one of those into a visible failure would
+   * report a segmentation that actually succeeded as broken.
+   *
+   * The uncalibrated case is logged at WARN and named, because it is the one a
+   * user can act on: the project needs its scale set before any assignment can
+   * happen, and silence here would look identical to "the feature is off".
+   */
+  private async assignNeuriteSomasIfNeurite(
+    imageId: string,
+    userId: string
+  ): Promise<void> {
+    try {
+      const image = await this.prisma.image.findUnique({
+        where: { id: imageId },
+        select: { project: { select: { id: true, type: true } } },
+      });
+      if (image?.project?.type !== 'neurite') {
+        return;
+      }
+
+      const result = await this.segmentationService.assignNeuriteSomas(
+        imageId,
+        userId
+      );
+      logger.info(
+        `Auto-assigned neurites: ${result.assigned} assigned, ${result.unassigned} unassigned, ${result.changed} polygon(s) changed`,
+        'QueueService',
+        { imageId, projectId: image.project.id }
+      );
+    } catch (err) {
+      logger.warn(
+        `Automatic neurite assignment skipped: ${(err as Error).message}`,
+        'QueueService',
+        { imageId }
+      );
+    }
+  }
+
+  /**
    * Drop frames whose segmentation will be projected from a sibling.
    *
    * Applies to two recorded facts, never to an inference from the pixels:
@@ -1130,6 +1177,25 @@ export class QueueService {
                 { imageId: item.imageId }
               );
             }
+
+            // Assign each neurite to its soma, on a neurite project, without
+            // the user having to ask. Requested 2026-09-08: the assignment is
+            // not an optional analysis, it is what makes the segmentation
+            // readable as CELLS rather than as loose branches.
+            //
+            // FIRE-AND-FORGET, and that is not laziness: on a real 6664x6657
+            // frame the assignment costs 22 s without the classifier and 38 s
+            // with it. Awaiting it here would hold the queue worker — and the
+            // user's "segmented" notification — for that whole time, on every
+            // image. It writes `somaId` onto the stored polygons and bumps
+            // `Segmentation.updatedAt`, so the editor picks the result up on
+            // its next load or poll.
+            //
+            // A failure here must never fail the segmentation: the result is
+            // already saved and the item is terminal. The commonest failure is
+            // an uncalibrated project, which is a statement about the INPUT,
+            // not a fault — hence warn, not error.
+            void this.assignNeuriteSomasIfNeurite(item.imageId, item.userId);
 
             // Emit success notification via WebSocket
             if (this.websocketService) {
