@@ -738,6 +738,7 @@ export default {
       assignDone:
         'Přiřazeno {{assigned}} neuritů, {{unassigned}} se nepodařilo',
       assignFailed: 'Přiřazení neuritů se nepodařilo',
+      somaLabel: 'Soma {{n}}',
       assign: 'Přiřadit neurity k buňkám',
       assignHint:
         'Počítá z polygonů v aktuálním stavu, takže opravy se promítnou.',
@@ -795,6 +796,7 @@ export default {
       slice: 'Rozřezat',
       delete: 'Smazat',
       deletePolygon: 'Smazat polygon',
+      assignNeurite: 'Přiřadit k somě',
       unknown: 'Neznámý',
     },
     modeDescription: {
@@ -1022,7 +1024,13 @@ export default {
         selectPolygon: 'Klikněte na polygon pro jeho výběr',
         navigation: 'Táhněte pro posouvání • Rolujte pro zvětšování',
       },
+      assignNeurite: {
+        pickNeurite: 'Klikni na neurit a vyber ho',
+        clickSomas: 'Pak klikni na každou somu, ke které patří',
+        clickAgainRemoves: 'Opětovný klik na přiřazenou somu ji odebere',
+      },
       modes: {
+        assignNeurite: 'Přiřazování neuritů',
         slice: 'Režim řezání',
         create: 'Režim vytváření polygonu',
         createPolyline: 'Režim tvorby mikrotubulu',
@@ -2527,6 +2535,7 @@ export default {
     propagateSelectedDescription:
       'Přepíše tvar {{count}} vybraných mikrotubulů ve všech následujících snímcích videa. Tuto akci nelze vrátit.',
     propagateTrack: 'Propagovat do dalších snímků',
+    removeSomaAssignment: 'Odebrat z {{soma}}',
     confirmPropagateTrack: 'Propagovat do dalších snímků?',
     propagateTrackDescription:
       'Přepíše tvar tohoto mikrotubulu ve všech následujících snímcích videa. Tuto akci nelze vrátit.',

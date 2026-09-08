@@ -20,6 +20,8 @@ import { polygonKey } from '@/lib/segmentation';
 import apiClient, { SegmentationPolygon } from '@/lib/api';
 import { toast } from 'sonner';
 import { getErrorMessage } from '@/types';
+import { EditMode } from './types';
+import { neuriteSomaIds } from './utils/neuriteSomaIds';
 import { assignmentClickAction } from './utils/assignmentClick';
 import { logger } from '@/lib/logger';
 import { handleCancelledError } from '@/lib/errorUtils';
@@ -1451,31 +1453,71 @@ const SegmentationEditor = () => {
   // joins the frame's unsaved changes and is written by the normal save.
   // `somaId` is on the OPTIONAL_POLYGON_FIELDS whitelist, so it survives that
   // round trip; without the registration the save would silently drop it.
+  // `somaId -> "Soma 3"`, numbered in the order the somas appear in the frame.
+  //
+  // The polygon id is a uuid, so a menu entry naming one would tell the user
+  // nothing about WHICH cell they are unassigning. Numbering by frame order is
+  // stable for as long as the polygon list is, which is the same guarantee the
+  // instance badges already run on.
+  const somaLabels = useMemo(() => {
+    if (projectType !== 'neurite') {
+      return undefined;
+    }
+    const labels = new Map<string, string>();
+    let n = 0;
+    for (const p of editor.polygons) {
+      if (p.partClass === 'soma' && p.id) {
+        n += 1;
+        labels.set(p.id, String(t('segmentation.neurite.somaLabel', { n })));
+      }
+    }
+    return labels;
+  }, [projectType, editor.polygons, t]);
+
+  // Right-click → "Remove from Soma N". The counterpart to the click gesture:
+  // the same local field edit, so it joins the frame's unsaved changes and is
+  // written by the ordinary save.
+  const handleRemoveSoma = useCallback(
+    (polygonId: string, somaId: string) => {
+      const target = editorRef.current
+        .getPolygons()
+        .find(p => p.id === polygonId);
+      if (!target) {
+        return;
+      }
+      const next = neuriteSomaIds(target).filter(id => id !== somaId);
+      handleUpdatePolygonField(polygonId, { somaIds: next });
+    },
+    [handleUpdatePolygonField]
+  );
+
   const handleCanvasSelectWithAssignment = useCallback(
     (polygonId: string | null, additive?: boolean) => {
-      // Additive (shift) clicks are multi-selection and must not reassign —
+      // Additive (shift) clicks are multi-selection and must not assign —
       // building a selection is not the same gesture as retargeting one.
       if (!additive) {
         const polys = editorRef.current.getPolygons();
         const action = assignmentClickAction(
           polys.find(p => p.id === editorRef.current.selectedPolygonId),
           polygonId ? polys.find(p => p.id === polygonId) : null,
-          projectType === 'neurite' && neuriteColorMode === 'assignment'
+          editorRef.current.editMode === EditMode.AssignNeurite
         );
-        if (action.kind === 'reassign') {
-          handleUpdatePolygonField(action.neuriteId, { somaId: action.somaId });
+        if (action.kind === 'assign') {
+          handleUpdatePolygonField(action.neuriteId, {
+            somaIds: action.somaIds,
+          });
+          // KEEP THE NEURITE SELECTED. The gesture is "click a neurite, then
+          // the somas it belongs to", and a neurite may belong to several —
+          // moving the selection onto the soma would make the second soma of
+          // a shared neurite need the neurite clicked again. Selecting the
+          // soma is what the single-assignment version did, when there was
+          // never a second one to add.
+          return;
         }
       }
-      // Select either way. After a reassignment that leaves the SOMA selected,
-      // so the next click behaves ordinarily and no state can get stuck.
       handleCanvasSelect(polygonId, additive);
     },
-    [
-      projectType,
-      neuriteColorMode,
-      handleUpdatePolygonField,
-      handleCanvasSelect,
-    ]
+    [handleUpdatePolygonField, handleCanvasSelect]
   );
 
   // Assign (or clear) a microtubule type label. When ≥2 MTs are multi-selected
@@ -1996,6 +2038,8 @@ const SegmentationEditor = () => {
         mtColorById={mtColorById}
         mtColorMode={mtColorMode}
         neuriteColorMode={neuriteColorMode}
+        somaLabels={somaLabels}
+        onRemoveSoma={handleRemoveSoma}
         onSetNeuriteColorMode={handleSetNeuriteColorMode}
         onAssignNeurites={handleAssignNeurites}
         isAssigningNeurites={isAssigningNeurites}

@@ -69,6 +69,7 @@ export interface SegmentationPolygon {
   /** Which soma this neurite belongs to, as the `id` of that soma's polygon.
    *  Neurite projects only; see OPTIONAL_POLYGON_FIELDS. */
   somaId?: string;
+  somaIds?: string[];
   /** The model's own semantic class (`microcapsule`, `membrane`, `sperm`, ...).
    *  `metricsCalculator` splits membranes from capsules on it. */
   class?: string;
@@ -352,17 +353,38 @@ export function setPolygonsSomaId(
       return p;
     }
     const id = typeof rec.id === 'string' ? rec.id : undefined;
-    const current = typeof rec.somaId === 'string' ? rec.somaId : undefined;
-    const next = id ? assignments.get(id) : undefined;
-    if (current === next) {
+    // Read through both fields: rows written before 2026-09-08 carry the
+    // single `somaId`, newer ones the list. Mirrors the frontend's
+    // `neuriteSomaIds()`.
+    const current = Array.isArray(rec.somaIds)
+      ? (rec.somaIds as unknown[]).filter(
+          (v): v is string => typeof v === 'string' && v.length > 0
+        )
+      : typeof rec.somaId === 'string' && rec.somaId.length > 0
+        ? [rec.somaId]
+        : [];
+    const owner = id ? assignments.get(id) : undefined;
+    const next = owner === undefined ? [] : [owner];
+
+    const same =
+      current.length === next.length &&
+      current.every((v, i) => v === next[i]);
+    if (same) {
       return p; // no-op
     }
     changed++;
     const copy = { ...rec };
-    if (next === undefined) {
-      delete copy.somaId;
+    // The pipeline reports ONE owner per neurite (the majority owner), so a
+    // run replaces the list rather than merging into it. That is the same
+    // whole-frame-answer reasoning as clearing an unattributed polygon above:
+    // a manual multi-assignment is a correction of the previous run, and
+    // silently keeping it beside a fresh one would show an assignment the
+    // current run does not support.
+    delete copy.somaId; // legacy field is never written back
+    if (next.length === 0) {
+      delete copy.somaIds;
     } else {
-      copy.somaId = next;
+      copy.somaIds = next;
     }
     return copy;
   });

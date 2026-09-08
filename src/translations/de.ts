@@ -902,6 +902,7 @@ export default {
     neurite: {
       assignDone: '{{assigned}} Neuriten zugeordnet, {{unassigned}} nicht',
       assignFailed: 'Die Neuriten konnten nicht zugeordnet werden',
+      somaLabel: 'Soma {{n}}',
       assign: 'Neuriten Zellen zuordnen',
       assignHint:
         'Läuft auf den Polygonen im aktuellen Zustand, Korrekturen werden also berücksichtigt.',
@@ -960,6 +961,7 @@ export default {
       slice: 'Schneiden',
       delete: 'Löschen',
       deletePolygon: 'Polygon löschen',
+      assignNeurite: 'Soma zuordnen',
       unknown: 'Unbekannt',
     },
     modeDescription: {
@@ -1197,7 +1199,14 @@ export default {
         selectPolygon: 'Klicken Sie auf ein Polygon, um es auszuwählen',
         navigation: 'Ziehen zum Schwenken • Scrollen zum Zoomen',
       },
+      assignNeurite: {
+        pickNeurite: 'Klicke einen Neuriten an, um ihn auszuwählen',
+        clickSomas: 'Dann klicke jedes zugehörige Soma an',
+        clickAgainRemoves:
+          'Erneuter Klick auf ein zugeordnetes Soma entfernt es',
+      },
       modes: {
+        assignNeurite: 'Neuriten zuordnen',
         slice: 'Schnitt-Modus',
         create: 'Polygon-Erstellungs-Modus',
         createPolyline: 'Mikrotubulus-Erstellmodus',
@@ -2572,6 +2581,7 @@ export default {
     propagateSelectedDescription:
       'Dies überschreibt die Form von {{count}} ausgewählten Mikrotubuli in allen folgenden Frames des Videos. Dies kann nicht rückgängig gemacht werden.',
     propagateTrack: 'In folgende Frames übertragen',
+    removeSomaAssignment: 'Aus {{soma}} entfernen',
     confirmPropagateTrack: 'In folgende Frames übertragen?',
     propagateTrackDescription:
       'Dies überschreibt die Form dieses Mikrotubulus in allen folgenden Frames des Videos. Dies kann nicht rückgängig gemacht werden.',

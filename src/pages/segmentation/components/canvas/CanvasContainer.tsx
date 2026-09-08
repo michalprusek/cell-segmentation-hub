@@ -88,6 +88,8 @@ const CanvasContainer = React.forwardRef<HTMLDivElement, CanvasContainerProps>(
           return 'border-violet-500'; // Violet for create polyline mode
         case EditMode.DeletePolygon:
           return 'border-red-500'; // Red for delete mode — destructive
+        case EditMode.AssignNeurite:
+          return 'border-fuchsia-500'; // Fuchsia — matches the rail accent
         case EditMode.View:
         default:
           return 'border-gray-200 dark:border-gray-700'; // Default border
@@ -118,7 +120,10 @@ const CanvasContainer = React.forwardRef<HTMLDivElement, CanvasContainerProps>(
           return 'crosshair';
         case EditMode.Slice:
           return 'crosshair';
+        // Both are click-to-act tools; the pointer says "this click does
+        // something to what is under it", which is exactly true here.
         case EditMode.DeletePolygon:
+        case EditMode.AssignNeurite:
           return 'pointer';
         default:
           return 'default';

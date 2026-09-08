@@ -1,9 +1,13 @@
 /**
- * When a canvas click reassigns a neurite instead of selecting.
+ * When a canvas click changes a neurite's soma assignment instead of selecting.
  *
- * The gesture lives entirely in the assignment view, so most of these assert
- * that it does NOT fire — a reassignment the user did not intend rewrites data
- * silently, which is far worse than a click that merely selects.
+ * The gesture lives entirely in `EditMode.AssignNeurite`, so most of these
+ * assert that it does NOT fire — an assignment the user did not intend rewrites
+ * data silently, which is far worse than a click that merely selects.
+ *
+ * A neurite may belong to SEVERAL somas (2026-09-08); the action therefore
+ * carries the complete new list, never a single id, so the caller writes one
+ * field and can never half-merge.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -17,31 +21,68 @@ const neurite = (id: string, somaId?: string) => ({
 const soma = (id: string) => ({ id, partClass: 'soma' as const });
 
 describe('assignmentClickAction', () => {
-  it('reassigns when a neurite is selected and a soma is clicked', () => {
+  it('assigns when a neurite is selected and a soma is clicked', () => {
     expect(assignmentClickAction(neurite('n1'), soma('s1'), true)).toEqual({
-      kind: 'reassign',
+      kind: 'assign',
       neuriteId: 'n1',
-      somaId: 's1',
+      somaIds: ['s1'],
     });
   });
 
-  it('reassigns away from the current soma', () => {
+  it('ADDS a second soma rather than replacing the first', () => {
+    // The whole point of the multi-assignment: a neurite bridging two cells is
+    // a real state the ML pipeline already reports as `shared`. Asserting the
+    // full list catches a replace, which an assertion on the last id would not.
     expect(
       assignmentClickAction(neurite('n1', 's1'), soma('s2'), true)
-    ).toEqual({ kind: 'reassign', neuriteId: 'n1', somaId: 's2' });
+    ).toEqual({ kind: 'assign', neuriteId: 'n1', somaIds: ['s1', 's2'] });
   });
 
-  it('only SELECTS when the neurite is already assigned there', () => {
-    // Reporting a change would mark the frame dirty and invite a save that
-    // writes nothing.
+  it('appends in click order, so the stripe order is stable', () => {
+    const three = {
+      id: 'n1',
+      partClass: 'neurite' as const,
+      somaIds: ['s1', 's2'],
+    };
+    expect(assignmentClickAction(three, soma('s3'), true)).toEqual({
+      kind: 'assign',
+      neuriteId: 'n1',
+      somaIds: ['s1', 's2', 's3'],
+    });
+  });
+
+  it('REMOVES the soma when it is clicked a second time', () => {
+    const both = {
+      id: 'n1',
+      partClass: 'neurite' as const,
+      somaIds: ['s1', 's2'],
+    };
+    expect(assignmentClickAction(both, soma('s1'), true)).toEqual({
+      kind: 'assign',
+      neuriteId: 'n1',
+      somaIds: ['s2'],
+    });
+  });
+
+  it('removes the LAST soma down to an empty list', () => {
+    // An empty list is "assigned to nothing", which the backend coercer drops
+    // to an absent field — the same state as never having been assigned.
     expect(
       assignmentClickAction(neurite('n1', 's1'), soma('s1'), true)
-    ).toEqual({ kind: 'select' });
+    ).toEqual({ kind: 'assign', neuriteId: 'n1', somaIds: [] });
   });
 
-  it('does nothing special while the assignment view is closed', () => {
-    // The colouring toggle IS the mode. Outside it, a soma click has to behave
-    // exactly as it always did.
+  it('reads a legacy single somaId as a one-entry list', () => {
+    // Rows written before 2026-09-08 carry `somaId`; adding a soma to one must
+    // keep the old assignment rather than silently dropping it.
+    expect(
+      assignmentClickAction(neurite('n1', 'old'), soma('s2'), true)
+    ).toEqual({ kind: 'assign', neuriteId: 'n1', somaIds: ['old', 's2'] });
+  });
+
+  it('does nothing special while the assign mode is not armed', () => {
+    // The MODE is the gate (it used to be the colouring toggle). Outside it a
+    // soma click has to behave exactly as it always did.
     expect(assignmentClickAction(neurite('n1'), soma('s1'), false)).toEqual({
       kind: 'select',
     });

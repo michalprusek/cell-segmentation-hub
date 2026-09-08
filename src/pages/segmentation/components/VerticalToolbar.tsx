@@ -2,6 +2,7 @@ import React from 'react';
 import { Button } from '@/components/ui/button';
 import {
   MousePointer,
+  Workflow,
   Edit3,
   Move,
   Plus,
@@ -134,6 +135,15 @@ const MODE_ACCENTS: Record<EditMode, ModeAccent> = {
     active:
       'bg-red-100 dark:bg-red-900/60 text-red-700 dark:text-red-100 ring-1 ring-inset ring-red-500 dark:ring-red-500',
     bar: 'bg-red-500',
+  },
+  [EditMode.AssignNeurite]: {
+    icon: Workflow,
+    labelKey: 'segmentation.mode.assignNeurite',
+    shortcut: 'G',
+    idle: 'text-gray-600 dark:text-gray-300 hover:bg-fuchsia-100 dark:hover:bg-fuchsia-900/40 hover:text-fuchsia-700 dark:hover:text-fuchsia-200',
+    active:
+      'bg-fuchsia-100 dark:bg-fuchsia-900/60 text-fuchsia-700 dark:text-fuchsia-100 ring-1 ring-inset ring-fuchsia-400 dark:ring-fuchsia-500',
+    bar: 'bg-fuchsia-500',
   },
 };
 
@@ -292,6 +302,7 @@ const VerticalToolbar: React.FC<VerticalToolbarProps> = ({
 }) => {
   // null = type not loaded yet, or unrecognised → offer both; see the prop doc.
   const geometry = annotationGeometryForProjectType(projectType);
+  const isNeuriteProject = projectType === 'neurite';
   const { t } = useLanguage();
 
   return (
@@ -364,6 +375,20 @@ const VerticalToolbar: React.FC<VerticalToolbarProps> = ({
         setEditMode={setEditMode}
         t={t}
       />
+      {/* Neurite → soma assignment. Rendered ONLY for neurite projects: no
+          other type has somas, so the tool would arm a gesture with nothing to
+          click. `cycleEditMode` applies the same gate, or Tab would reach a
+          mode the rail does not offer. */}
+      {isNeuriteProject && (
+        <ModeButton
+          mode={EditMode.AssignNeurite}
+          editMode={editMode}
+          selectedPolygonId={selectedPolygonId}
+          disabled={disabled}
+          setEditMode={setEditMode}
+          t={t}
+        />
+      )}
 
       {/* Destructive tools sit in their own group: a delete-on-click mode
           should never be one mis-aimed pixel away from a drawing tool. */}

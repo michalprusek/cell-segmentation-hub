@@ -10,6 +10,7 @@ import {
   ContextMenuSubContent,
 } from '@/components/ui/context-menu';
 import {
+  Unlink,
   Trash,
   Scissors,
   Edit,
@@ -68,6 +69,12 @@ interface PolygonContextMenuProps {
    *  ``'microtubules'`` shows "Show kymograph"; other types fall back
    *  to edit + delete only. */
   projectType?: ProjectType;
+  /** Somas this neurite is assigned to, as `{ id, label }`. Present only for a
+   *  neurite in a neurite project that has at least one assignment; the menu
+   *  offers one "remove" entry per soma. */
+  assignedSomas?: ReadonlyArray<{ id: string; label: string }>;
+  /** Remove ONE soma from this neurite's assignment. */
+  onRemoveSoma?: (somaId: string) => void;
   onChangePartClass?: (partClass: 'head' | 'midpiece' | 'tail') => void;
   onChangeInstanceId?: (instanceId: string) => void;
   currentInstanceId?: string;
@@ -110,6 +117,8 @@ const PolygonContextMenu = ({
   polygonId,
   isPolyline = false,
   projectType,
+  assignedSomas,
+  onRemoveSoma,
   onChangePartClass,
   onChangeInstanceId,
   currentInstanceId,
@@ -195,6 +204,30 @@ const PolygonContextMenu = ({
               <Scissors className="mr-2 h-4 w-4" />
               <span>{t('contextMenu.splitPolygon')}</span>
             </ContextMenuItem>
+          )}
+          {/* Remove ONE soma from a neurite's assignment — the counterpart to
+              the click gesture in `EditMode.AssignNeurite`, for taking an
+              assignment away without hunting for the right soma on the canvas.
+              Deliberately OUTSIDE the microtubule branch below: a neurite is a
+              closed polygon in a neurite project and would never reach it. */}
+          {onRemoveSoma && (assignedSomas ?? []).length > 0 && (
+            <>
+              <ContextMenuSeparator />
+              {(assignedSomas ?? []).map(soma => (
+                <ContextMenuItem
+                  key={`unassign-${soma.id}`}
+                  onClick={() => onRemoveSoma(soma.id)}
+                  className="cursor-pointer"
+                >
+                  <Unlink className="mr-2 h-4 w-4" />
+                  <span>
+                    {t('contextMenu.removeSomaAssignment', {
+                      soma: soma.label,
+                    })}
+                  </span>
+                </ContextMenuItem>
+              ))}
+            </>
           )}
           {isPolyline && isMicrotubules && (
             <>

@@ -87,11 +87,23 @@ export interface Polygon {
    *  projects only; set/cleared via the tracks/type endpoint. */
   mtType?: string;
   /** Which soma this neurite belongs to, as the `id` of that soma's polygon.
-   *  Neurite projects only. Written by the neurite metrics run and
-   *  overridable in the editor, which colours neurites by it. Registered in
-   *  `OPTIONAL_POLYGON_FIELDS` — without that it is stripped on the way out
-   *  and the next save persists the loss. */
+   *
+   *  LEGACY, read-only. Superseded by `somaIds` on 2026-09-08 when a neurite
+   *  became assignable to more than one soma. Still read — rows written before
+   *  that date carry it — but never written. Use `neuriteSomaIds()` rather
+   *  than either field directly, so the fallback lives in exactly one place. */
   somaId?: string;
+  /** Every soma this neurite belongs to, as those somas' polygon `id`s.
+   *
+   *  A neurite bridging two cells is a REAL state, not an error: the ML
+   *  pipeline has always known it (`neurite_owners[].shared`) and the single
+   *  `somaId` was a lossy projection of it onto the majority owner. Order is
+   *  the order the user assigned them, which is what the striped stroke
+   *  alternates through.
+   *
+   *  Registered in `OPTIONAL_POLYGON_FIELDS` — without that it is stripped on
+   *  the way out and the next save persists the loss. */
+  somaIds?: string[];
 }
 
 export const isPolyline = (p: Polygon): boolean => p.geometry === 'polyline';

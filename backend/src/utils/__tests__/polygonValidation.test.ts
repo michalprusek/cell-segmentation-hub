@@ -193,3 +193,52 @@ describe('PolygonValidator', () => {
     });
   });
 });
+
+describe('somaIds — a neurite may belong to several somas (2026-09-08)', () => {
+  const parseOne = (extra: Record<string, unknown>) => {
+    const [p] = PolygonValidator.parsePolygonData(
+      JSON.stringify([
+        {
+          id: 'n1',
+          points: [
+            { x: 0, y: 0 },
+            { x: 1, y: 0 },
+            { x: 1, y: 1 },
+          ],
+          partClass: 'neurite',
+          ...extra,
+        },
+      ])
+    ).polygons;
+    return p as unknown as Record<string, unknown>;
+  };
+
+  it('survives the round trip, which is the entire point of the whitelist', () => {
+    // `class` was stripped on the read path in exactly this way until
+    // 2026-09-04: the DB kept it, the editor never saw it, and the next save
+    // persisted the loss. An assignment lost that way is a user correction.
+    expect(parseOne({ somaIds: ['s1', 's2'] }).somaIds).toEqual(['s1', 's2']);
+  });
+
+  it('keeps the legacy single somaId too, so old frames are readable', () => {
+    expect(parseOne({ somaId: 's1' }).somaId).toBe('s1');
+  });
+
+  it('de-duplicates, because the toggle gesture appends', () => {
+    expect(parseOne({ somaIds: ['s1', 's1', 's2'] }).somaIds).toEqual([
+      's1',
+      's2',
+    ]);
+  });
+
+  it('DROPS an empty list rather than storing []', () => {
+    // "assigned to nothing" and "no assignment recorded" are the same state to
+    // every reader; keeping [] would make the JSON disagree with the meaning.
+    expect(parseOne({ somaIds: [] })).not.toHaveProperty('somaIds');
+  });
+
+  it('drops malformed entries instead of storing a broken id', () => {
+    expect(parseOne({ somaIds: ['s1', '', 42, null] }).somaIds).toEqual(['s1']);
+    expect(parseOne({ somaIds: 'not-an-array' })).not.toHaveProperty('somaIds');
+  });
+});

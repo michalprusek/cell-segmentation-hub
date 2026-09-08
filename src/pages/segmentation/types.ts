@@ -14,6 +14,14 @@ export enum EditMode {
   CreatePolyline = 'create-polyline',
   Slice = 'slice',
   DeletePolygon = 'delete-polygon',
+  /** Neurite projects ONLY. Click a neurite, then a soma, to assign it —
+   *  repeatedly. Clicking a soma the neurite already belongs to removes that
+   *  assignment, so one gesture both adds and takes away.
+   *
+   *  Gated on `projectType` in the toolbar AND in `cycleEditMode`, because a
+   *  mode only one project type may enter is exactly the hole the annotation
+   *  geometry gate closed: Tab must not walk into it elsewhere. */
+  AssignNeurite = 'assign-neurite',
 }
 
 // Enhanced InteractionState for comprehensive polygon editing

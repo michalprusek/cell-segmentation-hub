@@ -7,8 +7,8 @@
   "totals": {
     "tsconfig.app.json": 376,
     "tsconfig.node.json": 21,
-    "tsconfig.test.json": 1214,
-    "all": 1611
+    "tsconfig.test.json": 1215,
+    "all": 1612
   },
   "projects": {
     "tsconfig.app.json": {
@@ -1784,6 +1784,9 @@
       },
       "tests/utils/api-mock-manager.ts": {
         "TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.": 1
+      },
+      "src/pages/segmentation/utils/assignmentClick.ts": {
+        "TS6307: File 'src/pages/segmentation/utils/neuriteSomaIds.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
       }
     }
   }

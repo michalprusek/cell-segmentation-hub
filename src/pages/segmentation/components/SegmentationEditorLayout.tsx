@@ -177,6 +177,11 @@ export interface SegmentationEditorLayoutProps {
   /** What a neurite stroke means: its CLASS, or the cell it belongs to.
    *  Neurite projects only. */
   neuriteColorMode: NeuriteColorMode;
+  /** `somaId -> "Soma 3"` for this frame; names the entries in a neurite's
+   *  right-click "remove assignment" list. */
+  somaLabels?: ReadonlyMap<string, string>;
+  /** Remove one soma from a neurite's assignment. */
+  onRemoveSoma?: (polygonId: string, somaId: string) => void;
   onSetNeuriteColorMode: (mode: NeuriteColorMode) => void;
   onAssignNeurites: () => void;
   isAssigningNeurites: boolean;
@@ -277,6 +282,8 @@ const SegmentationEditorLayout: React.FC<SegmentationEditorLayoutProps> = ({
   mtColorById,
   mtColorMode,
   neuriteColorMode,
+  somaLabels,
+  onRemoveSoma,
   onSetNeuriteColorMode,
   onAssignNeurites,
   isAssigningNeurites,
@@ -546,6 +553,12 @@ const SegmentationEditorLayout: React.FC<SegmentationEditorLayoutProps> = ({
                           colorBySoma={
                             projectType === 'neurite' &&
                             neuriteColorMode === 'assignment'
+                          }
+                          somaLabels={
+                            projectType === 'neurite' ? somaLabels : undefined
+                          }
+                          onRemoveSoma={
+                            projectType === 'neurite' ? onRemoveSoma : undefined
                           }
                           semanticColor={
                             // Only resolve the by-label colour when it will be

@@ -273,8 +273,18 @@ export const useKeyboardShortcuts = ({
               setEditMode,
               selectedPolygonId,
               isShiftPressed.current,
-              geometry
+              geometry,
+              projectType === 'neurite'
             );
+          }
+          break;
+
+        // Neurite → soma assignment. Neurite projects only, for the same
+        // reason the rail hides the button elsewhere.
+        case 'g':
+          if (!isCtrlPressed.current && projectType === 'neurite') {
+            event.preventDefault();
+            setEditMode(EditMode.AssignNeurite);
           }
           break;
 
@@ -310,6 +320,7 @@ export const useKeyboardShortcuts = ({
       onKeyDown,
       onShowHelp,
       geometry,
+      projectType,
     ]
   );
 
@@ -355,7 +366,8 @@ function cycleEditMode(
   setEditMode: (mode: EditMode) => void,
   selectedPolygonId: string | null,
   reverse: boolean = false,
-  geometry: AnnotationGeometry | null = null
+  geometry: AnnotationGeometry | null = null,
+  isNeuriteProject: boolean = false
 ) {
   // Built in RAIL ORDER, so Tab walks the toolbar top to bottom. The two
   // selection-gated tools are interleaved rather than appended, which is why
@@ -369,6 +381,10 @@ function cycleEditMode(
     ...(geometry === 'polyline' ? [] : [EditMode.CreatePolygon]),
     ...(geometry === 'polygon' ? [] : [EditMode.CreatePolyline]),
     EditMode.Slice, // Slice mode available always
+    // Neurite projects only — the same gate the rail applies. Without it Tab
+    // would reach a tool that is not on the toolbar and whose gesture has
+    // nothing to click, which is exactly the hole the geometry gate closed.
+    ...(isNeuriteProject ? [EditMode.AssignNeurite] : []),
     EditMode.DeletePolygon,
   ];
 

@@ -10,6 +10,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   somaAssignmentColor,
+  somaAssignmentColors,
   isUnassignedNeurite,
 } from '../somaAssignmentColor';
 import { colorFromInstanceId } from '../instanceColors';
@@ -85,5 +86,41 @@ describe('isUnassignedNeurite', () => {
   it('is false for another project type entirely', () => {
     expect(isUnassignedNeurite({ partClass: 'tail' })).toBe(false);
     expect(isUnassignedNeurite({})).toBe(false);
+  });
+});
+
+describe('somaAssignmentColors (the list the stripes are drawn from)', () => {
+  it('gives one colour per assigned soma, in assignment order', () => {
+    const colors = somaAssignmentColors({
+      id: 'n1',
+      partClass: 'neurite',
+      somaIds: ['s1', 's2'],
+    });
+    expect(colors).toHaveLength(2);
+    // The two somas must be DISTINGUISHABLE — a shared neurite drawn in one
+    // colour twice would look exactly like an ordinary single assignment.
+    expect(colors[0]).not.toBe(colors[1]);
+  });
+
+  it('matches each soma its own colour, so a cell reads as one object', () => {
+    const [neuriteColor] = somaAssignmentColors({
+      id: 'n1',
+      partClass: 'neurite',
+      somaIds: ['s1'],
+    });
+    const [somaColor] = somaAssignmentColors({ id: 's1', partClass: 'soma' });
+    expect(neuriteColor).toBe(somaColor);
+  });
+
+  it('is empty for an unassigned neurite', () => {
+    expect(somaAssignmentColors({ id: 'n1', partClass: 'neurite' })).toEqual(
+      []
+    );
+  });
+
+  it('reads a legacy somaId, so old frames keep their colour', () => {
+    expect(
+      somaAssignmentColors({ id: 'n1', partClass: 'neurite', somaId: 's1' })
+    ).toHaveLength(1);
   });
 });

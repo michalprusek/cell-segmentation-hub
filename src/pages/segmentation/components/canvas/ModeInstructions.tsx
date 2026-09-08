@@ -212,6 +212,17 @@ const ModeInstructions: React.FC<ModeInstructionsProps> = ({
           ],
         };
 
+      case EditMode.AssignNeurite:
+        return {
+          title: t('segmentation.instructions.modes.assignNeurite'),
+          color: '#d946ef', // fuchsia-500 — matches the rail accent
+          instructions: [
+            t('segmentation.instructions.assignNeurite.pickNeurite'),
+            t('segmentation.instructions.assignNeurite.clickSomas'),
+            t('segmentation.instructions.assignNeurite.clickAgainRemoves'),
+          ],
+        };
+
       case EditMode.View:
       default:
         return {

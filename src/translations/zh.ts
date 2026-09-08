@@ -836,6 +836,7 @@ export default {
     neurite: {
       assignDone: '已归属 {{assigned}} 条神经突，{{unassigned}} 条未能归属',
       assignFailed: '神经突归属失败',
+      somaLabel: '胞体 {{n}}',
       assign: '将神经突归属到细胞',
       assignHint: '基于当前状态的多边形运行，因此包含你的修改。',
       color: {
@@ -887,6 +888,7 @@ export default {
       slice: '切割',
       delete: '删除',
       deletePolygon: '删除多边形',
+      assignNeurite: '分配到胞体',
       unknown: '未知',
     },
     modeDescription: {
@@ -1104,7 +1106,13 @@ export default {
         selectPolygon: '点击多边形选择它',
         navigation: '拖动平移 • 滚动缩放',
       },
+      assignNeurite: {
+        pickNeurite: '点击一条神经突以选中它',
+        clickSomas: '然后点击它所属的每个胞体',
+        clickAgainRemoves: '再次点击已分配的胞体可移除',
+      },
       modes: {
+        assignNeurite: '分配神经突',
         slice: '切割模式',
         create: '多边形创建模式',
         createPolyline: '创建微管模式',
@@ -2393,6 +2401,7 @@ export default {
     propagateSelectedDescription:
       '这将覆盖 {{count}} 个选中微管在视频所有后续帧中的形状。此操作无法撤销。',
     propagateTrack: '传播到后续帧',
+    removeSomaAssignment: '从 {{soma}} 移除',
     confirmPropagateTrack: '传播到后续帧？',
     propagateTrackDescription:
       '这将覆盖该微管在视频所有后续帧中的形状。此操作无法撤销。',
