@@ -318,6 +318,9 @@ line without pivoting yourself.
   \`medianBackground\`, \`meanBackground\`, \`signalMinusBackground\` and
   \`channelFrameSource\`; they mean exactly what the same-named columns in
   \`metrics.csv\` mean, and are read from the same **raw 16-bit** source.
+  Two or more fluorescent channels append a further block of **cross-channel
+  pair** columns after them — see "Competition between two labelled proteins"
+  below.
 - Columns follow each channel's first appearance, i.e. the video's own channel
   order; rows are in the same reading order as \`metrics.csv\`
   (frame-ascending).
@@ -336,6 +339,57 @@ line without pivoting yourself.
 
 \`metrics.csv\` (long) remains the canonical file and is unchanged — the wide
 view is an extra convenience, not a replacement.
+
+### Competition between two labelled proteins — \`competition_*\` / \`anticorrelation_*\`
+
+Present in the wide view only, and only when the video carries **two or more
+fluorescent channels**: one column pair per unordered channel pair, appended
+after the per-channel blocks and named \`competition_<a>_<b>\` /
+\`anticorrelation_<a>_<b>\` (e.g. \`competition_488_640\`). Label-free
+channels (IRM / BF / DIC / TL) are never paired — competition between a protein
+and a label-free image is meaningless — and neither is a channel whose type was
+never set.
+
+Both are read from the **same** two intensity profiles, sampled along that
+microtubule's centerline in that frame, one profile per channel. They answer
+different questions:
+
+- **\`competition\`** — how much of the two distributions do NOT overlap.
+  Each profile is background-subtracted and normalised to **unit area**, then
+  \`competition = 1 - sum(min(f, g))\` — the total variation distance, i.e.
+  one minus the overlap. **0** means the two proteins are distributed alike
+  along the filament, **1** that they occupy disjoint stretches of it.
+  Normalising each channel separately is required rather than cosmetic: raw
+  counts differ several-fold between dyes, so comparing them unnormalised
+  would mostly measure the labels.
+- **\`anticorrelation\`** — Pearson correlation of those same two profiles,
+  **-1 … +1**. **-1** means one protein falls exactly where the other rises;
+  **+1** means the two track each other.
+
+Read them **together**, because a distance is not a mechanism. Take protein A
+spread evenly along the filament and protein B in one bright spot: if B
+displaces A, competition reads near 1 — but if B simply binds where A happens
+not to be, competition **still** reads near 1. Only the correlation separates
+those two cases.
+
+| \`competition\` | \`anticorrelation\` | reads as |
+| --- | --- | --- |
+| low | near \`+1\` | the two proteins are colocalised |
+| high | near \`-1\` | displacement — one is excluded where the other binds |
+| high | near \`0\` | separate binding zones, with no evidence of displacement |
+
+Two caveats:
+
+- **A blank cell is not a zero.** Blank means the value could not be measured
+  for that microtubule: a channel lying entirely at background has no
+  distribution to compare, and a flat profile has no defined correlation.
+  Writing \`0\` would assert "distributed identically", which is the opposite
+  of an absent measurement. The two fail independently, so one of a pair can be
+  blank while the other is not.
+- **Noise biases \`competition\` upward.** Two identical but noisy profiles do
+  not cancel, so a dim microtubule scores as more competitive than a bright one
+  carrying the same biology. Read it next to the same channels'
+  \`signalMinusBackground\`, and treat short or dim filaments with suspicion.
 
 ### Channel totals — \`metrics_channel_totals.csv\` / \`.json\`, or the "Channel Totals" sheet
 
