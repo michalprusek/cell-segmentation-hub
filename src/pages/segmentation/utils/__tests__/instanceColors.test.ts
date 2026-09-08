@@ -77,8 +77,10 @@ describe('hue spread — distinct ids must look distinct', () => {
   };
 
   it('separates SEQUENTIAL ids, which is how polygons are numbered', () => {
-    // The failure this exists for: djb2 on strings differing by one in the last
-    // character differs by one, so `% 360` put four somas of one frame on
+    // The failure this exists for: the `hash * 31 + charCode` string hash on
+    // strings differing by one in the last character differs by one — the
+    // prefix is identical, so the whole difference is the final unmultiplied
+    // `+ c` — so `% 360` put four somas of one frame on
     // 329/330/331/332 — four cells, four indistinguishable magentas. Measured
     // on production 2026-09-08. A "colours differ" assertion passes at 1°,
     // which is why this asserts a SEPARATION a human could act on.

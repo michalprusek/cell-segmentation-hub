@@ -17,12 +17,19 @@ export function isMicrotubuleInstance(
 /**
  * Maps an instanceId / trackId to a deterministic CSS `hsl(...)` color.
  *
- * djb2-style hash → hue in [0, 359]. Saturation and lightness shift on
- * selection so the same color reads distinctly when picked. Empty input
- * returns a neutral gray instead of red so malformed IDs are obvious.
+ * `hash * 31 + charCode` (Java's `String.hashCode`, written here as the usual
+ * `(hash << 5) - hash + c`) → hue in [0, 359]. Saturation and lightness shift
+ * on selection so the same color reads distinctly when picked. Empty input
+ * returns a neutral gray instead of red so malformed IDs are obvious. This
+ * used to be documented as djb2; it is not — djb2 is `hash * 33 + c`, a PLUS
+ * where this has a minus. The x137 argument below holds for either, since
+ * both multiply only the prefix, but the name is what a later reader checks
+ * the arithmetic against.
  *
- * THE x137 IS LOAD-BEARING, not decoration. djb2 on two strings differing by
- * one in the LAST character produces hashes differing by one, so `% 360` put
+ * THE x137 IS LOAD-BEARING, not decoration. A multiplicative string hash on
+ * two strings differing by one in the LAST character produces hashes
+ * differing by one — the prefix is identical, so the whole difference is the
+ * final unmultiplied `+ c` — so `% 360` put
  * them one degree apart — and the ids handed to this function are routinely
  * sequential (`polygon_21`, `polygon_22`, …). Measured 2026-09-08 on a real
  * frame: four somas landed on hues 329/330/331/332, i.e. four cells in four

@@ -3,9 +3,14 @@
  *
  * The exported ROI stroke colour MUST match what the editor renders, otherwise
  * the same microtubule reads as one colour in the app and another in ImageJ.
- * `referenceHue` below re-implements the FE loop from
- * `src/pages/segmentation/utils/instanceColors.ts` INDEPENDENTLY (not imported),
- * so these tests fail if either side drifts.
+ * These tests can only see the BACKEND half. `localHueCopy` below is a copy of
+ * the same arithmetic living in this file, not an independent witness, so it
+ * cannot fail when `src/pages/segmentation/utils/instanceColors.ts` changes —
+ * proven on 2026-09-08, when the FE gained a x137 hue stride and this suite
+ * stayed green while every exported .roi would have carried the old colour.
+ * The cross-stack guard is `imagejColorParity.test.ts` on the frontend side,
+ * which imports BOTH modules; the backend container bakes `backend/` alone and
+ * cannot reach `src/`.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -16,13 +21,23 @@ import {
   imageJColorFromHex,
 } from '../imagejColor';
 
-/** Independent re-implementation of the FE hue hash for cross-checking. */
-function referenceHue(key: string): number {
+/**
+ * A re-implementation of the FE hue arithmetic — and it is NOT an independent
+ * check, whatever the old comment here claimed. It is a copy, in this file, of
+ * the code it is comparing against, so it can only catch a change made to
+ * `imagejColor.ts` alone; it cannot see the FRONTEND drift away, and on
+ * 2026-09-08 it did not (the FE gained the x137 stride, every exported .roi
+ * would have carried the old hue, and this suite stayed green). The real
+ * cross-stack guard is `imagejColorParity.test.ts` on the frontend side, the
+ * only suite that can import both modules. Kept because "the backend half did
+ * not change under me" is still worth asserting cheaply.
+ */
+function localHueCopy(key: string): number {
   let hash = 0;
   for (let i = 0; i < key.length; i++) {
     hash = ((hash << 5) - hash + key.charCodeAt(i)) | 0;
   }
-  return Math.abs(hash) % 360;
+  return (Math.abs(hash) * 137) % 360;
 }
 
 describe('colorKeyForRoi', () => {
@@ -46,16 +61,17 @@ describe('colorKeyForRoi', () => {
 });
 
 describe('hueFromColorKey', () => {
-  it('matches the frontend hash for representative keys', () => {
+  it('matches the local copy of the arithmetic for representative keys', () => {
     for (const key of ['mt_42', 'mt_0d08f27f', 'track_99', 'a', '']) {
-      expect(hueFromColorKey(key)).toBe(referenceHue(key));
+      expect(hueFromColorKey(key)).toBe(localHueCopy(key));
     }
   });
 
   it('pins the known FE hue for mt_42 (regression anchor)', () => {
-    // Hand-computed from the djb2 loop; locks the algorithm so a refactor that
-    // changes the hash is caught even if the FE reference above also drifts.
-    expect(hueFromColorKey('mt_42')).toBe(62);
+    // Hand-computed from `hash * 31 + charCode` then the x137 stride; locks the
+    // arithmetic so a refactor is caught even if the copy above drifts with it.
+    // Was 62 before the stride landed on 2026-09-08.
+    expect(hueFromColorKey('mt_42')).toBe(214);
   });
 
   it('is stable and bounded to [0, 359]', () => {
@@ -85,13 +101,13 @@ describe('imageJStrokeColor', () => {
     expect(imageJStrokeColor('mt_aaa')).not.toBe(imageJStrokeColor('mt_bbb'));
   });
 
-  it('encodes hsl(62, 70%, 55%) for mt_42 as RGB (215, 221, 60)', () => {
-    // hue 62 → C=0.63, X≈0.609, m=0.235 → R≈0.844 G≈0.865 B≈0.235 → ×255.
+  it('encodes hsl(214, 70%, 55%) for mt_42 as RGB (60, 130, 221)', () => {
+    // hue 214 → C=0.63, X≈0.147, m=0.235 → R=0.235 G≈0.382 B≈0.865 → ×255.
     const argb = imageJStrokeColor('mt_42');
     const r = (argb >>> 16) & 0xff;
     const g = (argb >>> 8) & 0xff;
     const b = argb & 0xff;
-    expect([r, g, b]).toEqual([215, 221, 60]);
+    expect([r, g, b]).toEqual([60, 130, 221]);
   });
 
   it('returns opaque neutral gray (153,153,153) for an empty key', () => {
