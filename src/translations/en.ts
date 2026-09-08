@@ -740,6 +740,7 @@ export default {
     neurite: {
       assignDone: '{{assigned}} neurites assigned, {{unassigned}} could not be',
       assignFailed: 'Could not assign the neurites',
+      somaLabel: 'Soma {{n}}',
       assign: 'Assign neurites to cells',
       assignHint:
         'Runs on the polygons as they are now, so corrections are included.',
@@ -798,6 +799,7 @@ export default {
       slice: 'Slice',
       delete: 'Delete',
       deletePolygon: 'Delete polygon',
+      assignNeurite: 'Assign to soma',
       unknown: 'Unknown',
     },
     shortcuts: {
@@ -1016,7 +1018,13 @@ export default {
         selectPolygon: 'Click on a polygon to select it',
         navigation: 'Drag to pan • Scroll to zoom',
       },
+      assignNeurite: {
+        pickNeurite: 'Click a neurite to pick it up',
+        clickSomas: 'Then click each soma it belongs to',
+        clickAgainRemoves: 'Click an assigned soma again to remove it',
+      },
       modes: {
+        assignNeurite: 'Assign neurites',
         slice: 'Slice Mode',
         create: 'Create Polygon Mode',
         createPolyline: 'Create Microtubule Mode',
@@ -2559,6 +2567,7 @@ export default {
     propagateSelectedDescription:
       'This overwrites the shape of {{count}} selected microtubules in all following frames of the video. This cannot be undone.',
     propagateTrack: 'Propagate to following frames',
+    removeSomaAssignment: 'Remove from {{soma}}',
     confirmPropagateTrack: 'Propagate to following frames?',
     propagateTrackDescription:
       "This overwrites this microtubule's shape in all following frames of the video. This cannot be undone.",

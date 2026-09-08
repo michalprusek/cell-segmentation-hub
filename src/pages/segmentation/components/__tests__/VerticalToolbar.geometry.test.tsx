@@ -68,19 +68,24 @@ const ALWAYS = [
 
 const POLYGON = 'segmentation.mode.createPolygon';
 const POLYLINE = 'segmentation.mode.createPolyline';
+/** Neurite-only: assigning a neurite to a soma needs somas to click. */
+const ASSIGN = 'segmentation.mode.assignNeurite';
 
 describe('VerticalToolbar — one create tool per project type', () => {
   it.each([
-    ['spheroid', POLYGON],
-    ['spheroid_invasive', POLYGON],
-    ['wound', POLYGON],
-    ['microcapsule', POLYGON],
-    ['neurite', POLYGON],
-    ['sperm', POLYLINE],
-    ['microtubules', POLYLINE],
-  ])('%s renders the whole rail plus exactly %s', (type, create) => {
+    ['spheroid', [POLYGON]],
+    ['spheroid_invasive', [POLYGON]],
+    ['wound', [POLYGON]],
+    ['microcapsule', [POLYGON]],
+    // The ONLY type that gets the assignment tool. Listing it here rather than
+    // in ALWAYS is the whole point: if the button ever leaks to another type,
+    // that row fails rather than this one quietly widening.
+    ['neurite', [POLYGON, ASSIGN]],
+    ['sperm', [POLYLINE]],
+    ['microtubules', [POLYLINE]],
+  ])('%s renders the whole rail plus exactly %s', (type, extra) => {
     renderToolbar(type);
-    expect(railLabels()).toEqual([...ALWAYS, create].sort());
+    expect(railLabels()).toEqual([...ALWAYS, ...extra].sort());
   });
 
   it.each([undefined, null, 'not_a_real_type'])(

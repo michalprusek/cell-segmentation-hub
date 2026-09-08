@@ -132,6 +132,27 @@ export interface OptionalPolygonField {
 const coerceNonEmptyString = (value: unknown): string | undefined =>
   typeof value === 'string' && value.length > 0 ? value : undefined;
 
+/**
+ * A list of non-empty ids, de-duplicated, or `undefined` to drop the field.
+ *
+ * An EMPTY result drops rather than stores `[]`: "assigned to nothing" and
+ * "no assignment recorded" are the same state to every reader, and keeping an
+ * empty array would make the two differ in the JSON while agreeing in meaning.
+ * De-duplicated because the toggle gesture appends, and a double event must not
+ * make a neurite appear to belong to one soma twice.
+ */
+const coerceIdArray = (value: unknown): string[] | undefined => {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+  const ids = [
+    ...new Set(
+      value.filter((v): v is string => typeof v === 'string' && v.length > 0)
+    ),
+  ];
+  return ids.length > 0 ? ids : undefined;
+};
+
 export const OPTIONAL_POLYGON_FIELDS: readonly OptionalPolygonField[] = [
   // partClass accepts sperm parts (head/midpiece/tail), 'core' for spheroid
   // disintegration core polygons, and the neurite/soma classes of the neuron
@@ -173,6 +194,11 @@ export const OPTIONAL_POLYGON_FIELDS: readonly OptionalPolygonField[] = [
   // never saw it, and the next manual save persisted the loss.
 
   { key: 'somaId', coerce: coerceNonEmptyString },
+  // Every soma a neurite belongs to. Supersedes the single `somaId` above,
+  // which is still accepted so frames written before 2026-09-08 keep their
+  // assignment; the editor reads both through `neuriteSomaIds()` and writes
+  // only this one.
+  { key: 'somaIds', coerce: coerceIdArray },
 ] as const;
 
 export interface ParsedPolygonResult {

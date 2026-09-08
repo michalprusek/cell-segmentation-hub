@@ -895,6 +895,7 @@ export default {
       assignDone:
         '{{assigned}} neuritas asignadas, {{unassigned}} no se pudieron',
       assignFailed: 'No se pudieron asignar las neuritas',
+      somaLabel: 'Soma {{n}}',
       assign: 'Asignar neuritas a células',
       assignHint:
         'Se ejecuta sobre los polígonos tal como están ahora, por lo que se incluyen las correcciones.',
@@ -953,6 +954,7 @@ export default {
       slice: 'Cortar',
       delete: 'Eliminar',
       deletePolygon: 'Eliminar polígono',
+      assignNeurite: 'Asignar al soma',
       unknown: 'Desconocido',
     },
     modeDescription: {
@@ -1186,7 +1188,14 @@ export default {
         selectPolygon: 'Haz clic en un polígono para seleccionarlo',
         navigation: 'Arrastra para desplazar • Desplaza para acercar',
       },
+      assignNeurite: {
+        pickNeurite: 'Haz clic en una neurita para seleccionarla',
+        clickSomas: 'Luego haz clic en cada soma al que pertenece',
+        clickAgainRemoves:
+          'Vuelve a hacer clic en un soma asignado para quitarlo',
+      },
       modes: {
+        assignNeurite: 'Asignar neuritas',
         slice: 'Modo cortar',
         create: 'Modo crear polígono',
         createPolyline: 'Modo crear microtúbulo',
@@ -2548,6 +2557,7 @@ export default {
     propagateSelectedDescription:
       'Esto sobrescribe la forma de {{count}} microtúbulos seleccionados en todos los fotogramas siguientes del vídeo. Esta acción no se puede deshacer.',
     propagateTrack: 'Propagar a los fotogramas siguientes',
+    removeSomaAssignment: 'Quitar de {{soma}}',
     confirmPropagateTrack: '¿Propagar a los fotogramas siguientes?',
     propagateTrackDescription:
       'Esto sobrescribe la forma de este microtúbulo en todos los fotogramas siguientes del vídeo. Esta acción no se puede deshacer.',

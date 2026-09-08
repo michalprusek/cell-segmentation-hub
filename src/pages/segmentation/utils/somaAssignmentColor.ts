@@ -1,5 +1,6 @@
 import type { Polygon } from '@/lib/segmentation';
 import { colorFromInstanceId } from './instanceColors';
+import { neuriteSomaIds } from './neuriteSomaIds';
 
 /**
  * Colour a neurite by the SOMA it was assigned to, so a cell and its processes
@@ -12,7 +13,7 @@ import { colorFromInstanceId } from './instanceColors';
  * checking an ASSIGNMENT, and the two cannot share a stroke. The editor
  * switches between them rather than trying to show both at once.
  *
- * A SOMA IS COLOURED BY ITS OWN id, a neurite by its `somaId`, so both resolve
+ * A SOMA IS COLOURED BY ITS OWN id, a neurite by its soma ids, so both resolve
  * through the same hash and a cell matches its processes. That is the whole
  * mechanism: there is no palette to keep in sync and no per-frame state, so
  * the colour of a given cell cannot drift between renders or between frames.
@@ -22,22 +23,40 @@ import { colorFromInstanceId } from './instanceColors';
  * class colouring, which is the honest answer: no colour is better than a
  * colour that claims an assignment the data does not have.
  */
-export function somaAssignmentColor(
-  polygon: Pick<Polygon, 'id' | 'partClass' | 'somaId'>,
+export function somaAssignmentColors(
+  polygon: Pick<Polygon, 'id' | 'partClass' | 'somaId' | 'somaIds'>,
   { selected = false }: { selected?: boolean } = {}
-): string | null {
+): string[] {
   if (polygon.partClass === 'soma') {
-    return polygon.id ? colorFromInstanceId(polygon.id, { selected }) : null;
+    return polygon.id ? [colorFromInstanceId(polygon.id, { selected })] : [];
   }
   if (polygon.partClass === 'neurite') {
     // NOT a fallback to the polygon's own id. An unassigned neurite given its
     // own colour would look exactly like an assigned one, and a user scanning
     // for the cells the pipeline could not resolve would find nothing.
-    return polygon.somaId
-      ? colorFromInstanceId(polygon.somaId, { selected })
-      : null;
+    //
+    // One entry per assigned soma, in assignment order: a neurite bridging two
+    // cells gets both colours and the canvas alternates them along the stroke,
+    // which is the only way "shared" is visible without opening a menu.
+    return neuriteSomaIds(polygon).map(id =>
+      colorFromInstanceId(id, { selected })
+    );
   }
-  return null;
+  return [];
+}
+
+/**
+ * The single colour to paint a polygon with, or null.
+ *
+ * The FIRST of `somaAssignmentColors`. A shared neurite is drawn by painting
+ * this one solid and overlaying the rest as interleaved dashes, so this stays
+ * the base coat rather than becoming a lie about a one-cell assignment.
+ */
+export function somaAssignmentColor(
+  polygon: Pick<Polygon, 'id' | 'partClass' | 'somaId' | 'somaIds'>,
+  { selected = false }: { selected?: boolean } = {}
+): string | null {
+  return somaAssignmentColors(polygon, { selected })[0] ?? null;
 }
 
 /**
@@ -48,8 +67,4 @@ export function somaAssignmentColor(
  * for every polygon a skeleton branch reaches, so an absent `somaId` means no
  * branch of it was credited to any soma the classifier accepted.
  */
-export function isUnassignedNeurite(
-  polygon: Pick<Polygon, 'partClass' | 'somaId'>
-): boolean {
-  return polygon.partClass === 'neurite' && !polygon.somaId;
-}
+export { isUnassignedNeurite } from './neuriteSomaIds';

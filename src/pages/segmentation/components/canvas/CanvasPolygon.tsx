@@ -1,7 +1,11 @@
 import React, { useMemo, useCallback } from 'react';
 import { cn } from '@/lib/utils';
 import { neuronClassStyle } from '../../utils/neuronClassStyle';
-import { somaAssignmentColor } from '../../utils/somaAssignmentColor';
+import { neuriteSomaIds } from '../../utils/neuriteSomaIds';
+import {
+  somaAssignmentColor,
+  somaAssignmentColors,
+} from '../../utils/somaAssignmentColor';
 import { Polygon } from '@/lib/segmentation';
 import PolygonVertices from './PolygonVertices';
 import PolygonContextMenu from '../context-menu/PolygonContextMenu';
@@ -30,6 +34,12 @@ interface CanvasPolygonProps {
    *  projects only; see `somaAssignmentColor` for why the two colourings
    *  cannot be shown at once. */
   colorBySoma?: boolean;
+  /** Label lookup for the somas of this frame, `id -> "Soma 3"`. Only a
+   *  neurite project supplies it; the context menu names the assignment it
+   *  offers to remove, because a bare id tells the user nothing. */
+  somaLabels?: ReadonlyMap<string, string>;
+  /** Remove one soma from this neurite's assignment. */
+  onRemoveSoma?: (polygonId: string, somaId: string) => void;
   /** `additive` (Shift+click) toggles this polygon in the multi-selection
    *  instead of replacing the single selection. */
   onSelectPolygon?: (id: string, additive?: boolean) => void;
@@ -101,6 +111,8 @@ const CanvasPolygon = React.memo(
     isHovered = false,
     isUndoRedoInProgress = false,
     colorBySoma = false,
+    somaLabels,
+    onRemoveSoma,
     onSelectPolygon,
     isMultiSelected = false,
     multiSelectCount = 0,
@@ -291,6 +303,7 @@ const CanvasPolygon = React.memo(
             id: polygon.id,
             partClass: polygon.partClass,
             somaId: polygon.somaId,
+            somaIds: polygon.somaIds,
           },
           { selected: isEffectivelySelected }
         );
@@ -358,6 +371,7 @@ const CanvasPolygon = React.memo(
       // mode is switched on a LIVE component. Unit tests could not catch that:
       // each render is a fresh mount, which always recomputes.
       polygon.somaId,
+      polygon.somaIds,
       colorBySoma,
       mtTypeLabels,
       isEffectivelySelected,
@@ -398,6 +412,54 @@ const CanvasPolygon = React.memo(
         : '';
 
     // Memoized click handlers
+    // The somas this neurite belongs to, named for the context menu. Empty for
+    // anything that is not an assigned neurite, which is what hides the entries.
+    const assignedSomas = React.useMemo(
+      () =>
+        polygon.partClass === 'neurite'
+          ? neuriteSomaIds(polygon).map(sid => ({
+              id: sid,
+              label: somaLabels?.get(sid) ?? sid,
+            }))
+          : [],
+      [polygon, somaLabels]
+    );
+
+    // Stripe colours for a neurite assigned to SEVERAL somas.
+    //
+    // An SVG path carries one stroke, so "both cells' colours" cannot be one
+    // path. The base path below paints colour[0] solid; these are painted over
+    // it as interleaved dashes, one path per remaining soma, each offset into
+    // its own slot of the dash cycle. With n somas every colour occupies 1/n of
+    // the stroke and the neurite reads as shared at a glance — which is the
+    // whole point, since the alternative is opening a menu to find out.
+    //
+    // Empty for the ordinary one-soma case, so nothing extra is rendered and
+    // the common path costs one array lookup.
+    const stripeColors = React.useMemo(() => {
+      if (!colorBySoma || polygon.partClass !== 'neurite') {
+        return [];
+      }
+      return somaAssignmentColors(
+        {
+          id: polygon.id,
+          partClass: polygon.partClass,
+          somaId: polygon.somaId,
+          somaIds: polygon.somaIds,
+        },
+        { selected: isEffectivelySelected }
+      ).slice(1);
+      // FIELDS, not `polygon` — same reason as the stroke memo above: a new
+      // object identity for an unchanged polygon must not recolour the canvas.
+    }, [
+      colorBySoma,
+      polygon.id,
+      polygon.partClass,
+      polygon.somaId,
+      polygon.somaIds,
+      isEffectivelySelected,
+    ]);
+
     const handleClick = useCallback(
       (e: React.MouseEvent) => {
         e.stopPropagation();
@@ -497,6 +559,12 @@ const CanvasPolygon = React.memo(
         onEdit={handleEdit}
         isPolyline={isPolyline}
         projectType={projectType}
+        assignedSomas={assignedSomas}
+        onRemoveSoma={
+          onRemoveSoma && assignedSomas.length > 0
+            ? somaId => onRemoveSoma(id, somaId)
+            : undefined
+        }
         onChangePartClass={isPolyline ? handleChangePartClass : undefined}
         onChangeInstanceId={isPolyline ? handleChangeInstanceId : undefined}
         currentInstanceId={isPolyline ? polygon.instanceId : undefined}
@@ -623,6 +691,30 @@ const CanvasPolygon = React.memo(
             data-polygon-contour="true"
           />
 
+          {/* Overlaid stripes for a neurite that belongs to more than one
+              soma. Purely decorative: no pointer events, no data-polygon-id,
+              so hit testing, the translate gesture and the context menu all
+              keep seeing exactly one path per polygon. */}
+          {stripeColors.map((color, i) => {
+            const total = stripeColors.length + 1; // + the solid base coat
+            const dash = 10;
+            return (
+              <path
+                key={`soma-stripe-${id}-${i}`}
+                d={pathString}
+                fill="none"
+                stroke={color}
+                strokeWidth={Math.max(strokeWidth * hoverStrokeMultiplier, 0.5)}
+                strokeOpacity={pathString ? 1 : 0}
+                strokeLinecap="butt"
+                strokeDasharray={`${dash} ${dash * (total - 1)}`}
+                strokeDashoffset={-dash * (i + 1)}
+                vectorEffect="non-scaling-stroke"
+                pointerEvents="none"
+              />
+            );
+          })}
+
           {/* Polyline endpoint markers — render ONLY when no draggable
               vertices are on top (i.e. polyline neither singly nor
               multi-selected; `PolygonVertices` paints the draggable
@@ -744,6 +836,17 @@ const CanvasPolygon = React.memo(
       // omitting either leaves the canvas painted with the previous answer,
       // which is repo bug #5 (incomplete memo comparator) exactly.
       prevProps.polygon.somaId === nextProps.polygon.somaId &&
+      // The LIST, compared by content. A neurite gains or loses a soma by
+      // getting a NEW array, so a reference check would be right by accident;
+      // it is spelled out because the striped stroke is derived from it and a
+      // missed entry here shows the previous cell's colours indefinitely.
+      // CLAUDE.md failure #5 is exactly this omission.
+      (prevProps.polygon.somaIds === nextProps.polygon.somaIds ||
+        (prevProps.polygon.somaIds?.length ===
+          nextProps.polygon.somaIds?.length &&
+          (prevProps.polygon.somaIds ?? []).every(
+            (v, i) => v === (nextProps.polygon.somaIds ?? [])[i]
+          ))) &&
       prevProps.colorBySoma === nextProps.colorBySoma &&
       prevProps.colorMode === nextProps.colorMode &&
       prevProps.semanticColor === nextProps.semanticColor &&

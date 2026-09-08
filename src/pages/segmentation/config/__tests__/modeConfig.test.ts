@@ -31,6 +31,10 @@ describe('Canvas deselection prevention', () => {
     // way to clear a selection without leaving the tool.
     expect(shouldPreventCanvasDeselection(EditMode.MoveShape)).toBe(false);
     expect(shouldPreventCanvasDeselection(EditMode.DeletePolygon)).toBe(false);
+    // AssignNeurite: clicking empty canvas is how the user abandons a
+    // half-finished pairing and starts on another neurite. Suppressing it
+    // would leave no way to drop the selection without leaving the tool.
+    expect(shouldPreventCanvasDeselection(EditMode.AssignNeurite)).toBe(false);
   });
 
   it('agrees with the configuration for every EditMode, in both directions', () => {
@@ -58,6 +62,7 @@ describe('Canvas deselection prevention', () => {
         EditMode.CreatePolyline,
         EditMode.Slice,
         EditMode.DeletePolygon,
+        EditMode.AssignNeurite,
       ].sort()
     );
   });

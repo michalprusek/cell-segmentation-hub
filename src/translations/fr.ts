@@ -899,6 +899,7 @@ export default {
       assignDone:
         "{{assigned}} neurites attribuées, {{unassigned}} n'ont pas pu l'être",
       assignFailed: "Impossible d'attribuer les neurites",
+      somaLabel: 'Soma {{n}}',
       assign: 'Attribuer les neurites aux cellules',
       assignHint:
         "S'exécute sur les polygones dans leur état actuel, les corrections sont donc prises en compte.",
@@ -958,6 +959,7 @@ export default {
       slice: 'Découper',
       delete: 'Supprimer',
       deletePolygon: 'Supprimer le polygone',
+      assignNeurite: 'Attribuer au soma',
       unknown: 'Inconnu',
     },
     modeDescription: {
@@ -1193,7 +1195,13 @@ export default {
         selectPolygon: 'Cliquez sur un polygone pour le sélectionner',
         navigation: 'Faites glisser pour déplacer • Défilez pour zoomer',
       },
+      assignNeurite: {
+        pickNeurite: 'Cliquez sur une neurite pour la sélectionner',
+        clickSomas: 'Puis cliquez sur chaque soma auquel elle appartient',
+        clickAgainRemoves: 'Recliquez sur un soma attribué pour le retirer',
+      },
       modes: {
+        assignNeurite: 'Attribuer les neurites',
         slice: 'Mode découpe',
         create: 'Mode création de polygone',
         createPolyline: 'Mode création de microtubule',
@@ -2568,6 +2576,7 @@ export default {
     propagateSelectedDescription:
       'Cela remplace la forme de {{count}} microtubules sélectionnés dans toutes les images suivantes de la vidéo. Cette action est irréversible.',
     propagateTrack: 'Propager aux images suivantes',
+    removeSomaAssignment: 'Retirer de {{soma}}',
     confirmPropagateTrack: 'Propager aux images suivantes ?',
     propagateTrackDescription:
       'Cela remplace la forme de ce microtubule dans toutes les images suivantes de la vidéo. Cette action est irréversible.',
