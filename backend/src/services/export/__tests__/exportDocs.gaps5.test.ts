@@ -129,6 +129,22 @@ describe('generateMetricsGuide — microtubules', () => {
     expect(guide).toContain('<channel>_<measure>');
   });
 
+  it('documents the cross-channel competition columns the wide sheet emits', () => {
+    // `wideHeaders` appends `competition_<a>_<b>` / `anticorrelation_<a>_<b>`
+    // for every fluorescent pair, so a guide that lists only the eight
+    // per-channel columns describes a sheet the user does not have.
+    const guide = generateMetricsGuide('microtubules', {} as ExportOptions);
+
+    expect(guide).toContain('competition_<a>_<b>');
+    expect(guide).toContain('anticorrelation_<a>_<b>');
+    // Both measures, and the reason both are reported rather than one.
+    expect(guide).toContain('total variation distance');
+    expect(guide).toContain('Pearson correlation');
+    // A missing pair is written blank, and the guide must not let that read
+    // as "distributed identically".
+    expect(guide).toContain('blank cell is not a zero');
+  });
+
   it('keeps every markdown heading on a single line', () => {
     // A heading wrapped across two source lines renders as a truncated heading
     // plus a stray paragraph. Easy to introduce when wrapping long file names.
