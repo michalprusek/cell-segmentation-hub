@@ -170,6 +170,11 @@ describe('SegmentationController', () => {
       mockAuthMiddleware,
       segmentationController.deleteTrackFromFrame
     );
+    app.post(
+      '/segmentation/:imageId/assign-neurites',
+      mockAuthMiddleware,
+      segmentationController.assignNeuriteSomas
+    );
   });
 
   afterEach(() => {
@@ -584,6 +589,65 @@ describe('SegmentationController', () => {
       await request(app)
         .delete(`/segmentation/images/${imageId}/tracks/${trackId}`)
         .expect(401);
+    });
+  });
+
+  describe('assignNeuriteSomas — the remedy has to reach the user', () => {
+    // Reported twice on 2026-09-08: the assignment refused because the project
+    // had no pixel size, and the editor showed the server's English sentence
+    // about micrometres verbatim — in a Czech UI, never naming the scale. The
+    // editor now keys on a CODE to show a translated, actionable message, so
+    // the code has to actually be on the wire.
+    // The REAL serializer, not a hand-rolled stand-in. The point of these two
+    // tests is where the code lands ON THE WIRE — `data.code`, beside a
+    // `data.error` that holds the message — and an invented mock would assert
+    // a shape the frontend never sees. (It also maps a bare string to
+    // `code: 'GENERIC_ERROR'`, which a stand-in would not have shown.)
+    beforeEach(async () => {
+      const actual = await vi.importActual<
+        typeof import('../../../utils/response')
+      >('../../../utils/response');
+      (MockedResponseHelper.error as Mock).mockImplementation(
+        actual.ResponseHelper.error
+      );
+    });
+
+    it('forwards the missing-scale CODE, not just the sentence', async () => {
+      mockMethod('assignNeuriteSomas').mockRejectedValueOnce(
+        Object.assign(
+          new Error(
+            'pixel size unknown — staging thresholds are in micrometres'
+          ),
+          { code: 'NEURITE_PIXEL_SIZE_UNKNOWN' }
+        )
+      );
+
+      const res = await request(app)
+        .post(`/segmentation/${imageId}/assign-neurites`)
+        .send({});
+
+      expect(res.status).toBe(400);
+      expect(res.body.code).toBe('NEURITE_PIXEL_SIZE_UNKNOWN');
+      // The sentence still travels beside it, for an older frontend.
+      expect(res.body.error).toContain('pixel size unknown');
+    });
+
+    it('still sends the plain message for failures with no single remedy', async () => {
+      // "no soma polygons", "the frame's file is missing" — naming one fix
+      // would be wrong, so the server's own message is all there is to say.
+      mockMethod('assignNeuriteSomas').mockRejectedValueOnce(
+        new Error('Image has no segmentation to assign')
+      );
+
+      const res = await request(app)
+        .post(`/segmentation/${imageId}/assign-neurites`)
+        .send({});
+
+      expect(res.status).toBe(400);
+      // `GENERIC_ERROR` is what the serializer stamps on a bare string — the
+      // editor's branch does not fire, which is the whole claim.
+      expect(res.body.code).toBe('GENERIC_ERROR');
+      expect(res.body.error).toContain('no segmentation');
     });
   });
 });

@@ -3089,9 +3089,19 @@ export class SegmentationService {
       // The reason is the only thing that tells the user WHICH input was
       // wrong — a missing pixel size reads very differently from a frame with
       // no soma polygons.
-      throw new Error(
-        skipped[0]?.reason ?? 'Could not compute the neurite assignment'
-      );
+      const reason = skipped[0]?.reason;
+      // A missing pixel size is the one failure the USER can fix, and it is by
+      // far the commonest — so it travels as a code the editor can translate
+      // into "set the project scale" rather than as an English sentence about
+      // micrometres. Reported twice by the same user on 2026-09-08, who read
+      // the raw message and could not tell what to do with it.
+      const err = new Error(
+        reason ?? 'Could not compute the neurite assignment'
+      ) as Error & { code?: string };
+      if (reason && /pixel size unknown/i.test(reason)) {
+        err.code = 'NEURITE_PIXEL_SIZE_UNKNOWN';
+      }
+      throw err;
     }
 
     const assignments = new Map<string, string>();

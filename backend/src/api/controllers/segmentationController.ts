@@ -571,11 +571,22 @@ class SegmentationController {
       // is missing — and the message is the only thing that says which.
       const message =
         error instanceof Error ? error.message : 'Assignment failed';
+      const code =
+        error instanceof Error && typeof (error as { code?: string }).code === 'string'
+          ? (error as { code?: string }).code
+          : undefined;
       logger.warn(
         `Neurite assignment failed: ${message}`,
         'SegmentationController'
       );
-      ResponseHelper.error(res, message, 400);
+      // Carry the code so the editor can say what to DO about it. The message
+      // stays as the fallback for every other input failure, which has no
+      // single remedy to name.
+      ResponseHelper.error(
+        res,
+        code ? { code, message } : message,
+        400
+      );
     }
   };
 

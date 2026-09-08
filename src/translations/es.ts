@@ -895,6 +895,8 @@ export default {
       assignDone:
         '{{assigned}} neuritas asignadas, {{unassigned}} no se pudieron',
       assignFailed: 'No se pudieron asignar las neuritas',
+      assignNeedsScale:
+        'Primero define la escala del proyecto (µm por píxel): la asignación mide en micrómetros.',
       somaLabel: 'Soma {{n}}',
       assign: 'Asignar neuritas a células',
       assignHint:

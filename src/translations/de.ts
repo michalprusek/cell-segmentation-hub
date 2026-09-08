@@ -902,6 +902,8 @@ export default {
     neurite: {
       assignDone: '{{assigned}} Neuriten zugeordnet, {{unassigned}} nicht',
       assignFailed: 'Die Neuriten konnten nicht zugeordnet werden',
+      assignNeedsScale:
+        'Legen Sie zuerst den Projektmaßstab fest (µm pro Pixel) — die Zuordnung misst in Mikrometern.',
       somaLabel: 'Soma {{n}}',
       assign: 'Neuriten Zellen zuordnen',
       assignHint:
