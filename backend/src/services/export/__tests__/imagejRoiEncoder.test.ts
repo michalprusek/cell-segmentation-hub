@@ -1488,9 +1488,12 @@ describe('exportImageJRoiSets', () => {
       [30.75, 40],
       [55.5, 12.5],
     ]);
-    // Colour is still keyed on trackId: mt_42 → hsl(62,70%,55%) → rgb(215,221,60).
+    // Colour is still keyed on trackId: mt_42 → hsl(214,70%,55%) → rgb(60,130,221).
+    // Was hue 62 / rgb(215,221,60) until the x137 hue stride landed on
+    // 2026-09-08; the editor moved and the export has to move with it, which is
+    // the whole point of `imagejColorParity.test.ts` on the frontend side.
     expect(roi.strokeColor).toBe(
-      ((0xff << 24) | (215 << 16) | (221 << 8) | 60) >>> 0
+      ((0xff << 24) | (60 << 16) | (130 << 8) | 221) >>> 0
     );
     // Untyped MT (no palette) is named untyped_1, not its raw trackId.
     expect(roi.name).toBe('untyped_1');

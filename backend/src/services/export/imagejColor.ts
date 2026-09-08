@@ -3,14 +3,20 @@
  *
  * Mirrors the frontend `src/pages/segmentation/utils/instanceColors.ts` so a
  * microtubule exported to a `.roi` gets the SAME colour it shows in the editor.
- * The FE renders `hsl(hue, 70%, 55%)` from a djb2-style hash of the polyline's
- * colour key (cross-frame trackId first). ImageJ stores a stroke colour as a
- * single ARGB int, so here we reproduce that exact hue hash, convert HSL→RGB,
- * and pack it with an opaque alpha.
+ * The FE renders `hsl(hue, 70%, 55%)` from a `hash * 31 + charCode` hash of
+ * the polyline's colour key (cross-frame trackId first), spread over the wheel
+ * by a x137 stride. ImageJ stores a stroke colour as a single ARGB int, so here
+ * we reproduce that exact hue arithmetic, convert HSL→RGB, and pack it with an
+ * opaque alpha.
  *
- * Parity is enforced by `__tests__/imagejColor.test.ts`: the integer hue math
- * is byte-identical to the FE loop, so a drift fails loudly rather than shipping
- * mismatched export colours.
+ * PARITY IS A CROSS-STACK CLAIM AND NEEDS A CROSS-STACK GUARD. The tests beside
+ * this file compare it against a copy of the FE loop written in the test file,
+ * which by construction cannot see the FE drift away — and on 2026-09-08 it did
+ * not: the FE gained the x137 stride and every exported .roi would have carried
+ * the old hue while the editor showed the new one, with all backend tests green.
+ * The real guard is `src/pages/segmentation/utils/__tests__/imagejColorParity.test.ts`,
+ * on the FRONTEND side, because that is the only suite that can import both
+ * files. The backend container bakes `backend/` alone and cannot reach `src/`.
  */
 
 /** Minimal shape needed to pick a colour key — a subset of the polygon row. */
@@ -45,15 +51,21 @@ export function colorKeyForRoi(p: RoiColorInput): string {
 }
 
 /**
- * djb2-style hash → hue in [0, 359]. Byte-identical to the FE hash loop
- * (`hash = ((hash << 5) - hash + charCode) | 0`) so exported hues match.
+ * `hash * 31 + charCode` → x137 stride → hue in [0, 359]. Byte-identical to
+ * `colorFromInstanceId`'s arithmetic (`hash = ((hash << 5) - hash + charCode) | 0`,
+ * then `(Math.abs(hash) * 137) % 360`) so exported hues match the editor.
+ *
+ * The x137 is not cosmetic and must not be dropped here alone: without it,
+ * sequential keys land within a degree of each other, and an export whose
+ * stride disagrees with the editor's is worse than either — the same
+ * microtubule gets two different colours in two tools.
  */
 export function hueFromColorKey(key: string): number {
   let hash = 0;
   for (let i = 0; i < key.length; i++) {
     hash = ((hash << 5) - hash + key.charCodeAt(i)) | 0;
   }
-  return Math.abs(hash) % 360;
+  return (Math.abs(hash) * 137) % 360;
 }
 
 /** Standard HSL→RGB. h in [0, 360), s/l in [0, 1] → [r, g, b] as 0–255 ints. */

@@ -836,6 +836,8 @@ export default {
     neurite: {
       assignDone: '已归属 {{assigned}} 条神经突，{{unassigned}} 条未能归属',
       assignFailed: '神经突归属失败',
+      assignNeedsScale:
+        '请先在项目页面设置项目比例（每像素微米数）——归属计算以微米为单位。',
       somaLabel: '胞体 {{n}}',
       assign: '将神经突归属到细胞',
       assignHint: '基于当前状态的多边形运行，因此包含你的修改。',

@@ -24,6 +24,7 @@
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true
   },
+  "files": ["backend/src/services/export/imagejColor.ts"],
   "include": [
     "src/**/*.test.ts",
     "src/**/*.test.tsx",

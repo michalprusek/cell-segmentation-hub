@@ -97,9 +97,13 @@ describe('somaAssignmentColors (the list the stripes are drawn from)', () => {
       somaIds: ['s1', 's2'],
     });
     expect(colors).toHaveLength(2);
-    // The two somas must be DISTINGUISHABLE — a shared neurite drawn in one
-    // colour twice would look exactly like an ordinary single assignment.
-    expect(colors[0]).not.toBe(colors[1]);
+    // The two somas must be DISTINGUISHABLE, and "not equal" is far too weak a
+    // way to say that: before the hue spread landed, two sequential soma ids
+    // differed by ONE degree — not equal, and visually identical. Assert a
+    // separation a human could act on.
+    const hue = (c: string) => Number(c.match(/hsl\((\d+)/)?.[1]);
+    const gap = Math.abs(hue(colors[0]) - hue(colors[1]));
+    expect(Math.min(gap, 360 - gap)).toBeGreaterThan(20);
   });
 
   it('matches each soma its own colour, so a cell reads as one object', () => {

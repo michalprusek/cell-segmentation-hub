@@ -59,3 +59,51 @@ describe('colorFromInstanceId', () => {
     expect(colorFromInstanceId('')).toBe('hsl(0, 0%, 60%)');
   });
 });
+
+describe('hue spread — distinct ids must look distinct', () => {
+  const hueOf = (id: string) => {
+    const m = colorFromInstanceId(id).match(/hsl\((\d+)/);
+    return m ? Number(m[1]) : NaN;
+  };
+  /** Smallest separation on the hue WHEEL, so 359 and 1 are 2 apart. */
+  const minGap = (ids: string[]) => {
+    const hs = ids.map(hueOf).sort((a, b) => a - b);
+    let min = 360;
+    for (let i = 0; i < hs.length; i++) {
+      const next = i + 1 < hs.length ? hs[i + 1] : hs[0] + 360;
+      min = Math.min(min, next - hs[i]);
+    }
+    return min;
+  };
+
+  it('separates SEQUENTIAL ids, which is how polygons are numbered', () => {
+    // The failure this exists for: the `hash * 31 + charCode` string hash on
+    // strings differing by one in the last character differs by one — the
+    // prefix is identical, so the whole difference is the final unmultiplied
+    // `+ c` — so `% 360` put four somas of one frame on
+    // 329/330/331/332 — four cells, four indistinguishable magentas. Measured
+    // on production 2026-09-08. A "colours differ" assertion passes at 1°,
+    // which is why this asserts a SEPARATION a human could act on.
+    const somas = ['polygon_21', 'polygon_22', 'polygon_23', 'polygon_24'];
+    expect(minGap(somas)).toBeGreaterThan(20);
+  });
+
+  it('separates random ids too', () => {
+    const tracks = [
+      'mt_1cea30b3',
+      'mt_af7599ea',
+      'mt_6288592c',
+      'mt_c30d9d4e',
+      'mt_7bff9635',
+    ];
+    expect(minGap(tracks)).toBeGreaterThan(20);
+  });
+
+  it('is still stable per id, which the cross-frame palette depends on', () => {
+    // Spreading the hues must not cost determinism: an MT keeps its colour
+    // across frames because the trackId is the only input.
+    expect(colorFromInstanceId('mt_abc123')).toBe(
+      colorFromInstanceId('mt_abc123')
+    );
+  });
+});
