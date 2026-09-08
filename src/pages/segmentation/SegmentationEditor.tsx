@@ -548,11 +548,12 @@ const SegmentationEditor = () => {
     },
     // IMPORTANT: onPolygonsChange is intentionally NOT provided
     // to prevent any automatic saving when polygons change.
-    // Saving only happens on:
-    // 1. Manual save (Ctrl+S, the Save button, or "Save and leave")
-    // 2. Switching images (autosaveBeforeReset)
-    // There is NO unmount autosave — leaving the editor with unsaved edits
-    // raises `UnsavedChangesDialog` and the user decides.
+    // Saving only happens on ONE trigger: a manual save (Ctrl+S, the Save
+    // button, or "Save and leave" in the dialog).
+    // There is NO unmount autosave and, since 2026-09-08, NO frame-switch
+    // autosave either — scrubbing to another frame DISCARDS unsaved edits.
+    // Leaving the editor with unsaved edits raises `UnsavedChangesDialog`
+    // and the user decides; that is the only place work is protected.
   });
 
   // Listen for segmentation completion and auto-reload polygons (debounced) with cancellation

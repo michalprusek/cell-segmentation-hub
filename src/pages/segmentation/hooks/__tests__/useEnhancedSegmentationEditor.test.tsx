@@ -1271,28 +1271,39 @@ describe('useEnhancedSegmentationEditor', () => {
       expect(result.current.hasUnsavedChanges).toBe(true);
     });
 
-    it('autosaves the previous image when imageId changes with unsaved changes', async () => {
+    // Switching frame saves NOTHING, by explicit product decision
+    // (2026-09-08). The background autosave that used to run here cancelled
+    // its own previous call on a fast scrub and reported the loss to nobody,
+    // so an edit could vanish unpredictably. Work is now protected only on
+    // the way OUT of the editor, where the user gets an explicit choice.
+    it('does NOT save when imageId changes, and discards the unsaved edit', async () => {
       const onSave = vi.fn().mockResolvedValue(undefined);
+      const framePolygons = [makePolygon('from-server')];
       const { result, rerender } = renderHook(
         (props: any) => useEnhancedSegmentationEditor(props),
         { initialProps: { ...baseProps, imageId: 'img-a', onSave } }
       );
 
-      act(() => result.current.updatePolygons([makePolygon('p2')]));
+      act(() => result.current.updatePolygons([makePolygon('hand-drawn')]));
       expect(result.current.hasUnsavedChanges).toBe(true);
+      expect(result.current.polygons.map(p => p.id)).toEqual(['hand-drawn']);
 
       await act(async () => {
         rerender({
           ...baseProps,
           imageId: 'img-b',
-          initialPolygons: [],
+          initialPolygons: framePolygons,
           onSave,
         });
       });
 
-      expect(onSave).toHaveBeenCalled();
-      // The autosave call references the previous imageId
-      expect(onSave.mock.calls[0][1]).toBe('img-a');
+      // Nothing was written for either frame.
+      expect(onSave).not.toHaveBeenCalled();
+      // The new frame's own polygons are on the canvas — asserted as the SET,
+      // so "the edit survived alongside them" also fails, not just "gone".
+      expect(result.current.polygons.map(p => p.id)).toEqual(['from-server']);
+      // ...and the editor reports itself clean, which is now truthful.
+      expect(result.current.hasUnsavedChanges).toBe(false);
     });
 
     it('resets history and unsaved flag when imageId changes', async () => {
