@@ -109,6 +109,7 @@ const segmentationServiceMock = {
   requestBatchSegmentation: vi.fn() as ReturnType<typeof vi.fn>,
   saveSegmentationResults: vi.fn() as ReturnType<typeof vi.fn>,
   checkServiceHealth: vi.fn() as ReturnType<typeof vi.fn>,
+  assignNeuriteSomas: vi.fn() as ReturnType<typeof vi.fn>,
 };
 
 const imageServiceMock = {
@@ -880,6 +881,104 @@ describe('processBatch', () => {
       2 // polygon count
     );
     expect(wsServiceMock.emitQueueStatsUpdate).toHaveBeenCalled();
+  });
+
+  // ── automatic neurite → soma assignment (2026-09-08) ──────────────────────
+  //
+  // Requested: the assignment should happen at SEGMENTATION time, not only
+  // when the user presses the button. These drive the real `processBatch`
+  // completion path rather than the private helper, because the thing that
+  // broke before was never the helper — it was whether anything called it.
+
+  /** The completion path performs TWO `image.findUnique` lookups in order:
+   *  the tracking dispatch (`parentVideoId`) and then the project-type check.
+   *  Both must be primed or the second reads the first one's answer. */
+  const primeCompletion = (
+    item: SegmentationQueue,
+    projectType: string | null
+  ) => {
+    imageServiceMock.getImageById.mockResolvedValueOnce({
+      id: 'img-1',
+      width: 100,
+      height: 100,
+    });
+    prismaMock.segmentationQueue.updateMany.mockResolvedValueOnce({ count: 1 });
+    prismaMock.image.updateMany.mockResolvedValueOnce({ count: 1 });
+    prismaMock.segmentationQueue.count.mockResolvedValueOnce(0);
+    segmentationServiceMock.requestSegmentation.mockResolvedValueOnce({
+      polygons: [{ points: [] }],
+      polylines: [],
+      confidence: 0.9,
+      processing_time: 150,
+      image_size: { width: 100, height: 100 },
+    });
+    segmentationServiceMock.saveSegmentationResults.mockResolvedValueOnce(
+      undefined
+    );
+    imageServiceMock.updateSegmentationStatus.mockResolvedValueOnce(undefined);
+    prismaMock.segmentationQueue.delete.mockResolvedValueOnce(item);
+    prismaMock.image.findUnique
+      .mockResolvedValueOnce({ parentVideoId: null })
+      .mockResolvedValueOnce(
+        projectType === null
+          ? null
+          : { project: { id: 'project-id', type: projectType } }
+      );
+    prismaMock.segmentationQueue.count
+      .mockResolvedValueOnce(0)
+      .mockResolvedValueOnce(0);
+  };
+
+  it('assigns neurites to somas automatically on a neurite project', async () => {
+    const item = makeQueueEntry();
+    primeCompletion(item, 'neurite');
+    segmentationServiceMock.assignNeuriteSomas.mockResolvedValueOnce({
+      assigned: 3,
+      unassigned: 1,
+      changed: 3,
+    });
+
+    await service.processBatch([item]);
+    // The call is fire-and-forget; let its microtasks drain.
+    await new Promise(resolve => setImmediate(resolve));
+
+    expect(segmentationServiceMock.assignNeuriteSomas).toHaveBeenCalledWith(
+      'img-1',
+      'user-id'
+    );
+  });
+
+  it('does NOT assign on a project type that has no somas', async () => {
+    const item = makeQueueEntry();
+    primeCompletion(item, 'spheroid');
+
+    await service.processBatch([item]);
+    await new Promise(resolve => setImmediate(resolve));
+
+    expect(segmentationServiceMock.assignNeuriteSomas).not.toHaveBeenCalled();
+  });
+
+  it('still reports the segmentation as complete when the assignment fails', async () => {
+    const item = makeQueueEntry();
+    primeCompletion(item, 'neurite');
+    // The commonest real failure: the project has no pixel size, so the
+    // staging thresholds (micrometres) cannot be applied.
+    segmentationServiceMock.assignNeuriteSomas.mockRejectedValueOnce(
+      new Error('pixel size unknown — staging thresholds are in micrometres')
+    );
+
+    await expect(service.processBatch([item])).resolves.not.toThrow();
+    await new Promise(resolve => setImmediate(resolve));
+
+    // The segmentation itself succeeded and must be reported as such — the
+    // result was saved and the queue item deleted long before the assignment
+    // was attempted.
+    expect(wsServiceMock.emitSegmentationComplete).toHaveBeenCalledWith(
+      'user-id',
+      'img-1',
+      'project-id',
+      1
+    );
   });
 
   it('marks the image as no_segmentation when ML returns 0 polygons', async () => {
