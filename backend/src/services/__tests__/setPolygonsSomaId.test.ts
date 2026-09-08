@@ -30,7 +30,52 @@ describe('setPolygonsSomaId', () => {
       new Map([['n1', 's1']])
     );
     expect(changed).toBe(1);
-    expect(polygons[0]).toMatchObject({ id: 'n1', somaId: 's1' });
+    // The LIST is what is written now (2026-09-08). The pipeline still reports
+    // exactly one owner per neurite — several somas only ever come from a
+    // manual assignment in the editor.
+    expect(polygons[0]).toMatchObject({ id: 'n1', somaIds: ['s1'] });
+    // And the legacy field is not written back beside it, or two readers would
+    // disagree about the same polygon.
+    expect(polygons[0]).not.toHaveProperty('somaId');
+  });
+
+  it('REPLACES a manual multi-assignment rather than merging into it', () => {
+    // Same whole-frame reasoning as clearing an unattributed polygon: a run is
+    // a complete answer, and keeping a hand-made second soma beside a fresh
+    // result would show an assignment the current run does not support.
+    const shared = {
+      id: 'n1',
+      partClass: 'neurite',
+      somaIds: ['s1', 's2'],
+    };
+    const { polygons, changed } = setPolygonsSomaId(
+      [shared],
+      new Map([['n1', 's1']])
+    );
+    expect(changed).toBe(1);
+    expect(polygons[0]).toMatchObject({ somaIds: ['s1'] });
+  });
+
+  it('clears a neurite that carried only the LEGACY somaId', () => {
+    // Frames written before the list existed must still be clearable, or a run
+    // could never take back an assignment made by an older one.
+    const { polygons, changed } = setPolygonsSomaId(
+      [neurite('n1', 'old')],
+      new Map()
+    );
+    expect(changed).toBe(1);
+    expect(polygons[0]).not.toHaveProperty('somaId');
+    expect(polygons[0]).not.toHaveProperty('somaIds');
+  });
+
+  it('counts NO change when a legacy somaId already names the same soma', () => {
+    // Reading through both fields is what makes this a no-op; comparing only
+    // `somaIds` would rewrite every pre-2026-09-08 frame on every run.
+    const { changed } = setPolygonsSomaId(
+      [neurite('n1', 's1')],
+      new Map([['n1', 's1']])
+    );
+    expect(changed).toBe(0);
   });
 
   it('CLEARS a neurite the run did not attribute', () => {
