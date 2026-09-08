@@ -103,10 +103,9 @@ export const useEnhancedSegmentationEditor = ({
 }: UseEnhancedSegmentationEditorProps) => {
   const { t } = useLanguage();
 
-  // AbortController for autosave operations
-  const { getSignal, abort: abortAutosave } = useAbortController(
-    'EnhancedSegmentationEditor'
-  );
+  // AbortController for the manual save. There is no autosave any more — see
+  // the note in the polygon-sync effect below.
+  const { getSignal } = useAbortController('EnhancedSegmentationEditor');
 
   // Core state
   const [polygons, setPolygons] = useState<Polygon[]>(initialPolygons);
@@ -285,96 +284,6 @@ export const useEnhancedSegmentationEditor = ({
   const prevReloadNonceRef = useRef<number>(reloadNonce);
   const currentImageIdRef = useRef<string | undefined>(undefined);
   const hasInitialized = useRef(false);
-  const previousImageIdRef = useRef<string | undefined>(imageId);
-  const previousImageDimensionsRef = useRef<
-    { width: number; height: number } | undefined
-  >(
-    imageWidth && imageHeight
-      ? { width: imageWidth, height: imageHeight }
-      : undefined
-  );
-
-  // Update dimensions ref whenever dimensions change (BEFORE image switch)
-  useEffect(() => {
-    if (imageWidth && imageHeight && imageId === previousImageIdRef.current) {
-      // Only update if we're still on the same image
-      previousImageDimensionsRef.current = {
-        width: imageWidth,
-        height: imageHeight,
-      };
-      logger.debug('📐 Updated dimension tracking:', {
-        width: imageWidth,
-        height: imageHeight,
-        imageId,
-      });
-    }
-  }, [imageWidth, imageHeight, imageId]);
-
-  // Autosave function with cancellation support - defined early to be used in useEffect
-  const autosaveBeforeReset = useCallback(async () => {
-    const currentImageId = imageId;
-    const previousImageId = previousImageIdRef.current;
-
-    // Only trigger autosave if:
-    // 1. We have initialized (not first load)
-    // 2. ImageId actually changed
-    // 3. There are unsaved changes
-    // 4. We have an onSave handler
-    if (
-      hasInitialized.current &&
-      previousImageId !== undefined &&
-      previousImageId !== currentImageId &&
-      hasUnsavedChanges &&
-      onSave
-    ) {
-      logger.debug(
-        '🔄 Autosaving before switching from image:',
-        previousImageId,
-        'to:',
-        currentImageId,
-        'with dimensions:',
-        previousImageDimensionsRef.current
-      );
-
-      // Save the polygons from the previous image
-      const polygonsToSave = history[historyIndex] || [];
-
-      // Get abort signal for autosave operation
-      const signal = getSignal('autosave');
-
-      try {
-        // Pass the previous image dimensions and abort signal to ensure correct coordinate context
-        await onSave(
-          polygonsToSave,
-          previousImageId,
-          previousImageDimensionsRef.current,
-          signal
-        );
-
-        // Only log success if not cancelled
-        if (!signal.aborted) {
-          logger.debug(
-            '✅ Autosave completed for image:',
-            previousImageId,
-            'with dimensions:',
-            previousImageDimensionsRef.current
-          );
-        }
-      } catch (error) {
-        // Handle cancellation gracefully
-        if (handleCancelledError(error, 'autosave')) {
-          return;
-        }
-
-        logger.error('Autosave failed when switching images:', error);
-        toast.error(t('toast.segmentation.autosaveFailed'));
-      }
-    }
-
-    // Update the ref for next comparison
-    previousImageIdRef.current = currentImageId;
-    // Note: dimensions are now tracked separately in a useEffect to ensure they're captured BEFORE image changes
-  }, [imageId, hasUnsavedChanges, onSave, history, historyIndex, t, getSignal]);
 
   useEffect(() => {
     // Which frame the polygons in hand belong to. Callers that do not track
@@ -406,21 +315,23 @@ export const useEnhancedSegmentationEditor = ({
       !hasInitialized.current || imageChanged || lengthChanged || reloadChanged;
 
     if (isNewData) {
-      // First, cancel any ongoing autosave for the previous image
-      if (imageChanged) {
-        abortAutosave('autosave');
-        logger.debug('🛑 Cancelled previous autosave operation');
-
-        // Handle autosave in background - DON'T BLOCK NAVIGATION
-        autosaveBeforeReset().catch(error => {
-          // Handle cancellation gracefully
-          if (!handleCancelledError(error, 'background autosave')) {
-            logger.error('Background autosave failed:', error);
-          }
-        });
-      }
-
-      // Immediately proceed with resetting editor state (don't wait for autosave)
+      // NOTHING IS SAVED HERE. Switching frame discards whatever is unsaved,
+      // by explicit product decision (2026-09-08).
+      //
+      // This used to fire a background `autosaveBeforeReset()` and then reset
+      // the editor state WITHOUT waiting for it. That was unsound in three
+      // ways at once: the next scrub called `abortAutosave('autosave')` on the
+      // single shared controller key and cancelled the in-flight save of the
+      // frame you had just edited; the cancellation was swallowed silently by
+      // `handleCancelledError`; and the reset below had already set
+      // `hasUnsavedChanges` to false, so nothing was left to retry from and
+      // the UI claimed to be clean while the write was still in the air.
+      // A scrub faster than one round-trip therefore lost the edit and said
+      // nothing — which is worse than not saving, because it is unpredictable.
+      //
+      // The guard against losing work now lives entirely on the way OUT of the
+      // editor (`UnsavedChangesDialog` + `beforeunload`), where the user gets
+      // an explicit choice instead of a silent background write.
       if (process.env.NODE_ENV === 'development') {
         logger.debug(
           '🔄 Loading new polygon data:',
@@ -494,14 +405,7 @@ export const useEnhancedSegmentationEditor = ({
     // setEditMode/setSelectedPolygonId are stable setState refs and intentionally
     // omitted to avoid re-running this initialization effect on each render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    initialPolygons,
-    reloadNonce,
-    polygonsImageId,
-    imageId,
-    autosaveBeforeReset,
-    abortAutosave,
-  ]);
+  }, [initialPolygons, reloadNonce, polygonsImageId, imageId]);
 
   // Auto-reset view when opening image from gallery
   useEffect(() => {
