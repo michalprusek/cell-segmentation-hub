@@ -58,7 +58,11 @@ const mockEditor = vi.hoisted(() => ({
   interactionState: null,
   keyboardState: { isShiftPressed: vi.fn(() => false) },
   canvasRef: { current: null },
-  handleSave: vi.fn(),
+  // Propagate COMMITS the frame first (2026-09-08): the endpoint writes
+  // `frameIndex > from` and would otherwise leave the source frame holding the
+  // old geometry. A save that resolves `false` must abort the propagate, so
+  // this has to resolve `true` for the positive cases below.
+  handleSave: vi.fn().mockResolvedValue(true),
   handleUndo: vi.fn(),
   handleRedo: vi.fn(),
   handleZoomIn: vi.fn(),
@@ -471,6 +475,62 @@ const clickAndSettle = async (
 };
 
 describe('propagate on a cold deep-link (video.container still null)', () => {
+  // --- commit-before-propagate (2026-09-08) --------------------------------
+  //
+  // `propagateTrackGeometryForward` writes `frameIndex > fromFrameIndex`, so it
+  // never writes the frame the shape was drawn on. Propagating an unsaved edit
+  // therefore wrote the new geometry to every LATER frame and left the source
+  // frame with the old one; once the frame-switch autosave was removed the same
+  // day, scrubbing away discarded the edit and the frame snapped back — which
+  // is what "propagate does nothing" looked like from the outside.
+
+  it('SAVES the frame before propagating from it', async () => {
+    setPolygons([polyline({ trackId: 'track-3', name: 'MT1' })]);
+    renderEditor();
+
+    await clickAndSettle('propagate-poly-1', () => {
+      expect(mockApiClient.propagateTrackForward).toHaveBeenCalledTimes(1);
+    });
+
+    expect(mockEditor.handleSave).toHaveBeenCalledTimes(1);
+    // ORDER is the claim, not merely that both ran: propagating first and
+    // saving second would leave the same inconsistency for the window between.
+    const saveOrder = mockEditor.handleSave.mock.invocationCallOrder[0];
+    const propOrder =
+      mockApiClient.propagateTrackForward.mock.invocationCallOrder[0];
+    expect(saveOrder).toBeLessThan(propOrder);
+  });
+
+  it('does NOT propagate when the save fails, so no frame diverges', async () => {
+    mockEditor.handleSave.mockResolvedValueOnce(false);
+    setPolygons([polyline({ trackId: 'track-3', name: 'MT1' })]);
+    renderEditor();
+
+    await clickAndSettle('propagate-poly-1', () => {
+      expect(mockEditor.handleSave).toHaveBeenCalledTimes(1);
+    });
+
+    // The source frame could not be persisted; writing the new shape to the
+    // later frames anyway is precisely the split-brain this guards against.
+    expect(mockApiClient.propagateTrackForward).not.toHaveBeenCalled();
+  });
+
+  it('saves ONCE for a bulk propagate, not once per microtubule', async () => {
+    setPolygons([
+      polyline({ id: 'poly-1', trackId: 'track-1' }),
+      polyline({ id: 'poly-2', trackId: 'track-2' }),
+    ]);
+    renderEditor();
+
+    await clickAndSettle('shift-select-poly-1', () => {});
+    await clickAndSettle('shift-select-poly-2', () => {});
+    await clickAndSettle('propagate-selected-poly-1', () => {
+      expect(mockApiClient.propagateTrackForward).toHaveBeenCalledTimes(2);
+    });
+
+    expect(mockEditor.handleSave).toHaveBeenCalledTimes(1);
+  });
+
   it('propagates ONE microtubule using the frame row\u2019s own container id + index', async () => {
     setPolygons([polyline({ trackId: 'track-3', name: 'MT1' })]);
     renderEditor();
