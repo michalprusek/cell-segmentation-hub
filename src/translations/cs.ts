@@ -739,7 +739,7 @@ export default {
         'Přiřazeno {{assigned}} neuritů, {{unassigned}} se nepodařilo',
       assignFailed: 'Přiřazení neuritů se nepodařilo',
       assignNeedsScale:
-        'Nejdřív nastavte měřítko projektu (µm na pixel) — přiřazení měří v mikrometrech.',
+        'Nejdřív nastavte měřítko projektu (µm na pixel) na stránce projektu — přiřazení měří v mikrometrech.',
       somaLabel: 'Soma {{n}}',
       assign: 'Přiřadit neurity k buňkám',
       assignHint:
