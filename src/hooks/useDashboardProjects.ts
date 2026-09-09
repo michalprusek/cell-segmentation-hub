@@ -30,6 +30,16 @@ interface ApiProject extends Project {
   images?: ProjectImage[];
 }
 
+/** Page size for the project listing. 100 is the API's hard maximum
+ *  (`validation.ts`, `.max(100)`), so this is the fewest round trips the
+ *  backend allows. */
+const PROJECTS_PAGE_SIZE = 100;
+
+/** A stop so a backend that keeps claiming another page cannot spin the
+ *  dashboard forever. 100 pages is 10 000 projects — far past anything real,
+ *  and the point is to fail visibly rather than hang. */
+const MAX_PROJECT_PAGES = 100;
+
 export const useDashboardProjects = ({
   sortField,
   sortDirection,
@@ -80,10 +90,39 @@ export const useDashboardProjects = ({
         // Folder-scoped view: backend already merges owned+shared and gates
         // on placement. We skip the separate /api/shared/projects call to
         // avoid double-counting and to keep the URL the source of truth.
-        const ownedResponse = await apiClient.getProjects({
-          _t: timestamp,
-          ...(folderId !== undefined && { folderId }),
-        });
+        //
+        // EVERY page, not just the first. `/projects` is paginated and
+        // defaults to **10** when no limit is sent (`projectController.ts`,
+        // `limit: limit || 10`), which is what this call used to do — so a
+        // user with more than ten projects was shown ten, with no pagination
+        // control and nothing anywhere saying the rest existed. It reads
+        // exactly like data loss: creating a project pushes the oldest off
+        // the page (the default sort is `createdAt desc`), so a project that
+        // was visible yesterday is gone today. Reported 2026-09-09 as
+        // "Disappearing projects?" by a user with 36 of them, none of which
+        // had ever been deleted.
+        //
+        // The cap is 100 per request, so the loop is what removes the
+        // silent truncation rather than the larger page size: raising the
+        // limit alone would just move the cliff to 101.
+        const ownedProjects: ApiProject[] = [];
+        let pageToFetch = 1;
+        let hasMorePages = true;
+        while (hasMorePages && pageToFetch <= MAX_PROJECT_PAGES) {
+          const pageResponse = await apiClient.getProjects({
+            _t: timestamp,
+            page: pageToFetch,
+            limit: PROJECTS_PAGE_SIZE,
+            ...(folderId !== undefined && { folderId }),
+          });
+          if (controller.signal.aborted) return;
+          ownedProjects.push(...(pageResponse.projects || []));
+          // A backend that omits `totalPages` must not spin forever here, so
+          // an absent or nonsensical value ends the loop after this page.
+          const totalPages = Number(pageResponse.totalPages) || 1;
+          hasMorePages = pageToFetch < totalPages;
+          pageToFetch += 1;
+        }
 
         let sharedResponse: unknown[] = [];
         if (folderId === undefined) {
@@ -111,7 +150,6 @@ export const useDashboardProjects = ({
           }
         }
 
-        const ownedProjects = ownedResponse.projects || [];
         const sharedProjects = Array.isArray(sharedResponse)
           ? sharedResponse
           : [];
