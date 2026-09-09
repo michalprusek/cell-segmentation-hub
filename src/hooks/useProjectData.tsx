@@ -27,6 +27,13 @@ export const useProjectData = (
   const [projectPixelSizeUm, setProjectPixelSizeUm] = useState<number | null>(
     null
   );
+  // Where THIS viewer filed the project: a folder id, or null for the
+  // dashboard root. `undefined` until the project has loaded — the three
+  // states are distinct on purpose, because "not loaded yet" must not be
+  // mistaken for "at root" by anything navigating on it.
+  const [projectFolderId, setProjectFolderId] = useState<
+    string | null | undefined
+  >(undefined);
   const [images, setImages] = useState<ProjectImage[]>([]);
   // Distinct channel names across all video containers in this project,
   // sourced from the BE response metadata. Used by the Segment-All channel
@@ -71,6 +78,10 @@ export const useProjectData = (
         setProjectType(project.type);
         setProjectVerified(project.verified ?? false);
         setProjectPixelSizeUm(project.pixelSizeUm ?? null);
+        // `?? null` collapses only the ABSENT case; an older backend that does
+        // not send the field lands on "root", which is the pre-existing
+        // behaviour rather than a broken link.
+        setProjectFolderId(project.folderId ?? null);
 
         // Fetch all images by making multiple requests if needed.
         // Backend max is 100 per request; we use lod: 'low' which
@@ -373,6 +384,7 @@ export const useProjectData = (
     setProjectType,
     projectVerified,
     projectPixelSizeUm,
+    projectFolderId,
     setProjectVerified,
     setProjectPixelSizeUm,
     images,

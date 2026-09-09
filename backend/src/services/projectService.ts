@@ -320,7 +320,10 @@ export async function getUserProjects(
 export async function getProjectById(
   projectId: string,
   userId: string
-): Promise<(Project & { _count: { images: number } }) | null> {
+): Promise<
+  | (Project & { _count: { images: number }; folderId: string | null })
+  | null
+> {
   try {
     // Check if user has access to this project (owner or shared)
     const accessCheck = await SharingService.hasProjectAccess(
@@ -359,6 +362,21 @@ export async function getProjectById(
             images: true,
           },
         },
+        // The CALLER's placement for this project. At most one row per
+        // (userId, projectId) — the unique index on `project_folder_items`
+        // guarantees it — and it is per-user on purpose: a shared project can
+        // be filed in a different folder by each person it reaches.
+        //
+        // `getUserProjects` has always selected this; the single-project read
+        // did not, so the project page had no idea where its project lived and
+        // its Back button could only go to the dashboard root. Requested
+        // 2026-09-09: "would it be possible to be transferred back to the last
+        // folder that I was in, instead of always to home?"
+        folderItems: {
+          where: { userId },
+          select: { folderId: true },
+          take: 1,
+        },
       },
     });
 
@@ -371,7 +389,12 @@ export async function getProjectById(
       userId,
     });
 
-    return project;
+    // Flattened to the same shape `getUserProjects` returns, so both reads
+    // answer `folderId` and the frontend mapper needs no second case.
+    return {
+      ...project,
+      folderId: project.folderItems[0]?.folderId ?? null,
+    };
   } catch (error) {
     logger.error(
       'Failed to get project by ID:',

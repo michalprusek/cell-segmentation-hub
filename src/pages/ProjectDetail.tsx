@@ -109,6 +109,7 @@ const ProjectDetail = () => {
     setProjectVerified,
     projectPixelSizeUm,
     setProjectPixelSizeUm,
+    projectFolderId,
     images,
     projectChannels,
     loading,
@@ -1748,6 +1749,7 @@ const ProjectDetail = () => {
       variants={pageVariants}
     >
       <ProjectHeader
+        folderId={projectFolderId}
         projectTitle={projectTitle}
         onTitleChange={handleProjectTitleChange}
         imagesCount={filteredImages.length}
