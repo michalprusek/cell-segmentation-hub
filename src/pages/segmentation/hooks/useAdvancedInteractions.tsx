@@ -668,8 +668,26 @@ export const useAdvancedInteractions = ({
             // Nothing selected - exit slice mode to View mode
             setEditMode(EditMode.View);
           }
-        } else {
-          // For other modes - always cancel current operation
+        } else if (editMode !== EditMode.AssignNeurite) {
+          // For other modes - always cancel current operation.
+          //
+          // AssignNeurite is excluded because it has no operation to cancel.
+          // The branches above undo IN-PROGRESS work — a placed slice point, a
+          // half-drawn polyline — and this one is the catch-all for the rest.
+          // The assignment mode holds no temp geometry: it is click-a-neurite,
+          // click-a-soma, and each click completes on its own.
+          //
+          // Cancelling it here was a silent trap, because right-click in that
+          // mode is how the polygon context menu is opened and that menu
+          // carries "Remove from Soma N" — the counterpart to the very gesture
+          // being armed. Verified in production: the menu opened with all five
+          // entries AND the fuchsia mode indicator was gone afterwards, so
+          // reaching for the removal entry cost the mode with nothing saying
+          // so, and `g` had to be pressed again.
+          //
+          // DeletePolygon and MoveShape have the same click-to-act shape and
+          // arguably the same problem; they are left alone here because only
+          // this one was reported and measured.
           if (editMode !== EditMode.View) {
             setEditMode(EditMode.View);
             setTempPoints([]);

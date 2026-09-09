@@ -139,6 +139,21 @@ function pressShape(polygonId: string) {
   } as unknown as React.MouseEvent<HTMLDivElement>;
 }
 
+/** A right-click, which is how the polygon context menu is opened. */
+function rightClick() {
+  return {
+    button: 2,
+    detail: 1,
+    clientX: 40,
+    clientY: 40,
+    altKey: false,
+    shiftKey: false,
+    target: document.createElement('div'),
+    preventDefault: vi.fn(),
+    stopPropagation: vi.fn(),
+  } as unknown as React.MouseEvent<HTMLDivElement>;
+}
+
 const panState = (fn: unknown) =>
   vi
     .mocked(fn as (s: InteractionState) => void)
@@ -195,5 +210,35 @@ describe('useAdvancedInteractions – panning in the assignment mode', () => {
 
     expect(props.onPolygonSelection).toHaveBeenCalledWith(null);
     expect(panState(props.setInteractionState)).toHaveLength(0);
+  });
+});
+
+describe('useAdvancedInteractions – right-click does not cancel the assignment mode', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('keeps the mode armed when the context menu is opened', () => {
+    // Right-click is how the polygon context menu is reached, and that menu
+    // carries "Remove from Soma N" — the counterpart to the gesture being
+    // armed. Dropping the mode there was silent: the menu opened fine, so
+    // nothing on screen said the mode had gone until the next click did
+    // nothing.
+    const props = makeProps();
+    const { result } = renderHook(() => useAdvancedInteractions(props));
+
+    act(() => result.current.handleMouseDown(rightClick()));
+
+    expect(props.setEditMode).not.toHaveBeenCalled();
+  });
+
+  it('still cancels a mode that HAS work in progress', () => {
+    // The branch exists to undo in-progress geometry, and that has to keep
+    // working — otherwise this fix has quietly disabled right-click-to-cancel
+    // for every other mode.
+    const props = makeProps({ editMode: EditMode.CreatePolygon });
+    const { result } = renderHook(() => useAdvancedInteractions(props));
+
+    act(() => result.current.handleMouseDown(rightClick()));
+
+    expect(props.setEditMode).toHaveBeenCalledWith(EditMode.View);
   });
 });
