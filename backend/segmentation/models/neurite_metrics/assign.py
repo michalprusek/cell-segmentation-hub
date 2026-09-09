@@ -123,7 +123,8 @@ def transition_cost(node: int, b_in: int, b_out: int, jt: dict, p: Params) -> fl
 
 # ------------------------------------------------------------------ somas
 def attach_somas(g: Graph, soma_inst: np.ndarray, p: Params,
-                 soma_ok: set[int] | None = None) -> dict[int, int]:
+                 soma_ok: set[int] | None = None,
+                 neurite_mask: np.ndarray | None = None) -> dict[int, int]:
     """node id -> soma id, for endpoint nodes lying on or beside a soma.
 
     The node is attached to the NEAREST allowed instance. The previous version
@@ -141,14 +142,76 @@ def attach_somas(g: Graph, soma_inst: np.ndarray, p: Params,
     credited to the cone. Excluded instances still occupy their pixels -- the
     neurite simply terminates there, which is what a growth cone is.
     """
-    r = max(1, int(round(p.attach_radius / g.um_per_px)))
+    # VENDOR EDIT (5 of 5) -- and the ONLY one that changes a result. The other
+    # four are environmental (paths, imports, device). A re-sync must decide
+    # about this one consciously; it is described in `__init__.py`.
+    #
+    # WHAT WAS WRONG. `attach_radius` (1.5 um) is documented as "node counted as
+    # touching a soma", but it was measured from the SKELETON NODE, and the
+    # skeleton is the medial axis -- its endpoint sits one local half-width
+    # inside the neurite by construction. Add the rasterisation seam (`semantic`
+    # gives soma priority on overlap, so the two masks are never adjacent, there
+    # is always >= 1 px of background between them) and the budget was mostly
+    # spent before the gap was measured at all. Worse, the budget is an INTEGER
+    # pixel radius, so at 0.65 um/px it is 2 px, not 2.31.
+    #
+    # Measured 2026-09-08 on production frame `neurite_practice_3.png`, 3
+    # neurites drawn 1 px from their cells: node->soma 2.24 / 2.83 / 3.00 px
+    # against local half-widths of 2.24 / 2.83 / 2.83 -- the distance IS the
+    # half-width, to two decimals. Nothing attached, `assigned_fraction` 0.0,
+    # 131.2 um of skeleton fully orphan. The user cannot draw their way out:
+    # drawing further into the cell only erodes the neurite and moves its
+    # skeleton back by the same amount.
+    #
+    # THE FIX IS TWO PARTS, AND ONLY THE SECOND IS A POLICY CHANGE.
+    #
+    # 1. Measure from the neurite's BOUNDARY, not from its skeleton: subtract
+    #    the local half-width (the exact distance transform AT the node -- not
+    #    `Branch.width_um / 2`, which is a median over the whole branch and
+    #    overshot by up to 2x on the frame above, 4.39 px against a true 2.24)
+    #    and the 1 px seam. This restores the documented meaning of
+    #    `attach_radius`; it is a bug fix, so it carries no direction test.
+    #
+    # 2. Allow a REAL gap of up to `D_gap` beyond that, for a filament the
+    #    segmentation broke off short of the cell -- but only for a leaf, and
+    #    only when its outward tangent points AT the soma, `theta_gap`. These
+    #    are not new constants: they are the same two `add_bridges` already uses
+    #    to close a neurite-neurite gap, and the asymmetry of gating one and not
+    #    the other was the defect. Without the direction test a thick neurite
+    #    merely passing a foreign cell would be adopted by it.
+    #
+    # Non-leaf nodes keep the original rule exactly. A junction has no single
+    # outward tangent, so there is nothing to gate it with, and it was not the
+    # broken case.
     H, W = soma_inst.shape
     allowed = None if soma_ok is None else np.array(sorted(soma_ok), soma_inst.dtype)
+    contact_px = p.attach_radius / g.um_per_px
+    gap_px = p.D_gap / g.um_per_px
+    cos_gap = np.cos(np.deg2rad(p.theta_gap))
+    # Distance from any pixel to the nearest neurite BACKGROUND pixel, i.e. the
+    # local half-width of the filament the node sits in. `None` keeps the old
+    # behaviour for a caller that has no mask to give.
+    half_width = (ndi.distance_transform_edt(neurite_mask)
+                  if neurite_mask is not None else None)
+    # 1 px of background always separates the two masks -- see above.
+    SEAM_PX = 1.0
+
     att = {}
     for n, c in g.nodes.items():
         y, x = int(round(c[0])), int(round(c[1]))
         if not (0 <= y < H and 0 <= x < W):
             continue
+        is_leaf = len(g.incident.get(n, ())) == 1
+        if half_width is None:
+            # No mask: the original rule, unchanged, down to the integer
+            # rounding of the radius.
+            inset = 0.0
+            r = max(1, int(round(contact_px)))
+        else:
+            inset = float(half_width[y, x])
+            # The window has to cover the widest rule that can fire here.
+            reach = contact_px + inset + SEAM_PX + (gap_px if is_leaf else 0.0)
+            r = max(1, int(np.ceil(reach)))
         y0, y1 = max(0, y - r), min(H, y + r + 1)
         x0, x1 = max(0, x - r), min(W, x + r + 1)
         win = soma_inst[y0:y1, x0:x1]
@@ -161,7 +224,32 @@ def attach_somas(g: Graph, soma_inst: np.ndarray, p: Params,
         yy, xx = np.nonzero(m)
         d2 = (yy + y0 - c[0]) ** 2 + (xx + x0 - c[1]) ** 2
         k = int(np.argmin(d2))
-        if d2[k] <= r * r:          # circular, not the square footprint's r*sqrt(2)
+        d = float(np.sqrt(d2[k]))
+
+        if half_width is None:
+            # circular, not the square footprint's r*sqrt(2)
+            if d2[k] <= r * r:
+                att[n] = int(win[yy[k], xx[k]])
+            continue
+
+        # How much true background lies between the two masks. Negative when
+        # the drawn shapes overlap and the seam is all that separates them.
+        boundary_gap = d - inset - SEAM_PX
+        if boundary_gap <= contact_px:
+            att[n] = int(win[yy[k], xx[k]])
+            continue
+        if not is_leaf or boundary_gap > gap_px:
+            continue
+        # Direction, exactly as `add_bridges` gates a neurite-neurite gap:
+        # `tangent` points INTO the branch, so the outward direction is -t, and
+        # it must look at the soma rather than merely lie near it.
+        t = tangent(g, n, g.incident[n][0], p.tangent_fit_len)
+        u = np.array([yy[k] + y0 - c[0], xx[k] + x0 - c[1]], float)
+        nu = float(np.linalg.norm(u))
+        if nu < 1e-9:
+            att[n] = int(win[yy[k], xx[k]])
+            continue
+        if float(np.dot(-t, u / nu)) > cos_gap:
             att[n] = int(win[yy[k], xx[k]])
     return att
 

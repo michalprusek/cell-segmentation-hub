@@ -902,27 +902,13 @@ const SegmentationEditor = () => {
         })
       );
     } catch (error) {
-      // The one failure the user can act on gets a translated sentence that
-      // names the remedy. Everything else falls through to the server's own
-      // message, which is the only thing that says WHICH input was wrong.
-      //
-      // Keyed on the CODE, not on the English text: matching a sentence would
-      // break the moment it is reworded, and silently — the user would be back
-      // to a raw technical string with no idea what to do, which is exactly
-      // what this replaces.
-      const code = (error as { response?: { data?: { code?: string } } })
-        ?.response?.data?.code;
-      if (code === 'NEURITE_PIXEL_SIZE_UNKNOWN') {
-        toast.error(String(t('segmentation.neurite.assignNeedsScale')));
-      } else {
-        toast.error(
-          // `String(t(key))` because this file's `t` can answer a string ARRAY
-          // (plural forms), which `getErrorMessage` does not accept — the same
-          // adaptation `ProjectDetail` makes at its second call site.
-          getErrorMessage(error, key => String(t(key))) ||
-            String(t('segmentation.neurite.assignFailed'))
-        );
-      }
+      toast.error(
+        // `String(t(key))` because this file's `t` can answer a string ARRAY
+        // (plural forms), which `getErrorMessage` does not accept — the same
+        // adaptation `ProjectDetail` makes at its second call site.
+        getErrorMessage(error, key => String(t(key))) ||
+          String(t('segmentation.neurite.assignFailed'))
+      );
     } finally {
       setIsAssigningNeurites(false);
     }

@@ -42,7 +42,11 @@ def analyse(neurite_mask, soma_inst, um_per_px, p: A.Params | None = None,
     p = p or A.Params()
     g, qc = build(neurite_mask, um_per_px, r_junction_merge=r_junction_merge,
                   spur_min_len=spur_min_len, spur_width_k=spur_width_k)
-    att = A.attach_somas(g, soma_inst, p, soma_ok=soma_ok)
+    # `neurite_mask` lets `attach_somas` measure from the filament's BOUNDARY
+    # instead of from its skeleton, which is one local half-width inside it.
+    # See the VENDOR EDIT note there.
+    att = A.attach_somas(g, soma_inst, p, soma_ok=soma_ok,
+                         neurite_mask=neurite_mask)
     qc.update(A.add_bridges(g, soma_inst, att, p, image=image))
     qc['soma_attachments'] = len(att)
 

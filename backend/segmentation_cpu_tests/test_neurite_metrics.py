@@ -476,3 +476,175 @@ class TestPolygonOwnership:
             resp.neurite_owners['stub_left']['soma_polygon_id']
             != resp.neurite_owners['stub_right']['soma_polygon_id']
         )
+
+
+# ---------------------------------------------------------------------------
+# Soma attachment: the vendored `attach_somas`, VENDOR EDIT (5 of 5).
+#
+# These four tests are here rather than in the research package because the
+# edit is ours. They are the reason it exists and the guard on it: the first
+# two pin the bug and its fix, the last two pin the price of the fix.
+# ---------------------------------------------------------------------------
+
+sg_mod = _load('_neurite_skeleton_graph', _VENDOR / 'skeleton_graph.py')
+assign_mod = _load('_neurite_assign', _VENDOR / 'assign.py')
+
+UM_PER_PX = 0.65  # production scale; `attach_radius` 1.5 um is 2.31 px here
+
+
+def _disc(mask_shape, cy, cx, r):
+    yy, xx = np.mgrid[0:mask_shape[0], 0:mask_shape[1]]
+    return (yy - cy) ** 2 + (xx - cx) ** 2 <= r * r
+
+
+def _capsule(mask_shape, p0, direction, length, half):
+    """A rod with hemispherical ends, so the skeleton endpoint and its local
+    half-width are the same for EVERY direction — which is what lets the
+    direction test below vary the angle and nothing else."""
+    yy, xx = np.mgrid[0:mask_shape[0], 0:mask_shape[1]]
+    d = np.asarray(direction, float)
+    d = d / np.linalg.norm(d)
+    v = np.stack([yy - p0[0], xx - p0[1]], -1)
+    t = np.clip((v @ d) / length, 0.0, 1.0)
+    foot = np.stack([p0[0] + t * d[0] * length, p0[1] + t * d[1] * length], -1)
+    return ((np.stack([yy, xx], -1) - foot) ** 2).sum(-1) <= half * half
+
+
+class TestSomaAttachment:
+    """`attach_radius` was measured from the wrong place."""
+
+    def _thick_neurite_beside_a_soma(self):
+        """A soma and an 8-px-thick neurite drawn ONE pixel apart.
+
+        That one pixel is not a drawing mistake and cannot be drawn away: the
+        semantic mask gives soma priority on overlap, so the two masks are
+        never adjacent. The skeleton is the medial axis, so its endpoint sits
+        ~4 px inside the neurite — nine-ish pixels from the soma, against a
+        2.31 px budget.
+        """
+        shape = (120, 200)
+        soma = np.zeros(shape, np.int32)
+        soma[40:80, 20:80] = 1
+        neurite = np.zeros(shape, bool)
+        neurite[56:64, 82:170] = True          # x=81 is background: the seam
+        return soma, neurite
+
+    def test_a_neurite_drawn_against_a_soma_attaches(self):
+        # `D_gap=0` switches the gap-bridging rule OFF, so this isolates the
+        # CONTACT rule. Without that the test is vacuous: at this thickness the
+        # uncorrected distance still lands inside D_gap, so gap-bridging
+        # rescues the attachment and the test passes with the inset correction
+        # deleted. Measured — the mutation survived until this line was added.
+        soma, neurite = self._thick_neurite_beside_a_soma()
+        g, _ = sg_mod.build(neurite, UM_PER_PX)
+        att = assign_mod.attach_somas(
+            g, soma, assign_mod.Params(D_gap=0.0), neurite_mask=neurite
+        )
+        assert att, (
+            'a neurite touching its cell was not attached — `attach_radius` is '
+            'being measured from the skeleton, which the medial axis places one '
+            'local half-width inside the filament'
+        )
+        assert set(att.values()) == {1}
+
+    def test_without_a_mask_the_original_radius_rule_is_unchanged(self):
+        """The other half of the same fixture, and the reason it discriminates.
+
+        Omitting `neurite_mask` must reproduce the pre-2026-09-09 behaviour
+        exactly — including failing on the frame above. A test that only
+        asserted the fix would pass just as well against a version that
+        attached everything to everything.
+        """
+        soma, neurite = self._thick_neurite_beside_a_soma()
+        g, _ = sg_mod.build(neurite, UM_PER_PX)
+        att = assign_mod.attach_somas(g, soma, assign_mod.Params(D_gap=0.0))
+        assert att == {}, (
+            'the mask-less path is meant to be the original rule verbatim; it '
+            'now attaches something the original could not reach'
+        )
+
+    def test_the_rasterisation_seam_is_allowed_for(self):
+        """The +1 px the two masks can never close.
+
+        `semantic` gives soma priority where the polygons overlap, so a neurite
+        drawn ONTO its cell still comes back as two masks with at least one
+        pixel of background between them. That pixel is not a real distance and
+        the contact rule adds it back.
+
+        This fixture is a knife edge on purpose — it is the only shape of test
+        that can pin a one-pixel term. The neurite sits so its skeleton
+        endpoint is 6 px from the soma with a 3 px half-width, i.e.
+        `d - inset` is exactly 3.00, which is above `attach_radius` (2.31 px
+        here) and below it plus the seam (3.31). Nothing here is floating-point
+        marginal: every number is an exact integer distance on a synthetic
+        raster. Drop the seam term and this is the test that goes red.
+        """
+        shape = (120, 200)
+        soma = np.zeros(shape, np.int32)
+        soma[40:80, 20:80] = 1
+        neurite = np.zeros(shape, bool)
+        neurite[56:64, 83:170] = True
+        g, _ = sg_mod.build(neurite, UM_PER_PX)
+        att = assign_mod.attach_somas(
+            g, soma, assign_mod.Params(D_gap=0.0), neurite_mask=neurite
+        )
+        assert att, (
+            'the one-pixel rasterisation seam is being charged as real '
+            'distance, so a neurite drawn onto its cell falls just outside '
+            'attach_radius'
+        )
+
+    def test_a_gap_is_crossed_only_when_the_neurite_points_at_the_soma(self):
+        """Same distance, same thickness — only the direction differs.
+
+        The capsule's end cap is a disc centred on a fixed point, so the
+        skeleton endpoint and its local half-width are identical for both
+        arms; the ONLY thing that changes is the outward tangent. Without this
+        gate a thick neurite merely passing a foreign cell would be adopted by
+        it.
+        """
+        shape = (400, 400)
+        centre, radius, half = (200.0, 200.0), 40.0, 3.0
+        soma = _disc(shape, *centre, radius).astype(np.int32)
+        end = np.array([centre[0], centre[1] + radius + 4.0 + half])
+        results = {}
+        for name, theta in (('towards', 20.0), ('across', 80.0)):
+            rad = np.deg2rad(theta)
+            outward = np.array([0.0, 1.0])       # +x, i.e. away from the soma
+            rot = np.array([[np.cos(rad), -np.sin(rad)],
+                            [np.sin(rad), np.cos(rad)]])
+            body = _capsule(shape, end, rot @ outward, 80.0, half)
+            neurite = body & (soma == 0)
+            g, _ = sg_mod.build(neurite, UM_PER_PX)
+            results[name] = assign_mod.attach_somas(
+                g, soma, assign_mod.Params(), neurite_mask=neurite
+            )
+        assert results['towards'], 'a neurite aimed at the cell was refused'
+        assert not results['across'], (
+            'a neurite running PAST the cell was adopted by it — the direction '
+            'gate is not firing, so `theta_gap` is decorative'
+        )
+
+    def test_a_gap_wider_than_D_gap_is_refused_even_pointing_straight_at_it(self):
+        """Direction is necessary, not sufficient. `D_gap` (3 um) still bounds
+        how much missing segmentation may be bridged, exactly as it bounds a
+        neurite-to-neurite gap in `add_bridges`."""
+        shape = (400, 400)
+        centre, radius, half = (200.0, 200.0), 40.0, 3.0
+        soma = _disc(shape, *centre, radius).astype(np.int32)
+        # 7 px, not 12: at 12 the soma falls outside the search window
+        # altogether and the WINDOW refuses it, not the bound — deleting the
+        # bound then changes nothing and the test is vacuous. Measured; the
+        # mutation survived at 12. At 7 the soma is inside the window (reach
+        # ~10.9 px, distance 10) and only `D_gap` stands between them.
+        far = np.array([centre[0], centre[1] + radius + 7.0 + half])
+        body = _capsule(shape, far, np.array([0.0, 1.0]), 80.0, half)
+        neurite = body & (soma == 0)
+        g, _ = sg_mod.build(neurite, UM_PER_PX)
+        att = assign_mod.attach_somas(
+            g, soma, assign_mod.Params(), neurite_mask=neurite
+        )
+        assert att == {}, (
+            'a 7 px break was bridged; D_gap is 3 um = 4.6 px at this scale, '
+            'so the distance bound has stopped working'
+        )

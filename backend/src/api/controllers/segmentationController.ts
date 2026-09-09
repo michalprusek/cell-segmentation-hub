@@ -567,26 +567,17 @@ class SegmentationController {
       ResponseHelper.success(res, result);
     } catch (error) {
       // 400 rather than 500: every failure this can produce is a statement
-      // about the INPUT — no pixel size, no soma polygons, a frame whose file
-      // is missing — and the message is the only thing that says which.
+      // about the INPUT — no soma polygons, a frame whose file is missing —
+      // and the message is the only thing that says which. There is no code to
+      // forward: the one failure that had a nameable remedy was a missing
+      // scale, and this path no longer needs one.
       const message =
         error instanceof Error ? error.message : 'Assignment failed';
-      const code =
-        error instanceof Error && typeof (error as { code?: string }).code === 'string'
-          ? (error as { code?: string }).code
-          : undefined;
       logger.warn(
         `Neurite assignment failed: ${message}`,
         'SegmentationController'
       );
-      // Carry the code so the editor can say what to DO about it. The message
-      // stays as the fallback for every other input failure, which has no
-      // single remedy to name.
-      ResponseHelper.error(
-        res,
-        code ? { code, message } : message,
-        400
-      );
+      ResponseHelper.error(res, message, 400);
     }
   };
 
