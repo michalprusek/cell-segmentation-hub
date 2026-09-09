@@ -802,4 +802,65 @@ describe('useProjectData', () => {
       expect(result.current.images).toHaveLength(200);
     });
   });
+
+  // `/project/:id` is not a keyed route, so React Router keeps ProjectDetail
+  // mounted when only the param changes and every piece of hook state survives
+  // the switch. For the folder that matters more than for the title: Back
+  // navigates on it, so a stale value carries the user into the folder of the
+  // project they just left.
+  describe('projectFolderId', () => {
+    const projectAt = (id: string, folderId: string | null) => ({
+      id,
+      name: id,
+      description: '',
+      created_at: '2023-01-01T00:00:00.000Z',
+      updated_at: '2023-01-01T00:00:00.000Z',
+      user_id: 'user-1',
+      folderId,
+    });
+    const noImages = { images: [], total: 0, page: 1, totalPages: 0 };
+
+    it('reports the folder the project is filed in', async () => {
+      vi.mocked(apiClient.getProject).mockResolvedValue(
+        projectAt('project-1', 'folder-7') as never
+      );
+      vi.mocked(apiClient.getProjectImagesWithThumbnails).mockResolvedValue(
+        noImages as never
+      );
+
+      const { result } = renderHook(
+        () => useProjectData('project-1', 'user-1'),
+        { wrapper }
+      );
+
+      await waitFor(() => expect(result.current.loading).toBe(false));
+      expect(result.current.projectFolderId).toBe('folder-7');
+    });
+
+    it('forgets the previous project’s folder while the next one loads', async () => {
+      vi.mocked(apiClient.getProjectImagesWithThumbnails).mockResolvedValue(
+        noImages as never
+      );
+      vi.mocked(apiClient.getProject).mockResolvedValue(
+        projectAt('project-1', 'folder-7') as never
+      );
+
+      const { result, rerender } = renderHook(
+        ({ id }: { id: string }) => useProjectData(id, 'user-1'),
+        { wrapper, initialProps: { id: 'project-1' } }
+      );
+      await waitFor(() =>
+        expect(result.current.projectFolderId).toBe('folder-7')
+      );
+
+      // The next project's fetch never settles, so the hook stays in exactly
+      // the window this is about: a new projectId with no answer yet.
+      vi.mocked(apiClient.getProject).mockImplementation(
+        () => new Promise(() => {}) as never
+      );
+      rerender({ id: 'project-2' });
+
+      expect(result.current.projectFolderId).toBeUndefined();
+    });
+  });
 });

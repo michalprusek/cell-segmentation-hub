@@ -58,6 +58,16 @@ export const useProjectData = (
   imagesRef.current = images;
 
   useEffect(() => {
+    // Forget the previous project's folder BEFORE fetching the next one.
+    // `/project/:id` is not keyed, so React Router keeps this component
+    // mounted when only the param changes and every piece of state survives
+    // the switch. A stale title is cosmetic for the second it lasts; a stale
+    // folder is not — Back would carry the user into the folder of the
+    // project they just left. `undefined` means "not known", which navigates
+    // to the dashboard root, so the worst case is the behaviour this feature
+    // replaced rather than a wrong destination.
+    setProjectFolderId(undefined);
+
     const fetchData = async () => {
       if (!projectId || !userId) {
         setLoading(false);
