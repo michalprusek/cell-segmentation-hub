@@ -5,10 +5,10 @@
   "_doNotEditByHand": true,
   "typescriptVersion": "5.9.3",
   "totals": {
-    "tsconfig.app.json": 376,
+    "tsconfig.app.json": 372,
     "tsconfig.node.json": 21,
-    "tsconfig.test.json": 1215,
-    "all": 1612
+    "tsconfig.test.json": 1211,
+    "all": 1604
   },
   "projects": {
     "tsconfig.app.json": {
@@ -37,7 +37,6 @@
       },
       "src/components/StatsOverview.tsx": {
         "TS2322: Type '{loading: boolean; title: string | string[]; value: string; description: string | string[]; icon: Element; key: number; }' is not assignable to type 'StatCardProps'.": 1,
-        "TS2353: Object literal may only specify known properties, and 'signal' does not exist in type '{page?: number | undefined; limit?: number | undefined; search?: string | undefined; folderId?: string | undefined; _t?: number | undefined; }'.": 1,
         "TS2554: Expected 0 arguments, but got 1.": 1,
         "TS2554: Expected 1-2 arguments, but got 3.": 1
       },
@@ -187,7 +186,6 @@
       "src/lib/api.ts": {
         "TS2322: Type '(null | {id: {}; points: any[]; type: {}; class: {}; parentIds: any[]; confidence: number | undefined; area: number | undefined; complete: boolean | undefined; })[]' is not assignable to type 'SegmentationPolygon[]'.": 1,
         "TS2322: Type '{}' is not assignable to type 'string'.": 5,
-        "TS2339: Property 'folderId' does not exist on type 'Project'.": 1,
         "TS2353: Object literal may only specify known properties, and 'type' does not exist in type 'Project'.": 1,
         "TS7005: Variable 'validPoints' implicitly has an 'any[]' type.": 1,
         "TS7034: Variable 'validPoints' implicitly has type 'any[]' in some locations where its type cannot be determined.": 1,
@@ -365,9 +363,8 @@
         "TS2322: Type '{children: (Element | string | string[])[]; variant: \"ghost\"; size: \"sm\"; onClick: () => void; \"aria-label\": string | string[]; className: string; }' is not assignable to type 'ButtonProps'.": 1
       },
       "src/pages/segmentation/hooks/useEnhancedSegmentationEditor.tsx": {
-        "TS2554: Expected 1-2 arguments, but got 4.": 2,
+        "TS2554: Expected 1-2 arguments, but got 4.": 1,
         "TS2554: Expected 1-2 arguments, but got 5.": 1,
-        "TS2554: Expected 1-2 arguments, but got 6.": 1,
         "TS7030: Not all code paths return a value.": 1
       },
       "src/pages/segmentation/hooks/usePolygonSelection.ts": {
@@ -544,7 +541,6 @@
       },
       "src/components/StatsOverview.tsx": {
         "TS2322: Type '{loading: boolean; title: string | string[]; value: string; description: string | string[]; icon: Element; key: number; }' is not assignable to type 'StatCardProps'.": 1,
-        "TS2353: Object literal may only specify known properties, and 'signal' does not exist in type '{page?: number | undefined; limit?: number | undefined; search?: string | undefined; folderId?: string | undefined; _t?: number | undefined; }'.": 1,
         "TS2554: Expected 0 arguments, but got 1.": 1,
         "TS2554: Expected 1-2 arguments, but got 3.": 1,
         "TS6307: File 'src/components/layout/index.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
@@ -981,7 +977,6 @@
         "TS6307: File 'src/lib/__tests__/helpers/apiClientTestKit.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
       },
       "src/lib/__tests__/api.test.ts": {
-        "TS2339: Property 'folderId' does not exist on type 'Project'.": 1,
         "TS2339: Property 'post' does not exist on type 'Mock<Procedure>'.": 2,
         "TS2339: Property 'type' does not exist on type 'Project'.": 1
       },
@@ -1005,6 +1000,9 @@
       },
       "src/lib/__tests__/exportStateManager.test.ts": {
         "TS6307: File 'src/lib/exportStateManager.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
+      },
+      "src/lib/__tests__/fetchAllProjects.test.ts": {
+        "TS6307: File 'src/lib/fetchAllProjects.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
       },
       "src/lib/__tests__/httpUtils.test.ts": {
         "TS6307: File 'src/lib/httpUtils.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
@@ -1071,7 +1069,6 @@
         "TS2322: Type '(null | {id: {}; points: never[]; type: {}; class: {}; parentIds: any[]; confidence: number | undefined; area: number | undefined; complete: boolean | undefined; })[]' is not assignable to type 'SegmentationPolygon[]'.": 1,
         "TS2322: Type '{ x: number; y: number; }[]' is not assignable to type 'never[]'.": 2,
         "TS2322: Type '{}' is not assignable to type 'string'.": 5,
-        "TS2339: Property 'folderId' does not exist on type 'Project'.": 1,
         "TS2353: Object literal may only specify known properties, and 'type' does not exist in type 'Project'.": 1,
         "TS6307: File 'src/lib/config.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
         "TS6307: File 'src/lib/constants.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
@@ -1544,9 +1541,8 @@
         "TS6307: File 'src/pages/segmentation/utils/polylineJoin.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
       },
       "src/pages/segmentation/hooks/useEnhancedSegmentationEditor.tsx": {
-        "TS2554: Expected 1-2 arguments, but got 4.": 2,
+        "TS2554: Expected 1-2 arguments, but got 4.": 1,
         "TS2554: Expected 1-2 arguments, but got 5.": 1,
-        "TS2554: Expected 1-2 arguments, but got 6.": 1,
         "TS6307: File 'src/pages/segmentation/hooks/useKeyboardShortcuts.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
         "TS6307: File 'src/pages/segmentation/hooks/usePolygonSlicing.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
         "TS7030: Not all code paths return a value.": 1
@@ -1587,6 +1583,9 @@
       },
       "src/pages/segmentation/utils/__tests__/transformSegmentationPolygons.test.ts": {
         "TS6307: File 'src/pages/segmentation/utils/transformSegmentationPolygons.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
+      },
+      "src/pages/segmentation/utils/assignmentClick.ts": {
+        "TS6307: File 'src/pages/segmentation/utils/neuriteSomaIds.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
       },
       "src/pages/segmentation/utils/metricCalculations.ts": {
         "TS6307: File 'src/lib/polygonGeometry.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
@@ -1784,9 +1783,6 @@
       },
       "tests/utils/api-mock-manager.ts": {
         "TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.": 1
-      },
-      "src/pages/segmentation/utils/assignmentClick.ts": {
-        "TS6307: File 'src/pages/segmentation/utils/neuriteSomaIds.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
       }
     }
   }

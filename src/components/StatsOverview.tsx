@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Microscope, Image, FileUp, HardDrive } from 'lucide-react';
 import apiClient from '@/lib/api';
+import { fetchAllProjects } from '@/lib/fetchAllProjects';
 import { useAuth, useLanguage } from '@/contexts/exports';
 import { getErrorMessage } from '@/types';
 import { StatsGrid } from '@/components/layout';
@@ -103,11 +104,25 @@ const StatsOverview = () => {
       if (!user) return;
 
       try {
-        // Get total projects count
-        const projectsResponse = await apiClient.getProjects({ signal });
+        // Every page. The count came from `total` and was therefore right,
+        // but the per-project statistics below iterate this list — so with
+        // the server's default of 10 the image totals were summed over the
+        // first ten projects only, while the project count beside them was
+        // correct. That consistency is what made it hard to notice.
+        //
+        // `signal` also moves out of the params object: `getProjects` spreads
+        // its argument into the axios QUERY STRING, so passing it there sent
+        // a literal `?signal=[object AbortSignal]` and aborted nothing. The
+        // walk takes a cancellation predicate instead, which stops it between
+        // pages for real.
+        const projects = await fetchAllProjects(
+          params => apiClient.getProjects(params),
+          {},
+          () => signal.aborted
+        );
         if (signal.aborted) return;
 
-        const projectsCount = projectsResponse.total || 0;
+        const projectsCount = projects.length;
 
         // Get statistics for all projects
         let totalImages = 0;
@@ -116,9 +131,6 @@ const StatsOverview = () => {
 
         const today = new Date();
         today.setHours(0, 0, 0, 0);
-
-        // Ensure projects array exists before mapping
-        const projects = projectsResponse.projects || [];
 
         // Fetch all project images in parallel
         const imagePromises = projects.map(async project => {

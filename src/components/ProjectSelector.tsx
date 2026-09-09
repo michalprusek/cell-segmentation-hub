@@ -7,6 +7,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import apiClient from '@/lib/api';
+import { fetchAllProjects } from '@/lib/fetchAllProjects';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/useAuth';
 import { useLanguage } from '@/contexts/useLanguage';
@@ -29,8 +30,14 @@ const ProjectSelector = ({ value, onChange }: ProjectSelectorProps) => {
       if (!user) return;
 
       try {
-        const response = await apiClient.getProjects();
-        setProjects(response.projects || []);
+        // Every page: `getProjects()` with no limit returns the server
+        // default of 10, so a user with more projects than that simply could
+        // not pick the rest out of this dropdown — the same truncation that
+        // was reported against the dashboard as "Disappearing projects?".
+        const allProjects = await fetchAllProjects(params =>
+          apiClient.getProjects(params)
+        );
+        setProjects(allProjects);
       } catch (error: unknown) {
         logger.error('Error fetching projects:', error);
         const errorMessage =
