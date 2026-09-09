@@ -102,7 +102,7 @@
     "@commitlint/cli": "^19.8.1",
     "@commitlint/config-conventional": "^19.8.1",
     "@eslint/js": "^9.39.5",
-    "@playwright/test": "^1.62.1",
+    "@playwright/test": "^1.63.0",
     "@tailwindcss/typography": "^0.5.20",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.3",
