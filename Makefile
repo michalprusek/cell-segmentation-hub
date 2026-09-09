@@ -286,10 +286,31 @@ test-ml:
 	@# HF_TOKEN is exported into the command's environment and passed by NAME.
 	@# Writing `-e HF_TOKEN="$$(grep ...)"` would expand the secret into the
 	@# docker argument list, where any user on the box can read it out of ps.
+	@#
+	@# `large_images.py` is mounted separately because the mount above HIDES it.
+	@# The image copies it flat onto PYTHONPATH from
+	@# `backend/src/services/video/pythonHelpers/` (ml.optimized.Dockerfile),
+	@# which is outside the tree we bind over /app -- and `api/main.py` imports
+	@# it at module scope, so `conftest.py` dies on collection and the ENTIRE
+	@# suite reports as one import error. It is the only such file: the image
+	@# has exactly three top-level .py and the other two are in this tree.
+	@#
+	@# That is not hypothetical. The COPY landed 2026-09-07 in #505 and this
+	@# target could not run for two days without anyone noticing, which is the
+	@# failure mode a test suite is least able to report about itself.
+	@#
+	@# It goes to /opt/helpers and NOT to /app/large_images.py: the target of a
+	@# bind mount has to exist, so docker would create it -- and since /app is
+	@# itself bind-mounted from the repo, that means an empty root-owned
+	@# `backend/segmentation/large_images.py` appearing in the working tree
+	@# every time the suite runs. Prepending the directory to PYTHONPATH gets
+	@# the same import with nothing written back.
 	@HF_TOKEN="$$(grep -E '^HF_TOKEN=' .env.production | cut -d= -f2-)" \
 	docker run --rm --gpus all --entrypoint sh \
 	  -v "$$PWD/backend/segmentation":/app -w /app \
 	  -v "$$PWD/backend/segmentation/.hf-cache":/home/app/.cache/huggingface \
+	  -v "$$PWD/backend/src/services/video/pythonHelpers/large_images.py":/opt/helpers/large_images.py:ro \
+	  -e PYTHONPATH=/opt/helpers:/app \
 	  -e HF_TOKEN \
 	  cell-segmentation-hub-ml:latest -c '\
 	    pip install -q -r requirements-test.txt && \
