@@ -107,8 +107,8 @@ export const useDashboardProjects = ({
         // limit alone would just move the cliff to 101.
         const ownedProjects: ApiProject[] = [];
         let pageToFetch = 1;
-        let totalPages = 1;
-        do {
+        let hasMorePages = true;
+        while (hasMorePages && pageToFetch <= MAX_PROJECT_PAGES) {
           const pageResponse = await apiClient.getProjects({
             _t: timestamp,
             page: pageToFetch,
@@ -119,9 +119,10 @@ export const useDashboardProjects = ({
           ownedProjects.push(...(pageResponse.projects || []));
           // A backend that omits `totalPages` must not spin forever here, so
           // an absent or nonsensical value ends the loop after this page.
-          totalPages = Number(pageResponse.totalPages) || 1;
+          const totalPages = Number(pageResponse.totalPages) || 1;
+          hasMorePages = pageToFetch < totalPages;
           pageToFetch += 1;
-        } while (pageToFetch <= totalPages && pageToFetch <= MAX_PROJECT_PAGES);
+        }
 
         let sharedResponse: unknown[] = [];
         if (folderId === undefined) {
