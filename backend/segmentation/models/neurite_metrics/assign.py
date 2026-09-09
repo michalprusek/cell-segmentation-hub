@@ -180,9 +180,13 @@ def attach_somas(g: Graph, soma_inst: np.ndarray, p: Params,
     #    the other was the defect. Without the direction test a thick neurite
     #    merely passing a foreign cell would be adopted by it.
     #
-    # Non-leaf nodes keep the original rule exactly. A junction has no single
-    # outward tangent, so there is nothing to gate it with, and it was not the
-    # broken case.
+    # Part 1 applies to EVERY node — the medial-axis inset is a property of the
+    # skeleton, not of a node's degree. Part 2 does not: only a leaf may bridge
+    # a real gap, because a junction has more than one incident branch and so
+    # no single outward tangent to gate it with.
+    #
+    # The original rule survives verbatim on one path only: a caller that
+    # passes no `neurite_mask` gets the integer circular radius, unchanged.
     H, W = soma_inst.shape
     allowed = None if soma_ok is None else np.array(sorted(soma_ok), soma_inst.dtype)
     contact_px = p.attach_radius / g.um_per_px
