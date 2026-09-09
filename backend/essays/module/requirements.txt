@@ -69,10 +69,11 @@ torch==2.6.0
 torchvision==0.21.0
 transformers==5.5.4
 # transformers 5.5.4 already demands `huggingface-hub >=1.5.0,<2.0`, so the old
-# `>=0.20` floor was three majors below anything installable. 1.29.0 is what the
+# `>=0.20` floor was three majors below anything installable. 1.30.0 is what the
 # ml image this worker is built FROM actually carries. Keep identical to
-# backend/segmentation/requirements.txt.
-huggingface_hub>=1.29.0
+# backend/segmentation/requirements.txt -- the `pins` CI job fails on any drift
+# between the two.
+huggingface_hub>=1.30.0
 
 # --- Numerics / classical CV (PySOAX postprocessing) ---
 numpy==1.26.4
