@@ -911,6 +911,30 @@ export const useAdvancedInteractions = ({
           case EditMode.DeletePolygon:
             handleDeletePolygonClick(imagePoint);
             break;
+          case EditMode.AssignNeurite:
+            // Empty canvas is the one thing this mode does NOT act on — the
+            // gesture is neurite-then-soma, both of them shapes — so it is
+            // free for navigation, and a neurite whose soma is off-screen was
+            // otherwise unreachable without leaving the mode.
+            //
+            // Deliberately NOT `handleViewModeClick`, which Move borrows
+            // above: that deselects first when something is selected, and here
+            // the selection IS the armed half of the gesture. Panning to bring
+            // the target soma into view would throw the neurite away and the
+            // next click would silently start over. Pan and keep it; Escape
+            // and the toolbar still cancel.
+            //
+            // Guarded on a genuine miss for the same reason Move is:
+            // `CanvasPolygon` binds no mousedown and stops propagation only on
+            // CLICK, so a press ON a shape reaches this handler too.
+            if (!target?.dataset?.polygonId) {
+              setInteractionState({
+                ...interactionState,
+                isPanning: true,
+                panStart: { x: e.clientX, y: e.clientY },
+              });
+            }
+            break;
         }
       }
     },
