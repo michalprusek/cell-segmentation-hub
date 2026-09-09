@@ -129,6 +129,9 @@ export interface SegmentationEditorLayoutProps {
   // Polygon handlers (from usePolygonHandlers + local panel handlers)
   setHoveredPolygonId: PolygonHandlers['setHoveredPolygonId'];
   hoveredPolygonId: PolygonHandlers['hoveredPolygonId'];
+  /** The soma an open "remove from Soma N" entry points at, or null. */
+  highlightedSomaId: string | null;
+  setHighlightedSomaId: (somaId: string | null) => void;
   handleTogglePolygonVisibility: PolygonHandlers['handleTogglePolygonVisibility'];
   handleDeletePolygonFromPanel: PolygonHandlers['handleDeletePolygonFromPanel'];
   handleSelectPolygon: PolygonHandlers['handleSelectPolygon'];
@@ -255,6 +258,8 @@ const SegmentationEditorLayout: React.FC<SegmentationEditorLayoutProps> = ({
   frameHiddenIds,
   setHoveredPolygonId,
   hoveredPolygonId,
+  highlightedSomaId,
+  setHighlightedSomaId,
   handleTogglePolygonVisibility,
   handleDeletePolygonFromPanel,
   handleDeletePolygonFromFrame,
@@ -489,6 +494,7 @@ const SegmentationEditorLayout: React.FC<SegmentationEditorLayoutProps> = ({
                           isZooming={editor.isZooming}
                           isUndoRedoInProgress={editor.isUndoRedoInProgress}
                           isHovered={polygon.id === hoveredPolygonId}
+                          isSomaHighlighted={polygon.id === highlightedSomaId}
                           editMode={editor.editMode}
                           onSelectPolygon={handleCanvasSelect}
                           isMultiSelected={selectedPolygonIds.has(polygon.id)}
@@ -604,6 +610,12 @@ const SegmentationEditorLayout: React.FC<SegmentationEditorLayoutProps> = ({
                           currentMtType={polygon.mtType}
                           onDeleteVertex={handleDeleteVertexFromContextMenu}
                           onHover={setHoveredPolygonId}
+                          // The SAME state the canvas uses for its own hover:
+                          // a soma id IS a polygon id, so pointing at
+                          // "Remove from Soma 3" lights that soma up exactly
+                          // as putting the cursor on it would. No second
+                          // highlight mechanism to keep in step.
+                          onHighlightSoma={setHighlightedSomaId}
                           // Drives sperm-vs-microtubule context-menu
                           // gating inside PolygonContextMenu — sperm
                           // items appear only on sperm projects, the

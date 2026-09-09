@@ -21,6 +21,10 @@ import {
   Plus,
 } from 'lucide-react';
 import { useLanguage } from '@/contexts/useLanguage';
+// The same hash the canvas paints a soma with. Imported rather than passed in
+// so the swatch and the shape cannot disagree — there is no palette to keep in
+// step, only one pure function of the id.
+import { colorFromInstanceId } from '../../utils/instanceColors';
 import { isMicrotubuleProject, type ProjectType } from '@/types';
 import type { MTTypeLabel } from '@/lib/api';
 import MtTypeLabelDialog from './MtTypeLabelDialog';
@@ -73,6 +77,9 @@ interface PolygonContextMenuProps {
    *  neurite in a neurite project that has at least one assignment; the menu
    *  offers one "remove" entry per soma. */
   assignedSomas?: ReadonlyArray<{ id: string; label: string }>;
+  /** Light up one soma on the canvas while its removal entry is under the
+   *  cursor, and clear it on the way out. `null` means "nothing highlighted". */
+  onHighlightSoma?: (somaId: string | null) => void;
   /** Remove ONE soma from this neurite's assignment. */
   onRemoveSoma?: (somaId: string) => void;
   onChangePartClass?: (partClass: 'head' | 'midpiece' | 'tail') => void;
@@ -118,6 +125,7 @@ const PolygonContextMenu = ({
   isPolyline = false,
   projectType,
   assignedSomas,
+  onHighlightSoma,
   onRemoveSoma,
   onChangePartClass,
   onChangeInstanceId,
@@ -216,10 +224,39 @@ const PolygonContextMenu = ({
               {(assignedSomas ?? []).map(soma => (
                 <ContextMenuItem
                   key={`unassign-${soma.id}`}
-                  onClick={() => onRemoveSoma(soma.id)}
+                  onClick={() => {
+                    // Before the removal, not after: `onRemoveSoma` closes the
+                    // menu, and an unmount fires no mouseleave — so without
+                    // this the soma stays lit until some later menu happens to
+                    // clear it.
+                    onHighlightSoma?.(null);
+                    onRemoveSoma(soma.id);
+                  }}
+                  // Highlight the soma this entry would detach, so a neurite
+                  // shared between two cells can be told apart without
+                  // guessing which "Soma 3" is which. Cleared on the way out,
+                  // and on click — the menu closes without a mouseleave, and
+                  // a highlight left behind would outlive its own menu.
+                  onMouseEnter={() => onHighlightSoma?.(soma.id)}
+                  onMouseLeave={() => onHighlightSoma?.(null)}
+                  onFocus={() => onHighlightSoma?.(soma.id)}
+                  onBlur={() => onHighlightSoma?.(null)}
                   className="cursor-pointer"
                 >
                   <Unlink className="mr-2 h-4 w-4" />
+                  {/* The soma's own colour, from the same hash the canvas
+                      paints it with — not a palette kept in step by hand, so
+                      the swatch cannot drift from the shape. */}
+                  <span
+                    // `aria-hidden` because the label beside it already names
+                    // the soma; the testid because the Unlink icon above is
+                    // also aria-hidden and a selector on that alone finds the
+                    // icon first.
+                    aria-hidden="true"
+                    data-testid="soma-swatch"
+                    className="mr-2 h-3 w-3 shrink-0 rounded-full border border-black/20"
+                    style={{ backgroundColor: colorFromInstanceId(soma.id) }}
+                  />
                   <span>
                     {t('contextMenu.removeSomaAssignment', {
                       soma: soma.label,

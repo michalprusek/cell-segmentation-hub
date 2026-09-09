@@ -40,6 +40,14 @@ interface CanvasPolygonProps {
   somaLabels?: ReadonlyMap<string, string>;
   /** Remove one soma from this neurite's assignment. */
   onRemoveSoma?: (polygonId: string, somaId: string) => void;
+  /** Light up one soma on the canvas while its removal entry is hovered. */
+  onHighlightSoma?: (somaId: string | null) => void;
+  /** This polygon is the soma a neurite's open "remove from Soma N" entry
+   *  points at. A state of its own rather than a reuse of `isHovered`: the
+   *  ordinary hover is a 1.3x stroke, measured at 2.19 -> 2.85 px, which is
+   *  accurate and almost invisible — and widening the shared one would restyle
+   *  hovering on every closed shape in every project type. */
+  isSomaHighlighted?: boolean;
   /** `additive` (Shift+click) toggles this polygon in the multi-selection
    *  instead of replacing the single selection. */
   onSelectPolygon?: (id: string, additive?: boolean) => void;
@@ -99,6 +107,11 @@ interface CanvasPolygonProps {
   ) => Promise<MTTypeLabel | null>;
 }
 
+/** Inline so it beats `.polygon-selected`'s CSS filter — see `pathStyle`. */
+const SOMA_HIGHLIGHT_STYLE: React.CSSProperties = {
+  filter: 'url(#soma-highlight)',
+};
+
 const CanvasPolygon = React.memo(
   ({
     polygon,
@@ -113,6 +126,8 @@ const CanvasPolygon = React.memo(
     colorBySoma = false,
     somaLabels,
     onRemoveSoma,
+    onHighlightSoma,
+    isSomaHighlighted = false,
     onSelectPolygon,
     isMultiSelected = false,
     multiSelectCount = 0,
@@ -385,31 +400,51 @@ const CanvasPolygon = React.memo(
       ? isHovered
         ? 2.5
         : 1.5
-      : isHovered
-        ? 1.3
-        : 1;
+      : isSomaHighlighted
+        ? // Pointed at from a menu the user is reading, so it has to be found
+          // at a glance and it lasts only as long as the cursor stays on the
+          // entry. Bigger than the 2.5 a hovered polyline gets, because a
+          // closed shape starts from 1 rather than 1.5.
+          3
+        : isHovered
+          ? 1.3
+          : 1;
 
     // Compute SVG filter for glow effects.
     //
-    // CAVEAT — this only paints on a hovered, *unselected* polyline. The same
-    // `isEffectivelySelected` that makes the two branches below non-empty also
-    // puts `.polygon-selected` on the path, and that rule's CSS
-    // `filter: drop-shadow(...)` beats a `filter` presentation attribute (a
-    // presentation attribute loses to any CSS declaration, whatever its
-    // specificity). So on every selected path — closed or open, internal or
-    // external — the drop-shadow wins and the url(#…) below is inert. The
-    // red/blue split has therefore never reached the screen: selection has
-    // always glowed the one colour `--polygon-selected-glow` names in
-    // `src/index.css`. That is where to change it, not here.
-    // Emitted ONLY where it actually paints: a hovered polyline that is not
-    // selected. Every selected shape carries `.polygon-selected`, whose CSS
-    // drop-shadow beats a `filter` attribute, so a url(#…) there is inert —
-    // which is why the red/blue split never reached the screen. Keeping the
-    // attribute for those cases just implied a behaviour that did not exist.
+    // CAVEAT — a `filter` presentation ATTRIBUTE loses to any CSS declaration,
+    // whatever its specificity, and every selected shape carries
+    // `.polygon-selected`, whose `filter: drop-shadow(...)` therefore wins. So
+    // `blue-glow` is emitted only where it actually paints: a hovered polyline
+    // that is NOT selected. That is also why the old red/blue selection split
+    // never once reached the screen — selection has always glowed the single
+    // colour `--polygon-selected-glow` names in `src/index.css`, and that is
+    // where to change it, not here.
     const pathFilter =
       isPolyline && isHovered && !isEffectivelySelected
         ? 'url(#blue-glow)'
         : '';
+
+    // The soma highlight is the one case that must survive selection, so it
+    // goes through an inline STYLE rather than the attribute above: the menu
+    // entry names one specific soma, and a selected one answering with the
+    // shared blue drop-shadow instead of its own colour is exactly the
+    // question the swatch was added to settle. Inline style beats the class
+    // rule (which sets no `!important`), so the halo paints either way; on
+    // mouseleave the selection glow returns. The 3x stroke was never at risk —
+    // `.polygon-selected` sets `filter` and nothing else.
+    // Merged into ONE `style` prop rather than a second one on the element:
+    // duplicate JSX attributes are a TS error, and esbuild silently keeps the
+    // last — so the tests passed while `tsc` caught it. The two concerns are
+    // independent (a core part's fill, a highlighted soma's halo) and a
+    // microcapsule core is never a soma, so the spread is belt-and-braces.
+    const coreStyle: React.CSSProperties | undefined =
+      !isPolyline && polygon.partClass === 'core'
+        ? { fill: 'rgba(34, 197, 94, 0.25)', stroke: '#22c55e' }
+        : undefined;
+    const pathStyle = isSomaHighlighted
+      ? { ...coreStyle, ...SOMA_HIGHLIGHT_STYLE }
+      : coreStyle;
 
     // Memoized click handlers
     // The somas this neurite belongs to, named for the context menu. Empty for
@@ -560,6 +595,7 @@ const CanvasPolygon = React.memo(
         isPolyline={isPolyline}
         projectType={projectType}
         assignedSomas={assignedSomas}
+        onHighlightSoma={onHighlightSoma}
         onRemoveSoma={
           onRemoveSoma && assignedSomas.length > 0
             ? somaId => onRemoveSoma(id, somaId)
@@ -640,11 +676,6 @@ const CanvasPolygon = React.memo(
           {/* Polygon/Polyline path - render even if path is empty for testing */}
           <path
             d={pathString || 'M0,0'}
-            style={
-              !isPolyline && polygon.partClass === 'core'
-                ? { fill: 'rgba(34, 197, 94, 0.25)', stroke: '#22c55e' }
-                : undefined
-            }
             className={cn(
               'polygon-path transition-colors',
               // The visible path is what the pointer actually meets — for a
@@ -682,6 +713,7 @@ const CanvasPolygon = React.memo(
             onClick={handleClick}
             onDoubleClick={handleDoubleClick}
             filter={pathFilter}
+            style={pathStyle}
             vectorEffect="non-scaling-stroke"
             pointerEvents={isPolyline ? 'stroke' : 'all'}
             // A polygon's own path is its contour AND its interior; a
@@ -903,6 +935,11 @@ const CanvasPolygon = React.memo(
       prevProps.onEditPolygon === nextProps.onEditPolygon &&
       prevProps.onDeleteVertex === nextProps.onDeleteVertex &&
       prevProps.onHover === nextProps.onHover &&
+      // A memoized canvas polygon re-renders only on a prop it compares; a new
+      // callback that is never compared would be captured stale for the life
+      // of the component. See CLAUDE.md failure #5.
+      prevProps.onHighlightSoma === nextProps.onHighlightSoma &&
+      prevProps.isSomaHighlighted === nextProps.isSomaHighlighted &&
       // editMode flips between View / EditVertices / Slice / AddPoints /
       // CreatePolygon / CreatePolyline / DeletePolygon and changes which
       // interactions the polygon should accept. Skipping it caused the

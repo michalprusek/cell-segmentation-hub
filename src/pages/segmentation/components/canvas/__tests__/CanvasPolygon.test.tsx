@@ -319,6 +319,75 @@ describe('CanvasPolygon', () => {
   // sets, and the polyline endpoint markers in one shot — and it fails if
   // `isEffectivelySelected` is reverted to `isSelected` in ANY of the eight
   // colour branches, not just the two a hand-picked example would exercise.
+  describe('Highlighting the soma a removal menu entry points at', () => {
+    const pathOf = (props: Record<string, unknown>) => {
+      const { container, unmount } = render(
+        <svg width="800" height="600" viewBox="0 0 800 600">
+          <CanvasPolygon {...defaultProps} {...props} />
+        </svg>
+      );
+      const path = container.querySelector(
+        'path.polygon-path'
+      ) as SVGPathElement | null;
+      const read = {
+        styleFilter: path?.style.filter ?? '',
+        styleFill: path?.style.fill ?? '',
+        attrFilter: path?.getAttribute('filter') ?? '',
+        strokeWidth: Number(path?.getAttribute('stroke-width') ?? 0),
+      };
+      unmount();
+      return read;
+    };
+
+    it('does nothing to a polygon that is not the highlighted one', () => {
+      const off = pathOf({ isSomaHighlighted: false });
+      expect(off.styleFilter).toBe('');
+      expect(off.attrFilter).toBe('');
+    });
+
+    it('paints the halo and widens the stroke while highlighted', () => {
+      const off = pathOf({ isSomaHighlighted: false });
+      const on = pathOf({ isSomaHighlighted: true });
+
+      expect(on.styleFilter).toContain('soma-highlight');
+      expect(on.strokeWidth).toBeGreaterThan(off.strokeWidth);
+    });
+
+    it("still carries a microcapsule core's own fill, which shares the prop", () => {
+      // The halo and the core fill live on ONE `style` prop — a second JSX
+      // attribute of the same name is a TS error and esbuild keeps only the
+      // last, so this is the case a careless merge would drop. Nothing else
+      // covered the core's inline style; the branch sweep below asserts its
+      // stroke COLOUR, which comes from `pathColor` and is a different thing.
+      const core = pathOf({
+        polygon: { ...mockPolygon, partClass: 'core' },
+      });
+      expect(core.styleFill).toBe('rgba(34, 197, 94, 0.25)');
+
+      // And it survives being highlighted at the same time.
+      const both = pathOf({
+        polygon: { ...mockPolygon, partClass: 'core' },
+        isSomaHighlighted: true,
+      });
+      expect(both.styleFill).toBe('rgba(34, 197, 94, 0.25)');
+      expect(both.styleFilter).toContain('soma-highlight');
+    });
+
+    it('keeps the halo on a SELECTED soma, through an inline style', () => {
+      // The reason the filter is not a presentation attribute: a selected
+      // shape carries `.polygon-selected`, whose CSS `filter` beats an
+      // attribute whatever its specificity — so the soma would answer the
+      // menu entry with the shared blue drop-shadow instead of its own
+      // colour, which is the one thing the swatch exists to settle. jsdom
+      // applies no stylesheet, so the assertion is that the value rides on
+      // `style` (which wins in a browser) rather than on the attribute.
+      const on = pathOf({ isSomaHighlighted: true, isSelected: true });
+
+      expect(on.styleFilter).toContain('soma-highlight');
+      expect(on.attrFilter).not.toContain('soma-highlight');
+    });
+  });
+
   describe('Multi-selection styling parity with single selection', () => {
     const renderOnce = (props: Record<string, unknown>) => {
       const { container, unmount } = render(

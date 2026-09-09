@@ -136,11 +136,31 @@ updates:
       #                       notification -- it cannot even be installed to be
       #                       evaluated -- so it is ignored outright rather
       #                       than left to open. See #402 / #466.
+      #  ml_dtypes            0.5.4 is the last release installable here, behind
+      #                       the same wall as opencv. Measured 2026-09-09
+      #                       against the pin: 0.6.0 declares `numpy>=2.0.0`
+      #                       outright, so installing it beside numpy==1.26.4
+      #                       is ResolutionImpossible, and there is no
+      #                       intermediate release to land on. It arrives as
+      #                       onnx's transitive and is pinned explicitly
+      #                       because that pin is what holds numpy at 1.26.4
+      #                       in the first place -- see the ORDER OF PINS note
+      #                       in backend/segmentation/requirements.txt.
+      #
+      #                       Ignored outright rather than left to open, for
+      #                       opencv's reason: a PR that cannot even be
+      #                       installed to be evaluated is a treadmill, not a
+      #                       notification. 0.5.4 -> 0.6.0 is a MINOR, so the
+      #                       blanket major rule below never caught it; #507
+      #                       was the first. Blocked until numpy moves, which
+      #                       is blocked until torch moves.
       #  numpy                1.26.4 is what the pinned torch was built against.
       - dependency-name: torch
       - dependency-name: torchvision
       - dependency-name: numpy
       - dependency-name: opencv-python-headless
+      - dependency-name: ml_dtypes
+      - dependency-name: ml-dtypes
       - dependency-name: transformers
         update-types:
           - version-update:semver-minor
