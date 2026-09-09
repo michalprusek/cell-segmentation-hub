@@ -402,4 +402,60 @@ describe('areKeysAllAborted', () => {
     });
     expect(result.current.areKeysAllAborted(['a'])).toBe(false);
   });
+
+  describe('callback identity across renders', () => {
+    // WHY A FRESH ARRAY. Every other test in this describe closes over the
+    // hoisted `operationKeys` const above, which is stable by construction —
+    // and that is exactly why none of them caught this. The production call
+    // site passes an ARRAY LITERAL inline
+    // (`useCoordinatedAbortController(['main-loading', 'prefetch',
+    // 'websocket-reload'], 'SegmentationEditor')`), a new object on every
+    // render.
+    //
+    // Measured 2026-09-09 in production: `abortAllOperations` therefore
+    // changed identity on every render, so `SegmentationEditor`'s
+    // image-change effect — which names it — re-ran on every render and fired
+    // its CLEANUP. Clicking "assign neurites" set a loading flag; the
+    // re-render's cleanup aborted the reload the click had just started,
+    // before it issued its GET. The POST succeeded, the toast said "3
+    // assigned", and the canvas never changed.
+
+    it('keeps abortAllOperations stable when the caller passes a new array literal', () => {
+      const { result, rerender } = renderHook(() =>
+        // A new array every render, exactly like the editor's call site.
+        useCoordinatedAbortController(
+          ['main-loading', 'prefetch', 'websocket-reload'],
+          'test'
+        )
+      );
+
+      const first = result.current.abortAllOperations;
+      rerender();
+      rerender();
+
+      expect(result.current.abortAllOperations).toBe(first);
+    });
+
+    it('still rebuilds them when the KEYS actually change', () => {
+      // The other half of the pair. Pinning identity by ignoring the argument
+      // would satisfy the test above and leave the hook aborting the wrong
+      // operations for the rest of the component's life.
+      const { result, rerender } = renderHook(
+        ({ keys }: { keys: string[] }) =>
+          useCoordinatedAbortController(keys, 'test'),
+        { initialProps: { keys: ['a', 'b'] } }
+      );
+
+      const first = result.current.abortAllOperations;
+      rerender({ keys: ['a', 'c'] });
+
+      expect(result.current.abortAllOperations).not.toBe(first);
+
+      const controller = result.current.getController('c');
+      act(() => {
+        result.current.abortAllOperations();
+      });
+      expect(controller.signal.aborted).toBe(true);
+    });
+  });
 });
