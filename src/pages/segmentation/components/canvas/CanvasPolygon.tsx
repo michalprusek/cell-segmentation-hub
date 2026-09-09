@@ -40,6 +40,14 @@ interface CanvasPolygonProps {
   somaLabels?: ReadonlyMap<string, string>;
   /** Remove one soma from this neurite's assignment. */
   onRemoveSoma?: (polygonId: string, somaId: string) => void;
+  /** Light up one soma on the canvas while its removal entry is hovered. */
+  onHighlightSoma?: (somaId: string | null) => void;
+  /** This polygon is the soma a neurite's open "remove from Soma N" entry
+   *  points at. A state of its own rather than a reuse of `isHovered`: the
+   *  ordinary hover is a 1.3x stroke, measured at 2.19 -> 2.85 px, which is
+   *  accurate and almost invisible — and widening the shared one would restyle
+   *  hovering on every closed shape in every project type. */
+  isSomaHighlighted?: boolean;
   /** `additive` (Shift+click) toggles this polygon in the multi-selection
    *  instead of replacing the single selection. */
   onSelectPolygon?: (id: string, additive?: boolean) => void;
@@ -113,6 +121,8 @@ const CanvasPolygon = React.memo(
     colorBySoma = false,
     somaLabels,
     onRemoveSoma,
+    onHighlightSoma,
+    isSomaHighlighted = false,
     onSelectPolygon,
     isMultiSelected = false,
     multiSelectCount = 0,
@@ -385,9 +395,15 @@ const CanvasPolygon = React.memo(
       ? isHovered
         ? 2.5
         : 1.5
-      : isHovered
-        ? 1.3
-        : 1;
+      : isSomaHighlighted
+        ? // Pointed at from a menu the user is reading, so it has to be found
+          // at a glance and it lasts only as long as the cursor stays on the
+          // entry. Bigger than the 2.5 a hovered polyline gets, because a
+          // closed shape starts from 1 rather than 1.5.
+          3
+        : isHovered
+          ? 1.3
+          : 1;
 
     // Compute SVG filter for glow effects.
     //
@@ -406,8 +422,10 @@ const CanvasPolygon = React.memo(
     // drop-shadow beats a `filter` attribute, so a url(#…) there is inert —
     // which is why the red/blue split never reached the screen. Keeping the
     // attribute for those cases just implied a behaviour that did not exist.
-    const pathFilter =
-      isPolyline && isHovered && !isEffectivelySelected
+    const pathFilter = isSomaHighlighted
+      ? // Its own colour, not the fixed blue — see `CanvasSvgFilters`.
+        'url(#soma-highlight)'
+      : isPolyline && isHovered && !isEffectivelySelected
         ? 'url(#blue-glow)'
         : '';
 
@@ -560,6 +578,7 @@ const CanvasPolygon = React.memo(
         isPolyline={isPolyline}
         projectType={projectType}
         assignedSomas={assignedSomas}
+        onHighlightSoma={onHighlightSoma}
         onRemoveSoma={
           onRemoveSoma && assignedSomas.length > 0
             ? somaId => onRemoveSoma(id, somaId)
@@ -903,6 +922,11 @@ const CanvasPolygon = React.memo(
       prevProps.onEditPolygon === nextProps.onEditPolygon &&
       prevProps.onDeleteVertex === nextProps.onDeleteVertex &&
       prevProps.onHover === nextProps.onHover &&
+      // A memoized canvas polygon re-renders only on a prop it compares; a new
+      // callback that is never compared would be captured stale for the life
+      // of the component. See CLAUDE.md failure #5.
+      prevProps.onHighlightSoma === nextProps.onHighlightSoma &&
+      prevProps.isSomaHighlighted === nextProps.isSomaHighlighted &&
       // editMode flips between View / EditVertices / Slice / AddPoints /
       // CreatePolygon / CreatePolyline / DeletePolygon and changes which
       // interactions the polygon should accept. Skipping it caused the

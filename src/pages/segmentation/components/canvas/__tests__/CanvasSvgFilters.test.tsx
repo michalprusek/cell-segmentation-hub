@@ -12,9 +12,28 @@
  */
 
 import React from 'react';
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render } from '@testing-library/react';
 import CanvasSvgFilters from '../CanvasSvgFilters';
+
+/**
+ * The ids CanvasPolygon actually names, read from its SOURCE.
+ *
+ * It used to be a hand-written array here, which made the "closed set"
+ * assertion below a snapshot of the filter list rather than the invariant it
+ * claims: adding a filter AND its reference still failed, because the list had
+ * to be edited by hand as well. Reading the source makes the test true — and
+ * the failure it can now produce is the real one, a filter defined and never
+ * named.
+ */
+function filtersReferencedByCanvasPolygon(): string[] {
+  const here = dirname(fileURLToPath(import.meta.url));
+  const src = readFileSync(join(here, '..', 'CanvasPolygon.tsx'), 'utf8');
+  return [...src.matchAll(/url\(#([\w-]+)\)/g)].map(m => m[1]);
+}
 
 describe('CanvasSvgFilters', () => {
   beforeEach(() => {
@@ -39,6 +58,11 @@ describe('CanvasSvgFilters', () => {
       expect(container.querySelector('filter#blue-glow')).not.toBeNull();
     });
 
+    it('renders filter with id "soma-highlight"', () => {
+      const { container } = renderInSvg();
+      expect(container.querySelector('filter#soma-highlight')).not.toBeNull();
+    });
+
     // Deliberately one-directional: every filter defined here must be named by
     // CanvasPolygon's `pathFilter`, because a definition nothing references is
     // dead weight. It does NOT assert the reverse, so a filter can always be
@@ -51,8 +75,9 @@ describe('CanvasSvgFilters', () => {
       const ids = Array.from(container.querySelectorAll('filter')).map(f =>
         f.getAttribute('id')
       );
-      const referenced = ['blue-glow'];
-      expect(ids.every(id => referenced.includes(id!))).toBe(true);
+      const referenced = filtersReferencedByCanvasPolygon();
+      expect(referenced.length).toBeGreaterThan(0); // the regex still matches
+      expect(ids.filter(id => !referenced.includes(id!))).toEqual([]);
     });
   });
 
@@ -65,8 +90,13 @@ describe('CanvasSvgFilters', () => {
       const { container } = renderInSvg();
       const defs = container.querySelector('defs');
       expect(defs).not.toBeNull();
-      // The one surviving filter lives inside the single defs
-      expect(defs!.querySelectorAll('filter')).toHaveLength(1);
+      // Every filter lives inside the single defs — the count is asserted
+      // against what the component renders rather than a number kept by hand,
+      // which is the same trap the closed-set test above fell into.
+      expect(defs!.querySelectorAll('filter')).toHaveLength(
+        container.querySelectorAll('filter').length
+      );
+      expect(defs!.querySelectorAll('filter').length).toBeGreaterThan(0);
     });
   });
 

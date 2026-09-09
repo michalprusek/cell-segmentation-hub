@@ -881,6 +881,15 @@ const SegmentationEditor = () => {
     }
   }, [editor.editMode, projectType, handleSetNeuriteColorMode]);
 
+  // The soma a neurite's open "remove from Soma N" entry points at, lit up
+  // while the cursor rests on that entry. Deliberately NOT `hoveredPolygonId`:
+  // the ordinary hover is a 1.3x stroke — accurate and nearly invisible —
+  // and widening that would restyle hovering on every closed shape in every
+  // project type. This state exists for the length of one menu.
+  const [highlightedSomaId, setHighlightedSomaId] = useState<string | null>(
+    null
+  );
+
   const [isAssigningNeurites, setIsAssigningNeurites] = useState(false);
   const handleAssignNeurites = useCallback(async () => {
     if (!imageId) return;
@@ -2033,6 +2042,8 @@ const SegmentationEditor = () => {
         frameHiddenIds={frameHiddenIds}
         setHoveredPolygonId={setHoveredPolygonId}
         hoveredPolygonId={hoveredPolygonId}
+        highlightedSomaId={highlightedSomaId}
+        setHighlightedSomaId={setHighlightedSomaId}
         handleTogglePolygonVisibility={handleTogglePolygonVisibility}
         handleDeletePolygonFromPanel={handleRequestDeleteFromPanel}
         handleSelectPolygon={handleSelectPolygon}

@@ -27,6 +27,7 @@ import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { colorFromInstanceId } from '../../../utils/instanceColors';
 import PolygonContextMenu from '../PolygonContextMenu';
 
 // ── mock Radix context-menu (same pattern as VertexContextMenu.e2e.test.tsx)
@@ -64,20 +65,24 @@ vi.mock('@/components/ui/context-menu', () => ({
     children: React.ReactNode;
     className?: string;
   }) => <div data-testid="ctx-menu-content">{children}</div>,
+  // `...rest` is load-bearing, not tidiness. This stub used to name exactly
+  // three props and silently drop the others, so a handler the real Radix item
+  // forwards to the DOM — `onMouseEnter`, `onFocus` — reached nothing here and
+  // a test of it failed against working code. A mock that is narrower than the
+  // thing it stands in for tests the mock.
   ContextMenuItem: ({
     children,
-    onClick,
     className,
+    ...rest
   }: {
     children: React.ReactNode;
-    onClick?: () => void;
     className?: string;
-  }) => (
+  } & React.HTMLAttributes<HTMLDivElement>) => (
     <div
       data-testid="ctx-menu-item"
       role="menuitem"
-      onClick={onClick}
       className={className}
+      {...rest}
     >
       {children}
     </div>
@@ -241,6 +246,99 @@ describe('PolygonContextMenu', () => {
   });
 
   // ── standard callbacks ────────────────────────────────────────────────────
+
+  // Requested 2026-09-09: "when I have 'remove from soma X' in the menu I want
+  // the corresponding soma to light up on hover, and give the menu entries
+  // colours matching how that soma is coloured".
+  describe('soma removal entries', () => {
+    const SOMAS = [
+      { id: 'polygon_5', label: 'Soma 1' },
+      { id: 'polygon_6', label: 'Soma 2' },
+    ];
+    const withSomas = (extra = {}) =>
+      render(
+        <PolygonContextMenu
+          {...DEFAULT_PROPS}
+          isPolyline={false}
+          assignedSomas={SOMAS}
+          onRemoveSoma={vi.fn()}
+          {...extra}
+        />
+      );
+
+    /** Both entries render the same TEXT — the `t` mock above answers the key,
+     *  and the soma name only reaches the real string through interpolation —
+     *  so they are addressed by order, which is assignment order. */
+    const removalEntries = () =>
+      getMenuItems().filter(el =>
+        el.textContent?.includes('contextMenu.removeSomaAssignment')
+      );
+
+    it('renders one entry per assigned soma', () => {
+      withSomas();
+      expect(removalEntries()).toHaveLength(2);
+    });
+
+    it('highlights the soma an entry would detach, and clears it on leave', async () => {
+      const user = userEvent.setup();
+      const onHighlightSoma = vi.fn();
+      withSomas({ onHighlightSoma });
+
+      await user.hover(removalEntries()[0]);
+      expect(onHighlightSoma).toHaveBeenLastCalledWith('polygon_5');
+
+      await user.unhover(removalEntries()[0]);
+      expect(onHighlightSoma).toHaveBeenLastCalledWith(null);
+    });
+
+    it('highlights the SECOND soma from the second entry', async () => {
+      // The pair that stops the test above from passing against a component
+      // that always announces the first assignment — which is the whole
+      // reason the feature exists, since a shared neurite's two entries are
+      // otherwise indistinguishable.
+      const user = userEvent.setup();
+      const onHighlightSoma = vi.fn();
+      withSomas({ onHighlightSoma });
+
+      await user.hover(removalEntries()[1]);
+      expect(onHighlightSoma).toHaveBeenLastCalledWith('polygon_6');
+    });
+
+    /** jsdom rewrites an `hsl()` inline style to `rgb()` on read, so the two
+     *  sides are put through the same normalisation rather than compared as
+     *  strings — otherwise the test fails on notation while the colour is
+     *  right. */
+    const asRenderedColour = (css: string) => {
+      const probe = document.createElement('span');
+      probe.style.backgroundColor = css;
+      return probe.style.backgroundColor;
+    };
+
+    it('gives each entry the colour its soma is painted with', () => {
+      withSomas();
+      const entries = removalEntries();
+      SOMAS.forEach((soma, i) => {
+        const swatch = entries[i].querySelector('[data-testid="soma-swatch"]');
+        expect(swatch, `no swatch on ${soma.label}`).toBeTruthy();
+        expect((swatch as HTMLElement).style.backgroundColor).toBe(
+          asRenderedColour(colorFromInstanceId(soma.id))
+        );
+      });
+    });
+
+    it('paints the two swatches differently', () => {
+      // The assertion above would also pass against a helper that answered one
+      // colour for everything — which is the bug the x137 hue stride fixed in
+      // #522, when four somas came back a degree apart.
+      withSomas();
+      const colours = removalEntries().map(
+        e =>
+          (e.querySelector('[data-testid="soma-swatch"]') as HTMLElement).style
+            .backgroundColor
+      );
+      expect(colours[0]).not.toBe(colours[1]);
+    });
+  });
 
   describe('Edit and Slice callbacks', () => {
     it('calls onEdit when Edit item is clicked', async () => {
