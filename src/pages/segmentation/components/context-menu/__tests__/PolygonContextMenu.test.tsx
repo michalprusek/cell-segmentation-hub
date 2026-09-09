@@ -304,6 +304,29 @@ describe('PolygonContextMenu', () => {
       expect(onHighlightSoma).toHaveBeenLastCalledWith('polygon_6');
     });
 
+    it('clears the highlight when the entry is CLICKED, not just left', async () => {
+      // The click path closes the menu, and an unmount fires no mouseleave, so
+      // the hover handlers above cannot cover this: without an explicit clear
+      // the detached soma stays lit on the canvas until some later menu
+      // happens to reset it.
+      const user = userEvent.setup();
+      const onHighlightSoma = vi.fn();
+      const onRemoveSoma = vi.fn();
+      withSomas({ onHighlightSoma, onRemoveSoma });
+
+      const entry = removalEntries()[0];
+      await user.hover(entry);
+      expect(onHighlightSoma).toHaveBeenLastCalledWith('polygon_5');
+
+      await user.click(entry);
+      expect(onRemoveSoma).toHaveBeenCalledWith('polygon_5');
+      expect(onHighlightSoma).toHaveBeenLastCalledWith(null);
+      // Cleared BEFORE the removal — `onRemoveSoma` is what closes the menu.
+      expect(onHighlightSoma.mock.invocationCallOrder.at(-1)).toBeLessThan(
+        onRemoveSoma.mock.invocationCallOrder.at(-1)!
+      );
+    });
+
     /** jsdom rewrites an `hsl()` inline style to `rgb()` on read, so the two
      *  sides are put through the same normalisation rather than compared as
      *  strings — otherwise the test fails on notation while the colour is

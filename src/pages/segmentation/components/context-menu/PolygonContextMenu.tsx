@@ -224,7 +224,14 @@ const PolygonContextMenu = ({
               {(assignedSomas ?? []).map(soma => (
                 <ContextMenuItem
                   key={`unassign-${soma.id}`}
-                  onClick={() => onRemoveSoma(soma.id)}
+                  onClick={() => {
+                    // Before the removal, not after: `onRemoveSoma` closes the
+                    // menu, and an unmount fires no mouseleave — so without
+                    // this the soma stays lit until some later menu happens to
+                    // clear it.
+                    onHighlightSoma?.(null);
+                    onRemoveSoma(soma.id);
+                  }}
                   // Highlight the soma this entry would detach, so a neurite
                   // shared between two cells can be told apart without
                   // guessing which "Soma 3" is which. Cleared on the way out,
