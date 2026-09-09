@@ -123,6 +123,91 @@ describe('useDashboardProjects', () => {
       expect(result.current.projects[0].id).toBe('p1');
     });
 
+    it('fetches EVERY page, not just the first', async () => {
+      // Reported 2026-09-09 as "Disappearing projects?" by a user with 36
+      // projects, none of which had ever been deleted. `/projects` defaults to
+      // 10 per page and this hook sent no limit, so it showed ten — with no
+      // pagination control and nothing saying the rest existed. The default
+      // sort is `createdAt desc`, so creating a project pushed the oldest off
+      // the page and one that was visible yesterday was gone today.
+      // Answered BY PAGE NUMBER rather than as a `mockResolvedValueOnce`
+      // sequence: the hook runs its fetch more than once on mount and the
+      // first run can be aborted part-way, so a positional sequence gets
+      // consumed out of order and the test fails on its own fixture.
+      const PAGES: Record<number, string[]> = {
+        1: ['p1', 'p2'],
+        2: ['p3', 'p4'],
+        3: ['p5'],
+      };
+      // `user_id` is spelled out because `mockImplementation` is checked
+      // against the real return type, unlike the partial `mockResolvedValue`
+      // literals elsewhere in this file.
+      const pageOf = (n: number) =>
+        (PAGES[n] ?? []).map(id => ({ ...makeProject(id), user_id: 'u1' }));
+      vi.mocked(apiClient.getProjects).mockImplementation(async params => ({
+        projects: pageOf(params?.page ?? 1),
+        total: 5,
+        page: params?.page ?? 1,
+        totalPages: 3,
+      }));
+
+      const { result } = renderDashboard();
+      await waitFor(() => expect(result.current.loading).toBe(false));
+
+      // Asserted on the PAGE NUMBERS asked for, not the call count: the hook
+      // runs its fetch more than once on mount, so a raw count measures that
+      // instead of the paging.
+      const pagesAsked = vi
+        .mocked(apiClient.getProjects)
+        .mock.calls.map(c => c[0]?.page);
+      expect(pagesAsked).toEqual(expect.arrayContaining([1, 2, 3]));
+      expect(result.current.projects.map(p => p.id)).toEqual([
+        'p1',
+        'p2',
+        'p3',
+        'p4',
+        'p5',
+      ]);
+    });
+
+    it('asks for the API maximum per page, so one page covers most users', async () => {
+      // Not cosmetic: at the old implicit 10 this would be 4 round trips for
+      // 36 projects, and the loop below only bounds the damage rather than
+      // removing it.
+      vi.mocked(apiClient.getProjects).mockResolvedValue({
+        projects: [{ ...makeProject('p1'), user_id: 'u1' }],
+        total: 1,
+        page: 1,
+        totalPages: 1,
+      });
+
+      const { result } = renderDashboard();
+      await waitFor(() => expect(result.current.loading).toBe(false));
+
+      expect(vi.mocked(apiClient.getProjects)).toHaveBeenCalledWith(
+        expect.objectContaining({ page: 1, limit: 100 })
+      );
+    });
+
+    it('stops after one page when the backend omits totalPages', async () => {
+      // A missing or nonsensical `totalPages` must end the loop, not spin it,
+      // so `totalPages` is cast away rather than supplied.
+      vi.mocked(apiClient.getProjects).mockResolvedValue({
+        projects: [{ ...makeProject('p1'), user_id: 'u1' }],
+        total: 1,
+        page: 1,
+      } as unknown as Awaited<ReturnType<typeof apiClient.getProjects>>);
+
+      const { result } = renderDashboard();
+      await waitFor(() => expect(result.current.loading).toBe(false));
+
+      const pagesAsked = vi
+        .mocked(apiClient.getProjects)
+        .mock.calls.map(c => c[0]?.page);
+      expect(pagesAsked.every(n => n === 1)).toBe(true);
+      expect(result.current.projects).toHaveLength(1);
+    });
+
     it('does not fetch when userId is undefined', async () => {
       const { result } = renderDashboard({
         ...defaultOptions,
