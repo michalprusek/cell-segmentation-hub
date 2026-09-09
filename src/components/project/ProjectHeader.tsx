@@ -55,6 +55,10 @@ interface ProjectHeaderProps {
   /** Omitted when the viewer may not change it (shared projects are
    *  read-only for the annotator), which also hides the control. */
   onPixelSizeChange?: (pixelSizeUm: number | null) => void | Promise<void>;
+  /** The folder THIS viewer filed the project in; `null` = dashboard root,
+   *  `undefined` = not loaded yet. Back returns there instead of always to
+   *  the root. */
+  folderId?: string | null;
 }
 
 /** Accepted range, mirroring the export modal's (`AdvancedExportDialog.tsx`):
@@ -75,6 +79,7 @@ const ProjectHeader = ({
   onVerifiedChange,
   pixelSizeUm,
   onPixelSizeChange,
+  folderId,
 }: ProjectHeaderProps) => {
   // Inline rename, following the same gesture the microtubule panel uses:
   // Enter or blur commits, Escape cancels.
@@ -151,7 +156,23 @@ const ProjectHeader = ({
               variant="ghost"
               size="sm"
               className="min-w-[44px] h-10 sm:h-9"
-              onClick={() => navigate('/dashboard')}
+              onClick={() =>
+                // Back to the folder the project is IN, not to the root.
+                // Requested 2026-09-09: "it always transfers me to the home
+                // page, and not back into the folder that I was just in".
+                //
+                // Derived from the project rather than from history, so it is
+                // also right after a reload or a pasted link — where there is
+                // no previous page to go back to — and because the folder is
+                // per-viewer, a shared project returns each person to their
+                // own filing. `undefined` (not loaded) falls through to the
+                // root, which is the old behaviour and never a wrong folder.
+                navigate(
+                  folderId
+                    ? `/dashboard?folder=${encodeURIComponent(folderId)}`
+                    : '/dashboard'
+                )
+              }
             >
               <ArrowLeft className="mr-1 sm:mr-2 h-4 w-4" />
               <span className="hidden sm:inline">{t('common.back')}</span>

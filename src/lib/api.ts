@@ -74,6 +74,11 @@ export interface Project {
   // proliferation recorded in CLAUDE.md; not unified here because that touches
   // every consumer.
   pixelSizeUm?: number | null;
+  // Per-user folder placement: a folder id, or null for the caller's root.
+  // Declared here as well as in `@/types` for exactly the reason above —
+  // `mapProjectFields` fills it, and `useProjectData` reads it off THIS
+  // interface.
+  folderId?: string | null;
 }
 
 /**

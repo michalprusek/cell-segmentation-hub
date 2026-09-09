@@ -249,6 +249,11 @@ describe('ProjectService', () => {
         _count: {
           images: 0,
         },
+        // Prisma returns the include as an array; empty means "not filed in
+        // any folder". Written out rather than omitted because the service
+        // reads `folderItems[0]` and a missing key is not a shape Prisma can
+        // produce — a fixture that omits it tests a world that cannot happen.
+        folderItems: [],
       };
 
       mockHasProjectAccess.mockResolvedValueOnce({
@@ -259,7 +264,7 @@ describe('ProjectService', () => {
 
       const result = await projectService.getProjectById(projectId, userId);
 
-      expect(result).toEqual(mockProject);
+      expect(result).toEqual({ ...mockProject, folderId: null });
       expect(prismaMock.project.findUnique).toHaveBeenCalledWith({
         where: {
           id: projectId,
@@ -269,6 +274,82 @@ describe('ProjectService', () => {
           _count: expect.any(Object),
         }),
       });
+    });
+
+    // The project page's Back button needs to know where the project lives.
+    // `getUserProjects` has always answered this; the single-project read did
+    // not, so the page could only ever return the user to the dashboard root.
+    // Requested 2026-09-09: "it always transfers me to the home page, and not
+    // back into the folder that I was just in".
+    const projectIn = (folderItems: Array<{ folderId: string }>) => ({
+      id: 'project-id',
+      title: 'Test Project',
+      userId: 'owner-id',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      user: { id: 'owner-id', email: 'owner@example.com' },
+      images: [],
+      _count: { images: 0 },
+      folderItems,
+    });
+
+    it('reports the folder the caller filed the project in', async () => {
+      mockHasProjectAccess.mockResolvedValueOnce({
+        hasAccess: true,
+        isOwner: true,
+      });
+      prismaMock.project.findUnique.mockResolvedValueOnce(
+        projectIn([{ folderId: 'folder-7' }]) as any
+      );
+
+      const result = await projectService.getProjectById(
+        'project-id',
+        'viewer-id'
+      );
+
+      expect(result?.folderId).toBe('folder-7');
+    });
+
+    it('scopes that lookup to the CALLER, not to the project', async () => {
+      // A shared project can be filed in a different folder by every person it
+      // reaches — `project_folder_items` is unique on (userId, projectId), not
+      // on projectId. Without the `where` the query would return whichever row
+      // Prisma happened to order first and send one user to another user's
+      // folder, which they cannot even open.
+      mockHasProjectAccess.mockResolvedValueOnce({
+        hasAccess: true,
+        isOwner: false,
+      });
+      prismaMock.project.findUnique.mockResolvedValueOnce(
+        projectIn([{ folderId: 'folder-7' }]) as any
+      );
+
+      await projectService.getProjectById('project-id', 'viewer-id');
+
+      const include = prismaMock.project.findUnique.mock.calls.at(-1)?.[0]
+        ?.include;
+      expect(include?.folderItems).toEqual({
+        where: { userId: 'viewer-id' },
+        select: { folderId: true },
+        take: 1,
+      });
+    });
+
+    it('answers null for a project the caller has not filed anywhere', async () => {
+      // Distinct from "unknown": null means the dashboard ROOT, and the Back
+      // button navigates there rather than to a folder that does not exist.
+      mockHasProjectAccess.mockResolvedValueOnce({
+        hasAccess: true,
+        isOwner: true,
+      });
+      prismaMock.project.findUnique.mockResolvedValueOnce(projectIn([]) as any);
+
+      const result = await projectService.getProjectById(
+        'project-id',
+        'viewer-id'
+      );
+
+      expect(result?.folderId).toBeNull();
     });
 
     it('should return null if project not found', async () => {

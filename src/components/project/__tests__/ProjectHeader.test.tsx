@@ -75,6 +75,53 @@ describe('ProjectHeader', () => {
     await user.click(backButton);
     expect(mockNavigate).toHaveBeenCalledWith('/dashboard');
   });
+
+  // Requested 2026-09-09: "When I am in a project and press the back button
+  // ... it always transfers me to the home page, and not back into the folder
+  // that I was just in (where my project is)."
+  describe('back button destination', () => {
+    const clickBack = async (
+      props: Partial<React.ComponentProps<typeof ProjectHeader>> = {}
+    ) => {
+      const user = userEvent.setup();
+      render(
+        <ProjectHeader
+          projectTitle="Project"
+          imagesCount={0}
+          loading={false}
+          {...props}
+        />
+      );
+      await user.click(screen.getByRole('button'));
+    };
+
+    it('returns to the folder the project is filed in', async () => {
+      await clickBack({ folderId: 'folder-7' });
+      expect(mockNavigate).toHaveBeenCalledWith('/dashboard?folder=folder-7');
+    });
+
+    it('returns to the root for a project that is not in a folder', async () => {
+      // `null` is a measurement, not an absence: the project IS at the root.
+      await clickBack({ folderId: null });
+      expect(mockNavigate).toHaveBeenCalledWith('/dashboard');
+    });
+
+    it('returns to the root while the project is still loading', async () => {
+      // `undefined` means "not known yet". Guessing a folder here would send
+      // the user somewhere they never were; the root is where they used to
+      // land anyway, so an early click is no worse than before.
+      await clickBack({ folderId: undefined });
+      expect(mockNavigate).toHaveBeenCalledWith('/dashboard');
+    });
+
+    it('escapes the folder id it puts in the query string', async () => {
+      // Folder ids are uuids today, so this cannot bite yet — which is exactly
+      // when it is cheap to get right. An unescaped `&` would silently drop
+      // the rest of the parameter and land the user at the root.
+      await clickBack({ folderId: 'a&b c' });
+      expect(mockNavigate).toHaveBeenCalledWith('/dashboard?folder=a%26b%20c');
+    });
+  });
 });
 
 describe('ProjectHeader — renaming', () => {
