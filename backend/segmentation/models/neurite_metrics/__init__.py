@@ -14,7 +14,10 @@ training scripts, figure generators and the StarDist hybrid instancer stay in
 the research package because nothing in the service calls them.
 
 The vendored files are kept byte-identical to the research package apart from
-four edits, each marked `VENDOR EDIT (n of 4)` in place:
+five edits, each marked `VENDOR EDIT (n of 5)` in place. The first four are
+environmental; the fifth is the only one that changes a RESULT, so a re-sync
+with the research package has to decide about it consciously rather than take
+whichever side looks newer:
 
   1. `soma_instances.py` -- `gt_io` moved into `main()`; it hardcodes a laptop
      checkout path and only the research CLI uses it.
@@ -25,6 +28,15 @@ four edits, each marked `VENDOR EDIT (n of 4)` in place:
   4. `soma_predict.py`   -- CUDA added to the device ladder; the research code
      chose between `mps` and `cpu` and would have pinned the 3-seed ResNet-18
      ensemble to this server's CPU.
+  5. `assign.py`         -- ALGORITHMIC. `attach_somas` measured `attach_radius`
+     from the skeleton node, which the medial axis places one local half-width
+     inside the filament, and the rasterisation always leaves >= 1 px of
+     background between the neurite and soma masks. On a real frame the whole
+     1.5 um budget was spent on those two before the gap was measured and NO
+     neurite attached. It now measures from the filament's boundary, and allows
+     a genuine `D_gap` break only for a leaf whose outward tangent points at the
+     soma -- the same two constants `add_bridges` already uses for a
+     neurite-neurite gap.
 
 Keeping the rest identical is deliberate: re-syncing with the research package
 is then a file-by-file diff rather than a merge. **Do not refactor these files.**

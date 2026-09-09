@@ -1,4 +1,4 @@
-import { useRef, useCallback, useEffect } from 'react';
+import { useRef, useCallback, useEffect, useMemo } from 'react';
 import { logger } from '@/lib/logger';
 
 /**
@@ -151,6 +151,26 @@ export function useCoordinatedAbortController(
   operationKeys: string[],
   debugKey?: string
 ) {
+  // Pinned by CONTENT, not by identity. Callers pass an array literal, which is
+  // a new object on every render, and every callback below lists
+  // `operationKeys` in its dependencies — so `abortAllOperations` used to
+  // change identity on every render too. Any effect that named it then re-ran
+  // on every render and fired its CLEANUP, which is how a freshly issued fetch
+  // got aborted by an unrelated `setState`.
+  //
+  // Measured 2026-09-09 in production: clicking "assign neurites" set a
+  // loading flag, the re-render tore down `SegmentationEditor`'s
+  // image-change effect, its cleanup called `cleanupReloadOperations()`, and
+  // the reload that the click had just started was cancelled before it issued
+  // its GET. The POST succeeded, the toast said "3 assigned", and the canvas
+  // never changed — indistinguishable from a broken feature.
+  const keySignature = operationKeys.join('\u0000');
+  const stableKeys = useMemo(
+    () => operationKeys,
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- content, not identity
+    [keySignature]
+  );
+
   const {
     getController,
     getSignal,
@@ -165,27 +185,27 @@ export function useCoordinatedAbortController(
    * Use this when switching context (e.g., changing images)
    */
   const abortAllOperations = useCallback(() => {
-    operationKeys.forEach(key => abort(key));
-  }, [operationKeys, abort]);
+    stableKeys.forEach(key => abort(key));
+  }, [stableKeys, abort]);
 
   /**
    * Get signals for all operations
    */
   const getAllSignals = useCallback(() => {
     const signals: Record<string, AbortSignal> = {};
-    operationKeys.forEach(key => {
+    stableKeys.forEach(key => {
       signals[key] = getSignal(key);
     });
     return signals;
-  }, [operationKeys, getSignal]);
+  }, [stableKeys, getSignal]);
 
   /**
    * Check if all operations are aborted.
    * Returns false when no controllers have been created yet (nothing has started).
    */
   const areAllAborted = useCallback(() => {
-    return areKeysAllAborted(operationKeys);
-  }, [areKeysAllAborted, operationKeys]);
+    return areKeysAllAborted(stableKeys);
+  }, [areKeysAllAborted, stableKeys]);
 
   return {
     getController,

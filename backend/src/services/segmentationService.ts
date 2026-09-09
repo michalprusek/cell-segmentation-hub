@@ -6,6 +6,21 @@ import { Agent as HttpAgent } from 'http';
 import { Agent as HttpsAgent } from 'https';
 import { logger } from '../utils/logger';
 import { computeNeuriteFrame } from './export/neuriteMetricsExporter';
+
+/**
+ * The scale the neurite ASSIGNMENT falls back to when a project has none.
+ *
+ * Any positive number in this range gives the same answer — measured
+ * 2026-09-09 across 0.10 - 2.00 um/px on two real production frames, the
+ * complete neurite -> soma mapping was byte-identical at every one. 0.65 is
+ * simply the value production frames actually carry, so a log line quoting it
+ * reads plausibly next to a calibrated run.
+ *
+ * It exists ONLY so the pipeline has a number to multiply by; nothing this
+ * path returns is in micrometres. The export does not use it and still refuses
+ * an uncalibrated frame, because its staging thresholds are physical.
+ */
+const NOMINAL_SCALE_FOR_ASSIGNMENT_UM = 0.65;
 import { config } from '../utils/config';
 import type { JobStatus } from '../types';
 import { type KnownModelId } from '../constants/modelRegistry';
@@ -3052,16 +3067,13 @@ export class SegmentationService {
     // measured 2026-09-07, all 10 857 production rows have it null — so the
     // project's value is what actually arrives; the image's is kept ahead of it
     // so a calibrated ND2 can win in future without a second change here.
-    //
-    // No fallback below that, deliberately. The soma splitting this drives is
-    // h-maxima at 2 um depth in the distance transform, so a guessed scale does
-    // not give approximate somas, it gives confidently wrong ones. Without a
-    // scale `computeNeuriteFrame` skips the frame and the reason reaches the
-    // user, which is the honest outcome.
     const projectScale = await this.prisma.project.findUnique({
       where: { id: image.projectId },
       select: { pixelSizeUm: true },
     });
+
+    const configuredScale =
+      image.pixelSizeUm ?? projectScale?.pixelSizeUm ?? null;
 
     const segmentation = await this.prisma.segmentation.findUnique({
       where: { imageId },
@@ -3078,11 +3090,57 @@ export class SegmentationService {
         name: image.name,
         width: image.width,
         height: image.height,
-        pixelSizeUm: image.pixelSizeUm ?? projectScale?.pixelSizeUm ?? null,
+        // ASSIGNMENT RUNS WITHOUT A CALIBRATION, and that is a measurement, not
+        // a shortcut. Which soma owns which neurite is decided by the skeleton
+        // graph: the attachment reach is dominated by the filament's own
+        // half-width in PIXELS, and `polygon_ownership` picks the majority
+        // owner by cable length, an argmax that a uniform rescale cannot move.
+        // Measured 2026-09-09 over a 20x range of scale (0.10 - 2.00 um/px) on
+        // two real frames: the complete neurite -> soma mapping came back
+        // BYTE-IDENTICAL at every scale, 3/3 and 20/20 owners throughout.
+        //
+        // It was not always so. Before the `attach_somas` fix of the same day
+        // the same sweep swung 3 -> 0 and 21 -> 11 attachments, because
+        // `attach_radius` was an integer pixel radius derived from the scale
+        // and the skeleton endpoint sat one half-width behind the filament's
+        // edge. That is what made a scale load-bearing here, and it is fixed.
+        //
+        // The EXPORT still refuses an uncalibrated frame, and must: its staging
+        // rules are physical ("at least 2 um", "2x the soma diameter") and a
+        // guessed scale there gives confidently wrong stages, not approximate
+        // ones. This path reads `neurite_owners` and nothing else.
+        //
+        // `> 0`, not `??`: a stored 0 would satisfy the nullish coalesce and
+        // then fail `computeNeuriteFrame`'s own positivity guard, putting back
+        // the failure this removes. No production row holds one today (checked
+        // 2026-09-09: 259 projects null, 1 positive, none zero or negative) and
+        // this keeps it that way by construction.
+        pixelSizeUm:
+          configuredScale && configuredScale > 0
+            ? configuredScale
+            : NOMINAL_SCALE_FOR_ASSIGNMENT_UM,
         originalPath: image.originalPath,
         segmentation: { polygons: segmentation.polygons },
       },
-      { formats: [], classify: options.classify },
+      // THE SOMA CLASSIFIER DOES NOT GET A VETO HERE, and that is the point
+      // of this line. It exists for somas the pipeline DERIVED from a mask,
+      // where about half the instances turn out to be growth cones or
+      // fragments and must not act as a source for a neurite. The polygons on
+      // this path are not derived: they are the ones the user drew and
+      // labelled `soma` in the editor, and a model overruling that label is
+      // wrong — silently so, because the editor keeps painting the polygon as
+      // a soma while it can no longer own anything.
+      //
+      // Measured 2026-09-09 on production frame `neurite_practice_3.png`: the
+      // classifier rejected 2 of the user's 3 somas at p_not_soma 0.992 and
+      // 0.999, dropping the assignment from 3 neurites to 2 with nothing on
+      // screen to explain the missing one. Its verdict still ships in the
+      // export, as the `soma_neuronal` and `p_not_soma` COLUMNS, where it is
+      // visible and can be argued with.
+      //
+      // `?? false` rather than a hard false: the API still honours an explicit
+      // `classify: true` from a caller that wants it.
+      { formats: [], classify: options.classify ?? false },
       skipped
     );
     if (!result) {
@@ -3090,18 +3148,13 @@ export class SegmentationService {
       // wrong — a missing pixel size reads very differently from a frame with
       // no soma polygons.
       const reason = skipped[0]?.reason;
-      // A missing pixel size is the one failure the USER can fix, and it is by
-      // far the commonest — so it travels as a code the editor can translate
-      // into "set the project scale" rather than as an English sentence about
-      // micrometres. Reported twice by the same user on 2026-09-08, who read
-      // the raw message and could not tell what to do with it.
-      const err = new Error(
-        reason ?? 'Could not compute the neurite assignment'
-      ) as Error & { code?: string };
-      if (reason && /pixel size unknown/i.test(reason)) {
-        err.code = 'NEURITE_PIXEL_SIZE_UNKNOWN';
-      }
-      throw err;
+      // The missing-pixel-size code that used to be attached here is gone with
+      // the guard that produced it: this path now always supplies a scale, so
+      // `computeNeuriteFrame` cannot skip for that reason and a message about
+      // it could never be shown. The remaining reasons — no soma polygons,
+      // unreadable JSON, unknown dimensions — have no single remedy to name,
+      // so the server's own sentence is all there is to say.
+      throw new Error(reason ?? 'Could not compute the neurite assignment');
     }
 
     const assignments = new Map<string, string>();
