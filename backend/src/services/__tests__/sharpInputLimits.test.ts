@@ -20,7 +20,10 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'fs';
 import { join, relative } from 'path';
-import { MAX_INPUT_PIXELS } from '../../constants/imageLimits';
+import {
+  MAX_INPUT_PIXELS,
+  segmentationTimeoutMs,
+} from '../../constants/imageLimits';
 
 const SRC = join(__dirname, '..', '..');
 
@@ -71,5 +74,29 @@ describe('sharp input pixel limits', () => {
     }
 
     expect(offenders).toEqual([]);
+  });
+});
+
+describe('segmentation timeout', () => {
+  it('keeps the previous flat value for small frames', () => {
+    // 44 Mpx measured at ~22 s, so the floor is what protects it, not the rate.
+    expect(segmentationTimeoutMs(6664, 6657)).toBe(300_000);
+  });
+
+  it('covers the 498 Mpx frame that used to time out at 5 minutes', () => {
+    // Measured end to end at 1 342 s once the accumulators moved off the GPU.
+    const ms = segmentationTimeoutMs(22324, 22324);
+    expect(ms).toBeGreaterThan(1_342_000);
+    expect(ms).toBeLessThanOrEqual(45 * 60_000);
+  });
+
+  it('caps, rather than holding a connection open indefinitely', () => {
+    expect(segmentationTimeoutMs(100_000, 100_000)).toBe(45 * 60_000);
+  });
+
+  it('falls back to the flat value when dimensions are unknown', () => {
+    // An upload that failed part-way records no width/height.
+    expect(segmentationTimeoutMs(null, null)).toBe(300_000);
+    expect(segmentationTimeoutMs(0, 500)).toBe(300_000);
   });
 });

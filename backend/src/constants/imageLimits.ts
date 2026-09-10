@@ -34,3 +34,46 @@ export const MAX_INPUT_PIXELS = 1_000_000_000;
  * default is the right guard there.
  */
 export const SHARP_INPUT_LIMITS = { limitInputPixels: MAX_INPUT_PIXELS } as const;
+
+/**
+ * How long to let the ML service work on one frame, from its pixel count.
+ *
+ * The client-side ceiling used to be a flat 5 minutes, which is generous for
+ * the sizes this platform started with and far too short for the ones it now
+ * accepts. Measured 2026-09-10 on the frame from the report above:
+ *
+ *   6 664 x 6 657   44 Mpx    ~22 s   (the model's own packaged sample)
+ *   22 324 x 22 324 498 Mpx  1 342 s  (22.4 min, once the accumulators moved
+ *                                      off the GPU — before that it spent
+ *                                      1 246 s and then ran out of memory)
+ *
+ * That is ~2.7 s per megapixel at the large end and ~0.5 s at the small one:
+ * the cost per pixel RISES, because the whole-frame accumulators no longer fit
+ * on the card and every tile's contribution crosses the bus. The budget below
+ * uses the pessimistic end with headroom, so the timeout tracks the work
+ * instead of a number chosen when frames were smaller.
+ *
+ * A flat cap still applies. Past it the honest answer is that the frame is too
+ * large for this deployment, and holding a connection open for an hour to
+ * discover that helps nobody.
+ */
+const MS_PER_MEGAPIXEL = 4_000;
+const MIN_SEGMENTATION_TIMEOUT_MS = 300_000; // the previous flat value
+const MAX_SEGMENTATION_TIMEOUT_MS = 45 * 60_000;
+
+export function segmentationTimeoutMs(
+  width?: number | null,
+  height?: number | null
+): number {
+  // Dimensions are not always recorded (an upload that failed part-way, an
+  // older row). Falling back to the previous flat value is right: it is what
+  // every frame got before this existed.
+  if (!width || !height || width <= 0 || height <= 0) {
+    return MIN_SEGMENTATION_TIMEOUT_MS;
+  }
+  const megapixels = (width * height) / 1_000_000;
+  return Math.min(
+    MAX_SEGMENTATION_TIMEOUT_MS,
+    Math.max(MIN_SEGMENTATION_TIMEOUT_MS, Math.ceil(megapixels * MS_PER_MEGAPIXEL))
+  );
+}
