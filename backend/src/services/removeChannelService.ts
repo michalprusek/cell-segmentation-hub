@@ -280,7 +280,7 @@ export async function removeChannelFromFrames(
     // pick as "covers everything" and wipe the channel off the whole video.
     const allFrames = await prisma.image.findMany({
       where: { parentVideoId: container.id },
-      select: { id: true, frameIndex: true },
+      select: { id: true, frameIndex: true, originalPath: true },
       orderBy: { frameIndex: 'asc' },
     });
     const allFrameIds = allFrames.map(f => f.id);
@@ -296,7 +296,28 @@ export async function removeChannelFromFrames(
       [...selected],
       channelName
     );
-    if (!plan.changed) {continue;}
+    if (!plan.changed) {
+      continue;
+    }
+
+    // Which channel each stripped frame will show afterwards. A frame with
+    // NONE left has no pixels at all — that is deleting the frame, which the
+    // gallery already offers as its own operation, so refuse rather than leave
+    // a row pointing at nothing. Checked BEFORE anything is unlinked: a
+    // half-applied removal is worse than a refused one.
+    const survivorFor = new Map<string, string>();
+    for (const frameId of plan.removedFrameIds) {
+      const survivor = plan.channels.find(c => {
+        const cov = c.frameIds;
+        return !cov || cov.includes(frameId);
+      });
+      if (!survivor) {
+        throw new Error(
+          `Cannot remove '${channelName}': it is the last channel on one or more of the selected frames. Delete those frames instead.`
+        );
+      }
+      survivorFor.set(frameId, survivor.name);
+    }
 
     for (const frameId of plan.removedFrameIds) {
       const frameIndex = indexById.get(frameId);
@@ -313,6 +334,36 @@ export async function removeChannelFromFrames(
       where: { id: container.id },
       data: { channels: plan.channels as unknown as object },
     });
+
+    // The gallery renders each frame from its `originalPath`. Deleting the PNG
+    // without moving that column leaves a 404 per frame — seen in a real
+    // browser before this existed. Only rows that actually pointed at the
+    // removed channel are rewritten.
+    const removedSuffix = `/${channelName}.png`;
+    for (const frame of allFrames) {
+      if (!plan.removedFrameIds.includes(frame.id)) {
+        continue;
+      }
+      const current = frame.originalPath;
+      if (!current || !current.endsWith(removedSuffix)) {
+        continue;
+      }
+      const survivor = survivorFor.get(frame.id);
+      if (!survivor) {
+        continue;
+      }
+      await prisma.image.update({
+        where: { id: frame.id },
+        data: {
+          originalPath: frameStorageKey(
+            storageProjectId,
+            container.id,
+            indexById.get(frame.id) ?? 0,
+            survivor
+          ),
+        },
+      });
+    }
 
     result.framesAffected += plan.removedFrameIds.length;
     result.containersAffected++;
