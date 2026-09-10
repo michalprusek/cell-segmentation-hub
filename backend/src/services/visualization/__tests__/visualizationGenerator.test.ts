@@ -16,6 +16,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { MAX_INPUT_PIXELS } from '../../../constants/imageLimits';
 
 // ---------------------------------------------------------------------------
 // vi.hoisted — runs BEFORE vi.mock factory calls, so variables declared here
@@ -731,7 +732,14 @@ describe('VisualizationGenerator', () => {
         '/out/out.png'
       );
 
-      expect(mockSharp).toHaveBeenCalledWith(Buffer.from('TIFF_DATA'));
+      // The pixel limit travels with the buffer: a user's TIFF can be far
+      // larger than sharp's 268 Mpx default, and dropping the option here
+      // would reintroduce `Input image exceeds pixel limit` on exactly the
+      // frames this converter exists for.
+      expect(mockSharp).toHaveBeenCalledWith(
+        Buffer.from('TIFF_DATA'),
+        expect.objectContaining({ limitInputPixels: MAX_INPUT_PIXELS })
+      );
       expect(mockPng).toHaveBeenCalledWith(
         expect.objectContaining({ quality: 95 })
       );
