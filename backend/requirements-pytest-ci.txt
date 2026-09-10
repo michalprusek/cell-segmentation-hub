@@ -73,3 +73,10 @@ scikit-image
 # production stack's numpy 1.26.4 + opencv 4.11.0.86.
 nd2
 opencv-python-headless
+
+# `segmentation_cpu_tests/test_inference_serialisation.py` imports the real
+# `api.routes` — the point of that suite is to test the shipped dispatch rather
+# than a copy of it. Declaring a `Form(...)` parameter makes FastAPI require
+# python-multipart at ROUTE-DEFINITION time, so the import fails at collection
+# without it. It is a test-only dependency here; the ml image already has it.
+python-multipart
