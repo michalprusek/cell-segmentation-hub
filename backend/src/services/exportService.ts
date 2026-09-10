@@ -1,4 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
+import { SHARP_INPUT_LIMITS } from '../constants/imageLimits';
 import path from 'path';
 import fs from 'fs/promises';
 import sharp from 'sharp';
@@ -1651,7 +1652,7 @@ export class ExportService {
           }
           meta = bmp;
         } else {
-          meta = await sharp(filePath).metadata();
+          meta = await sharp(filePath, SHARP_INPUT_LIMITS).metadata();
         }
       } catch (err) {
         logger.warn(

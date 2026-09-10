@@ -1,4 +1,5 @@
 import { PrismaClient, Image, Prisma } from '@prisma/client';
+import { SHARP_INPUT_LIMITS } from '../constants/imageLimits';
 import { getStorageProvider, LocalStorageProvider } from '../storage/index';
 import { logger } from '../utils/logger';
 import { config } from '../utils/config';
@@ -1531,7 +1532,10 @@ export class ImageService {
       //
       // 8-bit sources keep the sharp path: it is in-process, and there is
       // nothing to preserve.
-      const probe = await sharp(originalBuffer, { failOn: 'error' }).metadata();
+      const probe = await sharp(originalBuffer, {
+        failOn: 'error',
+        ...SHARP_INPUT_LIMITS,
+      }).metadata();
       let convertedBuffer: Buffer;
       if (probe.depth && probe.depth !== 'uchar') {
         await fs.mkdir(path.dirname(convertedPath), { recursive: true });
@@ -1565,6 +1569,7 @@ export class ImageService {
       }
 
       convertedBuffer = await sharp(originalBuffer, {
+        ...SHARP_INPUT_LIMITS,
         failOn: 'error',
       })
         .png({

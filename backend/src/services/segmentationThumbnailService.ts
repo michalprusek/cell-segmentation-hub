@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import { SHARP_INPUT_LIMITS } from '../constants/imageLimits';
 import path from 'path';
 import fs from 'fs/promises';
 import { existsSync } from 'fs';
@@ -162,7 +163,7 @@ export class SegmentationThumbnailService {
       const thumbnailWidth = options.width || 300;
       const thumbnailHeight = options.height || 300;
 
-      await sharp(tempVisualizationPath)
+      await sharp(tempVisualizationPath, SHARP_INPUT_LIMITS)
         .resize(thumbnailWidth, thumbnailHeight, {
           fit: 'cover',
           position: 'center',

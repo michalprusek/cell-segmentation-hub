@@ -11,6 +11,7 @@
  */
 
 import { spawn } from 'child_process';
+import { SHARP_INPUT_LIMITS } from '../constants/imageLimits';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -232,7 +233,7 @@ async function ensureRangeMax(
     for (const c of channels) {
       const file = path.join(framesDir, name, `${c.name}.png`);
       try {
-        const stats = await sharp(file).stats();
+        const stats = await sharp(file, SHARP_INPUT_LIMITS).stats();
         const peak = stats.channels[0]?.max;
         if (typeof peak === 'number') {
           maxima.push(peak);
