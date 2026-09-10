@@ -39,6 +39,10 @@ interface VideoFrameImageProps {
   width?: number;
   height?: number;
   alt?: string;
+  /** Whether the video is playing. Forwarded to MultiChannelCanvas, which
+   *  keeps the frame on the 8-bit playback proxy while it moves and pulls the
+   *  16-bit original once it settles. */
+  videoIsPlaying?: boolean;
   /** `channelsKey` identifies which channel set produced the load,
    *  letting the parent invalidate "loaded" state when the channel
    *  mix changes on the same frame. Single-channel fallback emits
@@ -54,6 +58,7 @@ export default function VideoFrameImage({
   width,
   height,
   alt,
+  videoIsPlaying,
   onLoad,
 }: VideoFrameImageProps) {
   const { channel, visibleChannels, channelColors, channelCoverage } =
@@ -85,6 +90,7 @@ export default function VideoFrameImage({
         channelCoverage={channelCoverage}
         width={width}
         height={height}
+        videoIsPlaying={videoIsPlaying}
         onLoad={onLoad}
       />
     );

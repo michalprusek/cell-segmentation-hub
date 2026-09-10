@@ -12,9 +12,17 @@
 export const PROXY_LEVELS = 256;
 
 /**
- * Fewest proxy levels a window may span before the proxy stops being good
- * enough. Below roughly this many, quantisation shows as banding on smooth
- * gradients; above it, proxy and original are indistinguishable.
+ * Fewest proxy levels a window may span before the proxy's QUANTISATION STEP
+ * shows as banding on smooth gradients.
+ *
+ * Clearing this threshold does NOT make proxy and original indistinguishable,
+ * though this comment claimed it did until 2026-09-10. That claim was never
+ * measured, and it is false: the proxy is also a lossy DCT, whose error is
+ * independent of the step and larger than it. A production window spanning 134
+ * of the 256 levels — four times this threshold — still differed from the
+ * original by a mean of 2.3 display levels and a max of 14.9. What actually
+ * keeps the two apart is {@link PROXY_SETTLE_MS}: a still frame is drawn from
+ * the original, so this threshold now only has to be right about a MOVING one.
  *
  * Note what this means arithmetically: the fallback fires when the window is
  * narrower than `32/256` — an EIGHTH — of the range it is measured against.
@@ -22,6 +30,34 @@ export const PROXY_LEVELS = 256;
  * as much as the threshold does (see `windowNeedsFullDepth`).
  */
 export const MIN_LEVELS_IN_WINDOW = 32;
+
+/**
+ * How long a frame must hold still before it is re-fetched at full depth.
+ *
+ * WHY A TIME GATE AND NOT THE WINDOW GUARD. `windowNeedsFullDepth` models the
+ * quantisation STEP and nothing else, and the proxy's dominant error is not the
+ * step — it is that WebP q90 is a lossy DCT. Measured on production (Alice
+ * Dodokova's project 929, frame 0, 2026-09-10): the shipped encoder moves 74 %
+ * of the TIRF channel's pixels and 82 % of the other's, by a mean of 2.3
+ * display levels with a maximum of 14.9, while her window spanned 134 of the
+ * 256 levels — four times the guard's threshold. The guard was never going to
+ * catch this, and no encoder setting fixes it either: against the ~220 kB per
+ * channel-frame that 10 fps on a 35 Mbit/s link allows, q98 costs 12x the bytes
+ * for 1.5x the accuracy and lossless 25x for 5x. One production channel
+ * (488_nm) is already at 606 kB with the shipped q90.
+ *
+ * So the proxy is what it was named for and nothing more: a PLAYBACK artifact.
+ * A moving frame hides its blotches and needs its bytes; a still one is what
+ * gets annotated and measured, and gets the original 16-bit PNG instead.
+ *
+ * 200 ms because a frame is held for 100 ms at the 10 fps playback target, so
+ * a shorter delay would expire between frames of a clip that stalls slightly —
+ * and pulling multi-megabyte PNGs mid-playback would worsen the exact problem
+ * the proxy exists to solve. (`videoIsPlaying` guards that case directly; this
+ * margin means the two do not have to agree instantly.) It is also short enough
+ * to be imperceptible after a scrub, which is the interaction it really serves.
+ */
+export const PROXY_SETTLE_MS = 200;
 
 /**
  * What each channel's proxies are actually encoded against, learned from the
