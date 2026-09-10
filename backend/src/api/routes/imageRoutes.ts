@@ -147,6 +147,18 @@ router.post(
 );
 
 /**
+ * Remove a channel from SELECTED video frames of a microtubule project. The
+ * per-frame PNGs (and their playback proxies) are deleted and each affected
+ * container's channels JSON is narrowed to the frames that survive.
+ * POST /projects/:id/images/remove-channel   body: { channelName, imageIds }
+ */
+router.post(
+  '/:id/images/remove-channel',
+  validateParams(projectIdSchema),
+  VideoController.removeChannel
+);
+
+/**
  * List the frames of a video container in temporal order.
  * GET /images/:imageId/video-frames
  */
