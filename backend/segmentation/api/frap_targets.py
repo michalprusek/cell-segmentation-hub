@@ -33,11 +33,18 @@ from api import frap_render  # noqa: E402
 from api._log_safe import scrub  # noqa: E402
 from api.routes import (  # noqa: E402
     InferenceError,
-    _microtubule_inference_lock,
+    _inference_lock,
     get_model_loader,
 )
-# The lock is imported rather than re-created: it serialises microtubule inference
-# across EVERY caller, and a second lock object would serialise nothing.
+# The lock is imported rather than re-created: it serialises inference across
+# EVERY caller, and a second lock object would serialise nothing.
+#
+# It is loader-wide now, not microtubule-only. This route matters most to that
+# change: it is a plain `def`, so Starlette runs it on its 40-slot threadpool,
+# which means it has always been able to execute beside the event loop. Since
+# `/segment` moved its dispatch to a single-slot executor, this lock is the ONLY
+# thing stopping a frap request and a queued segmentation from putting two
+# inferences on the card at once.
 # InferenceError comes from api/routes.py for the same reason -- that module already
 # owns the ImportError fallback for a stripped image, so importing it from there is
 # what guarantees this endpoint classifies exactly what the sibling classifies. Note
@@ -596,7 +603,7 @@ def frap_targets(
     # bare correlation ID above, which is exactly the bug the paragraph above
     # describes.
     try:
-        with _microtubule_inference_lock:
+        with _inference_lock:
             result = loader.predict_microtubule(pil)
     except InferenceError as exc:
         logger.error("frap/targets: inference failed: %s", exc)
