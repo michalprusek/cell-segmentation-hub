@@ -196,7 +196,23 @@ const PolygonContextMenu = ({
 
   return (
     <>
-      <ContextMenu>
+      {/* The highlight is cleared HERE, on the menu's own close, and not only
+          by the entries' own mouse handlers. Those cover moving between items
+          and clicking one, but a menu also closes by Escape, by a click
+          outside it, and by unmounting — and none of those fire a mouseleave,
+          so the soma stayed lit indefinitely with no menu on screen and no
+          gesture that could turn it off. Reported 2026-09-10 as "it now glows
+          continuously".
+
+          One authoritative signal beats enumerating exits: whatever closes the
+          menu, `onOpenChange(false)` runs. */}
+      <ContextMenu
+        onOpenChange={open => {
+          if (!open) {
+            onHighlightSoma?.(null);
+          }
+        }}
+      >
         <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
         <ContextMenuContent className="w-64">
           <ContextMenuItem onClick={onEdit} className="cursor-pointer">

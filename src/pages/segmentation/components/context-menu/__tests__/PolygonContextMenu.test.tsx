@@ -25,15 +25,37 @@
 
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { colorFromInstanceId } from '../../../utils/instanceColors';
 import PolygonContextMenu from '../PolygonContextMenu';
 
 // ── mock Radix context-menu (same pattern as VertexContextMenu.e2e.test.tsx)
 vi.mock('@/components/ui/context-menu', () => ({
-  ContextMenu: ({ children }: { children: React.ReactNode }) => (
-    <div data-testid="ctx-menu-root">{children}</div>
+  // Exposes `onOpenChange` instead of dropping it. A stub that forwards only
+  // `children` cannot distinguish "clears the highlight when the menu closes"
+  // from "never clears it" — the same blind spot the `ContextMenuItem` stub
+  // had, where a dropped `onMouseEnter` made a correct implementation test red.
+  // The button stands in for every way a menu closes: Escape, a click outside,
+  // unmounting.
+  ContextMenu: ({
+    children,
+    onOpenChange,
+  }: {
+    children: React.ReactNode;
+    onOpenChange?: (open: boolean) => void;
+  }) => (
+    <div data-testid="ctx-menu-root">
+      <button
+        data-testid="ctx-menu-close"
+        onClick={() => onOpenChange?.(false)}
+      />
+      <button
+        data-testid="ctx-menu-open"
+        onClick={() => onOpenChange?.(true)}
+      />
+      {children}
+    </div>
   ),
   // The submenu wrappers render their children inline, so a `Set type` trigger
   // and its label items are findable the same way every other item is.
@@ -302,6 +324,38 @@ describe('PolygonContextMenu', () => {
 
       await user.hover(removalEntries()[1]);
       expect(onHighlightSoma).toHaveBeenLastCalledWith('polygon_6');
+    });
+
+    it('clears the highlight when the MENU CLOSES by any route', async () => {
+      // The entries' own handlers cover moving between items and clicking one.
+      // A menu also closes by Escape, by a click outside it, and by
+      // unmounting, and none of those fire a mouseleave — so without this the
+      // soma stayed lit with no menu on screen and no gesture left that could
+      // turn it off. Reported 2026-09-10 as "it now glows continuously".
+      const user = userEvent.setup();
+      const onHighlightSoma = vi.fn();
+      withSomas({ onHighlightSoma });
+
+      await user.hover(removalEntries()[0]);
+      expect(onHighlightSoma).toHaveBeenLastCalledWith('polygon_5');
+
+      // `fireEvent`, NOT `userEvent`: clicking through userEvent moves the
+      // pointer off the hovered entry first, which fires that entry's own
+      // `onMouseLeave` and clears the highlight by the very route this test
+      // is supposed to prove is not the only one. With the pointer left where
+      // it is, the close signal is the only thing that can clear it.
+      fireEvent.click(screen.getByTestId('ctx-menu-close'));
+      expect(onHighlightSoma).toHaveBeenLastCalledWith(null);
+    });
+
+    it('does not clear the highlight when the menu OPENS', async () => {
+      // Guards the obvious over-correction: clearing on every `onOpenChange`
+      // would wipe the highlight the moment a menu is opened again.
+      const onHighlightSoma = vi.fn();
+      withSomas({ onHighlightSoma });
+
+      fireEvent.click(screen.getByTestId('ctx-menu-open'));
+      expect(onHighlightSoma).not.toHaveBeenCalled();
     });
 
     it('clears the highlight when the entry is CLICKED, not just left', async () => {
