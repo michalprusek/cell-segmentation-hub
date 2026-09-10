@@ -386,10 +386,34 @@ class NeuriteSomaModel:
             device=device,
         )
 
+        # The tiling bounds the NETWORK's memory, not the accumulators': `acc`
+        # and `norm` are the size of the whole padded frame, so on a large
+        # image they are what exhausts the GPU rather than any tile.
+        #
+        # Measured 2026-09-10 on a 22 324 x 22 324 (498 Mpx) frame: inference
+        # ran 1 246 s and then died with `CUDA out of memory. Tried to allocate
+        # 7.43 GiB` — `acc` 2.99 GiB + `norm` 1.00 GiB here, plus the two
+        # whole-frame fold tensors `predict` used to hold at once. The packaged
+        # sample this model was built against is 6 664 x 6 657 (44 Mpx), where
+        # the same buffers are 352 MiB and comfortably fit.
+        #
+        # So the accumulators move to host memory once they get big. The GPU
+        # then holds only a tile, its activations and the Gaussian, and the
+        # ceiling becomes host RAM (62 GiB here) instead of the 14 GiB this
+        # process is allowed on the card. Small frames keep the all-GPU path,
+        # because the per-tile transfer is pure cost when nothing is at risk.
+        acc_device = self._accumulator_device(padded_h, padded_w)
         acc = torch.zeros(
-            (self._num_classes, padded_h, padded_w), dtype=torch.float16, device=device
+            (self._num_classes, padded_h, padded_w),
+            dtype=torch.float16,
+            device=acc_device,
         )
-        norm = torch.zeros((1, padded_h, padded_w), dtype=torch.float16, device=device)
+        norm = torch.zeros(
+            (1, padded_h, padded_w), dtype=torch.float16, device=acc_device
+        )
+        # One host copy of the weight, reused by every tile, instead of a
+        # device-to-host transfer per tile.
+        gaussian_acc = gaussian if acc_device == device else gaussian.to(acc_device)
         combos = mirror_combinations(self._mirror_axes)
 
         with torch.inference_mode():
@@ -401,11 +425,34 @@ class NeuriteSomaModel:
                         for axes in combos:
                             pred = pred + torch.flip(net(torch.flip(tile, axes)), axes)
                     pred = pred / (1 + len(combos))
-                    acc[:, y : y + patch[0], x : x + patch[1]] += pred[0].half() * gaussian
-                    norm[:, y : y + patch[0], x : x + patch[1]] += gaussian
+                    contribution = pred[0].half() * gaussian
+                    if acc_device != device:
+                        contribution = contribution.to(acc_device)
+                    acc[:, y : y + patch[0], x : x + patch[1]] += contribution
+                    norm[:, y : y + patch[0], x : x + patch[1]] += gaussian_acc
 
             acc /= norm
         return acc[:, :height, :width]
+
+    #: Whole-frame accumulator bytes above which they move to host memory.
+    #: `acc` + `norm` cost ``(num_classes + 1) * H * W * 2`` bytes in float16 —
+    #: 8 B/px for the three classes here. 1.5 GiB therefore switches at roughly
+    #: 200 Mpx, which keeps the all-GPU path for every frame size this model has
+    #: actually been run on (the 44 Mpx packaged sample needs 352 MiB) and takes
+    #: the host path only where the card was going to run out anyway.
+    _ACCUMULATOR_GPU_BUDGET_BYTES = 1_536 * 1024 * 1024
+
+    def _accumulator_device(self, padded_h: int, padded_w: int) -> str:
+        """Where the whole-frame accumulators should live for this frame.
+
+        Returns ``"cpu"`` when they would not comfortably fit on the card. The
+        arithmetic is unchanged either way — same dtype, same order, same tiles;
+        only the residence moves.
+        """
+        if self._device == "cpu":
+            return "cpu"
+        needed = (self._num_classes + 1) * padded_h * padded_w * 2
+        return "cpu" if needed > self._ACCUMULATOR_GPU_BUDGET_BYTES else self._device
 
     def predict(self, image_np: np.ndarray) -> np.ndarray:
         """Segment one 2D grayscale frame at native resolution.
@@ -450,10 +497,17 @@ class NeuriteSomaModel:
 
         tensor = torch.from_numpy(self._preprocess(raw))[None]
 
+        # Summed IN PLACE. `logits = logits + fold_logits` allocated a third
+        # whole-frame tensor while both operands were still alive, which on a
+        # 498 Mpx frame is 3 GiB held for no reason; `add_` reuses the first.
         logits = None
         for net in self._nets:
             fold_logits = self._predict_logits(net, tensor)
-            logits = fold_logits if logits is None else logits + fold_logits
+            if logits is None:
+                logits = fold_logits
+            else:
+                logits.add_(fold_logits)
+                del fold_logits
         logits /= len(self._nets)
 
         return logits.argmax(0).to("cpu").numpy().astype(np.uint8)

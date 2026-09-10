@@ -1,4 +1,5 @@
 import { PrismaClient, Prisma } from '@prisma/client';
+import { segmentationTimeoutMs } from '../constants/imageLimits';
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import FormData from 'form-data';
 import { v4 as uuidv4 } from 'uuid';
@@ -888,6 +889,7 @@ export class SegmentationService {
             },
             maxBodyLength: Infinity,
             maxContentLength: Infinity,
+            timeout: segmentationTimeoutMs(image.width, image.height),
           });
         }
       );
