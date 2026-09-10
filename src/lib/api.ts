@@ -1187,6 +1187,8 @@ class ApiClient {
       // Distinct channels across all video containers in this project.
       // Empty for non-video projects. Drives the Segment-All channel picker.
       projectChannels?: string[];
+      /** Of those, the ones some container segments from. */
+      projectSegmentationSources?: string[];
     };
   }> {
     const response = await this.instance.get(
@@ -1470,6 +1472,34 @@ class ApiClient {
           }
         },
       }
+    );
+    return this.extractData(response) as never;
+  }
+
+  /**
+   * Remove a channel from the selected video frames.
+   *
+   * The inverse of {@link addChannel}, and scoped the same way: coverage is
+   * exactly the frames passed in, so removing from a selection narrows the
+   * channel rather than deleting it from the whole video. Frames the channel
+   * never covered are ignored, not rejected — the gallery makes it easy to
+   * select more than the channel spans.
+   */
+  async removeChannel(
+    projectId: string,
+    params: { channelName: string; imageIds: string[] }
+  ): Promise<{
+    framesAffected: number;
+    containersAffected: number;
+    containersFullyCleared: number;
+    filesDeleted: number;
+    sparseDependentsDropped: number;
+    /** The container has no segmentation source left. */
+    segmentationSourceCleared: boolean;
+  }> {
+    const response = await this.instance.post(
+      `/projects/${projectId}/images/remove-channel`,
+      params
     );
     return this.extractData(response) as never;
   }

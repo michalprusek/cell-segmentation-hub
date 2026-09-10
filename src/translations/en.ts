@@ -1362,6 +1362,19 @@ export default {
     deleteSelected: 'Delete Selected',
     deleteAnnotations: 'Delete Annotations',
     addChannel: 'Add channel',
+    manageChannels: 'Manage channels',
+    removeChannel: 'Remove channel',
+    removeChannelDescription:
+      'Removes the channel from the {frames} selected frame(s). The per-frame images are deleted; for a channel added after upload they are the only copy.',
+    removeChannelPick: 'Channel to remove',
+    removeChannelSegSourceWarning:
+      'This is the segmentation source. Without one the video is never segmented, and nothing else in the app will say so.',
+    removeChannelTypeToConfirm: 'Type {channel} to confirm',
+    removeChannelSuccess: 'Removed {channel} from {frames} frame(s)',
+    removeChannelNoop: 'None of the selected frames had {channel}',
+    removeChannelSegSourceCleared:
+      'The video has no segmentation source left — set one before segmenting again.',
+    removeChannelFailed: 'Could not remove the channel',
     addChannelSuccess: 'Added channel {{channels}} to {{frames}} frame(s)',
     addChannelAlignWarning:
       'Alignment failed on {{failed}} of {{frames}} frame(s) — only {{shifted}} were registered. The channels could not be correlated (no shared structure); the frames were added unshifted.',

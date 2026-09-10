@@ -1369,6 +1369,19 @@ export default {
     deleteSelected: 'Smazat vybrané',
     deleteAnnotations: 'Smazat anotace',
     addChannel: 'Přidat kanál',
+    manageChannels: 'Spravovat kanály',
+    removeChannel: 'Odebrat kanál',
+    removeChannelDescription:
+      'Odebere kanál z {frames} vybraných snímků. Obrázky jednotlivých snímků se smažou; u kanálu přidaného po nahrání jsou jedinou kopií.',
+    removeChannelPick: 'Kanál k odebrání',
+    removeChannelSegSourceWarning:
+      'Toto je segmentační zdroj. Bez něj se video nikdy nesegmentuje a nikde jinde se to nedozvíte.',
+    removeChannelTypeToConfirm: 'Pro potvrzení napište {channel}',
+    removeChannelSuccess: 'Kanál {channel} odebrán z {frames} snímků',
+    removeChannelNoop: 'Žádný z vybraných snímků kanál {channel} neměl',
+    removeChannelSegSourceCleared:
+      'Video už nemá segmentační zdroj — před další segmentací ho nastavte.',
+    removeChannelFailed: 'Kanál se nepodařilo odebrat',
     addChannelSuccess: 'Kanál {{channels}} přidán k {{frames}} snímkům',
     addChannelAlignWarning:
       'Zarovnání selhalo u {{failed}} z {{frames}} snímků — zarovnáno bylo jen {{shifted}}. Kanály nelze zkorelovat (nemají společnou strukturu); snímky byly přidány neposunuté.',

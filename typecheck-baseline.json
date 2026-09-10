@@ -7,8 +7,8 @@
   "totals": {
     "tsconfig.app.json": 372,
     "tsconfig.node.json": 21,
-    "tsconfig.test.json": 1211,
-    "all": 1604
+    "tsconfig.test.json": 1212,
+    "all": 1605
   },
   "projects": {
     "tsconfig.app.json": {
@@ -162,7 +162,7 @@
         "TS2345: Argument of type '(key: string, options?: Record<string, unknown> | undefined) => string | string[]' is not assignable to parameter of type '(key: string) => string'.": 3
       },
       "src/hooks/useProjectData.tsx": {
-        "TS2339: Property 'total' does not exist on type '{images: ProjectImageDTO[]; pagination: {page: number; limit: number; total: number; pages: number; }; metadata: {levelOfDetail: \"high\" | \"low\" | \"medium\"; totalImages: number; imagesWithThumbnails: number; projectChannels?: string[] | undefined; }; }'.": 1,
+        "TS2339: Property 'total' does not exist on type '{images: ProjectImageDTO[]; pagination: {page: number; limit: number; total: number; pages: number; }; metadata: {levelOfDetail: \"high\" | \"low\" | \"medium\"; totalImages: number; imagesWithThumbnails: number; projectChannels?: string[] | undefined; projectSegmentationSources?: string[] | undefined; }; }'.": 1,
         "TS2339: Property 'type' does not exist on type 'Project'.": 1,
         "TS2345: Argument of type '(key: string, options?: Record<string, unknown> | undefined) => string | string[]' is not assignable to parameter of type '(key: string) => string'.": 1,
         "TS2345: Argument of type '<type elided by tsc>' is not assignable to parameter of type 'SetStateAction<ProjectImage[]>'.": 1
@@ -892,8 +892,8 @@
         "TS2322: Type '{ id: string; name: string; url: string; created_at: string; updated_at: string; segmentationStatus: string; }[]' is not assignable to type 'ProjectImageDTO[]'.": 3,
         "TS2345: Argument of type '{ id: string; name: string; description: string; }' is not assignable to parameter of type 'Project'.": 1,
         "TS2345: Argument of type '{ id: string; name: string; }' is not assignable to parameter of type 'Project'.": 12,
-        "TS2345: Argument of type '{images: ({...; } | {id: string; name: string; url: string; thumbnail_url: string; width: number; height: number; created_at: string; updated_at: string; segmentationStatus: string; segmentationResult: {...; }; })[]; total: number; page: number; totalPages: number; }' is not assignable to parameter of type '{images: ProjectImageDTO[]; pagination: {page: number; limit: number; total: number; pages: number; }; metadata: {levelOfDetail: \"high\" | \"low\" | \"medium\"; totalImages: number; imagesWithThumbnails: number; projectChannels?: string[] | undefined; }; }'.": 1,
-        "TS2353: Object literal may only specify known properties, and 'total' does not exist in type '{images: ProjectImageDTO[]; pagination: {page: number; limit: number; total: number; pages: number; }; metadata: {levelOfDetail: \"high\" | \"low\" | \"medium\"; totalImages: number; imagesWithThumbnails: number; projectChannels?: string[] | undefined; }; }'.": 2,
+        "TS2345: Argument of type '{images: ({...; } | {id: string; name: string; url: string; thumbnail_url: string; width: number; height: number; created_at: string; updated_at: string; segmentationStatus: string; segmentationResult: {...; }; })[]; total: number; page: number; totalPages: number; }' is not assignable to parameter of type '{images: ProjectImageDTO[]; pagination: {page: number; limit: number; total: number; pages: number; }; metadata: {levelOfDetail: \"high\" | \"low\" | \"medium\"; totalImages: number; imagesWithThumbnails: number; projectChannels?: string[] | undefined; projectSegmentationSources?: string[] | undefined; }; }'.": 1,
+        "TS2353: Object literal may only specify known properties, and 'total' does not exist in type '{images: ProjectImageDTO[]; pagination: {page: number; limit: number; total: number; pages: number; }; metadata: {levelOfDetail: \"high\" | \"low\" | \"medium\"; totalImages: number; imagesWithThumbnails: number; projectChannels?: string[] | undefined; projectSegmentationSources?: string[] | undefined; }; }'.": 2,
         "TS2561: Object literal may only specify known properties, but 'segmentationStatus' does not exist in type 'ProjectImageDTO'. Did you mean to write 'segmentation_status'?": 2
       },
       "src/hooks/__tests__/useProjectImageActions.test.tsx": {
@@ -945,7 +945,7 @@
         "TS6307: File 'src/contexts/useModel.ts' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1
       },
       "src/hooks/useProjectData.tsx": {
-        "TS2339: Property 'total' does not exist on type '{images: ProjectImageDTO[]; pagination: {page: number; limit: number; total: number; pages: number; }; metadata: {levelOfDetail: \"high\" | \"low\" | \"medium\"; totalImages: number; imagesWithThumbnails: number; projectChannels?: string[] | undefined; }; }'.": 1,
+        "TS2339: Property 'total' does not exist on type '{images: ProjectImageDTO[]; pagination: {page: number; limit: number; total: number; pages: number; }; metadata: {levelOfDetail: \"high\" | \"low\" | \"medium\"; totalImages: number; imagesWithThumbnails: number; projectChannels?: string[] | undefined; projectSegmentationSources?: string[] | undefined; }; }'.": 1,
         "TS2339: Property 'type' does not exist on type 'Project'.": 1,
         "TS2345: Argument of type '(key: string, options?: Record<string, unknown> | undefined) => string | string[]' is not assignable to parameter of type '(key: string) => string'.": 1,
         "TS2345: Argument of type '<type elided by tsc>' is not assignable to parameter of type 'SetStateAction<ProjectImage[]>'.": 1
@@ -1222,6 +1222,7 @@
         "TS6307: File 'src/components/project/ProjectHeader.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
         "TS6307: File 'src/components/project/ProjectImages.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
         "TS6307: File 'src/components/project/ProjectUploaderSection.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
+        "TS6307: File 'src/components/project/RemoveChannelDialog.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
         "TS6307: File 'src/components/project/SegmentChannelDialog.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
         "TS6307: File 'src/hooks/useImageFilter.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
         "TS6307: File 'src/hooks/usePagination.tsx' is not listed within the file list of project 'tsconfig.test.json'. Projects must list all files or use an 'include' pattern.": 1,
@@ -1729,7 +1730,7 @@
         "TS2304: Cannot find name 'error'.": 2,
         "TS2322: Type 'string[]' is not assignable to type '(\"Alt\" | \"Control\" | \"ControlOrMeta\" | \"Meta\" | \"Shift\")[]'.": 1,
         "TS2349: This expression is not callable.": 5,
-        "TS2353: Object literal may only specify known properties, and 'modifiers' does not exist in type '{ force?: boolean | undefined; noWaitAfter?: boolean | undefined; scroll?: \"none\" | \"auto\" | undefined; signal?: AbortSignal | undefined; sourcePosition?: { x: number; y: number; } | undefined; steps?: number | undefined; targetPosition?: { ...; } | undefined; timeout?: number | undefined; trial?: boolean | undefine...'.": 1
+        "TS2353: Object literal may only specify known properties, and 'modifiers' does not exist in type '{ force?: boolean | undefined; noWaitAfter?: boolean | undefined; scroll?: \"auto\" | \"none\" | undefined; signal?: AbortSignal | undefined; sourcePosition?: { x: number; y: number; } | undefined; steps?: number | undefined; targetPosition?: { ...; } | undefined; timeout?: number | undefined; trial?: boolean | undefine...'.": 1
       },
       "tests/e2e/page-objects/SignInPage.ts": {
         "TS2550: Property 'any' does not exist on type 'PromiseConstructor'. Do you need to change your target library? Try changing the 'lib' compiler option to 'es2021' or later.": 1
@@ -1749,7 +1750,7 @@
       },
       "tests/e2e/segmentation-editor-enhanced.spec.ts": {
         "TS2353: Object literal may only specify known properties, and 'clickCount' does not exist in type '<type elided by tsc>'.": 1,
-        "TS2353: Object literal may only specify known properties, and 'modifiers' does not exist in type '{ force?: boolean | undefined; noWaitAfter?: boolean | undefined; scroll?: \"none\" | \"auto\" | undefined; signal?: AbortSignal | undefined; sourcePosition?: { x: number; y: number; } | undefined; steps?: number | undefined; targetPosition?: { ...; } | undefined; timeout?: number | undefined; trial?: boolean | undefine...'.": 1
+        "TS2353: Object literal may only specify known properties, and 'modifiers' does not exist in type '{ force?: boolean | undefined; noWaitAfter?: boolean | undefined; scroll?: \"auto\" | \"none\" | undefined; signal?: AbortSignal | undefined; sourcePosition?: { x: number; y: number; } | undefined; steps?: number | undefined; targetPosition?: { ...; } | undefined; timeout?: number | undefined; trial?: boolean | undefine...'.": 1
       },
       "tests/e2e/segmentation-workflow.spec.ts": {
         "TS2339: Property 'waitForDownload' does not exist on type 'Page'.": 1

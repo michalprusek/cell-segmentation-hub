@@ -8,6 +8,7 @@ import {
   Plus,
   Eraser,
   Layers,
+  ChevronDown,
 } from 'lucide-react';
 import { useLanguage } from '@/contexts/useLanguage';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -60,6 +61,13 @@ interface ProjectToolbarProps {
   /** Add an extra channel to the selected frames. Rendered only for
    *  microtubule projects (see canAddChannel). */
   onAddChannel?: () => void;
+  /** Opens the "remove channel" confirmation. Omitted => the menu shows only
+   *  "Add channel". */
+  onRemoveChannel?: () => void;
+  /** Whether the project declares any channel that could be removed. The item
+   *  stays visible but disabled when it does not, so the capability is
+   *  discoverable on a project that has yet to gain a second channel. */
+  hasRemovableChannels?: boolean;
   /** Gate for the "Add channel" button — true only for microtubule projects. */
   canAddChannel?: boolean;
   showSelectAll?: boolean;
@@ -100,6 +108,8 @@ const ProjectToolbar = ({
   onBatchDelete,
   onDeleteAnnotations,
   onAddChannel,
+  onRemoveChannel,
+  hasRemovableChannels = false,
   canAddChannel = false,
   showSelectAll = false,
   onExportingChange,
@@ -201,16 +211,36 @@ const ProjectToolbar = ({
                 These three are the densest cluster in the toolbar and two of
                 them are destructive, so they get the same 40px touch height as
                 the rest of the toolbar below `sm`. */}
+            {/* One menu rather than two buttons: this cluster already holds
+                four controls at a selection, and a fifth wraps below `sm`.
+                The removal is destructive, so it also benefits from being one
+                step further in than a bare button. */}
             {canAddChannel && onAddChannel && (
-              <Button
-                onClick={onAddChannel}
-                size="sm"
-                variant="outline"
-                className="h-10 sm:h-9"
-              >
-                <Layers className="h-4 w-4 mr-1" />
-                {t('project.addChannel')}
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button size="sm" variant="outline" className="h-10 sm:h-9">
+                    <Layers className="h-4 w-4 mr-1" />
+                    {t('project.manageChannels')}
+                    <ChevronDown className="h-4 w-4 ml-1" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start">
+                  <DropdownMenuItem onSelect={onAddChannel}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    {t('project.addChannel')}
+                  </DropdownMenuItem>
+                  {onRemoveChannel && (
+                    <DropdownMenuItem
+                      onSelect={onRemoveChannel}
+                      disabled={!hasRemovableChannels}
+                      className="text-destructive focus:text-destructive"
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      {t('project.removeChannel')}
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
             )}
             {onDeleteAnnotations && (
               <Button
