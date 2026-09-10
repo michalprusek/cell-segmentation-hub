@@ -1390,13 +1390,13 @@ export default {
     manageChannels: 'Kanäle verwalten',
     removeChannel: 'Kanal entfernen',
     removeChannelDescription:
-      'Entfernt den Kanal aus den {frames} ausgewählten Einzelbildern. Die Bilder je Einzelbild werden gelöscht; bei einem nach dem Upload hinzugefügten Kanal sind sie die einzige Kopie.',
+      'Entfernt den Kanal aus den {{frames}} ausgewählten Einzelbildern. Die Bilder je Einzelbild werden gelöscht; bei einem nach dem Upload hinzugefügten Kanal sind sie die einzige Kopie.',
     removeChannelPick: 'Zu entfernender Kanal',
     removeChannelSegSourceWarning:
       'Dies ist die Segmentierungsquelle. Ohne sie wird das Video nie segmentiert, und nichts sonst in der App weist darauf hin.',
-    removeChannelTypeToConfirm: 'Zum Bestätigen {channel} eingeben',
-    removeChannelSuccess: '{channel} aus {frames} Einzelbild(ern) entfernt',
-    removeChannelNoop: 'Keines der ausgewählten Einzelbilder hatte {channel}',
+    removeChannelTypeToConfirm: 'Zum Bestätigen {{channel}} eingeben',
+    removeChannelSuccess: '{{channel}} aus {{frames}} Einzelbild(ern) entfernt',
+    removeChannelNoop: 'Keines der ausgewählten Einzelbilder hatte {{channel}}',
     removeChannelSegSourceCleared:
       'Das Video hat keine Segmentierungsquelle mehr — legen Sie eine fest, bevor Sie erneut segmentieren.',
     removeChannelFailed: 'Kanal konnte nicht entfernt werden',

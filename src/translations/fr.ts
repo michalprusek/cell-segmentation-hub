@@ -1383,13 +1383,14 @@ export default {
     manageChannels: 'Gérer les canaux',
     removeChannel: 'Supprimer le canal',
     removeChannelDescription:
-      'Supprime le canal des {frames} images sélectionnées. Les images par trame sont effacées ; pour un canal ajouté après l’import, elles sont l’unique copie.',
+      'Supprime le canal des {{frames}} images sélectionnées. Les images par trame sont effacées ; pour un canal ajouté après l’import, elles sont l’unique copie.',
     removeChannelPick: 'Canal à supprimer',
     removeChannelSegSourceWarning:
       'C’est la source de segmentation. Sans elle, la vidéo n’est jamais segmentée, et rien d’autre dans l’application ne le signalera.',
-    removeChannelTypeToConfirm: 'Saisissez {channel} pour confirmer',
-    removeChannelSuccess: '{channel} supprimé de {frames} image(s)',
-    removeChannelNoop: 'Aucune des images sélectionnées ne possédait {channel}',
+    removeChannelTypeToConfirm: 'Saisissez {{channel}} pour confirmer',
+    removeChannelSuccess: '{{channel}} supprimé de {{frames}} image(s)',
+    removeChannelNoop:
+      'Aucune des images sélectionnées ne possédait {{channel}}',
     removeChannelSegSourceCleared:
       'La vidéo n’a plus de source de segmentation — définissez-en une avant de segmenter à nouveau.',
     removeChannelFailed: 'Impossible de supprimer le canal',
