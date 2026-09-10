@@ -202,8 +202,14 @@ def _dispatch_inference(loader, model, image, threshold, detect_holes):
         elif model == 'microcapsule':
             # Microcapsule distilled U-Net — the user threshold is forwarded as
             # the foreground cutoff. detect_holes is not meaningful: each capsule
-            # is a single closed instance polygon. The model is light (~14.5 MB),
-            # so it runs in parallel like hrnet/sperm/wound (no inference lock).
+            # is a single closed instance polygon.
+            #
+            # This used to note that the model is light (~14.5 MB) and therefore
+            # ran without an inference lock, unlike microtubule and
+            # neurite/soma. That is no longer true of any branch: the lock is
+            # loader-wide and `_dispatch_inference` holds it around all of them.
+            # Being light now means the serialisation costs it little, not that
+            # it escapes it.
             result = loader.predict_microcapsule(image, threshold)
         elif model == 'neurite_soma':
             # Neurite/soma (nnU-Net ResEnc-M, 3 folds, 3 classes). Does its own

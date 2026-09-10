@@ -39,6 +39,14 @@ from api.routes import (  # noqa: E402
 # The lock is imported rather than re-created: it serialises inference across
 # EVERY caller, and a second lock object would serialise nothing.
 #
+#: How long `/frap/targets` will wait for `_inference_lock` before giving up.
+#:
+#: Two minutes covers the models this route realistically queues behind — a
+#: microtubule frame is ~4 s and a 1024^2 neurite frame ~2 min — without making
+#: the operator sit through a 498 Mpx one. Past it they get a 503 that says what
+#: to do, which is the only outcome a one-line status file can carry.
+_LOCK_WAIT_SECONDS = 120.0
+
 # It is loader-wide now, not microtubule-only. This route matters most to that
 # change: it is a plain `def`, so Starlette runs it on its 40-slot threadpool,
 # which means it has always been able to execute beside the event loop. Since
@@ -587,13 +595,19 @@ def frap_targets(
     # into a ONE-LINE frap_status.txt read at the microscope.
     #
     # There is deliberately NO 504 branch, and that is a difference from the sibling
-    # in api/routes.py rather than an oversight. A timeout is reachable there and not
-    # here: ModelLoader.predict_microtubule takes a `timeout` argument and never
-    # reads it -- no executor, no wait -- so InferenceTimeoutError cannot be raised
-    # on this path. A handler for a state that cannot occur only disguises the fact
-    # that no timeout exists; nginx's proxy_read_timeout is the real one. If an
-    # executor is ever put behind this call, restore the 504 clause ABOVE the
-    # InferenceError one, because InferenceTimeoutError subclasses it.
+    # in api/routes.py rather than an oversight. `InferenceTimeoutError` still cannot
+    # be raised on this path: ModelLoader.predict_microtubule takes a `timeout`
+    # argument and never reads it, so the PREDICT itself has no executor and no
+    # deadline. A handler for a state that cannot occur only disguises the fact that
+    # no timeout exists. If an executor is ever put behind that call, restore the 504
+    # clause ABOVE the InferenceError one, because InferenceTimeoutError subclasses
+    # it.
+    #
+    # There IS a wait now, but it is the LOCK below, not the predict — and it is
+    # bounded there rather than here, with its own 503. Since the lock went
+    # loader-wide this route can queue behind any model, including a neurite frame
+    # that runs for 22 minutes; nginx's proxy_read_timeout would cut that silently
+    # and the client would write an empty line into frap_status.txt.
     #
     # The catch-all is not defensive padding either. The failures this path actually
     # produces are torch's CUDA OutOfMemoryError and a bare ValueError/RuntimeError
@@ -602,9 +616,23 @@ def frap_targets(
     # InferenceError. Without this clause every failure that really happens is the
     # bare correlation ID above, which is exactly the bug the paragraph above
     # describes.
+    # Bounded, because the caller is a person at a microscope and the queue ahead
+    # of them can be 22 minutes long. Waiting that out yields a frame they can no
+    # longer use; a sentence they can act on is worth more. `frap_status.txt` is one
+    # line, so the detail has to BE that sentence.
+    if not _inference_lock.acquire(timeout=_LOCK_WAIT_SECONDS):
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Segmentation service is busy with another frame; "
+                "wait a few minutes and send this field again."
+            ),
+        )
     try:
-        with _inference_lock:
+        try:
             result = loader.predict_microtubule(pil)
+        finally:
+            _inference_lock.release()
     except InferenceError as exc:
         logger.error("frap/targets: inference failed: %s", exc)
         raise HTTPException(

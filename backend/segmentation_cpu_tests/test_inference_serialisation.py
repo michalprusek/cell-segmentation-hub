@@ -215,3 +215,38 @@ def test_a_frap_style_caller_cannot_overlap_the_executor():
         f'{loader.max_concurrent} inferences ran at once; a frap request and a '
         'queued segmentation would put two working sets on the card'
     )
+
+
+def test_frap_waits_for_the_lock_with_a_bound():
+    """`/frap/targets` must not block forever on the shared lock.
+
+    Since the lock went loader-wide this route can queue behind any model,
+    including a neurite frame that runs for 22 minutes. Its caller is a person
+    at a microscope who writes the response into a one-line `frap_status.txt`,
+    so an nginx timeout mid-wait gives them an empty line and no instruction.
+    """
+    frap = importlib.import_module('api.frap_targets')
+
+    assert frap._LOCK_WAIT_SECONDS > 0
+    # Long enough for the models it realistically queues behind (a 1024^2
+    # neurite frame is ~2 min), short enough not to outlast the operator.
+    assert 30.0 <= frap._LOCK_WAIT_SECONDS <= 600.0
+
+    # The bound only exists if the acquisition is the timed form. A plain
+    # `with _inference_lock:` waits forever, which is what this replaced.
+    source = Path(frap.__file__).read_text(encoding='utf-8')
+    assert 'with _inference_lock:' not in source, (
+        'frap acquires the shared lock without a timeout'
+    )
+    assert '_inference_lock.acquire(timeout=' in source
+
+
+def test_frap_releases_the_lock_when_inference_raises():
+    """A predict that throws must not strand the lock for every other route."""
+    frap = importlib.import_module('api.frap_targets')
+    source = Path(frap.__file__).read_text(encoding='utf-8')
+    acquire_at = source.index('_inference_lock.acquire(timeout=')
+    tail = source[acquire_at:acquire_at + 600]
+    assert 'finally:' in tail and '_inference_lock.release()' in tail, (
+        'the release is not on a finally, so a raising predict would keep it'
+    )
