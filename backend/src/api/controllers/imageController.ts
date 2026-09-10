@@ -1233,15 +1233,31 @@ export class ImageController {
         where: { projectId, isVideoContainer: true },
         select: { channels: true },
       });
+      const allChannelMeta = containers.flatMap(c =>
+        Array.isArray(c.channels) ? c.channels : []
+      );
+      const channelName = (ch: unknown): string | null =>
+        ch && typeof ch === 'object' && 'name' in ch
+          ? String((ch as { name: unknown }).name)
+          : null;
       const projectChannels = Array.from(
+        new Set(allChannelMeta.map(channelName).filter((n): n is string => !!n))
+      ).sort();
+      // Which of those a container segments from. Surfaced so the "Remove
+      // channel" confirmation can name the consequence instead of warning
+      // generically: a container left with no segmentation source is never
+      // segmented, and nothing else in the UI says so.
+      const projectSegmentationSources = Array.from(
         new Set(
-          containers
-            .flatMap(c => (Array.isArray(c.channels) ? c.channels : []))
-            .map((ch: unknown) =>
-              ch && typeof ch === 'object' && 'name' in ch
-                ? String((ch as { name: unknown }).name)
-                : null
+          allChannelMeta
+            .filter(
+              ch =>
+                ch &&
+                typeof ch === 'object' &&
+                (ch as { isSegmentationSource?: unknown })
+                  .isSegmentationSource === true
             )
+            .map(channelName)
             .filter((n): n is string => !!n)
         )
       ).sort();
@@ -1264,6 +1280,7 @@ export class ImageController {
           // project. Empty for non-video projects. Drives the
           // Segment-All channel picker on the frontend.
           projectChannels,
+          projectSegmentationSources,
         },
       };
 

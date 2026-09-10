@@ -1274,6 +1274,19 @@ export default {
     deleteSelected: '删除选中项',
     deleteAnnotations: '删除标注',
     addChannel: '添加通道',
+    manageChannels: '管理通道',
+    removeChannel: '删除通道',
+    removeChannelDescription:
+      '从选中的 {frames} 帧中删除该通道。逐帧图像将被删除；对于上传后添加的通道，它们是唯一的副本。',
+    removeChannelPick: '要删除的通道',
+    removeChannelSegSourceWarning:
+      '这是分割源。没有它，视频将永远不会被分割，应用中也不会有其他提示。',
+    removeChannelTypeToConfirm: '输入 {channel} 以确认',
+    removeChannelSuccess: '已从 {frames} 帧中删除 {channel}',
+    removeChannelNoop: '选中的帧中没有 {channel}',
+    removeChannelSegSourceCleared:
+      '视频已没有分割源 — 请在再次分割前设置一个。',
+    removeChannelFailed: '无法删除通道',
     addChannelSuccess: '已将通道 {{channels}} 添加到 {{frames}} 帧',
     addChannelAlignWarning:
       '{{frames}} 帧中有 {{failed}} 帧对齐失败，仅 {{shifted}} 帧完成配准。通道之间无法相关（缺少共同结构），这些帧已按原位添加。',
