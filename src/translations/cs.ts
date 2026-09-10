@@ -1372,13 +1372,13 @@ export default {
     manageChannels: 'Spravovat kanály',
     removeChannel: 'Odebrat kanál',
     removeChannelDescription:
-      'Odebere kanál z {frames} vybraných snímků. Obrázky jednotlivých snímků se smažou; u kanálu přidaného po nahrání jsou jedinou kopií.',
+      'Odebere kanál z {{frames}} vybraných snímků. Obrázky jednotlivých snímků se smažou; u kanálu přidaného po nahrání jsou jedinou kopií.',
     removeChannelPick: 'Kanál k odebrání',
     removeChannelSegSourceWarning:
       'Toto je segmentační zdroj. Bez něj se video nikdy nesegmentuje a nikde jinde se to nedozvíte.',
-    removeChannelTypeToConfirm: 'Pro potvrzení napište {channel}',
-    removeChannelSuccess: 'Kanál {channel} odebrán z {frames} snímků',
-    removeChannelNoop: 'Žádný z vybraných snímků kanál {channel} neměl',
+    removeChannelTypeToConfirm: 'Pro potvrzení napište {{channel}}',
+    removeChannelSuccess: 'Kanál {{channel}} odebrán z {{frames}} snímků',
+    removeChannelNoop: 'Žádný z vybraných snímků kanál {{channel}} neměl',
     removeChannelSegSourceCleared:
       'Video už nemá segmentační zdroj — před další segmentací ho nastavte.',
     removeChannelFailed: 'Kanál se nepodařilo odebrat',

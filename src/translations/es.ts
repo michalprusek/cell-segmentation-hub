@@ -1375,14 +1375,14 @@ export default {
     manageChannels: 'Gestionar canales',
     removeChannel: 'Eliminar canal',
     removeChannelDescription:
-      'Elimina el canal de los {frames} fotogramas seleccionados. Las imágenes por fotograma se borran; para un canal añadido tras la subida son la única copia.',
+      'Elimina el canal de los {{frames}} fotogramas seleccionados. Las imágenes por fotograma se borran; para un canal añadido tras la subida son la única copia.',
     removeChannelPick: 'Canal a eliminar',
     removeChannelSegSourceWarning:
       'Es la fuente de segmentación. Sin ella el vídeo nunca se segmenta, y nada más en la aplicación lo indicará.',
-    removeChannelTypeToConfirm: 'Escriba {channel} para confirmar',
-    removeChannelSuccess: '{channel} eliminado de {frames} fotograma(s)',
+    removeChannelTypeToConfirm: 'Escriba {{channel}} para confirmar',
+    removeChannelSuccess: '{{channel}} eliminado de {{frames}} fotograma(s)',
     removeChannelNoop:
-      'Ninguno de los fotogramas seleccionados tenía {channel}',
+      'Ninguno de los fotogramas seleccionados tenía {{channel}}',
     removeChannelSegSourceCleared:
       'El vídeo se ha quedado sin fuente de segmentación: defina una antes de volver a segmentar.',
     removeChannelFailed: 'No se pudo eliminar el canal',

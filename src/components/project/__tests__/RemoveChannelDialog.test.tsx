@@ -135,6 +135,23 @@ describe('RemoveChannelDialog', () => {
     expect(confirmButton()).toBeDisabled();
   });
 
+  it('interpolates the channel name into the confirm label', () => {
+    // This project's `t()` uses DOUBLE braces. A key written with single ones
+    // type-checks, passes the i18n validator (the key exists in all six
+    // files) and renders the literal "{channel}" to the user — which is what
+    // shipped to a browser before this test existed. Nothing but reading the
+    // rendered text catches it.
+    // A single channel auto-selects, which is enough: what is under test is
+    // the LABEL's interpolation, not the picker.
+    setup({ channels: ['TIRF_488'], segmentationSources: [] });
+
+    // The input's accessible name IS the interpolated label, so this asserts
+    // the substitution rather than merely that the name appears somewhere.
+    expect(confirmBox()).toHaveAccessibleName(/TIRF_488/);
+    expect(document.body.textContent).not.toMatch(/\{\{?channel\}?\}/);
+    expect(document.body.textContent).not.toMatch(/\{\{?frames\}?\}/);
+  });
+
   it('does not preselect a channel when there is more than one', () => {
     // Preselecting would put a destructive default one keystroke away, and the
     // user might confirm a channel they never chose.

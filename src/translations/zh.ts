@@ -1277,13 +1277,13 @@ export default {
     manageChannels: '管理通道',
     removeChannel: '删除通道',
     removeChannelDescription:
-      '从选中的 {frames} 帧中删除该通道。逐帧图像将被删除；对于上传后添加的通道，它们是唯一的副本。',
+      '从选中的 {{frames}} 帧中删除该通道。逐帧图像将被删除；对于上传后添加的通道，它们是唯一的副本。',
     removeChannelPick: '要删除的通道',
     removeChannelSegSourceWarning:
       '这是分割源。没有它，视频将永远不会被分割，应用中也不会有其他提示。',
-    removeChannelTypeToConfirm: '输入 {channel} 以确认',
-    removeChannelSuccess: '已从 {frames} 帧中删除 {channel}',
-    removeChannelNoop: '选中的帧中没有 {channel}',
+    removeChannelTypeToConfirm: '输入 {{channel}} 以确认',
+    removeChannelSuccess: '已从 {{frames}} 帧中删除 {{channel}}',
+    removeChannelNoop: '选中的帧中没有 {{channel}}',
     removeChannelSegSourceCleared:
       '视频已没有分割源 — 请在再次分割前设置一个。',
     removeChannelFailed: '无法删除通道',
