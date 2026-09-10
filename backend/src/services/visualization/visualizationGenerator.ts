@@ -1,4 +1,5 @@
 import { isMeasuredMicrocapsule } from '../microcapsuleRelevance';
+import { SHARP_INPUT_LIMITS } from '../../constants/imageLimits';
 import {
   isMembranePolygon,
   MEMBRANE_COLOR,
@@ -140,7 +141,7 @@ export class VisualizationGenerator {
       if (ext === '.tiff' || ext === '.tif') {
         // Convert TIFF to PNG and save to temp file
         const tiffBuffer = await readFile(imagePath);
-        const pngBuffer = await sharp(tiffBuffer)
+        const pngBuffer = await sharp(tiffBuffer, SHARP_INPUT_LIMITS)
           .png({ quality: 95, compressionLevel: 6 })
           .toBuffer();
 

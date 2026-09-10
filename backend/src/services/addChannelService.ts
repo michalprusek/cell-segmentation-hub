@@ -18,6 +18,7 @@
  */
 
 import * as fs from 'fs/promises';
+import { SHARP_INPUT_LIMITS } from '../constants/imageLimits';
 import * as os from 'os';
 import * as path from 'path';
 import { randomUUID } from 'crypto';
@@ -533,11 +534,11 @@ async function extractSource(
   // Single image → one grayscale frame at frames/0000/ch0.png.
   const framesDir = path.join(tempDir, 'frames', '0000');
   await fs.mkdir(framesDir, { recursive: true });
-  const meta = await sharp(tempFilePath, { unlimited: true }).metadata();
+  const meta = await sharp(tempFilePath, { unlimited: true, ...SHARP_INPUT_LIMITS }).metadata();
   if (!meta.width || !meta.height) {
     throw new Error('Could not read image dimensions from the uploaded file');
   }
-  await sharp(tempFilePath, { unlimited: true })
+  await sharp(tempFilePath, { unlimited: true, ...SHARP_INPUT_LIMITS })
     .grayscale()
     .png()
     .toFile(path.join(framesDir, 'ch0.png'));

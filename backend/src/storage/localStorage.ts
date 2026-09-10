@@ -1,4 +1,5 @@
 import path from 'path';
+import { SHARP_INPUT_LIMITS } from '../constants/imageLimits';
 import fs from 'fs/promises';
 import { existsSync } from 'fs';
 import sharp from 'sharp';
@@ -45,7 +46,7 @@ export class LocalStorageProvider implements StorageProvider {
       let mimeType = options.mimeType || 'application/octet-stream';
 
       try {
-        const imageMetadata = await sharp(buffer).metadata();
+        const imageMetadata = await sharp(buffer, SHARP_INPUT_LIMITS).metadata();
         width = imageMetadata.width;
         height = imageMetadata.height;
         if (imageMetadata.format) {
@@ -86,8 +87,11 @@ export class LocalStorageProvider implements StorageProvider {
 
           const sharpInput =
             'raw' in inputBuffer
-              ? sharp(inputBuffer.data, { raw: inputBuffer.raw })
-              : sharp(inputBuffer.data);
+              ? sharp(inputBuffer.data, {
+                  raw: inputBuffer.raw,
+                  ...SHARP_INPUT_LIMITS,
+                })
+              : sharp(inputBuffer.data, SHARP_INPUT_LIMITS);
 
           await sharpInput
             .resize(thumbnailSize.width, thumbnailSize.height, {

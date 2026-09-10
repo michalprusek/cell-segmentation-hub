@@ -31,6 +31,7 @@
  */
 
 import * as fs from 'fs/promises';
+import { SHARP_INPUT_LIMITS } from '../constants/imageLimits';
 import * as path from 'path';
 import sharp from 'sharp';
 import { prisma } from '../db/prismaClient';
@@ -168,7 +169,7 @@ async function generateContainerThumbnail(
   ];
   for (const candidate of candidates) {
     try {
-      await sharp(candidate)
+      await sharp(candidate, SHARP_INPUT_LIMITS)
         .resize(300, 300, { fit: 'inside' })
         .jpeg({ quality: 85 })
         .toFile(outPath);
