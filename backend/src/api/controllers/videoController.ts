@@ -27,6 +27,7 @@ import { logger } from '../../utils/logger';
 import { ResponseHelper } from '../../utils/response';
 import { uploadVideoFromFile } from '../../services/videoUploadService';
 import type { VideoUploadProgressEvent } from '../../services/videoUploadService';
+import { removeChannelFromFrames } from '../../services/removeChannelService';
 import { addChannelToFrames } from '../../services/addChannelService';
 import { isVideoFilename } from '../../services/video/videoExtractor';
 import { isSafeChannelName } from '../../services/video/types';
@@ -441,6 +442,66 @@ export class VideoController {
       // Known user-input failures → 400; anything else → 500.
       const isClientError =
         /required|selected|mismatch|only|Invalid|Cannot align|must |cannot be added|microtubule|dimensions|no channels|pixel grid/i.test(
+          message
+        );
+      ResponseHelper.error(res, message, isClientError ? 400 : 500);
+    }
+  }
+
+  /**
+   * POST /projects/:id/images/remove-channel
+   *
+   * Remove a channel from the SELECTED video frames — the inverse of
+   * `addChannel`, and scoped the same way, because the two sit behind one
+   * "Manage channels" button and a user who added to a selection expects to
+   * remove from one.
+   *
+   * Body: `{ channelName: string, imageIds: string[] }`. JSON, not multipart:
+   * there is no file.
+   */
+  static async removeChannel(req: Request, res: Response): Promise<void> {
+    try {
+      const projectId = req.params.id;
+      const userId = await assertProjectAccess(req, res, projectId);
+      if (!userId) {
+        return;
+      }
+
+      const channelName =
+        typeof req.body?.channelName === 'string'
+          ? req.body.channelName.trim()
+          : '';
+      // The path-safe `name`, not the display label — it becomes a filename.
+      // Validated here as well as inside `frameStorageKey` so a bad value is a
+      // 400 rather than a 500 from the storage guard.
+      if (!/^[A-Za-z0-9_-]{1,64}$/.test(channelName)) {
+        ResponseHelper.error(res, 'channelName is required', 400);
+        return;
+      }
+
+      const rawIds = req.body?.imageIds;
+      const imageIds: string[] = Array.isArray(rawIds) ? rawIds.map(String) : [];
+      if (imageIds.length === 0) {
+        ResponseHelper.error(res, 'imageIds required', 400);
+        return;
+      }
+
+      const result = await removeChannelFromFrames({
+        projectId,
+        channelName,
+        imageIds,
+      });
+
+      ResponseHelper.success(res, result);
+    } catch (err) {
+      const message = (err as Error).message;
+      logger.error(
+        `Remove channel failed: ${message}`,
+        err as Error,
+        'VideoController'
+      );
+      const isClientError =
+        /required|selected|only|Invalid|microtubule|not supported/i.test(
           message
         );
       ResponseHelper.error(res, message, isClientError ? 400 : 500);
