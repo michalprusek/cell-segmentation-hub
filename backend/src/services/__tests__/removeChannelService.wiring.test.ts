@@ -58,8 +58,19 @@ function setupFindMany(opts: {
   prismaMock.image.findMany
     .mockResolvedValueOnce(opts.selected)
     .mockResolvedValueOnce([{ id: CONTAINER, channels: opts.channels }])
-    .mockResolvedValueOnce(opts.allFrames);
+    .mockResolvedValueOnce(
+      opts.allFrames.map(f => ({ ...f, originalPath: null }))
+    );
 }
+
+/** A second channel that survives every removal below. Without one, the
+ *  service refuses — stripping a frame of its last channel is frame deletion,
+ *  not channel removal. The single-channel case has its own test. */
+const SURVIVOR = {
+  name: 'base',
+  type: 'irm',
+  isSegmentationSource: false,
+};
 
 describe('removeChannelFromFrames', () => {
   const CH = { name: 'extra', type: 'fluorescent', isSegmentationSource: false };
@@ -67,7 +78,7 @@ describe('removeChannelFromFrames', () => {
   it('deletes the per-frame PNG the add path wrote, at its own frameIndex', async () => {
     setupFindMany({
       selected: [frame('f2', 2)],
-      channels: [CH],
+      channels: [SURVIVOR, CH],
       allFrames: [frame('f0', 0), frame('f1', 1), frame('f2', 2)],
     });
 
@@ -93,7 +104,7 @@ describe('removeChannelFromFrames', () => {
     ]);
     setupFindMany({
       selected: [frame('f0', 0)],
-      channels: [CH],
+      channels: [SURVIVOR, CH],
       allFrames: [frame('f0', 0), frame('f1', 1)],
     });
 
@@ -117,7 +128,7 @@ describe('removeChannelFromFrames', () => {
     // deleted. Passing the selection as "all frames" would wipe the channel.
     setupFindMany({
       selected: [frame('f0', 0)],
-      channels: [CH],
+      channels: [SURVIVOR, CH],
       allFrames: [frame('f0', 0), frame('f1', 1), frame('f2', 2)],
     });
 
@@ -128,8 +139,8 @@ describe('removeChannelFromFrames', () => {
     });
 
     const written = prismaMock.image.update.mock.calls[0][0].data.channels;
-    expect(written).toHaveLength(1);
-    expect(written[0].frameIds).toEqual(['f1', 'f2']);
+    const extra = written.find((c: { name: string }) => c.name === 'extra');
+    expect(extra.frameIds).toEqual(['f1', 'f2']);
   });
 
   it('does not write a container nothing changed on', async () => {
@@ -153,7 +164,7 @@ describe('removeChannelFromFrames', () => {
   it('reports a cleared segmentation source instead of silently dropping it', async () => {
     setupFindMany({
       selected: [frame('f0', 0)],
-      channels: [{ ...CH, isSegmentationSource: true }],
+      channels: [SURVIVOR, { ...CH, isSegmentationSource: true }],
       allFrames: [frame('f0', 0)],
     });
 
@@ -171,5 +182,78 @@ describe('removeChannelFromFrames', () => {
     await expect(
       removeChannelFromFrames({ projectId: 'p1', channelName: 'extra', imageIds: ['f0'] })
     ).rejects.toThrow(/microtubule/i);
+  });
+});
+
+describe('removeChannelFromFrames — the frame row still points at the file', () => {
+  const CH = { name: 'extra', type: 'fluorescent', isSegmentationSource: false };
+  const OTHER = { name: 'base', type: 'irm', isSegmentationSource: true };
+
+  it('repoints a frame whose originalPath was the removed channel', async () => {
+    // The gallery renders each frame from its `originalPath`. Deleting the PNG
+    // without moving that column leaves a 404 per frame — observed in a real
+    // browser on 2026-09-10, which is why this test exists.
+    prismaMock.image.findMany
+      .mockResolvedValueOnce([
+        {
+          id: 'f0',
+          frameIndex: 0,
+          parentVideoId: CONTAINER,
+          isVideoContainer: false,
+        },
+      ])
+      .mockResolvedValueOnce([{ id: CONTAINER, channels: [OTHER, CH] }])
+      .mockResolvedValueOnce([
+        {
+          id: 'f0',
+          frameIndex: 0,
+          originalPath:
+            'projects/p1/images/vid1/frames/0000/extra.png',
+        },
+        { id: 'f1', frameIndex: 1, originalPath: null },
+      ]);
+
+    await removeChannelFromFrames({
+      projectId: 'p1',
+      channelName: 'extra',
+      imageIds: ['f0'],
+    });
+
+    const frameWrite = prismaMock.image.update.mock.calls.find(
+      c => c[0].where.id === 'f0'
+    );
+    expect(frameWrite).toBeDefined();
+    expect(frameWrite![0].data.originalPath).toBe(
+      'projects/p1/images/vid1/frames/0000/base.png'
+    );
+  });
+
+  it('refuses to strip a frame of its last remaining channel', async () => {
+    // Not the same axis as "which channel may go": a frame with no channels
+    // left has no pixels at all, which is deleting the frame, and that is a
+    // separate operation the gallery already offers.
+    prismaMock.image.findMany
+      .mockResolvedValueOnce([
+        {
+          id: 'f0',
+          frameIndex: 0,
+          parentVideoId: CONTAINER,
+          isVideoContainer: false,
+        },
+      ])
+      .mockResolvedValueOnce([{ id: CONTAINER, channels: [CH] }])
+      .mockResolvedValueOnce([
+        { id: 'f0', frameIndex: 0, originalPath: null },
+      ]);
+
+    await expect(
+      removeChannelFromFrames({
+        projectId: 'p1',
+        channelName: 'extra',
+        imageIds: ['f0'],
+      })
+    ).rejects.toThrow(/last|only channel/i);
+    // And nothing was deleted on the way to finding out.
+    expect(rm).not.toHaveBeenCalled();
   });
 });
