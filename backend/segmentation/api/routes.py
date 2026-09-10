@@ -2,7 +2,9 @@
 
 import time
 import logging
+import asyncio
 import threading
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from fastapi import APIRouter, HTTPException, UploadFile, File, Depends, Form
 import torch
@@ -24,37 +26,57 @@ logger = logging.getLogger(__name__)
 # Initialize router
 router = APIRouter()
 
-# Serialises microtubule inference at the request layer.
+# Serialises EVERY inference in this worker, across every route that runs one.
 #
-# This lock was introduced for v7 (DINOv3-L + DPT), which held ~7 GB of GPU
-# activations for a single 1024x1024 pass: four concurrent queue batches tried
-# to allocate 4 * 7 GB, fragmented the allocator and tripped OOM even with
-# >15 GB free.  v5H is far lighter — measured 0.73 GiB peak, and FLAT across
-# 1024^2 and 2048^2 because it tiles at 512^2 rather than running a ViT over
-# the whole frame — so the OOM argument no longer applies.
+# One lock, not one per model, and it is now an ACTIVE guard rather than the
+# insurance the two per-model locks used to be. What changed: the inference
+# dispatch moved off the event loop (see `_INFERENCE_EXECUTOR`), so the loop is
+# no longer what serialises it.
 #
-# The lock is kept anyway: it also bounds CPU contention, because the instancer
-# is single-threaded numpy/networkx and is the larger half of the ~4 s budget
-# on a dense frame (65 MTs).  Removing it is a throughput decision to make with
-# measurements, not a side effect of the model swap.
-_microtubule_inference_lock = threading.Lock()
+# It has to be loader-wide because the three inference paths do not share a
+# thread. `/segment` and `/batch-segment` are `async def` and now hop to the
+# executor; `/frap/targets` is a plain `def`, so Starlette hands it to its
+# 40-slot threadpool and it has ALWAYS been able to run beside the event loop —
+# which is why the old microtubule lock was shared with it. Without a single
+# lock spanning all three, a frap request and a queued /segment would overlap
+# and their GPU peaks would SUM rather than max, on a card shared with the
+# essays worker and Maptimize. That is the OOM the per-model locks existed to
+# prevent, and it is why this is not simply `max_workers=1`.
+#
+# The two locks it replaces carried these measurements, which still hold:
+#
+#  * microtubule — introduced for v7 (DINOv3-L + DPT), ~7 GB of activations per
+#    1024^2 pass, where four concurrent queue batches fragmented the allocator
+#    and tripped OOM with >15 GB free. v5H is far lighter (0.73 GiB peak, flat
+#    across 1024^2 and 2048^2 because it tiles at 512^2) so the OOM argument no
+#    longer applies to it, but the lock also bounds CPU contention: the
+#    instancer is single-threaded numpy/networkx and is the larger half of the
+#    ~4 s budget on a dense frame (65 MTs).
+#
+#  * neurite/soma — the heaviest interactive model on the card. Three ResEnc-M
+#    folds stay resident (1.70 GiB reserved) and each call adds a working set
+#    sized by the FRAME rather than the tile. It is also the longest: 108
+#    forward passes of 512^2 for a 1024^2 frame, ~2 min for a native one, and
+#    22 min for the 498 Mpx frame that prompted this change.
+_inference_lock = threading.Lock()
 
-# Serialises neurite/soma inference at the request layer.
+# One slot, so hopping off the event loop does not become real concurrency.
 #
-# Like the microtubule lock above, this is currently insurance rather than an
-# active guard: `/segment` is `async def` and its predict calls are blocking, so
-# the event loop already serialises every inference in this worker. The lock is
-# what still holds if that ever changes (a `def` route, a threadpool hop, an
-# `await` added mid-body) — and this is the model where it would matter most.
+# `/segment` is `async def`, so a blocking predict used to stall the whole
+# worker — including GET /health — for the inference's entire duration. That was
+# tolerable while the worst case was 150 s on a 6657x6664 frame (measured
+# 2026-08-28, A5000). It stopped being tolerable when #535 made a 498 Mpx frame
+# complete instead of running out of memory: 22 minutes of a dead event loop,
+# during which the docker healthcheck (30 s x 3) marks the container unhealthy
+# and every other request gets a 503. Measured on production 2026-09-10: 359
+# and 335 `Exceeded concurrency limit` in single minutes, while one frame ran.
 #
-# It is the heaviest interactive one on the card: three ResEnc-M folds stay
-# resident (1.70 GiB reserved) and each call adds a working set sized by the
-# FRAME, not the tile, because the two fp16 accumulators are C x H x W — 3.35 GiB
-# peak reserved on a 6657x6664 frame. It is also the longest: 108 forward passes
-# of 512² for a 1024² frame (9 tiles x 3 folds x 4 mirror variants), ~2 min for a
-# native one. Concurrency here would not shorten the queue, only raise the peak
-# on a card shared with the essays worker and Maptimize.
-_neurite_soma_inference_lock = threading.Lock()
+# The executor frees the loop; `_inference_lock` above is what keeps the work
+# serialised. Both are needed — see that comment for why the lock cannot be
+# replaced by this executor's single slot.
+_INFERENCE_EXECUTOR = ThreadPoolExecutor(
+    max_workers=1, thread_name_prefix="inference"
+)
 
 from fastapi import Request
 
@@ -137,6 +159,127 @@ async def get_status(loader = Depends(get_model_loader)):
         logger.error(f"Failed to get status: {e}")
         raise HTTPException(status_code=503, detail="Failed to get service status")
 
+
+def _dispatch_inference(loader, model, image, threshold, detect_holes):
+    """Run one inference, holding the loader-wide lock.
+
+    Split out of `segment_image` so the async route can hand it to
+    `_INFERENCE_EXECUTOR` instead of running it on the event loop. The branch
+    bodies are unchanged; only their residence is.
+    """
+    with _inference_lock:
+        if model == 'sperm':
+            # Sperm model uses its own mask_threshold (0.3) and score_threshold (0.95)
+            # Don't override with the user's segmentation threshold — it's calibrated differently
+            result = loader.predict_sperm(image)
+        elif model == 'wound':
+            # Wound model expects grayscale 512×512 — custom preprocessing lives in WoundModel
+            result = loader.predict_wound(image, threshold, detect_holes)
+        elif model == 'microtubule':
+            # Microtubule v5H uses its OWN fitted foreground cut (0.97, from
+            # params_v5h.json), not the user's threshold — the same reason
+            # sperm ignores it above: it is calibrated differently.
+            #
+            # This is not merely a preference. `threshold` is declared
+            # `le=0.9`, so 0.97 is not even expressible on this endpoint:
+            # forwarding the user's value would silently cut this model's
+            # (very confident) foreground at 0.5 and flood the instancer with
+            # noise, and "fixing" that by sending 0.97 would 422. The cut
+            # belongs to the fitted parameter vector, so it travels with it.
+            #
+            # detect_holes is not meaningful for polylines.
+            #
+            # Serialisation is `_inference_lock`, taken once by
+            # `_dispatch_inference` around this whole block — NOT here. A second
+            # acquisition would deadlock: `threading.Lock` is not reentrant.
+            #
+            # (The note that used to sit here claimed a sync route only blocks a
+            # worker thread. That was wrong for this path: `segment_image` is
+            # `async def`, so before the executor hop it blocked the event loop.
+            # It is right about `/frap/targets`, which is a plain `def` and takes
+            # the same lock from Starlette's threadpool.)
+            result = loader.predict_microtubule(image)
+        elif model == 'microcapsule':
+            # Microcapsule distilled U-Net — the user threshold is forwarded as
+            # the foreground cutoff. detect_holes is not meaningful: each capsule
+            # is a single closed instance polygon.
+            #
+            # This used to note that the model is light (~14.5 MB) and therefore
+            # ran without an inference lock, unlike microtubule and
+            # neurite/soma. That is no longer true of any branch: the lock is
+            # loader-wide and `_dispatch_inference` holds it around all of them.
+            # Being light now means the serialisation costs it little, not that
+            # it escapes it.
+            result = loader.predict_microcapsule(image, threshold)
+        elif model == 'neurite_soma':
+            # Neurite/soma (nnU-Net ResEnc-M, 3 folds, 3 classes). Does its own
+            # two-stage normalisation (1-99.5 percentile stretch, then z-score)
+            # and emits per-class polygons, so it cannot flow through the generic
+            # ImageNet-normalised single-channel path — that path would silently
+            # produce garbage rather than fail.
+            #
+            # `threshold` is forwarded only so the response echoes what the
+            # caller sent; the 3-class decision is an argmax, with no probability
+            # cut to move.
+            #
+            # This branch is the reason the whole dispatch moved off the event
+            # loop, so the history is worth keeping.
+            #
+            # It used to run blocking ON the loop, like every other branch, and
+            # that was a considered choice: a blocking predict stalls the whole
+            # worker — GET /health included — for its duration, which was up to
+            # 4 s at 1024x1024, 15 s at 2048x2048 and 150 s on the 6657x6664
+            # frames this model was trained on (measured 2026-08-28, A5000, two
+            # runs at different card load), against a docker healthcheck that
+            # gives up after 30 s x 3. Tolerable. Then #535 made a 498 Mpx frame
+            # COMPLETE rather than run out of memory, and the worst case became
+            # 22 minutes — a container marked unhealthy and 503s for everyone
+            # else while one frame ran.
+            #
+            # Hopping only THIS branch would have been worse than leaving it:
+            # the loop was what serialised inference across models, and the
+            # queue worker dispatches up to FOUR concurrent /segment calls
+            # (queueService.getMultipleBatches — the SERIAL_DISPATCH_MODELS cap
+            # only applies when a serial model is picked FIRST). Real
+            # concurrency would sum GPU peaks instead of maxing them, on a card
+            # shared with the essays worker and Maptimize, and would let two
+            # threads race `loader.is_processing` / `current_model` so
+            # GET /api/v1/status reported idle mid-inference.
+            #
+            # So the whole dispatch hops together, under one loader-wide
+            # `_inference_lock` — which is exactly the fix the old note here
+            # prescribed and deferred. Do not re-acquire that lock in this
+            # branch: `_dispatch_inference` already holds it and it is not
+            # reentrant.
+            result = loader.predict_neurite_soma(image, threshold, detect_holes)
+        elif model == 'spheroid_disintegration':
+            # Spheroid-disintegration model (UNet++/EffB5, 3-class). Uses its own
+            # CLAHE preprocessing and emits foreground + core polygons directly,
+            # so it can't flow through the generic single-channel predict path.
+            result = loader.predict_disintegration(image, threshold, detect_holes)
+        else:
+            result = loader.predict(image, model, threshold, detect_holes)
+    return result
+
+
+def _dispatch_batch_inference(
+    loader, images, model, batch_size, threshold, detect_holes
+):
+    """`predict_batch`, holding the loader-wide lock.
+
+    The counterpart to `_dispatch_inference` for `/batch-segment`; both hand
+    their work to the same single-slot executor, so a batch and a single frame
+    can never be in flight together.
+    """
+    with _inference_lock:
+        return loader.predict_batch(
+            images,
+            model,
+            batch_size=batch_size,
+            threshold=threshold,
+            detect_holes=detect_holes,
+        )
+
 @router.post("/segment")
 async def segment_image(
     file: UploadFile = File(...),
@@ -169,84 +312,16 @@ async def segment_image(
         
         # Perform segmentation with timing
         inference_start = time.time()
-        if model == 'sperm':
-            # Sperm model uses its own mask_threshold (0.3) and score_threshold (0.95)
-            # Don't override with the user's segmentation threshold — it's calibrated differently
-            result = loader.predict_sperm(image)
-        elif model == 'wound':
-            # Wound model expects grayscale 512×512 — custom preprocessing lives in WoundModel
-            result = loader.predict_wound(image, threshold, detect_holes)
-        elif model == 'microtubule':
-            # Microtubule v5H uses its OWN fitted foreground cut (0.97, from
-            # params_v5h.json), not the user's threshold — the same reason
-            # sperm ignores it above: it is calibrated differently.
-            #
-            # This is not merely a preference. `threshold` is declared
-            # `le=0.9`, so 0.97 is not even expressible on this endpoint:
-            # forwarding the user's value would silently cut this model's
-            # (very confident) foreground at 0.5 and flood the instancer with
-            # noise, and "fixing" that by sending 0.97 would 422. The cut
-            # belongs to the fitted parameter vector, so it travels with it.
-            #
-            # detect_holes is not meaningful for polylines.
-            #
-            # Serialise on _microtubule_inference_lock — see the comment at its
-            # definition. Holding it across the entire predict_microtubule call
-            # is fine: FastAPI sync routes run on uvicorn's worker thread pool,
-            # so blocking here only blocks the worker thread, not the event loop.
-            with _microtubule_inference_lock:
-                result = loader.predict_microtubule(image)
-        elif model == 'microcapsule':
-            # Microcapsule distilled U-Net — the user threshold is forwarded as
-            # the foreground cutoff. detect_holes is not meaningful: each capsule
-            # is a single closed instance polygon. The model is light (~14.5 MB),
-            # so it runs in parallel like hrnet/sperm/wound (no inference lock).
-            result = loader.predict_microcapsule(image, threshold)
-        elif model == 'neurite_soma':
-            # Neurite/soma (nnU-Net ResEnc-M, 3 folds, 3 classes). Does its own
-            # two-stage normalisation (1-99.5 percentile stretch, then z-score)
-            # and emits per-class polygons, so it cannot flow through the generic
-            # ImageNet-normalised single-channel path — that path would silently
-            # produce garbage rather than fail.
-            #
-            # `threshold` is forwarded only so the response echoes what the
-            # caller sent; the 3-class decision is an argmax, with no probability
-            # cut to move.
-            #
-            # Blocking, on the event loop, like every other branch here. That is
-            # a deliberate choice, not an oversight, and the trade-off is worth
-            # writing down because this model makes it sharpest.
-            #
-            # `segment_image` is `async def`, so a blocking predict stalls the
-            # whole worker — including GET /health — for its duration. That is
-            # up to 4 s at 1024x1024, 15 s at 2048x2048 and 150 s on the
-            # 6657x6664 frames this model was trained on (measured 2026-08-28,
-            # A5000, two runs at different card load), against a docker
-            # healthcheck that gives up after 30 s x 3.
-            #
-            # Hopping this ONE branch to a threadpool fixes that and breaks
-            # something worse: the event loop is what serialises inference
-            # across models today, and the queue worker dispatches up to FOUR
-            # concurrent /segment calls (queueService.getMultipleBatches — the
-            # SERIAL_DISPATCH_MODELS cap only applies when a serial model is
-            # picked FIRST). Real concurrency would sum GPU peaks instead of
-            # maxing them on a card shared with the essays worker and Maptimize
-            # — the exact OOM that cap exists to prevent — and would let two
-            # threads race `loader.is_processing` / `current_model`, so
-            # GET /api/v1/status would report idle mid-inference.
-            #
-            # The correct fix is a loader-wide inference lock applied to EVERY
-            # branch, which is a change to shared code that needs its own
-            # measurement. Until then this stays consistent with its neighbours.
-            with _neurite_soma_inference_lock:
-                result = loader.predict_neurite_soma(image, threshold, detect_holes)
-        elif model == 'spheroid_disintegration':
-            # Spheroid-disintegration model (UNet++/EffB5, 3-class). Uses its own
-            # CLAHE preprocessing and emits foreground + core polygons directly,
-            # so it can't flow through the generic single-channel predict path.
-            result = loader.predict_disintegration(image, threshold, detect_holes)
-        else:
-            result = loader.predict(image, model, threshold, detect_holes)
+        # Off the event loop, and serialised — see `_inference_lock`.
+        result = await asyncio.get_running_loop().run_in_executor(
+            _INFERENCE_EXECUTOR,
+            _dispatch_inference,
+            loader,
+            model,
+            image,
+            threshold,
+            detect_holes,
+        )
         inference_time = time.time() - inference_start
         
         processing_time = time.time() - start_time
@@ -397,13 +472,20 @@ async def batch_segment_images(
             # Get optimal batch size for the model
             optimal_batch_size = loader.get_batch_limit(model)
             
-            # Process all valid images using predict_batch
-            batch_results = loader.predict_batch(
-                valid_images, 
-                model, 
-                batch_size=optimal_batch_size,
-                threshold=threshold,
-                detect_holes=detect_holes
+            # Same treatment as `/segment`: off the event loop, and under the
+            # loader-wide lock. Leaving this one behind would have reopened the
+            # hole the lock exists to close — a batch running on the loop while
+            # the executor runs a single frame is two concurrent inferences,
+            # and their GPU peaks sum.
+            batch_results = await asyncio.get_running_loop().run_in_executor(
+                _INFERENCE_EXECUTOR,
+                _dispatch_batch_inference,
+                loader,
+                valid_images,
+                model,
+                optimal_batch_size,
+                threshold,
+                detect_holes,
             )
             
             # Create results array with proper index alignment
