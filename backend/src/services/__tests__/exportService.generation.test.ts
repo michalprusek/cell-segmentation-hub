@@ -187,10 +187,21 @@ vi.mock('../../utils/concurrency', () => ({
   ),
 }));
 
-vi.mock('../../types/validation', () => ({
-  isMicrotubuleProject: (t: string | undefined | null) => t === 'microtubules',
-  coerceProjectType: vi.fn((t: string) => t ?? 'spheroid'),
-}));
+// Partial mock via `importOriginal`, NOT a hand-written stand-in. The previous
+// version re-implemented `isMicrotubuleProject` inline, so the mock was a
+// second copy of a project-type rule that had to be kept in step by hand — and
+// when `standardPolygonMetricsApply` joined the module it was simply absent,
+// failing all 18 tests here with "No export is defined on the mock". Only
+// `coerceProjectType` needs to be a spy; every predicate is the real one, so a
+// dispatch test cannot pass against a rule production does not use.
+vi.mock('../../types/validation', async importOriginal => {
+  const actual =
+    await importOriginal<typeof import('../../types/validation')>();
+  return {
+    ...actual,
+    coerceProjectType: vi.fn((t: string) => t ?? 'spheroid'),
+  };
+});
 
 // ─── Imports (after mocks) ────────────────────────────────────────────────────
 
