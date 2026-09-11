@@ -268,11 +268,6 @@ export default {
       '{{count}} segmentations existantes peuvent ne plus correspondre au format d\'export "{{type}}". Re-segmentez pour mettre à jour les métriques.',
     verified: 'Vérifié',
     toggleVerified: 'Basculer la vérification',
-    pixelSize: 'Échelle :',
-    pixelSizeUnset: 'µm/px',
-    pixelSizeAria: "Échelle d'image du projet en micromètres par pixel",
-    pixelSizeHint:
-      'Micromètres par pixel pour ce projet. Nécessaire pour toute mesure en µm ; laisser vide si inconnue.',
     projectVerified: 'Projet marqué comme vérifié',
     projectUnverified: 'La vérification du projet a été supprimée',
     failedToUpdateVerified:

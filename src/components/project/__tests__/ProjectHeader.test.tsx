@@ -36,6 +36,21 @@ describe('ProjectHeader', () => {
     expect(screen.getByText('My Test Project')).toBeInTheDocument();
   });
 
+  it('does not offer a project-level pixel scale', () => {
+    // The scale belongs to the EXPORT, not to the project. It arrived here with
+    // the neurite work (#501) but was rendered for every project type, so a
+    // spheroid or wound project showed a µm/px box that nothing on its path
+    // reads. The export dialog has its own field and prefills it from the
+    // IMAGE's own calibration first, so nothing is lost by not having one here.
+    render(
+      <ProjectHeader projectTitle="Project" imagesCount={3} loading={false} />
+    );
+    // A number box is the only thing this header ever rendered one for, so its
+    // absence is the assertion. The props are gone from the interface too, so
+    // re-adding the control means re-adding them — which is the visible step.
+    expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument();
+  });
+
   it('renders image count when not loading', () => {
     render(
       <ProjectHeader projectTitle="Project" imagesCount={12} loading={false} />
