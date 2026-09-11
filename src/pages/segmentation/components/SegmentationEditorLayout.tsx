@@ -447,6 +447,7 @@ const SegmentationEditorLayout: React.FC<SegmentationEditorLayoutProps> = ({
                         width={imageDimensions?.width || canvasWidth}
                         height={imageDimensions?.height || canvasHeight}
                         alt={t('common.image')}
+                        videoIsPlaying={isVideoMode && video.isPlaying}
                         onLoad={handleImageLoad}
                       />
                     )}

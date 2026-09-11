@@ -43,6 +43,7 @@ import {
 import { createMockCanvasContext } from '@/test-utils/canvasTestUtils';
 import { buildLut } from '@/lib/windowLevel';
 import MultiChannelCanvas from '../MultiChannelCanvas';
+import { PROXY_SETTLE_MS, clearProxyRanges } from '@/lib/playbackProxyWindow';
 import {
   MAX_SPECULATIVE_REQUESTS,
   speculativeFrameRequests,
@@ -978,5 +979,122 @@ describe('MultiChannelCanvas — CPU composite windows', () => {
     const calls = vi.mocked(buildLut).mock.calls;
     expect(calls).toContainEqual([2941, 4145, 4145]);
     expect(calls).toContainEqual([489, 53927, 53927]);
+  });
+  // ── the playback proxy is for MOVING frames only ───────────────────────────
+  //
+  // A settled frame is what a scientist annotates and measures on, and the
+  // proxy is an 8-bit LOSSY WebP: measured on production data (Alice
+  // Dodokova's project 929, 2026-09-10) it moves 74-82 % of pixels, by a mean
+  // of 2.3 display levels and a max of 14.9, and NO encoder setting fixes that
+  // within the playback bandwidth budget — q98 costs 12x the bytes for 1.5x
+  // the accuracy, lossless 25x for 5x. The window guard cannot catch it either,
+  // because it models only the quantisation STEP: her window spanned 134 of the
+  // 256 levels, four times the guard's threshold, and still banded.
+  //
+  // So the proxy is gated on the frame MOVING instead, where its artefacts are
+  // invisible and its bytes are the point.
+  describe('playback proxy is used only while the frame is moving', () => {
+    let originalOffscreenCanvas: typeof globalThis.OffscreenCanvas;
+
+    beforeEach(() => {
+      // canDecodeWebpGray() gates on these two; jsdom has neither, so without
+      // a stand-in every test here would pass for the WRONG reason — no proxy
+      // because the browser cannot decode one, rather than because the frame
+      // settled.
+      originalOffscreenCanvas = globalThis.OffscreenCanvas;
+      globalThis.OffscreenCanvas =
+        class {} as unknown as typeof globalThis.OffscreenCanvas;
+      clearProxyRanges();
+    });
+
+    afterEach(() => {
+      globalThis.OffscreenCanvas = originalOffscreenCanvas;
+    });
+
+    /** Every URL fetched for `channel`, in order. */
+    function urlsFor(fetchImpl: ReturnType<typeof vi.fn>, channel: string) {
+      return fetchImpl.mock.calls
+        .map((c: unknown[]) => c[0] as string)
+        .filter(u => u.includes(`channel=${channel}`));
+    }
+
+    it('draws from the proxy while the video is playing', async () => {
+      const { fetchImpl } = makeSuccessfulFetch();
+      global.fetch = fetchImpl;
+
+      await act(async () => {
+        render(<MultiChannelCanvas {...DEFAULT_PROPS} videoIsPlaying />);
+        await new Promise(r => setTimeout(r, 50));
+      });
+
+      expect(urlsFor(fetchImpl, 'ch1')).toEqual([
+        '/api/images/frame-1/frame-data?channel=ch1&repr=proxy',
+      ]);
+    });
+
+    it('draws from the proxy right after a frame change, before it settles', async () => {
+      const { fetchImpl } = makeSuccessfulFetch();
+      global.fetch = fetchImpl;
+
+      const { rerender } = render(<MultiChannelCanvas {...DEFAULT_PROPS} />);
+      // Let frame-1 settle first, so the proxy below can only come from the
+      // frame CHANGE and not from the initial un-settled render.
+      await waitFor(() => {
+        const u = urlsFor(fetchImpl, 'ch1');
+        expect(u[u.length - 1]).toBe(
+          '/api/images/frame-1/frame-data?channel=ch1'
+        );
+      });
+      fetchImpl.mockClear();
+
+      // A scrub: the frame changes while the video is NOT playing.
+      rerender(<MultiChannelCanvas {...DEFAULT_PROPS} frameId="frame-2" />);
+      await waitFor(() => expect(urlsFor(fetchImpl, 'ch1').length).toBe(1));
+
+      // The FIRST request for the new frame, not eventually — a scrub that
+      // pulled the multi-megabyte original for every frame scrolled past would
+      // defeat the proxy entirely.
+      expect(urlsFor(fetchImpl, 'ch1')[0]).toBe(
+        '/api/images/frame-2/frame-data?channel=ch1&repr=proxy'
+      );
+    });
+
+    it('re-fetches at full depth once the frame stops changing', async () => {
+      const { fetchImpl } = makeSuccessfulFetch();
+      global.fetch = fetchImpl;
+
+      render(<MultiChannelCanvas {...DEFAULT_PROPS} />);
+
+      // The LAST thing fetched for this channel must be the 16-bit original.
+      await waitFor(() => {
+        const urls = urlsFor(fetchImpl, 'ch1');
+        expect(urls[urls.length - 1]).toBe(
+          '/api/images/frame-1/frame-data?channel=ch1'
+        );
+      });
+      // ...and the proxy must have come FIRST, so the upgrade is progressive
+      // refinement rather than a stall on a cold cache.
+      expect(urlsFor(fetchImpl, 'ch1')[0]).toBe(
+        '/api/images/frame-1/frame-data?channel=ch1&repr=proxy'
+      );
+    });
+
+    it('does not upgrade to full depth while the video is still playing', async () => {
+      const { fetchImpl } = makeSuccessfulFetch();
+      global.fetch = fetchImpl;
+
+      render(<MultiChannelCanvas {...DEFAULT_PROPS} videoIsPlaying />);
+      await act(async () => {
+        await new Promise(r => setTimeout(r, PROXY_SETTLE_MS * 3));
+      });
+
+      // Playback holds a frame on screen for a whole interval; without the
+      // isPlaying half of the gate, a slow clip (or a stall) would settle
+      // mid-playback and start pulling multi-megabyte PNGs — making the very
+      // problem the proxy exists to solve worse.
+      const urls = urlsFor(fetchImpl, 'ch1');
+      expect(urls.length).toBeGreaterThan(0);
+      expect(urls.every(u => u.endsWith('&repr=proxy'))).toBe(true);
+    });
   });
 });

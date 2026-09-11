@@ -60,6 +60,7 @@ import { FRAME_PREFETCH_WINDOW } from '../../hooks/useFrameWindowPrefetch';
 import { DECODE_AHEAD_FRAMES } from '../../hooks/useDecodeAhead';
 import { buildFrameImageUrl } from '../../hooks/segmentationPolygonCache';
 import {
+  PROXY_SETTLE_MS,
   anyWindowNeedsFullDepth,
   noteProxyRange,
 } from '@/lib/playbackProxyWindow';
@@ -103,6 +104,10 @@ interface MultiChannelCanvasProps {
   width?: number;
   height?: number;
   loading?: boolean;
+  /** Whether the video is playing. Holds the frame on the 8-bit playback proxy
+   *  for as long as playback lasts — see `useProxy` below. Undefined for a
+   *  still image, which is never "playing" and settles immediately. */
+  videoIsPlaying?: boolean;
   /** Notified once the first channel image has loaded with its natural
    *  dimensions + the channelsKey that produced this load. */
   onLoad?: (width: number, height: number, channelsKey: string) => void;
@@ -209,6 +214,7 @@ export default function MultiChannelCanvas({
   width,
   height,
   loading = true,
+  videoIsPlaying = false,
   onLoad,
 }: MultiChannelCanvasProps) {
   const {
@@ -304,17 +310,62 @@ export default function MultiChannelCanvas({
   );
   const fetchChannelsKey = fetchChannels.join('|');
 
-  // Draw from the 8-bit playback proxy unless the window has narrowed far
-  // enough that its 256 levels would band — see `windowNeedsFullDepth`. The
-  // server may still answer with the original PNG (batch not finished, or the
-  // frame too bright to map); `decodeWebpGray` expands proxy samples back into
-  // the data's own units, so both answers reach the compositor alike and this
-  // flag never has to be right about what actually arrived.
+  // Whether this frame has stopped moving.
+  //
+  // The state names WHICH frame settled, and the boolean is derived from it in
+  // render. That is not a stylistic choice. A plain `settled` flag reset by the
+  // effect is one commit late — the render that first sees a new `frameId`
+  // still reads the PREVIOUS frame's `true`, so a scrub fires the decode effect
+  // at full depth and only then flips to the proxy. Exactly backwards: the
+  // multi-megabyte PNG on the frame being scrolled past, the cheap proxy on the
+  // one that stopped. Derived here, the new frame is un-settled in its very
+  // first render, at no extra commit.
+  //
+  // The timer is cleaned up on every path (frame change AND unmount). An
+  // uncleaned setTimeout in an editor effect is what made this suite flaky for
+  // months, poisoning whichever test file ran next; see CLAUDE.md, "Flaky under
+  // load — and the blame MOVES".
+  const [settledFrameId, setSettledFrameId] = useState<string | null>(null);
+  const frameSettled = settledFrameId === frameId;
+  useEffect(() => {
+    const id = window.setTimeout(
+      () => setSettledFrameId(frameId),
+      PROXY_SETTLE_MS
+    );
+    return () => window.clearTimeout(id);
+  }, [frameId]);
+
+  // Draw from the 8-bit playback proxy only while the frame is MOVING, and only
+  // when the window is wide enough that its 256 levels would not band anyway
+  // (`windowNeedsFullDepth`).
+  //
+  // WHY MOVING, AND NOT THE WINDOW ALONE. The window guard models the
+  // quantisation step; the proxy's dominant error is that WebP q90 is a lossy
+  // DCT, which the step says nothing about. Measured on production data
+  // (2026-09-10) the shipped encoder moves 74-82 % of a frame's pixels by a
+  // mean of 2.3 display levels and a max of 14.9, at a window four times the
+  // guard's threshold — reported by a user as the editor "showing quantisation
+  // noise", which is exactly what a DCT does to photon noise. No encoder
+  // setting fixes it inside the playback bandwidth budget, so the proxy is
+  // confined to what its name always said: a moving picture, where the
+  // artefacts are invisible and the bytes are the whole point. A still frame —
+  // the thing that actually gets annotated and measured — gets the 16-bit PNG.
+  //
+  // `videoIsPlaying` is a separate term from `frameSettled` rather than a
+  // replacement for it: playback covers a clip whose frames arrive slower than
+  // PROXY_SETTLE_MS (a stall, a long exposure), and `frameSettled` covers
+  // scrubbing and vertex work, where nothing is "playing" at all.
+  //
+  // The server may still answer with the original PNG (batch not finished, or
+  // the frame too bright to map); `decodeWebpGray` expands proxy samples back
+  // into the data's own units, so both answers reach the compositor alike and
+  // this flag never has to be right about what actually arrived.
   // Gated on being able to DECODE one, not just on wanting one: a browser
   // without OffscreenCanvas would otherwise spend the bandwidth on bytes it
   // then cannot turn into samples, and draw those channels blank.
   const useProxy =
     canDecodeWebpGray() &&
+    (videoIsPlaying || !frameSettled) &&
     !anyWindowNeedsFullDepth(
       channelWindows,
       proxyRangeMax,
