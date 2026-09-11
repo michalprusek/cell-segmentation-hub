@@ -1426,9 +1426,6 @@ export default {
       title: 'Neurite metrics',
       description:
         'Assign each neurite to a soma and export per-cell tables with a developmental stage.',
-      enable: 'Include neurite metrics',
-      enableHint:
-        'One run per frame on the ML service; a large confocal field takes about a minute.',
       classify: 'Filter out non-neuronal somas',
       classifyHint:
         'A fine-tuned classifier rejects growth cones and cell fragments. Rejected objects stay in the table with soma_neuronal = 0.',

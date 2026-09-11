@@ -1429,9 +1429,6 @@ export default {
       title: 'Metriky neuritů',
       description:
         'Přiřadí každý neurit k somě a vyexportuje tabulky po buňkách včetně vývojového stadia.',
-      enable: 'Zahrnout metriky neuritů',
-      enableHint:
-        'Jeden běh na snímek na ML službě; velké konfokální pole trvá zhruba minutu.',
       classify: 'Odfiltrovat neneuronální somy',
       classifyHint:
         'Doučený klasifikátor odmítne růstové kužely a fragmenty buněk. Odmítnuté objekty zůstanou v tabulce se soma_neuronal = 0.',

@@ -35,6 +35,8 @@ import {
 import {
   coerceProjectType,
   isMicrotubuleProject as isMicrotubuleProjectType,
+  isNeuriteProject as isNeuriteProjectType,
+  standardPolygonMetricsApply,
 } from '../types/validation';
 import {
   SPERM_LABEL_PREFIX,
@@ -750,10 +752,14 @@ export class ExportService {
         );
       }
 
-      // Neurite per-cell metrics — `neurite` projects only.
+      // Neurite per-cell metrics OWN the metrics.* files for neurite projects
+      // (the standard closed-polygon report steps aside above). Runs whenever
+      // metrics are requested, not behind its own toggle: that toggle defaulted
+      // to OFF, so a normal export of a neurite project produced spheroid
+      // metrics and no neurite or soma sheet at all. Mirrors the microtubule
+      // arrangement directly above.
       if (
-        project.type === 'neurite' &&
-        options.neuriteMetrics?.enabled &&
+        isNeuriteProjectType(project.type) &&
         options.metricsFormats?.length &&
         project.images?.length
       ) {
@@ -1581,15 +1587,14 @@ export class ExportService {
       throw new Error('Export cancelled by user');
     }
 
-    // Microtubule annotations are open polylines, which the standard
-    // closed-polygon metrics calculator discards (geometry !== 'polyline'
-    // filter) — so this report would be header-only. The MT per-channel
-    // intensity exporter (`generateMTIntensityMetrics`) writes the
-    // metrics.{csv,xlsx,json} files for MT projects instead. Skip here to
-    // avoid emitting empty files and racing the MT writer on the same paths.
-    if (isMicrotubuleProjectType(projectType)) {
+    // Some project types own their metrics files; see
+    // `standardPolygonMetricsApply` for why each one does. Skipping here avoids
+    // both an empty report and — worse, because it looks fine — a plausible
+    // one: a neurite project used to export "Sphericity" per dendrite. It also
+    // stops this writer racing the specialised one on the same paths.
+    if (!standardPolygonMetricsApply(projectType)) {
       logger.info(
-        'Microtubule project: standard polygon metrics skipped; the MT intensity exporter owns the metrics files',
+        `${projectType} project: standard polygon metrics skipped; the specialised exporter owns the metrics files`,
         'ExportService',
         { jobId }
       );

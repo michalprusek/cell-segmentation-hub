@@ -1450,9 +1450,6 @@ export default {
       title: 'Neuriten-Metriken',
       description:
         'Ordnet jeden Neuriten einem Soma zu und exportiert Tabellen pro Zelle samt Entwicklungsstadium.',
-      enable: 'Neuriten-Metriken einbeziehen',
-      enableHint:
-        'Ein Durchlauf pro Bild im ML-Dienst; ein großes konfokales Feld dauert etwa eine Minute.',
       classify: 'Nicht-neuronale Somata herausfiltern',
       classifyHint:
         'Ein feinabgestimmter Klassifikator verwirft Wachstumskegel und Zellfragmente. Verworfene Objekte bleiben mit soma_neuronal = 0 in der Tabelle.',

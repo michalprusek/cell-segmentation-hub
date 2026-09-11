@@ -322,7 +322,10 @@ describe('countExportSteps', () => {
     ).toBe(5);
   });
 
-  it('does not count it when disabled, or with no images', () => {
+  it('counts it regardless of the vestigial `enabled` flag', () => {
+    // The neurite report is no longer opt-in — it IS the metrics report for a
+    // neurite project. An older frontend bundle still sends `enabled: false`;
+    // honouring it would go back to exporting spheroid metrics per dendrite.
     expect(
       countExportSteps(
         { ...generic, neuriteMetrics: { enabled: false } },
@@ -330,7 +333,7 @@ describe('countExportSteps', () => {
         true,
         true
       )
-    ).toBe(5);
+    ).toBe(6);
     expect(
       countExportSteps(
         { ...generic, neuriteMetrics: { enabled: true } },

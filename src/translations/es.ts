@@ -1437,9 +1437,6 @@ export default {
       title: 'Métricas de neuritas',
       description:
         'Asigna cada neurita a un soma y exporta tablas por célula con el estadio de desarrollo.',
-      enable: 'Incluir métricas de neuritas',
-      enableHint:
-        'Una ejecución por fotograma en el servicio de ML; un campo confocal grande tarda alrededor de un minuto.',
       classify: 'Filtrar somas no neuronales',
       classifyHint:
         'Un clasificador ajustado rechaza conos de crecimiento y fragmentos celulares. Los objetos rechazados permanecen en la tabla con soma_neuronal = 0.',

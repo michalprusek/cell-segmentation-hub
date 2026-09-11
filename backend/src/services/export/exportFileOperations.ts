@@ -133,10 +133,10 @@ export function countExportSteps(
     isMicrotubuleProject && options.mtKymographs?.enabled,
     isMicrotubuleProject && hasImages,
     isMicrotubuleProject && hasImages,
-    isNeuriteProject &&
-      options.neuriteMetrics?.enabled &&
-      options.metricsFormats?.length &&
-      hasImages,
+    // No `neuriteMetrics.enabled` term: the neurite report is not opt-in any
+    // more (see exportService). Leaving it here would make the progress bar
+    // overshoot and stall at the end on every neurite export.
+    isNeuriteProject && options.metricsFormats?.length && hasImages,
   ].filter(Boolean).length;
 }
 

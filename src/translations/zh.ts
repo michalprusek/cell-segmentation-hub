@@ -1332,8 +1332,6 @@ export default {
     neuriteMetrics: {
       title: '神经突指标',
       description: '将每条神经突归属到一个胞体，并导出带发育阶段的按细胞表格。',
-      enable: '包含神经突指标',
-      enableHint: 'ML 服务对每帧运行一次；较大的共聚焦视野约需一分钟。',
       classify: '过滤非神经元胞体',
       classifyHint:
         '经微调的分类器会剔除生长锥和细胞碎片。被剔除的对象仍保留在表中，soma_neuronal = 0。',
