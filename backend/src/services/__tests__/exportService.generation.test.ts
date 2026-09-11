@@ -704,6 +704,55 @@ describe('ExportService — copyOriginalImagesWithProgress', () => {
 // generateMetrics — project-type dispatch
 // ═══════════════════════════════════════════════════════════════════════════
 
+describe('ExportService — generateNeuriteMetrics without an options object', () => {
+  it('runs and defaults the classifier ON when neuriteMetrics is absent', async () => {
+    // The report used to be gated on `neuriteMetrics.enabled`, so the object
+    // was guaranteed to exist by the time this ran. Now the report runs for
+    // every neurite export, and a request that never mentioned it — the
+    // ordinary case — arrives with `undefined`. Reading `.classify` off that
+    // threw, and the export completed with an EMPTY metrics directory: no
+    // spheroid sheet (correct) and no neurite sheet either.
+    const svc = new ExportService();
+    vi.mocked(computeNeuriteMetrics).mockClear();
+
+    await expect(
+      (
+        svc as unknown as {
+          generateNeuriteMetrics(
+            images: unknown[],
+            exportDir: string,
+            formats: readonly string[],
+            options: unknown,
+            mlGate?: unknown,
+            pixelToMicrometerScale?: number
+          ): Promise<void>;
+        }
+      ).generateNeuriteMetrics(
+        [
+          {
+            id: 'i1',
+            name: 'f.tif',
+            pixelSizeUm: 0.18,
+            originalPath: 'p.png',
+            segmentation: { polygons: [] },
+          },
+        ],
+        '/tmp/neurite',
+        ['csv'],
+        undefined,
+        undefined,
+        0.18
+      )
+    ).resolves.toBeUndefined();
+
+    // Defaulting to OFF would silently over-report connections; the section's
+    // own warning says so. The default has to be ON.
+    expect(vi.mocked(computeNeuriteMetrics).mock.calls[0][1]).toMatchObject({
+      classify: true,
+    });
+  });
+});
+
 describe('ExportService — generateNeuriteMetrics scale', () => {
   // The exporter SKIPS any frame without a pixel size, because every staging
   // threshold is in micrometres and a guess yields confident wrong stages

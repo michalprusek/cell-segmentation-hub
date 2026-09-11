@@ -1870,7 +1870,10 @@ export class ExportService {
     images: ImageWithSegmentation[],
     exportDir: string,
     formats: ReadonlyArray<'excel' | 'csv' | 'json'>,
-    options: NonNullable<ExportOptions['neuriteMetrics']>,
+    /** May be absent: the report is no longer opt-in, so an ordinary export
+     *  request never mentions it. Defaulted below rather than made required —
+     *  the caller has nothing sensible to invent either. */
+    options: ExportOptions['neuriteMetrics'],
     mlGate?: Semaphore,
     /** The scale the user typed on the export modal. This is the ONLY source
      *  of a pixel size in practice: measured 2026-09-07, not one of the 10 857
@@ -1900,7 +1903,12 @@ export class ExportService {
           originalPath: img.originalPath,
           segmentation: img.segmentation,
         })),
-        { formats, classify: options.classify },
+        // Classifier ON by default. Off, a neurite ending in the cell's OWN
+        // growth cone cannot be told from one connecting two cells, so
+        // connections are over-reported and their length credited to the
+        // wrong object — the export dialog warns about exactly this. A
+        // silently-off default would put that error in every ordinary export.
+        { formats, classify: options?.classify ?? true },
         mlGate
       );
 
@@ -1923,6 +1931,26 @@ export class ExportService {
         error instanceof Error ? error : new Error(String(error)),
         'ExportService'
       );
+      // Honour the contract in this method's docstring. Logging alone left the
+      // metrics directory EMPTY, which reads as "this project has no cells"
+      // rather than "the report did not run" — and now that the standard
+      // polygon report steps aside for neurite projects, there is no other
+      // file to notice its absence against.
+      try {
+        await writeNeuriteMetrics(
+          { neurites: [], somas: [], skipped: [], qc: {} },
+          path.join(exportDir, 'neurite_metrics'),
+          formats
+        );
+      } catch (writeError) {
+        logger.error(
+          'Neurite metrics: could not write the empty fallback sheets',
+          writeError instanceof Error
+            ? writeError
+            : new Error(String(writeError)),
+          'ExportService'
+        );
+      }
     }
   }
 
