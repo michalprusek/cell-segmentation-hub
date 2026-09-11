@@ -276,11 +276,6 @@ export default {
       '{{count}} existing segmentation(s) may no longer match the new "{{type}}" export format. Re-segment to refresh metrics.',
     verified: 'Verified',
     toggleVerified: 'Toggle verified',
-    pixelSize: 'Scale:',
-    pixelSizeUnset: 'µm/px',
-    pixelSizeAria: 'Project image scale in micrometres per pixel',
-    pixelSizeHint:
-      'Micrometres per pixel for this project. Needed for any measurement in µm; leave empty if unknown.',
     projectVerified: 'Project marked as verified',
     projectUnverified: 'Project verification removed',
     failedToUpdateVerified: 'Failed to update verification status',
@@ -1426,9 +1421,6 @@ export default {
       title: 'Neurite metrics',
       description:
         'Assign each neurite to a soma and export per-cell tables with a developmental stage.',
-      enable: 'Include neurite metrics',
-      enableHint:
-        'One run per frame on the ML service; a large confocal field takes about a minute.',
       classify: 'Filter out non-neuronal somas',
       classifyHint:
         'A fine-tuned classifier rejects growth cones and cell fragments. Rejected objects stay in the table with soma_neuronal = 0.',

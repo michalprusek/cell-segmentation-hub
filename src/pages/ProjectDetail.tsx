@@ -111,7 +111,6 @@ const ProjectDetail = () => {
     projectVerified,
     setProjectVerified,
     projectPixelSizeUm,
-    setProjectPixelSizeUm,
     projectFolderId,
     images,
     projectChannels,
@@ -141,25 +140,6 @@ const ProjectDetail = () => {
       }
     },
     [id, projectTitle, setProjectTitle, t]
-  );
-
-  // The project's image scale. Optimistic like the type pill above, and for
-  // the same reason: the input would otherwise sit showing the old value for
-  // the whole round-trip and read as if the edit had been ignored.
-  const handlePixelSizeChange = useCallback(
-    async (pixelSizeUm: number | null) => {
-      if (!id) return;
-      const previous = projectPixelSizeUm;
-      setProjectPixelSizeUm(pixelSizeUm);
-      try {
-        await apiClient.updateProject(id, { pixelSizeUm });
-      } catch (error) {
-        setProjectPixelSizeUm(previous);
-        logger.error('Failed to update project pixel size', error);
-        toast.error(getErrorMessage(error));
-      }
-    },
-    [id, projectPixelSizeUm, setProjectPixelSizeUm]
   );
 
   const handleProjectTypeChange = useCallback(
@@ -1811,8 +1791,6 @@ const ProjectDetail = () => {
         onTypeChange={handleProjectTypeChange}
         verified={projectVerified}
         onVerifiedChange={handleVerifiedChange}
-        pixelSizeUm={projectPixelSizeUm}
-        onPixelSizeChange={handlePixelSizeChange}
       />
 
       <div className="container mx-auto px-4 py-8">

@@ -50,11 +50,6 @@ interface ProjectHeaderProps {
   // backend is the actual authorization boundary.
   verified?: boolean;
   onVerifiedChange?: (verified: boolean) => void;
-  /** Image scale for the whole project, µm per pixel; null = not calibrated. */
-  pixelSizeUm?: number | null;
-  /** Omitted when the viewer may not change it (shared projects are
-   *  read-only for the annotator), which also hides the control. */
-  onPixelSizeChange?: (pixelSizeUm: number | null) => void | Promise<void>;
   /** The folder THIS viewer filed the project in; `null` = dashboard root,
    *  `undefined` = not loaded yet. Back returns there instead of always to
    *  the root. */
@@ -65,8 +60,6 @@ interface ProjectHeaderProps {
  *  0.001 is 1 nm/px, finer than any light microscope resolves; 1000 is a
  *  millimetre per pixel, coarser than any objective in use here. A value the
  *  modal accepts must not be refused here, and vice versa. */
-const SCALE_MIN_UM_PER_PX = 0.001;
-const SCALE_MAX_UM_PER_PX = 1000;
 
 const ProjectHeader = ({
   projectTitle,
@@ -77,8 +70,6 @@ const ProjectHeader = ({
   onTypeChange,
   verified,
   onVerifiedChange,
-  pixelSizeUm,
-  onPixelSizeChange,
   folderId,
 }: ProjectHeaderProps) => {
   // Inline rename, following the same gesture the microtubule panel uses:
@@ -91,31 +82,6 @@ const ProjectHeader = ({
   // from the number on every keystroke makes "0." and a trailing zero
   // impossible to type. `null` means "not being edited", so the input shows
   // the stored value.
-  const [scaleDraft, setScaleDraft] = useState<string | null>(null);
-
-  const commitScale = () => {
-    if (scaleDraft === null) return;
-    const text = scaleDraft.trim();
-    setScaleDraft(null);
-    if (text === '') {
-      // Emptying the box CLEARS the calibration rather than meaning zero.
-      if (pixelSizeUm != null) void onPixelSizeChange?.(null);
-      return;
-    }
-    const value = Number(text);
-    if (
-      !Number.isFinite(value) ||
-      value < SCALE_MIN_UM_PER_PX ||
-      value > SCALE_MAX_UM_PER_PX
-    ) {
-      return; // out of range: keep what was stored, discard the draft
-    }
-    // Six decimals, matching the export modal — a Nikon ND2 reports
-    // 0.0722222 µm/px, and rounding to three silently costs 0.3 % on every
-    // exported length.
-    const rounded = Math.round(value * 1e6) / 1e6;
-    if (rounded !== pixelSizeUm) void onPixelSizeChange?.(rounded);
-  };
 
   // No effect syncs the draft to `projectTitle`: `startRename` is the only way
   // into the editor and it seeds the draft itself, so an effect would be dead
@@ -284,47 +250,6 @@ const ProjectHeader = ({
                     )}
                   >
                     {t(`projects.types.${projectType}`)}
-                  </Badge>
-                )}
-              </div>
-            )}
-            {(onPixelSizeChange || pixelSizeUm != null) && (
-              <div className="flex shrink-0 items-center gap-2">
-                <span className="whitespace-nowrap text-xs text-gray-500 dark:text-gray-400">
-                  {t('projects.pixelSize')}
-                </span>
-                {onPixelSizeChange ? (
-                  <input
-                    type="number"
-                    inputMode="decimal"
-                    step="any"
-                    min={SCALE_MIN_UM_PER_PX}
-                    max={SCALE_MAX_UM_PER_PX}
-                    // Empty string, not "0" — an uncalibrated project must not
-                    // look like one measured at zero.
-                    value={
-                      scaleDraft ??
-                      (pixelSizeUm != null ? String(pixelSizeUm) : '')
-                    }
-                    onChange={e => setScaleDraft(e.target.value)}
-                    onBlur={commitScale}
-                    onKeyDown={e => {
-                      if (e.key === 'Enter') {
-                        commitScale();
-                        (e.target as HTMLInputElement).blur();
-                      } else if (e.key === 'Escape') {
-                        setScaleDraft(null);
-                        (e.target as HTMLInputElement).blur();
-                      }
-                    }}
-                    placeholder={String(t('projects.pixelSizeUnset'))}
-                    aria-label={String(t('projects.pixelSizeAria'))}
-                    title={String(t('projects.pixelSizeHint'))}
-                    className="h-8 w-24 rounded-md border border-gray-300 bg-transparent px-2 text-xs dark:border-gray-600"
-                  />
-                ) : (
-                  <Badge variant="outline" className="h-8 px-3 text-xs">
-                    {pixelSizeUm} µm/px
                   </Badge>
                 )}
               </div>

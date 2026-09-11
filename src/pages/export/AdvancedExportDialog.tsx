@@ -91,7 +91,6 @@ interface AdvancedExportDialogProps {
  *  the section file, which would then export a non-component and break fast
  *  refresh for the whole module. */
 const NEURITE_METRICS_DEFAULTS: NeuriteMetricsOptions = {
-  enabled: false,
   classify: true,
 };
 

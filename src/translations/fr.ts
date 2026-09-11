@@ -268,11 +268,6 @@ export default {
       '{{count}} segmentations existantes peuvent ne plus correspondre au format d\'export "{{type}}". Re-segmentez pour mettre à jour les métriques.',
     verified: 'Vérifié',
     toggleVerified: 'Basculer la vérification',
-    pixelSize: 'Échelle :',
-    pixelSizeUnset: 'µm/px',
-    pixelSizeAria: "Échelle d'image du projet en micromètres par pixel",
-    pixelSizeHint:
-      'Micromètres par pixel pour ce projet. Nécessaire pour toute mesure en µm ; laisser vide si inconnue.',
     projectVerified: 'Projet marqué comme vérifié',
     projectUnverified: 'La vérification du projet a été supprimée',
     failedToUpdateVerified:
@@ -1445,9 +1440,6 @@ export default {
       title: 'Métriques des neurites',
       description:
         'Attribue chaque neurite à un soma et exporte des tableaux par cellule avec le stade de développement.',
-      enable: 'Inclure les métriques des neurites',
-      enableHint:
-        'Une exécution par image sur le service ML ; un grand champ confocal prend environ une minute.',
       classify: 'Filtrer les somas non neuronaux',
       classifyHint:
         'Un classifieur affiné rejette les cônes de croissance et les fragments cellulaires. Les objets rejetés restent dans le tableau avec soma_neuronal = 0.',

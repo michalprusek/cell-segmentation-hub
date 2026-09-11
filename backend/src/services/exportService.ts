@@ -35,6 +35,8 @@ import {
 import {
   coerceProjectType,
   isMicrotubuleProject as isMicrotubuleProjectType,
+  isNeuriteProject as isNeuriteProjectType,
+  standardPolygonMetricsApply,
 } from '../types/validation';
 import {
   SPERM_LABEL_PREFIX,
@@ -45,6 +47,7 @@ import {
   getProgressMessage,
   createZipArchive,
   countExportSteps,
+  neuriteMetricsWillRun,
   type ExportProgressStage,
 } from './export/exportFileOperations';
 import {
@@ -750,12 +753,18 @@ export class ExportService {
         );
       }
 
-      // Neurite per-cell metrics — `neurite` projects only.
+      // Neurite per-cell metrics OWN the metrics.* files for neurite projects
+      // (the standard closed-polygon report steps aside above). Runs whenever
+      // metrics are requested, not behind its own toggle: that toggle defaulted
+      // to OFF, so a normal export of a neurite project produced spheroid
+      // metrics and no neurite or soma sheet at all. Mirrors the microtubule
+      // arrangement directly above.
       if (
-        project.type === 'neurite' &&
-        options.neuriteMetrics?.enabled &&
-        options.metricsFormats?.length &&
-        project.images?.length
+        neuriteMetricsWillRun(
+          options,
+          isNeuriteProjectType(project.type),
+          Boolean(project.images?.length)
+        )
       ) {
         exportTasks.push(
           this.generateNeuriteMetrics(
@@ -1581,15 +1590,14 @@ export class ExportService {
       throw new Error('Export cancelled by user');
     }
 
-    // Microtubule annotations are open polylines, which the standard
-    // closed-polygon metrics calculator discards (geometry !== 'polyline'
-    // filter) — so this report would be header-only. The MT per-channel
-    // intensity exporter (`generateMTIntensityMetrics`) writes the
-    // metrics.{csv,xlsx,json} files for MT projects instead. Skip here to
-    // avoid emitting empty files and racing the MT writer on the same paths.
-    if (isMicrotubuleProjectType(projectType)) {
+    // Some project types own their metrics files; see
+    // `standardPolygonMetricsApply` for why each one does. Skipping here avoids
+    // both an empty report and — worse, because it looks fine — a plausible
+    // one: a neurite project used to export "Sphericity" per dendrite. It also
+    // stops this writer racing the specialised one on the same paths.
+    if (!standardPolygonMetricsApply(projectType)) {
       logger.info(
-        'Microtubule project: standard polygon metrics skipped; the MT intensity exporter owns the metrics files',
+        `${projectType} project: standard polygon metrics skipped; the specialised exporter owns the metrics files`,
         'ExportService',
         { jobId }
       );
@@ -1862,7 +1870,10 @@ export class ExportService {
     images: ImageWithSegmentation[],
     exportDir: string,
     formats: ReadonlyArray<'excel' | 'csv' | 'json'>,
-    options: NonNullable<ExportOptions['neuriteMetrics']>,
+    /** May be absent: the report is no longer opt-in, so an ordinary export
+     *  request never mentions it. Defaulted below rather than made required —
+     *  the caller has nothing sensible to invent either. */
+    options: ExportOptions['neuriteMetrics'],
     mlGate?: Semaphore,
     /** The scale the user typed on the export modal. This is the ONLY source
      *  of a pixel size in practice: measured 2026-09-07, not one of the 10 857
@@ -1892,7 +1903,12 @@ export class ExportService {
           originalPath: img.originalPath,
           segmentation: img.segmentation,
         })),
-        { formats, classify: options.classify },
+        // Classifier ON by default. Off, a neurite ending in the cell's OWN
+        // growth cone cannot be told from one connecting two cells, so
+        // connections are over-reported and their length credited to the
+        // wrong object — the export dialog warns about exactly this. A
+        // silently-off default would put that error in every ordinary export.
+        { formats, classify: options?.classify ?? true },
         mlGate
       );
 
@@ -1915,6 +1931,26 @@ export class ExportService {
         error instanceof Error ? error : new Error(String(error)),
         'ExportService'
       );
+      // Honour the contract in this method's docstring. Logging alone left the
+      // metrics directory EMPTY, which reads as "this project has no cells"
+      // rather than "the report did not run" — and now that the standard
+      // polygon report steps aside for neurite projects, there is no other
+      // file to notice its absence against.
+      try {
+        await writeNeuriteMetrics(
+          { neurites: [], somas: [], skipped: [], qc: {} },
+          path.join(exportDir, 'neurite_metrics'),
+          formats
+        );
+      } catch (writeError) {
+        logger.error(
+          'Neurite metrics: could not write the empty fallback sheets',
+          writeError instanceof Error
+            ? writeError
+            : new Error(String(writeError)),
+          'ExportService'
+        );
+      }
     }
   }
 

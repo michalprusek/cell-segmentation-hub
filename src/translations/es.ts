@@ -267,11 +267,6 @@ export default {
       '{{count}} segmentaciones existentes pueden no coincidir con el formato de exportación "{{type}}". Vuelva a segmentar para actualizar las métricas.',
     verified: 'Verificado',
     toggleVerified: 'Alternar verificación',
-    pixelSize: 'Escala:',
-    pixelSizeUnset: 'µm/px',
-    pixelSizeAria: 'Escala de imagen del proyecto en micrómetros por píxel',
-    pixelSizeHint:
-      'Micrómetros por píxel para este proyecto. Necesario para cualquier medición en µm; dejar vacío si se desconoce.',
     projectVerified: 'Proyecto marcado como verificado',
     projectUnverified: 'Se ha eliminado la verificación del proyecto',
     failedToUpdateVerified: 'Error al actualizar el estado de verificación',
@@ -1437,9 +1432,6 @@ export default {
       title: 'Métricas de neuritas',
       description:
         'Asigna cada neurita a un soma y exporta tablas por célula con el estadio de desarrollo.',
-      enable: 'Incluir métricas de neuritas',
-      enableHint:
-        'Una ejecución por fotograma en el servicio de ML; un campo confocal grande tarda alrededor de un minuto.',
       classify: 'Filtrar somas no neuronales',
       classifyHint:
         'Un clasificador ajustado rechaza conos de crecimiento y fragmentos celulares. Los objetos rechazados permanecen en la tabla con soma_neuronal = 0.',
