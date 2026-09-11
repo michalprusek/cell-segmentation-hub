@@ -1380,6 +1380,20 @@ export default {
     deleteSelected: 'Supprimer la sélection',
     deleteAnnotations: 'Supprimer les annotations',
     addChannel: 'Ajouter un canal',
+    manageChannels: 'Gérer les canaux',
+    removeChannel: 'Supprimer le canal',
+    removeChannelDescription:
+      'Supprime le canal des {{frames}} images sélectionnées. Les images par trame sont effacées ; pour un canal ajouté après l’import, elles sont l’unique copie.',
+    removeChannelPick: 'Canal à supprimer',
+    removeChannelSegSourceWarning:
+      'C’est la source de segmentation. Sans elle, la vidéo n’est jamais segmentée, et rien d’autre dans l’application ne le signalera.',
+    removeChannelTypeToConfirm: 'Saisissez {{channel}} pour confirmer',
+    removeChannelSuccess: '{{channel}} supprimé de {{frames}} image(s)',
+    removeChannelNoop:
+      'Aucune des images sélectionnées ne possédait {{channel}}',
+    removeChannelSegSourceCleared:
+      'La vidéo n’a plus de source de segmentation — définissez-en une avant de segmenter à nouveau.',
+    removeChannelFailed: 'Impossible de supprimer le canal',
     addChannelSuccess: 'Canal {{channels}} ajouté à {{frames}} image(s)',
     addChannelAlignWarning:
       "L'alignement a échoué sur {{failed}} image(s) sur {{frames}} — seules {{shifted}} ont été recalées. Les canaux n'ont pas pu être corrélés (aucune structure commune) ; les images ont été ajoutées sans décalage.",

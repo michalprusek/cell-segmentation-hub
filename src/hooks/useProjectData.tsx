@@ -42,6 +42,16 @@ export const useProjectData = (
   // `originalPath`), so deriving from paths alone misses multi-channel
   // videos. Container `channels` JSON is the source of truth.
   const [projectChannels, setProjectChannels] = useState<string[]>([]);
+  /** Bumped to re-run the fetch effect. The fetch lives INSIDE the effect and
+   *  closes over a page-walking loop, so a nonce is what re-runs it without
+   *  lifting that loop out — the same idiom the editor's reload uses. */
+  const [reloadNonce, setReloadNonce] = useState(0);
+  /** Channel names some container segments from — the ones whose removal has a
+   *  consequence nothing else in the UI would show. Same source and same
+   *  per-page recompute as `projectChannels`. */
+  const [projectSegmentationSources, setProjectSegmentationSources] = useState<
+    string[]
+  >([]);
   const [loading, setLoading] = useState<boolean>(true);
 
   // Track pending requests to prevent duplicates
@@ -99,6 +109,7 @@ export const useProjectData = (
         const allImages: any[] = [];
         const seenImageIds = new Set<string>();
         let aggregatedChannels: string[] = [];
+        let aggregatedSegSources: string[] = [];
         let page = 1;
         let hasMore = true;
         const limit = 100; // Use max backend limit for fewer round-trips
@@ -142,6 +153,13 @@ export const useProjectData = (
               Array.isArray(imagesResponse.metadata.projectChannels)
             ) {
               aggregatedChannels = imagesResponse.metadata.projectChannels;
+            }
+            if (
+              imagesResponse.metadata?.projectSegmentationSources &&
+              Array.isArray(imagesResponse.metadata.projectSegmentationSources)
+            ) {
+              aggregatedSegSources =
+                imagesResponse.metadata.projectSegmentationSources;
             }
 
             const totalImages =
@@ -211,6 +229,7 @@ export const useProjectData = (
         // The segmentation editor loads full polygon data on its own.
         setImages(formattedImages);
         setProjectChannels(aggregatedChannels);
+        setProjectSegmentationSources(aggregatedSegSources);
 
         logger.debug(
           `Loaded ${formattedImages.length} images for project ${projectId}`
@@ -257,7 +276,7 @@ export const useProjectData = (
     // signOut is stable from AuthContext but not memoized; including it would
     // re-fetch on every auth state change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectId, userId, t]);
+  }, [projectId, userId, t, reloadNonce]);
 
   const updateImages = useCallback(
     (
@@ -387,7 +406,15 @@ export const useProjectData = (
     }
   };
 
+  /** Re-fetch the project's images and channel aggregates. Needed after a
+   *  write that changes a container's `channels` JSON — removing a channel
+   *  would otherwise keep offering the one just deleted. */
+  const refreshProjectData = useCallback(() => {
+    setReloadNonce(n => n + 1);
+  }, []);
+
   return {
+    refreshProjectData,
     projectTitle,
     setProjectTitle,
     projectType,
@@ -399,6 +426,7 @@ export const useProjectData = (
     setProjectPixelSizeUm,
     images,
     projectChannels,
+    projectSegmentationSources,
     loading,
     updateImages,
     refreshImageSegmentation,

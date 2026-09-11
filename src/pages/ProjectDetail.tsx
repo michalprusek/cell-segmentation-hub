@@ -20,6 +20,7 @@ import {
   extractChannelsFromPaths,
 } from '@/components/project/SegmentChannelDialog';
 import { AddChannelDialog } from '@/components/project/AddChannelDialog';
+import { RemoveChannelDialog } from '@/components/project/RemoveChannelDialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SkeletonProjectImageGrid } from '@/components/ui/skeleton-variants';
 import { useSharedAdvancedExport } from '@/pages/export/hooks/useSharedAdvancedExport';
@@ -89,6 +90,8 @@ const ProjectDetail = () => {
     defaultChannel: string;
   } | null>(null);
   // "Add channel" dialog state (microtubule projects only).
+  const [showRemoveChannelDialog, setShowRemoveChannelDialog] = useState(false);
+  const [isRemovingChannel, setIsRemovingChannel] = useState(false);
   const [showAddChannelDialog, setShowAddChannelDialog] =
     useState<boolean>(false);
   const [isAddingChannel, setIsAddingChannel] = useState<boolean>(false);
@@ -112,6 +115,8 @@ const ProjectDetail = () => {
     projectFolderId,
     images,
     projectChannels,
+    projectSegmentationSources,
+    refreshProjectData,
     loading,
     updateImages,
     refreshImageSegmentation,
@@ -1400,6 +1405,54 @@ const ProjectDetail = () => {
     return videos.size;
   }, [images, selectedImageIds]);
 
+  const handleRemoveChannelConfirm = useCallback(
+    async (channelName: string) => {
+      if (!id || selectedImageIds.size === 0 || isRemovingChannel) {
+        return;
+      }
+      setIsRemovingChannel(true);
+      try {
+        const result = await apiClient.removeChannel(id, {
+          channelName,
+          imageIds: Array.from(selectedImageIds),
+        });
+        if (result.framesAffected === 0) {
+          // Not an error: the gallery makes it easy to select frames a channel
+          // never covered, and the backend ignores those rather than failing.
+          toast.info(t('project.removeChannelNoop', { channel: channelName }));
+        } else {
+          toast.success(
+            t('project.removeChannelSuccess', {
+              channel: channelName,
+              frames: result.framesAffected,
+            })
+          );
+        }
+        // Losing the segmentation source is silent everywhere else — the
+        // container simply never segments again — so it gets its own message
+        // rather than a line inside the success toast.
+        if (result.segmentationSourceCleared) {
+          toast.warning(t('project.removeChannelSegSourceCleared'));
+        }
+        setShowRemoveChannelDialog(false);
+        // The channels JSON changed on the container rows, so the cached list
+        // (and each frame's coverage) is stale.
+        refreshProjectData();
+      } catch (err) {
+        // `t` is typed `=> string | string[]` and `getErrorMessage` wants a
+        // string-returning one; narrow at the call rather than adding a third
+        // copy of a baselined type error.
+        toast.error(
+          getErrorMessage(err, (k: string) => String(t(k))) ||
+            String(t('project.removeChannelFailed'))
+        );
+      } finally {
+        setIsRemovingChannel(false);
+      }
+    },
+    [id, selectedImageIds, isRemovingChannel, t, refreshProjectData]
+  );
+
   const handleAddChannelConfirm = useCallback(
     async (params: { file: File; channelName: string; align: boolean }) => {
       if (!id || selectedImageIds.size === 0 || isAddingChannel) {
@@ -1804,6 +1857,8 @@ const ProjectDetail = () => {
               onBatchDelete={handleBatchDelete}
               onDeleteAnnotations={handleDeleteAnnotations}
               onAddChannel={() => setShowAddChannelDialog(true)}
+              onRemoveChannel={() => setShowRemoveChannelDialog(true)}
+              hasRemovableChannels={projectChannels.length > 0}
               canAddChannel={isMicrotubuleProject(projectType)}
               showSelectAll={true}
               onExportingChange={() => {}} // No longer needed - hook handles state
@@ -2041,6 +2096,19 @@ const ProjectDetail = () => {
 
       {/* Add-channel dialog — appends an extra channel to the selected frames
           (microtubule projects only; gated by the toolbar button). */}
+      {/* Remove-channel dialog — deletes the per-frame PNGs for one channel
+          across the selected frames. Type-to-confirm, because for a channel
+          added after upload those PNGs are the only copy. */}
+      <RemoveChannelDialog
+        open={showRemoveChannelDialog}
+        channels={projectChannels}
+        segmentationSources={projectSegmentationSources}
+        selectedCount={selectedCount}
+        isSubmitting={isRemovingChannel}
+        onConfirm={handleRemoveChannelConfirm}
+        onCancel={() => setShowRemoveChannelDialog(false)}
+      />
+
       <AddChannelDialog
         open={showAddChannelDialog}
         selectedCount={selectedCount}
