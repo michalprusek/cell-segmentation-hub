@@ -42,20 +42,28 @@ export interface ChannelRemovalPlan {
   changed: boolean;
 }
 
+/** One frame of the container: both keys, because the two sparse maps are
+ *  keyed differently and only the index-keyed one is authoritative. */
+export interface FrameRef {
+  id: string;
+  frameIndex: number;
+}
+
 /**
  * Narrow one container's channel coverage to the frames that survive.
  *
  * @param channels    the container's current channels JSON
- * @param allFrameIds every frame id of the container, in frame order
+ * @param allFrames   every frame of the container, in frame order
  * @param removeFrom  the selected frame ids to remove the channel from
  * @param channelName the channel's path-safe `name`
  */
 export function applyChannelRemoval(
   channels: readonly ChannelMeta[],
-  allFrameIds: readonly string[],
+  allFrames: readonly FrameRef[],
   removeFrom: readonly string[],
   channelName: string
 ): ChannelRemovalPlan {
+  const allFrameIds = allFrames.map(f => f.id);
   const unchanged: ChannelRemovalPlan = {
     channels: channels as ChannelMeta[],
     removedFrameIds: [],
@@ -81,11 +89,28 @@ export function applyChannelRemoval(
   // backend serves each from the last real frame before it. Delete that real
   // frame's PNG and the gaps have nothing left to be served from, so they
   // leave coverage as well. They own no file, hence the separate list.
+  //
+  // Read from `sparseFill`, NOT from `sparseFillFrameIds`. The id-keyed mirror
+  // is documented as "PURELY A RENDERING OPTIMISATION ... nothing on the
+  // correctness path may read it", and it is allowed to be absent or PARTIAL —
+  // a gap with no Image row is omitted rather than guessed. Deciding coverage
+  // from it would silently keep a gap frame whose anchor's PNG was just
+  // deleted, which is a 404 per gap: the exact failure this block prevents.
+  // (Measured 2026-09-11: all 34 production containers carry both maps in
+  // agreement, so this was latent rather than live.)
   const gone = new Set(removedFrameIds);
-  const fills = channel.sparseFillFrameIds ?? {};
-  const sparseDependentsDropped = coverage.filter(
-    id => !gone.has(id) && fills[id] !== undefined && gone.has(fills[id])
-  );
+  const idByIndex = new Map(allFrames.map(f => [f.frameIndex, f.id]));
+  const indexById = new Map(allFrames.map(f => [f.id, f.frameIndex]));
+  const fills = channel.sparseFill ?? {};
+  const sparseDependentsDropped = coverage.filter(id => {
+    if (gone.has(id)) {return false;}
+    const idx = indexById.get(id);
+    if (idx === undefined) {return false;}
+    const anchorIndex = fills[String(idx)];
+    if (anchorIndex === undefined) {return false;}
+    const anchorId = idByIndex.get(anchorIndex);
+    return anchorId !== undefined && gone.has(anchorId);
+  });
 
   if (removedFrameIds.length === 0 && sparseDependentsDropped.length === 0) {
     return unchanged;
@@ -122,6 +147,16 @@ export function applyChannelRemoval(
   if (next.staticShifts) {
     next.staticShifts = Object.fromEntries(
       Object.entries(next.staticShifts).filter(([id]) => kept.has(id))
+    );
+  }
+  // Both maps, or the authoritative one keeps pointing a surviving gap at an
+  // anchor that is gone.
+  if (next.sparseFill) {
+    next.sparseFill = Object.fromEntries(
+      Object.entries(next.sparseFill).filter(([idx]) => {
+        const id = idByIndex.get(Number(idx));
+        return id !== undefined && kept.has(id);
+      })
     );
   }
   if (next.sparseFillFrameIds) {
@@ -271,20 +306,41 @@ export async function removeChannelFromFrames(
     segmentationSourceCleared: false,
   };
 
+  // TWO PASSES. Everything is planned and validated first, and only then is a
+  // single byte unlinked or a single row written. Validating inside the same
+  // loop that mutates makes "a half-applied removal is worse than a refused
+  // one" true only WITHIN a container: with two videos selected, the first
+  // would be stripped and the second refused, leaving the user half-done and
+  // no way to tell which half.
+  interface ContainerPlan {
+    containerId: string;
+    plan: ChannelRemovalPlan;
+    frames: { id: string; frameIndex: number; originalPath: string | null }[];
+    indexById: Map<string, number>;
+    survivorFor: Map<string, string>;
+  }
+  const planned: ContainerPlan[] = [];
+
   for (const container of containers) {
     const selected = selectedByContainer.get(container.id);
-    if (!selected) {continue;}
+    if (!selected) {
+      continue;
+    }
 
     // The container's OWN frames, in frame order. This is what "full coverage"
     // is measured against — using the SELECTION instead would read a one-frame
     // pick as "covers everything" and wipe the channel off the whole video.
-    const allFrames = await prisma.image.findMany({
+    const rows = await prisma.image.findMany({
       where: { parentVideoId: container.id },
       select: { id: true, frameIndex: true, originalPath: true },
       orderBy: { frameIndex: 'asc' },
     });
-    const allFrameIds = allFrames.map(f => f.id);
-    const indexById = new Map(allFrames.map(f => [f.id, f.frameIndex ?? 0]));
+    const frames = rows.map(r => ({
+      id: r.id,
+      frameIndex: r.frameIndex ?? 0,
+      originalPath: r.originalPath ?? null,
+    }));
+    const indexById = new Map(frames.map(f => [f.id, f.frameIndex]));
 
     const existing: ChannelMeta[] = Array.isArray(container.channels)
       ? (container.channels as unknown as ChannelMeta[])
@@ -292,7 +348,7 @@ export async function removeChannelFromFrames(
 
     const plan = applyChannelRemoval(
       existing,
-      allFrameIds,
+      frames,
       [...selected],
       channelName
     );
@@ -303,10 +359,17 @@ export async function removeChannelFromFrames(
     // Which channel each stripped frame will show afterwards. A frame with
     // NONE left has no pixels at all — that is deleting the frame, which the
     // gallery already offers as its own operation, so refuse rather than leave
-    // a row pointing at nothing. Checked BEFORE anything is unlinked: a
-    // half-applied removal is worse than a refused one.
+    // a row pointing at nothing.
+    //
+    // The dependent GAP frames are checked too. They own no file, so they are
+    // absent from `removedFrameIds` — but they lose their pixels exactly the
+    // same way when the anchor they read from goes, so judging only the frames
+    // with files would leave a gap covered by nothing.
     const survivorFor = new Map<string, string>();
-    for (const frameId of plan.removedFrameIds) {
+    for (const frameId of [
+      ...plan.removedFrameIds,
+      ...plan.sparseDependentsDropped,
+    ]) {
       const survivor = plan.channels.find(c => {
         const cov = c.frameIds;
         return !cov || cov.includes(frameId);
@@ -319,19 +382,32 @@ export async function removeChannelFromFrames(
       survivorFor.set(frameId, survivor.name);
     }
 
+    planned.push({
+      containerId: container.id,
+      plan,
+      frames,
+      indexById,
+      survivorFor,
+    });
+  }
+
+  // Second pass: every plan is valid, so mutate.
+  for (const { containerId, plan, frames, indexById, survivorFor } of planned) {
     for (const frameId of plan.removedFrameIds) {
       const frameIndex = indexById.get(frameId);
-      if (frameIndex === undefined) {continue;}
+      if (frameIndex === undefined) {
+        continue;
+      }
       result.filesDeleted += await deleteFrameChannelFiles(
         storageProjectId,
-        container.id,
+        containerId,
         frameIndex,
         channelName
       );
     }
 
     await prisma.image.update({
-      where: { id: container.id },
+      where: { id: containerId },
       data: { channels: plan.channels as unknown as object },
     });
 
@@ -340,12 +416,11 @@ export async function removeChannelFromFrames(
     // browser before this existed. Only rows that actually pointed at the
     // removed channel are rewritten.
     const removedSuffix = `/${channelName}.png`;
-    for (const frame of allFrames) {
+    for (const frame of frames) {
       if (!plan.removedFrameIds.includes(frame.id)) {
         continue;
       }
-      const current = frame.originalPath;
-      if (!current || !current.endsWith(removedSuffix)) {
+      if (!frame.originalPath || !frame.originalPath.endsWith(removedSuffix)) {
         continue;
       }
       const survivor = survivorFor.get(frame.id);
@@ -357,7 +432,7 @@ export async function removeChannelFromFrames(
         data: {
           originalPath: frameStorageKey(
             storageProjectId,
-            container.id,
+            containerId,
             indexById.get(frame.id) ?? 0,
             survivor
           ),
@@ -368,8 +443,12 @@ export async function removeChannelFromFrames(
     result.framesAffected += plan.removedFrameIds.length;
     result.containersAffected++;
     result.sparseDependentsDropped += plan.sparseDependentsDropped.length;
-    if (plan.fullyRemoved) {result.containersFullyCleared++;}
-    if (plan.segmentationSourceCleared) {result.segmentationSourceCleared = true;}
+    if (plan.fullyRemoved) {
+      result.containersFullyCleared++;
+    }
+    if (plan.segmentationSourceCleared) {
+      result.segmentationSourceCleared = true;
+    }
   }
 
   logger.info(

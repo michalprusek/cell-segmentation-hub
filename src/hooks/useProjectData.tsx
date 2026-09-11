@@ -66,6 +66,10 @@ export const useProjectData = (
   // closure when several frames refresh in quick succession.
   const imagesRef = useRef<ProjectImage[]>(images);
   imagesRef.current = images;
+  /** The project the fetch effect last ran for, so a refresh can be told
+   *  apart from a switch. A ref, not state: it must update inside the effect
+   *  without scheduling another render. */
+  const lastFetchedProjectRef = useRef<string | undefined>(undefined);
 
   useEffect(() => {
     // Forget the previous project's folder BEFORE fetching the next one.
@@ -76,7 +80,16 @@ export const useProjectData = (
     // project they just left. `undefined` means "not known", which navigates
     // to the dashboard root, so the worst case is the behaviour this feature
     // replaced rather than a wrong destination.
-    setProjectFolderId(undefined);
+    //
+    // Only on a PROJECT SWITCH. `reloadNonce` re-runs this same effect for a
+    // same-project refresh, where nothing about the folder changed — blanking
+    // it there would send Back to the dashboard root instead of the folder
+    // the user came from, which is the bug this reset exists to prevent,
+    // inverted.
+    if (lastFetchedProjectRef.current !== projectId) {
+      lastFetchedProjectRef.current = projectId;
+      setProjectFolderId(undefined);
+    }
 
     const fetchData = async () => {
       if (!projectId || !userId) {

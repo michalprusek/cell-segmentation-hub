@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { renderHook, waitFor } from '@testing-library/react';
+import { renderHook, waitFor, act } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { useProjectData } from '@/hooks/useProjectData';
 import apiClient from '@/lib/api';
@@ -834,6 +834,38 @@ describe('useProjectData', () => {
       );
 
       await waitFor(() => expect(result.current.loading).toBe(false));
+      expect(result.current.projectFolderId).toBe('folder-7');
+    });
+
+    it('keeps the folder across a same-project refresh', async () => {
+      // `refreshProjectData()` re-runs the same effect, and the effect opens by
+      // forgetting the folder so a PROJECT SWITCH cannot show a stale one.
+      // Firing that reset on a same-project refresh is a different thing
+      // entirely: nothing changed except the data, and blanking the folder
+      // sends Back to the dashboard root instead of the folder the user came
+      // from. Introduced with the refresh nonce; caught in review.
+      vi.mocked(apiClient.getProject).mockResolvedValue(
+        projectAt('project-1', 'folder-7') as never
+      );
+      vi.mocked(apiClient.getProjectImagesWithThumbnails).mockResolvedValue(
+        noImages as never
+      );
+
+      const { result } = renderHook(
+        () => useProjectData('project-1', 'user-1'),
+        { wrapper }
+      );
+      await waitFor(() =>
+        expect(result.current.projectFolderId).toBe('folder-7')
+      );
+
+      // The refetch never settles, so the assertion lands in the window the
+      // reset would have blanked.
+      vi.mocked(apiClient.getProject).mockImplementation(
+        () => new Promise(() => {}) as never
+      );
+      act(() => result.current.refreshProjectData());
+
       expect(result.current.projectFolderId).toBe('folder-7');
     });
 
