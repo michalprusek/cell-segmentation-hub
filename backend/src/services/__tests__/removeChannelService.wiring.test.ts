@@ -257,3 +257,66 @@ describe('removeChannelFromFrames — the frame row still points at the file', (
     expect(rm).not.toHaveBeenCalled();
   });
 });
+
+describe('removeChannelFromFrames — nothing is unlinked until every plan is valid', () => {
+  const CH = { name: 'extra', type: 'fluorescent', isSegmentationSource: false };
+  const OTHER = { name: 'base', type: 'irm', isSegmentationSource: false };
+
+  it('refuses when a dependent GAP frame would be left with no channel', () => {
+    // The gap owns no file, so it never appears in removedFrameIds — but it
+    // loses its pixels all the same when its anchor goes. Checking only the
+    // frames with files leaves that gap covered by nothing.
+    prismaMock.image.findMany
+      .mockResolvedValueOnce([
+        { id: 'f0', frameIndex: 0, parentVideoId: CONTAINER, isVideoContainer: false },
+      ])
+      .mockResolvedValueOnce([
+        {
+          id: CONTAINER,
+          channels: [
+            // `base` covers f0 only, so f1 (the gap) has nothing else.
+            { ...OTHER, frameIds: ['f0'] },
+            { ...CH, sparseSource: true, frameIds: ['f0', 'f1'], sparseFill: { '1': 0 } },
+          ],
+        },
+      ])
+      .mockResolvedValueOnce([
+        { id: 'f0', frameIndex: 0, originalPath: null },
+        { id: 'f1', frameIndex: 1, originalPath: null },
+      ]);
+
+    return expect(
+      removeChannelFromFrames({ projectId: 'p1', channelName: 'extra', imageIds: ['f0'] })
+    )
+      .rejects.toThrow(/last|only channel/i)
+      .then(() => {
+        expect(rm).not.toHaveBeenCalled();
+      });
+  });
+
+  it('deletes nothing from container A when container B is invalid', () => {
+    // Per-container validate-then-mutate leaves A stripped and B refused —
+    // "a half-applied removal is worse than a refused one" has to hold across
+    // the whole call, not inside one container.
+    prismaMock.image.findMany
+      .mockResolvedValueOnce([
+        { id: 'a0', frameIndex: 0, parentVideoId: 'vidA', isVideoContainer: false },
+        { id: 'b0', frameIndex: 0, parentVideoId: 'vidB', isVideoContainer: false },
+      ])
+      .mockResolvedValueOnce([
+        { id: 'vidA', channels: [OTHER, CH] }, // fine: `base` survives
+        { id: 'vidB', channels: [CH] }, // invalid: `extra` is the last channel
+      ])
+      .mockResolvedValueOnce([{ id: 'a0', frameIndex: 0, originalPath: null }])
+      .mockResolvedValueOnce([{ id: 'b0', frameIndex: 0, originalPath: null }]);
+
+    return expect(
+      removeChannelFromFrames({ projectId: 'p1', channelName: 'extra', imageIds: ['a0', 'b0'] })
+    )
+      .rejects.toThrow(/last|only channel/i)
+      .then(() => {
+        expect(rm).not.toHaveBeenCalled();
+        expect(prismaMock.image.update).not.toHaveBeenCalled();
+      });
+  });
+});
