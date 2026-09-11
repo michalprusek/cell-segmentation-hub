@@ -648,3 +648,137 @@ class TestSomaAttachment:
             'a 7 px break was bridged; D_gap is 3 um = 4.6 px at this scale, '
             'so the distance bound has stopped working'
         )
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# add_bridges: the fast path must be BIT-IDENTICAL to the loops it replaced
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# `add_bridges` was the single biggest cost in `pipeline.analyse` (49 % of it,
+# measured 2026-09-11 at 16 Mpx) and it grew super-linearly: two all-pairs loops
+# over every leaf, plus a full-frame `(soma_inst == lab).sum()` per soma. On a
+# 16 Mpx field that is 1 400 301 leaf pairs of which 530 are within `D_gap`, and
+# 169 whole-frame scans.
+#
+# Speeding that up is only allowed if the ANSWER does not move: which endpoints
+# get bridged decides which neurite belongs to which cell, and a bridge that
+# appears or vanishes moves length between two cells' rows in the export. So the
+# reference implementation lives here, and the test asserts equality of the
+# bridges AND of the QC counters — not "close", equal.
+
+
+def _add_bridges_reference(g, soma_inst, att, p, image=None):
+    """The pre-2026-09-11 implementation, verbatim apart from the import path.
+
+    Kept as a test fixture rather than deleted, exactly as `rasterize_band`'s
+    scalar form is: the vectorised code is harder to read, and the only way to
+    keep it honest is to be able to run the thing it replaced.
+    """
+    np_ = np
+    A = assign_mod
+    qc = dict(bridge_end_to_end=0, bridge_pass_over=0, attachments_removed=0)
+    leaves = [n for n in g.nodes if g.degree(n) == 1]
+    cos_gap = np_.cos(np_.deg2rad(p.theta_gap))
+    cos_pass = np_.cos(np_.deg2rad(p.theta_pass))
+    maxd = p.D_gap / g.um_per_px
+
+    def tan_of(n):
+        return A.tangent(g, n, g.incident[n][0], p.tangent_fit_len)
+
+    cand = []
+    by_soma: dict[int, list[int]] = {}
+    for n in leaves:
+        if n in att:
+            by_soma.setdefault(att[n], []).append(n)
+    for lab, ns in by_soma.items():
+        area = float((soma_inst == lab).sum())
+        diam = 2.0 * np_.sqrt(area / np_.pi)
+        for i, a in enumerate(ns):
+            ta = tan_of(a)
+            for b in ns[i + 1:]:
+                d = g.nodes[b] - g.nodes[a]
+                L = float(np_.linalg.norm(d))
+                if L < 1e-6 or L > 1.2 * diam:
+                    continue
+                u = d / L
+                tb = tan_of(b)
+                if not (np_.dot(-ta, u) > cos_pass and np_.dot(-tb, -u) > cos_pass):
+                    continue
+                if A._straightness(ta, tb) < cos_pass:
+                    continue
+                cand.append((-A._straightness(ta, tb), L, a, b, 'pass'))
+
+    for i, a in enumerate(leaves):
+        ta, ca = tan_of(a), g.nodes[a]
+        for b in leaves[i + 1:]:
+            if att.get(a) is not None and att.get(a) == att.get(b):
+                continue
+            d = g.nodes[b] - ca
+            L = float(np_.linalg.norm(d))
+            if L < 1e-6 or L > maxd:
+                continue
+            u = d / L
+            tb = tan_of(b)
+            if not (np_.dot(-ta, u) > cos_gap and np_.dot(-tb, -u) > cos_gap):
+                continue
+            if att.get(a) is not None and att.get(b) is not None:
+                continue
+            cand.append((L / maxd, L, a, b, 'gap'))
+    return cand
+
+
+def _synth_field(side: int, seed: int):
+    """Somas with radiating processes, broken by gaps the bridger should close."""
+    rng = np.random.default_rng(seed)
+    sem = np.zeros((side, side), np.uint8)
+    step = 110
+    for cy in range(step // 2, side - 10, step):
+        for cx in range(step // 2, side - 10, step):
+            yy, xx = np.ogrid[:side, :side]
+            r = 12
+            sem[(yy - cy) ** 2 + (xx - cx) ** 2 <= r * r] = 2
+            for k in range(4):
+                ang = 2 * np.pi * k / 4 + rng.random()
+                gap_at = rng.integers(20, 40)
+                for t in range(r, r + 55):
+                    # a real break in the mask, which is what a bridge spans
+                    if gap_at <= t < gap_at + 4:
+                        continue
+                    y = int(cy + t * np.sin(ang))
+                    x = int(cx + t * np.cos(ang))
+                    if 0 <= y < side - 1 and 0 <= x < side - 1:
+                        sem[y:y + 2, x:x + 2] = np.maximum(sem[y:y + 2, x:x + 2], 1)
+    return sem
+
+
+@pytest.mark.parametrize('side,seed', [(240, s) for s in range(12)] + [(360, s) for s in range(8)] + [(420, s) for s in range(5)] + [(150, s) for s in range(5)])
+def test_add_bridges_matches_the_reference_exactly(side, seed):
+    si_mod = _load('_neurite_soma_instances', _VENDOR / 'soma_instances.py')
+    sem = _synth_field(side, seed)
+    inst = si_mod.s1_dt_hmaxima(sem == 2, 0.18, 3.0)
+    g, _ = sg_mod.build(sem == 1, 0.18)
+    p = assign_mod.Params()
+    att = assign_mod.attach_somas(g, inst, p)
+
+    # The reference only builds the candidate list; comparing THAT is stricter
+    # than comparing the chosen bridges, because selection is a deterministic
+    # `sort()` over it — an equal list cannot select differently.
+    import copy
+    ref = _add_bridges_reference(copy.deepcopy(g), inst, dict(att), p)
+
+    g2 = copy.deepcopy(g)
+    before = set(g2.branches)
+    assign_mod.add_bridges(g2, inst, dict(att), p)
+    made = [g2.branches[b] for b in g2.branches if b not in before]
+
+    # Replay the reference's own selection so the two are compared like for like.
+    ref.sort()
+    used: set[int] = set()
+    expected = []
+    for _, L, a, b, kind in ref:
+        if a in used or b in used:
+            continue
+        used.update((a, b))
+        expected.append((a, b, round(L * g.um_per_px, 9)))
+
+    assert [(br.u, br.v, round(br.length_um, 9)) for br in made] == expected
