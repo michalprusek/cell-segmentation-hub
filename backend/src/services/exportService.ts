@@ -47,6 +47,7 @@ import {
   getProgressMessage,
   createZipArchive,
   countExportSteps,
+  neuriteMetricsWillRun,
   type ExportProgressStage,
 } from './export/exportFileOperations';
 import {
@@ -759,9 +760,11 @@ export class ExportService {
       // metrics and no neurite or soma sheet at all. Mirrors the microtubule
       // arrangement directly above.
       if (
-        isNeuriteProjectType(project.type) &&
-        options.metricsFormats?.length &&
-        project.images?.length
+        neuriteMetricsWillRun(
+          options,
+          isNeuriteProjectType(project.type),
+          Boolean(project.images?.length)
+        )
       ) {
         exportTasks.push(
           this.generateNeuriteMetrics(

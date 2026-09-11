@@ -136,8 +136,32 @@ export function countExportSteps(
     // No `neuriteMetrics.enabled` term: the neurite report is not opt-in any
     // more (see exportService). Leaving it here would make the progress bar
     // overshoot and stall at the end on every neurite export.
-    isNeuriteProject && options.metricsFormats?.length && hasImages,
+    neuriteMetricsWillRun(options, isNeuriteProject, Boolean(hasImages)),
   ].filter(Boolean).length;
+}
+
+/**
+ * Whether the neurite per-cell report (the neurite + soma sheets) will run.
+ *
+ * ONE expression of the rule, shared by the export task's gate and the step
+ * counter that drives the progress bar. They used to be two hand-synced
+ * conditions; dropping the opt-in from one and not the other would leave the
+ * bar overshooting and stalling at the end of every neurite export — the same
+ * drift-between-two-copies failure this whole change is about.
+ *
+ * Deliberately does NOT consult `neuriteMetrics.enabled`. That flag still
+ * arrives from older frontend bundles and is ignored: honouring it meant a
+ * neurite project exported closed-polygon spheroid metrics — Area,
+ * Circularity, Sphericity per dendrite — and neither sheet.
+ */
+export function neuriteMetricsWillRun(
+  options: { metricsFormats?: unknown[] | null },
+  isNeuriteProject: boolean,
+  hasImages: boolean
+): boolean {
+  return (
+    isNeuriteProject && Boolean(options.metricsFormats?.length) && hasImages
+  );
 }
 
 export interface ExportProgressDetail {
