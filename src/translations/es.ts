@@ -1790,7 +1790,7 @@ export default {
         'Cuando ningún nombre de canal resulta reconocible no se marca ninguna fuente y se usa el primer canal. Para los microtúbulos eso importa: el modelo solo funciona con IRM, así que apuntarlo a un canal de fluorescencia produce polilíneas convincentes sin nada debajo.',
       windowLevel: 'Mostrar datos de 16 bits',
       windowLevelDescription:
-        'Los fotogramas de alta profundidad de bits se ajustan para su visualización con los deslizadores Mín y Máx, más Brillo y Contraste. La ventana es por canal, no compartida: un canal se ajusta automáticamente a sus propios datos la primera vez que lo ve, después conserva sus límites y solo amplía su rango cuando llegan fotogramas más brillantes. Estos ajustes duran la sesión; los colores y las opacidades de los canales sí se recuerdan.',
+        'Los fotogramas de alta profundidad de bits se ajustan para su visualización con los deslizadores Mín y Máx, más Brillo y Contraste. Sobre ellos, un histograma del canal activo comparte el eje de los deslizadores y dibuja la ventana sobre los datos, y Auto ajusta Mín y Máx al fotograma actual como el Auto de ImageJ; cada pulsación adicional satura más. La ventana es por canal, no compartida: un canal se ajusta automáticamente a sus propios datos la primera vez que lo ve, después conserva sus límites y solo amplía su rango cuando llegan fotogramas más brillantes. Estos ajustes duran la sesión; los colores y las opacidades de los canales sí se recuerdan.',
       navigation: 'Moverse por los fotogramas',
       keys: {
         step: 'Fotograma anterior / siguiente',
@@ -2957,6 +2957,10 @@ export default {
       brightness: 'Brillo',
       contrast: 'Contraste',
       reset: 'Restablecer',
+      histogram: 'Histograma',
+      auto: 'Auto',
+      autoHint:
+        'Ajusta Mín y Máx a este fotograma, como Auto en ImageJ. Pulse de nuevo para saturar más.',
     },
     frameNavigation: {
       frame: 'Cuadro',

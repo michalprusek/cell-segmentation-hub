@@ -1765,7 +1765,7 @@ export default {
         'Pokud není žádný název kanálu rozpoznatelný, není označen žádný zdroj a použije se první kanál. U mikrotubulů to má následky: model pracuje jen s IRM, takže na fluorescenčním kanálu vytvoří přesvědčivé polyline, pod nimiž ale nic není.',
       windowLevel: 'Zobrazení 16bitových dat',
       windowLevelDescription:
-        'Snímky s vysokou bitovou hloubkou se pro zobrazení mapují posuvníky Min a Max, doplněnými o Jas a Kontrast. Okno je zvlášť pro každý kanál, nikoli sdílené: kanál se při prvním zobrazení automaticky přizpůsobí vlastním datům, poté si drží vaše meze a rozsah jen rozšiřuje, když přijdou jasnější snímky. Nastavení platí po dobu relace; barvy a krytí kanálů se pamatují.',
+        'Snímky s vysokou bitovou hloubkou se pro zobrazení mapují posuvníky Min a Max, doplněnými o Jas a Kontrast. Nad nimi je histogram aktivního kanálu na stejné ose jako posuvníky, s vyznačeným oknem, a tlačítko Auto nastaví Min a Max podle aktuálního snímku stejně jako Auto v ImageJ; každý další stisk saturuje víc. Okno je zvlášť pro každý kanál, nikoli sdílené: kanál se při prvním zobrazení automaticky přizpůsobí vlastním datům, poté si drží vaše meze a rozsah jen rozšiřuje, když přijdou jasnější snímky. Nastavení platí po dobu relace; barvy a krytí kanálů se pamatují.',
       navigation: 'Pohyb po snímcích',
       keys: {
         step: 'Předchozí / další snímek',
@@ -2925,6 +2925,10 @@ export default {
       brightness: 'Jas',
       contrast: 'Kontrast',
       reset: 'Resetovat',
+      histogram: 'Histogram',
+      auto: 'Auto',
+      autoHint:
+        'Nastaví Min a Max podle tohoto snímku, jako Auto v ImageJ. Další stisk saturuje víc.',
     },
     frameNavigation: {
       frame: 'Snímek',

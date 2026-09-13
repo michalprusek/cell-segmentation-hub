@@ -1793,7 +1793,7 @@ export default {
         'When no channel name is recognisable, none is marked as the source and the first channel is used. For microtubule work that matters: the model is IRM-only, so pointing it at a fluorescence channel produces confident polylines with nothing underneath them.',
       windowLevel: 'Displaying 16-bit data',
       windowLevelDescription:
-        'High-bit-depth frames are windowed for display with Min and Max sliders, plus Brightness and Contrast. The window is per channel, not shared: a channel is auto-fitted to its own data the first time you see it, keeps your cutoffs afterwards, and only widens its range as brighter frames arrive. These settings last for the session; channel colours and opacities are remembered.',
+        'High-bit-depth frames are windowed for display with Min and Max sliders, plus Brightness and Contrast. Above them, a histogram of the active channel shares the axis of the sliders and draws the window over the data, and Auto fits Min and Max to the current frame the way Auto does in ImageJ; each further press saturates more. The window is per channel, not shared: a channel is auto-fitted to its own data the first time you see it, keeps your cutoffs afterwards, and only widens its range as brighter frames arrive. These settings last for the session; channel colours and opacities are remembered.',
       navigation: 'Moving through frames',
       keys: {
         step: 'Previous / next frame',
@@ -2979,6 +2979,10 @@ export default {
       brightness: 'Brightness',
       contrast: 'Contrast',
       reset: 'Reset',
+      histogram: 'Histogram',
+      auto: 'Auto',
+      autoHint:
+        "Fit Min and Max to this frame, like ImageJ's Auto. Press again to saturate more.",
     },
     frameNavigation: {
       frame: 'Frame',

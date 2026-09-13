@@ -92,23 +92,51 @@ const CanvasImage = ({
   // re-fetch per drag would be a network request per pixel of slider travel.
   const reportRangeRef = useRef(ctx?.reportChannelRanges);
   reportRangeRef.current = ctx?.reportChannelRanges;
+  // Same reason, for the samples the Display panel's histogram reads.
+  const reportSamplesRef = useRef(ctx?.reportDisplayedSamples);
+  reportSamplesRef.current = ctx?.reportDisplayedSamples;
+  const clearSamplesRef = useRef(ctx?.clearDisplayedSamples);
+  clearSamplesRef.current = ctx?.clearDisplayedSamples;
+  // Tags what this component publishes, so withdrawing it never removes a
+  // different canvas's samples.
+  const samplesOwnerRef = useRef(Symbol('CanvasImage'));
   // Same reason as above: the key must not re-run the fetch when it changes.
   const keyRef = useRef(windowKey);
   keyRef.current = windowKey;
+
+  useEffect(() => {
+    const owner = samplesOwnerRef.current;
+    return () => clearSamplesRef.current?.(owner);
+  }, []);
 
   // Probe the source once per src. A miss (not a greyscale PNG, 8-bit, or a
   // fetch failure) leaves `deep` null and the <img> below renders exactly as
   // it always did — the fallback is the old behaviour, not a blank canvas.
   useEffect(() => {
     let cancelled = false;
+    const owner = samplesOwnerRef.current;
+    // On a miss the picture is an <img> nothing decoded, so a histogram of the
+    // PREVIOUS image would describe something no longer on screen. Withdrawn
+    // on a settled miss rather than on every src change, so scrubbing a
+    // single-channel video does not blank the plot between frames.
+    const withdraw = () => {
+      if (!cancelled) clearSamplesRef.current?.(owner);
+    };
     setDeep(null);
     if (!src) return;
     (async () => {
       try {
         const res = await fetch(src, { credentials: 'include' });
-        if (!res.ok) return;
+        if (!res.ok) {
+          withdraw();
+          return;
+        }
         const decoded = await decodeGrayPng(await res.blob());
-        if (cancelled || !decoded || decoded.bitDepth <= 8) return;
+        if (cancelled) return;
+        if (!decoded || decoded.bitDepth <= 8) {
+          withdraw();
+          return;
+        }
         setDeep(decoded);
         // Hand the sample range to the shared window state. `windowKey` is
         // the "container": a different image auto-fits, the same one keeps
@@ -122,10 +150,18 @@ const CanvasImage = ({
           },
           keyRef.current ?? src
         );
+        // Keyed on `src`, not on `windowKey`: this identifies the FRAME, and
+        // Auto's progression has to restart on every one.
+        reportSamplesRef.current?.({
+          owner,
+          frameKey: src,
+          channels: { [STILL_IMAGE_WINDOW_CHANNEL]: decoded },
+        });
         onLoad?.(decoded.width, decoded.height);
       } catch (err) {
         // Never block the picture on this: the <img> path still runs.
         logger.debug?.('16-bit probe failed, using the <img> path', err);
+        withdraw();
       }
     })();
     return () => {

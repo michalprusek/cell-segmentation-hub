@@ -196,10 +196,11 @@ describe('CanvasImage 16-bit window', () => {
 
   async function renderDeep(
     ctx: Partial<Record<string, unknown>> | null,
-    props: Record<string, unknown> = {}
+    props: Record<string, unknown> = {},
+    decoded: unknown = deep
   ) {
     vi.doMock('@/lib/png16', () => ({
-      decodeGrayPng: vi.fn().mockResolvedValue(deep),
+      decodeGrayPng: vi.fn().mockResolvedValue(decoded),
     }));
     const realLut =
       await vi.importActual<typeof import('@/lib/windowLevel')>(
@@ -289,5 +290,52 @@ describe('CanvasImage 16-bit window', () => {
     });
 
     expect(buildLut).toHaveBeenCalledWith(deep.min, deep.max, deep.max);
+  });
+
+  // ── samples for the Display panel's histogram ──────────────────────────────
+
+  function samplesCtx() {
+    return {
+      reportChannelRanges: vi.fn(),
+      reportDisplayedSamples: vi.fn(),
+      clearDisplayedSamples: vi.fn(),
+      windowChannel: '',
+    };
+  }
+
+  it('hands its samples to the histogram keyed by the frame, not by windowKey', async () => {
+    // For a single-channel video `windowKey` is the container, the same on
+    // every frame; Auto's progression must restart per frame, so the samples
+    // are filed under `src`.
+    const ctx = samplesCtx();
+    await renderDeep(ctx, { windowKey: 'container-42' });
+
+    expect(ctx.reportDisplayedSamples).toHaveBeenCalledTimes(1);
+    const [published] = ctx.reportDisplayedSamples.mock.calls[0];
+    expect(published.frameKey).toBe('/images/deep.png');
+    expect(published.channels).toEqual({ '': deep });
+    expect(typeof published.owner).toBe('symbol');
+  });
+
+  it('withdraws its samples when the image turns out not to be 16-bit', async () => {
+    // The picture is then an <img> nothing decoded; a histogram of the image
+    // before it would describe something no longer on screen.
+    const ctx = samplesCtx();
+    await renderDeep(ctx, {}, { ...deep, bitDepth: 8 });
+
+    expect(ctx.reportDisplayedSamples).not.toHaveBeenCalled();
+    expect(ctx.clearDisplayedSamples).toHaveBeenCalledTimes(1);
+    expect(typeof ctx.clearDisplayedSamples.mock.calls[0][0]).toBe('symbol');
+  });
+
+  it('withdraws on unmount under the owner it published with', async () => {
+    const ctx = samplesCtx();
+    const { unmount } = await renderDeep(ctx);
+    const { owner } = ctx.reportDisplayedSamples.mock.calls[0][0];
+    expect(ctx.clearDisplayedSamples).not.toHaveBeenCalled();
+
+    unmount();
+
+    expect(ctx.clearDisplayedSamples).toHaveBeenCalledWith(owner);
   });
 });
