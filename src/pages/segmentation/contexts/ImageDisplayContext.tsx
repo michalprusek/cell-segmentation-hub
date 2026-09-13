@@ -23,6 +23,7 @@ import {
   useState,
 } from 'react';
 import { logger } from '@/lib/logger';
+import type { SampleBuffer } from '@/lib/histogram';
 
 /** One channel's window/level, in raw sample units.
  *
@@ -44,6 +45,23 @@ export interface ChannelWindow {
    *  false, because on a plain 8-bit image nothing decodes the samples and the
    *  cutoffs would move a slider that changes no pixel. */
   measured: boolean;
+}
+
+/** The samples on screen right now, per channel — what the Display panel's
+ *  histogram and its Auto button read.
+ *
+ *  Held in a context of its OWN rather than in the display state below, because
+ *  it changes with every decoded frame. Folded into that value it would
+ *  re-render every display-state consumer, the canvas included, once per frame
+ *  of playback, to redraw one small plot in the sidebar. */
+export interface DisplayedSamples {
+  /** Who published this. Only that publisher may withdraw it, so a canvas
+   *  unmounting late cannot wipe what its replacement has already reported. */
+  owner: symbol;
+  /** Identifies the frame. Auto's progressive threshold starts over when it
+   *  changes, as ImageJ's does on a new slice. */
+  frameKey: string;
+  channels: Readonly<Record<string, SampleBuffer>>;
 }
 
 /** Window for images with no channel set (standalone frames, single-channel
@@ -120,6 +138,11 @@ interface ImageDisplayContextValue extends ImageDisplayState {
   readonly windowMax: number;
   /** Slider ceiling for the active channel = its brightest sample so far. */
   readonly windowRangeMax: number;
+  /** Slider floor for the active channel = its dimmest sample so far. The
+   *  Min/Max sliders and the histogram both span [windowDataMin,
+   *  windowRangeMax], which is ImageJ's axis; a lower value can still be typed
+   *  into the number field. */
+  readonly windowDataMin: number;
   /** Whether the active window came from a decoded image rather than the 8-bit
    *  placeholder. See {@link ChannelWindow.measured}. */
   readonly windowIsMeasured: boolean;
@@ -165,6 +188,11 @@ interface ImageDisplayContextValue extends ImageDisplayState {
     ranges: Record<string, { min: number; max: number }>,
     containerKey: string | null
   ) => void;
+  /** Publish the samples now on screen; see {@link DisplayedSamples}. The
+   *  canvases call it after every full-depth decode. */
+  reportDisplayedSamples: (samples: DisplayedSamples) => void;
+  /** Withdraw `owner`'s samples, if they are still the ones published. */
+  clearDisplayedSamples: (owner: symbol) => void;
   /** Choose which channel the Min/Max sliders edit. Null restores the default
    *  pick (the segmentation source). */
   setActiveWindowChannel: (channel: string | null) => void;
@@ -352,6 +380,12 @@ function applyRanges(
 // eslint-disable-next-line react-refresh/only-export-components
 export const ImageDisplayContext =
   createContext<ImageDisplayContextValue | null>(null);
+
+/** Carries {@link DisplayedSamples}; see there for why it is separate. */
+// eslint-disable-next-line react-refresh/only-export-components
+export const DisplayedSamplesContext = createContext<DisplayedSamples | null>(
+  null
+);
 
 const clampWindow = (n: number, maxv: number) =>
   Math.max(0, Math.min(maxv, Math.round(n)));
@@ -674,6 +708,17 @@ export function ImageDisplayProvider({
     }));
   }, []);
 
+  const [displayedSamples, setDisplayedSamples] =
+    useState<DisplayedSamples | null>(null);
+
+  const reportDisplayedSamples = useCallback((samples: DisplayedSamples) => {
+    setDisplayedSamples(samples);
+  }, []);
+
+  const clearDisplayedSamples = useCallback((owner: symbol) => {
+    setDisplayedSamples(current => (current?.owner === owner ? null : current));
+  }, []);
+
   // The scalar window fields are a VIEW of one entry of channelWindows, never a
   // second copy: everything that writes goes through channelWindows, so the
   // panel and the canvas can never disagree about what the window is.
@@ -687,6 +732,7 @@ export function ImageDisplayProvider({
       windowMin: activeWindow.min,
       windowMax: activeWindow.max,
       windowRangeMax: activeWindow.rangeMax,
+      windowDataMin: activeWindow.dataMin,
       windowIsMeasured: activeWindow.measured,
       fallbackWindow:
         state.channelWindows[FALLBACK_CHANNEL] ?? DEFAULT_CHANNEL_WINDOW,
@@ -704,6 +750,8 @@ export function ImageDisplayProvider({
       setWindowMin,
       setWindowMax,
       reportChannelRanges,
+      reportDisplayedSamples,
+      clearDisplayedSamples,
       setActiveWindowChannel,
       setBrightness,
       setContrast,
@@ -728,6 +776,8 @@ export function ImageDisplayProvider({
       setWindowMin,
       setWindowMax,
       reportChannelRanges,
+      reportDisplayedSamples,
+      clearDisplayedSamples,
       setActiveWindowChannel,
       setBrightness,
       setContrast,
@@ -739,9 +789,18 @@ export function ImageDisplayProvider({
 
   return (
     <ImageDisplayContext.Provider value={value}>
-      {children}
+      <DisplayedSamplesContext.Provider value={displayedSamples}>
+        {children}
+      </DisplayedSamplesContext.Provider>
     </ImageDisplayContext.Provider>
   );
+}
+
+/** The samples on screen, or null before any frame has decoded at full depth,
+ *  and outside a provider. */
+// eslint-disable-next-line react-refresh/only-export-components
+export function useDisplayedSamples(): DisplayedSamples | null {
+  return useContext(DisplayedSamplesContext);
 }
 
 // eslint-disable-next-line react-refresh/only-export-components

@@ -66,6 +66,7 @@ import {
 } from '@/lib/playbackProxyWindow';
 import { speculativeFrameRequests } from '@/lib/requestThrottle';
 import { buildLut } from '@/lib/windowLevel';
+import { hexToRgb } from '@/lib/hexColor';
 import {
   createCompositor,
   type Compositor,
@@ -143,27 +144,6 @@ interface ChannelSamples {
  */
 type RenderPath = 'webgl' | '2d';
 
-/** Parse `#RRGGBB` (or `#rgb`) into [r, g, b]. White is the grayscale
- *  identity — invalid inputs degrade to it rather than throwing. */
-function hexToRgb(hex: string): [number, number, number] {
-  if (!hex || hex[0] !== '#') return [255, 255, 255];
-  if (hex.length === 4) {
-    return [
-      parseInt(hex[1] + hex[1], 16),
-      parseInt(hex[2] + hex[2], 16),
-      parseInt(hex[3] + hex[3], 16),
-    ];
-  }
-  if (hex.length === 7) {
-    return [
-      parseInt(hex.slice(1, 3), 16),
-      parseInt(hex.slice(3, 5), 16),
-      parseInt(hex.slice(5, 7), 16),
-    ];
-  }
-  return [255, 255, 255];
-}
-
 /** Fallback for non-grayscale PNGs: decode 8-bit via createImageBitmap. */
 async function decode8Bit(blob: Blob): Promise<ChannelSamples | null> {
   // NOT for a playback proxy. This returns samples exactly as decoded, which
@@ -225,6 +205,8 @@ export default function MultiChannelCanvas({
     contrast,
     channelOpacities,
     reportChannelRanges,
+    reportDisplayedSamples,
+    clearDisplayedSamples,
   } = useImageDisplay();
   const { t } = useLanguage();
 
@@ -260,6 +242,13 @@ export default function MultiChannelCanvas({
     [windowsKey]
   );
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  // Tags what this canvas publishes to the Display panel's histogram, so that
+  // unmounting withdraws only its own samples and never a successor's.
+  const samplesOwnerRef = useRef(Symbol('MultiChannelCanvas'));
+  useEffect(() => {
+    const owner = samplesOwnerRef.current;
+    return () => clearDisplayedSamples(owner);
+  }, [clearDisplayedSamples]);
   // Decoded samples for the current frame/channel set, reused across
   // window-slider re-renders so dragging never refetches.
   const decodedRef = useRef<ChannelSamples[]>([]);
@@ -363,9 +352,28 @@ export default function MultiChannelCanvas({
   // Gated on being able to DECODE one, not just on wanting one: a browser
   // without OffscreenCanvas would otherwise spend the bandwidth on bytes it
   // then cannot turn into samples, and draw those channels blank.
+  //
+  // NEVER BACK TO THE PROXY FOR A FRAME ALREADY DECODED AT FULL DEPTH. Opening
+  // a frame decodes it at full depth first — no channel has a window yet, and
+  // `anyWindowNeedsFullDepth` errs toward the original — and that decode is
+  // what reports the windows. When they come back wide while the frame is
+  // still inside PROXY_SETTLE_MS, the gate used to flip to the proxy: a second
+  // fetch, the lossy WebP drawn over the exact picture until the timer ran
+  // out, and its DCT noise folded into the channel's range for good. Measured
+  // on production (marika_stage3, 2026-09-13): the IRM channel's true minimum
+  // is 2941 and its proxy decodes to 2910 (TIRF_491: 1318 and 1269), which is
+  // where the Min/Max tracks and the histogram's axis then started. A scrub
+  // back to a frame still in the cache is the same case. Playback is NOT: the
+  // decode-ahead walk and the buffer probe key readiness on the proxy while
+  // playing, so the canvas has to keep asking for it there.
+  //
+  // `has`, not `get`: a probe must not reorder the cache's eviction.
+  const fullDepthDecoded =
+    fetchChannels.length > 0 &&
+    fetchChannels.every(c => decodedFrameCache.has(frameCacheKey(frameId, c)));
   const useProxy =
     canDecodeWebpGray() &&
-    (videoIsPlaying || !frameSettled) &&
+    (videoIsPlaying || (!frameSettled && !fullDepthDecoded)) &&
     !anyWindowNeedsFullDepth(
       channelWindows,
       proxyRangeMax,
@@ -433,6 +441,17 @@ export default function MultiChannelCanvas({
     if (!fetchChannels.length) {
       decodedRef.current = [];
       setDecodeVersion(v => v + 1);
+      // Nothing on screen for this frame, so nothing for the histogram either;
+      // leaving the previous frame's samples up would plot a frame not shown.
+      try {
+        reportDisplayedSamples({
+          owner: samplesOwnerRef.current,
+          frameKey: frameId,
+          channels: {},
+        });
+      } catch (err) {
+        logger.error('MultiChannelCanvas: reportDisplayedSamples threw', err);
+      }
       try {
         onLoad?.(width ?? 0, height ?? 0, channelsKey);
       } catch (err) {
@@ -642,6 +661,28 @@ export default function MultiChannelCanvas({
           err
         );
       }
+      // The Display panel's histogram and Auto read these — but only at full
+      // depth. A playback proxy's samples are 8-bit levels stretched back into
+      // the data's units, so they fill one bin in every few and leave the rest
+      // empty: plotted, a comb; fed to Auto, a window fitted to quantisation
+      // steps. The proxy is only ever up while the frame is moving, so the plot
+      // holds the last settled frame until this one settles too.
+      //
+      // Gated on what was REQUESTED, not on what arrived: the server may answer
+      // a proxy request with the original PNG, and that decode is cached under
+      // the proxy key with nothing recording which one it was. Nothing is lost
+      // by it — the settled frame is re-fetched at full depth and published.
+      if (repr !== 'proxy') {
+        try {
+          reportDisplayedSamples({
+            owner: samplesOwnerRef.current,
+            frameKey: frameId,
+            channels: Object.fromEntries(loaded.map(cs => [cs.channel, cs])),
+          });
+        } catch (err) {
+          logger.error('MultiChannelCanvas: reportDisplayedSamples threw', err);
+        }
+      }
       try {
         onLoad?.(loaded[0].width, loaded[0].height, channelsKey);
       } catch (err) {
@@ -668,6 +709,7 @@ export default function MultiChannelCanvas({
     fetchChannels,
     fetchChannelsKey,
     reportChannelRanges,
+    reportDisplayedSamples,
     onLoad,
     t,
     visibleChannels,

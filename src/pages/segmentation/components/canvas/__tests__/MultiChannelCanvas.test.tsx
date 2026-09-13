@@ -79,6 +79,10 @@ let mockChannelOpacities: Record<string, number> = {};
 // Must be a STABLE reference: it sits in the decode effect's dependency
 // array, so a fresh fn each render would re-trigger the fetch effect forever.
 const mockReportChannelRanges = vi.fn();
+// Same stability requirement: the decode effect depends on the first, and the
+// unmount effect on the second.
+const mockReportDisplayedSamples = vi.fn();
+const mockClearDisplayedSamples = vi.fn();
 // Per-channel windows, keyed by channel name. Defaulted for both fixture
 // channels because that is the production invariant: the decode's
 // `setDecodeVersion` and `reportChannelRanges` land in ONE React commit, so a
@@ -103,6 +107,8 @@ vi.mock('@/pages/segmentation/contexts/ImageDisplayContext', () => ({
     contrast: mockContrast,
     channelOpacities: mockChannelOpacities,
     reportChannelRanges: mockReportChannelRanges,
+    reportDisplayedSamples: mockReportDisplayedSamples,
+    clearDisplayedSamples: mockClearDisplayedSamples,
   }),
 }));
 
@@ -1096,5 +1102,202 @@ describe('MultiChannelCanvas — CPU composite windows', () => {
       expect(urls.length).toBeGreaterThan(0);
       expect(urls.every(u => u.endsWith('&repr=proxy'))).toBe(true);
     });
+
+    // The Display panel's histogram must never be fed proxy samples: 8-bit
+    // levels stretched into the data's units plot as a comb, and Auto would
+    // fit a window to the quantisation steps.
+    it('does not hand the histogram proxy samples while the video plays', async () => {
+      mockReportChannelRanges.mockClear();
+      mockReportDisplayedSamples.mockClear();
+      const { fetchImpl } = makeSuccessfulFetch();
+      global.fetch = fetchImpl;
+
+      await act(async () => {
+        render(<MultiChannelCanvas {...DEFAULT_PROPS} videoIsPlaying />);
+        await new Promise(r => setTimeout(r, 50));
+      });
+
+      // The frame DID decode, so the silence below is the gate and not a
+      // load that never happened.
+      expect(mockReportChannelRanges).toHaveBeenCalled();
+      expect(mockReportDisplayedSamples).not.toHaveBeenCalled();
+    });
+
+    it('hands the histogram the settled full-depth samples, and only those', async () => {
+      mockReportChannelRanges.mockClear();
+      mockReportDisplayedSamples.mockClear();
+      const { fetchImpl } = makeSuccessfulFetch();
+      global.fetch = fetchImpl;
+
+      render(<MultiChannelCanvas {...DEFAULT_PROPS} />);
+      await waitFor(() => {
+        const urls = urlsFor(fetchImpl, 'ch1');
+        expect(urls[urls.length - 1]).toBe(
+          '/api/images/frame-1/frame-data?channel=ch1'
+        );
+        expect(mockReportDisplayedSamples).toHaveBeenCalled();
+      });
+      await act(async () => {
+        await new Promise(r => setTimeout(r, PROXY_SETTLE_MS));
+      });
+
+      // Two decodes, proxy then full depth; one publication.
+      expect(mockReportChannelRanges.mock.calls.length).toBeGreaterThanOrEqual(
+        2
+      );
+      expect(mockReportDisplayedSamples).toHaveBeenCalledTimes(1);
+    });
+
+    // Opening a frame decodes it at full depth, and that decode reports wide
+    // windows while the frame is still unsettled. The gate used to answer by
+    // flipping to the proxy: on production (2026-09-13) that re-drew the lossy
+    // WebP over the exact picture and widened the IRM channel's floor from its
+    // true 2941 to the proxy's 2910. Full-depth samples in the decoded cache
+    // are what "already decoded" means, however they got there.
+    const FULL_DEPTH = {
+      width: 2,
+      height: 1,
+      bitDepth: 16,
+      data: new Uint16Array([1000, 2000]),
+      min: 1000,
+      max: 2000,
+    };
+
+    async function seedFullDepth(frameId: string) {
+      const { decodedFrameCache, frameCacheKey } =
+        await import('@/lib/decodedFrameCache');
+      decodedFrameCache.clear();
+      for (const channel of DEFAULT_PROPS.visibleChannels) {
+        decodedFrameCache.set(frameCacheKey(frameId, channel), FULL_DEPTH);
+      }
+      return () => decodedFrameCache.clear();
+    }
+
+    it('does not go back to the proxy for a frame already decoded at full depth', async () => {
+      const clear = await seedFullDepth('frame-1');
+      try {
+        mockReportDisplayedSamples.mockClear();
+        const { fetchImpl } = makeSuccessfulFetch();
+        global.fetch = fetchImpl;
+
+        await act(async () => {
+          render(<MultiChannelCanvas {...DEFAULT_PROPS} />);
+          // Well inside PROXY_SETTLE_MS: the frame is still "moving".
+          await new Promise(r => setTimeout(r, 50));
+        });
+
+        expect(
+          urlsFor(fetchImpl, 'ch1').filter(u => u.endsWith('&repr=proxy'))
+        ).toEqual([]);
+        // Drawn from the cached full-depth samples, and published as such.
+        expect(mockReportDisplayedSamples).toHaveBeenCalledWith(
+          expect.objectContaining({ frameKey: 'frame-1' })
+        );
+      } finally {
+        clear();
+      }
+    });
+
+    it('still plays from the proxy when full depth happens to be cached', async () => {
+      // Deliberately out of scope for the rule above: while playing, the
+      // decode-ahead walk and the buffer probe key readiness on the proxy, so
+      // the canvas asking for anything else would gate playback on samples it
+      // never reads.
+      const clear = await seedFullDepth('frame-1');
+      try {
+        const { fetchImpl } = makeSuccessfulFetch();
+        global.fetch = fetchImpl;
+
+        await act(async () => {
+          render(<MultiChannelCanvas {...DEFAULT_PROPS} videoIsPlaying />);
+          await new Promise(r => setTimeout(r, 50));
+        });
+
+        expect(urlsFor(fetchImpl, 'ch1')).toEqual([
+          '/api/images/frame-1/frame-data?channel=ch1&repr=proxy',
+        ]);
+      } finally {
+        clear();
+      }
+    });
+  });
+});
+
+describe('MultiChannelCanvas — samples for the Display histogram', () => {
+  let originalFetch: typeof global.fetch;
+  let originalCreateImageBitmap: typeof global.createImageBitmap;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockChannelWindows = { ch1: EIGHT_BIT, ch2: EIGHT_BIT };
+    originalFetch = global.fetch;
+    originalCreateImageBitmap = global.createImageBitmap;
+    vi.mocked(createCompositor).mockImplementation(() => null);
+  });
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+    global.createImageBitmap = originalCreateImageBitmap;
+  });
+
+  it('publishes every decoded channel under its own name, for this frame', async () => {
+    const { fetchImpl } = makeSuccessfulFetch();
+    global.fetch = fetchImpl;
+
+    render(<MultiChannelCanvas {...DEFAULT_PROPS} />);
+    await waitFor(() => expect(mockReportDisplayedSamples).toHaveBeenCalled());
+
+    const [published] = mockReportDisplayedSamples.mock.calls[0];
+    expect(published.frameKey).toBe('frame-1');
+    expect(typeof published.owner).toBe('symbol');
+    expect(Object.keys(published.channels).sort()).toEqual(['ch1', 'ch2']);
+    // The decoded samples themselves: one per pixel of the 400x300 bitmap.
+    expect(published.channels.ch1.data).toHaveLength(400 * 300);
+    expect(published.channels.ch2.bitDepth).toBe(8);
+  });
+
+  it("publishes the new frame's samples after a frame change", async () => {
+    const { fetchImpl } = makeSuccessfulFetch();
+    global.fetch = fetchImpl;
+
+    const { rerender } = render(<MultiChannelCanvas {...DEFAULT_PROPS} />);
+    await waitFor(() => expect(mockReportDisplayedSamples).toHaveBeenCalled());
+    rerender(<MultiChannelCanvas {...DEFAULT_PROPS} frameId="frame-2" />);
+
+    await waitFor(() => {
+      const calls = mockReportDisplayedSamples.mock.calls;
+      expect(calls[calls.length - 1][0].frameKey).toBe('frame-2');
+    });
+  });
+
+  it('publishes an empty frame when no visible channel covers it', async () => {
+    // Leaving the previous frame's samples up would plot a frame not shown.
+    render(
+      <MultiChannelCanvas
+        {...DEFAULT_PROPS}
+        visibleChannels={['ch1']}
+        channelCoverage={{ ch1: ['some-other-frame'] }}
+      />
+    );
+
+    await waitFor(() =>
+      expect(mockReportDisplayedSamples).toHaveBeenCalledWith(
+        expect.objectContaining({ frameKey: 'frame-1', channels: {} })
+      )
+    );
+  });
+
+  it('withdraws, on unmount, exactly what it published', async () => {
+    const { fetchImpl } = makeSuccessfulFetch();
+    global.fetch = fetchImpl;
+
+    const { unmount } = render(<MultiChannelCanvas {...DEFAULT_PROPS} />);
+    await waitFor(() => expect(mockReportDisplayedSamples).toHaveBeenCalled());
+    const { owner } = mockReportDisplayedSamples.mock.calls[0][0];
+    expect(mockClearDisplayedSamples).not.toHaveBeenCalled();
+
+    unmount();
+
+    expect(mockClearDisplayedSamples).toHaveBeenCalledWith(owner);
   });
 });

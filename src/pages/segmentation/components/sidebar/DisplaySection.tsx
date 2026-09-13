@@ -1,7 +1,7 @@
 /**
- * Sidebar card with four image-display sliders: Min, Max, Brightness,
- * Contrast. Each row is a Radix Slider paired with a numeric Input
- * (Input ↔ Slider sync follows the FrameSlider pattern). Brightness/
+ * Sidebar card with the image-display controls: a histogram, Min, Max,
+ * Brightness, Contrast. Each slider row is a Radix Slider paired with a numeric
+ * Input (Input ↔ Slider sync follows the FrameSlider pattern). Brightness/
  * Contrast are global and persist across frame and channel changes.
  *
  * Min/Max are the ImageJ-style window/level cutoffs and belong to ONE CHANNEL
@@ -12,17 +12,30 @@
  * source, so the channel the model ran on is the one being adjusted unless the
  * user says otherwise.
  *
+ * The histogram and the Auto button are ImageJ's Brightness & Contrast dialog;
+ * the arithmetic is in `@/lib/histogram`, held to ImageJ's own output. As in
+ * ImageJ, the histogram and both window sliders span the channel's DATA range
+ * ([dimmest, brightest] sample seen), not 0..max: a dim 12-bit IRM channel
+ * sitting at 2941..4145 would otherwise use a third of the track and a third of
+ * the plot.
+ *
  * MultiChannelCanvas remaps each channel's true (16-bit-aware) samples through
  * its own LUT; Brightness/Contrast apply once, via CSS `filter`, on the
  * composite. The two compose at draw time.
  */
 
+import { useRef } from 'react';
 import { RotateCcw } from 'lucide-react';
 import { useLanguage } from '@/contexts/useLanguage';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Slider } from '@/components/ui/slider';
-import { useImageDisplay } from '../../contexts/ImageDisplayContext';
+import { autoAdjust, rawStatistics } from '@/lib/histogram';
+import {
+  useDisplayedSamples,
+  useImageDisplay,
+} from '../../contexts/ImageDisplayContext';
+import WindowHistogram from './WindowHistogram';
 
 interface DisplaySliderRowProps {
   label: string;
@@ -31,6 +44,10 @@ interface DisplaySliderRowProps {
   max: number;
   onChange: (v: number) => void;
   suffix?: string;
+  /** Where the slider TRACK starts, when that is not where typed input stops.
+   *  The Min/Max tracks span the channel's data, like ImageJ's scrollbars,
+   *  while the number field still accepts anything down to `min`. */
+  sliderMin?: number;
 }
 
 function DisplaySliderRow({
@@ -40,7 +57,9 @@ function DisplaySliderRow({
   max,
   onChange,
   suffix,
+  sliderMin,
 }: DisplaySliderRowProps) {
+  const trackMin = sliderMin ?? min;
   return (
     <div className="space-y-1">
       <div className="flex items-center justify-between text-xs">
@@ -68,10 +87,11 @@ function DisplaySliderRow({
         </div>
       </div>
       <Slider
-        min={min}
+        min={trackMin}
         max={max}
         step={1}
-        value={[value]}
+        // A typed value below the track would put the thumb off its end.
+        value={[Math.max(trackMin, Math.min(max, value))]}
         onValueChange={v => onChange(v[0])}
         aria-label={label}
       />
@@ -85,12 +105,14 @@ export default function DisplaySection() {
     windowMin,
     windowMax,
     windowRangeMax,
+    windowDataMin,
     windowIsMeasured,
     windowChannel,
     visibleChannels,
     channelColors,
     brightness,
     contrast,
+    setWindow,
     setWindowMin,
     setWindowMax,
     setActiveWindowChannel,
@@ -98,6 +120,8 @@ export default function DisplaySection() {
     setContrast,
     resetDisplay,
   } = useImageDisplay();
+  const displayed = useDisplayedSamples();
+  const activeSamples = displayed?.channels[windowChannel] ?? null;
 
   // Only worth the row when there is a choice to make. One channel (or none,
   // for a plain image) means the sliders can only mean that channel anyway.
@@ -109,22 +133,74 @@ export default function DisplaySection() {
   // filter and DO apply there, which is why only this pair is gated.
   const showWindow = windowIsMeasured;
 
+  // The axis the histogram and both window tracks share. It needs a positive
+  // span, which a channel that has only ever shown one value does not have.
+  const axisMin = Math.max(0, Math.min(windowDataMin, windowRangeMax - 1));
+
+  // Auto's progressive threshold. ImageJ carries it from press to press while
+  // the image, slice and channel stay the same — each press saturates more —
+  // and starts over on anything else, and on Reset. Held in a ref: it steers
+  // the next press and nothing on screen depends on it.
+  const autoRef = useRef({ key: '', threshold: 0 });
+
+  const handleAuto = () => {
+    if (!displayed || !activeSamples) return;
+    const key = `${displayed.frameKey}::${windowChannel}`;
+    const previous =
+      autoRef.current.key === key ? autoRef.current.threshold : 0;
+    const result = autoAdjust(
+      rawStatistics(activeSamples),
+      activeSamples.min,
+      activeSamples.max,
+      previous
+    );
+    autoRef.current = { key, threshold: result.autoThreshold };
+    if (result.kind === 'window') {
+      // ImageJ displays its window rounded to whole sample values.
+      setWindow(Math.round(result.min), Math.round(result.max));
+    } else {
+      // ImageJ's reset(): the frame's own range for 16-bit. For 8-bit it
+      // resets to 0..255 instead, which here would put Max past the track's
+      // end, so both get the data range the track shows.
+      setWindow(activeSamples.min, activeSamples.max);
+    }
+  };
+
+  const handleReset = () => {
+    autoRef.current = { key: '', threshold: 0 };
+    resetDisplay();
+  };
+
   return (
     <div className="w-full shrink-0 bg-white dark:bg-gray-800 border-l border-b border-gray-200 dark:border-gray-700">
       <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
         <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">
           {t('editor.windowLevel.title')}
         </h3>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={resetDisplay}
-          aria-label={t('editor.windowLevel.reset')}
-          className="h-7 px-2 text-xs"
-        >
-          <RotateCcw className="h-3 w-3 mr-1" />
-          {t('editor.windowLevel.reset')}
-        </Button>
+        <div className="flex items-center gap-1">
+          {showWindow && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleAuto}
+              disabled={!activeSamples}
+              title={String(t('editor.windowLevel.autoHint'))}
+              className="h-7 px-2 text-xs"
+            >
+              {t('editor.windowLevel.auto')}
+            </Button>
+          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleReset}
+            aria-label={t('editor.windowLevel.reset')}
+            className="h-7 px-2 text-xs"
+          >
+            <RotateCcw className="h-3 w-3 mr-1" />
+            {t('editor.windowLevel.reset')}
+          </Button>
+        </div>
       </div>
       <div className="p-4 space-y-3">
         {showChannelTabs && (
@@ -170,11 +246,21 @@ export default function DisplaySection() {
         )}
         {showWindow && (
           <>
+            <WindowHistogram
+              samples={activeSamples}
+              axisMin={axisMin}
+              axisMax={windowRangeMax}
+              windowMin={windowMin}
+              windowMax={windowMax}
+              color={channelColors[windowChannel] ?? '#FFFFFF'}
+              label={String(t('editor.windowLevel.histogram'))}
+            />
             <DisplaySliderRow
               label={t('editor.windowLevel.min')}
               value={windowMin}
               min={0}
               max={windowRangeMax}
+              sliderMin={axisMin}
               onChange={setWindowMin}
             />
             <DisplaySliderRow
@@ -182,6 +268,7 @@ export default function DisplaySection() {
               value={windowMax}
               min={0}
               max={windowRangeMax}
+              sliderMin={axisMin}
               onChange={setWindowMax}
             />
           </>

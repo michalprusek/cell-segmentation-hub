@@ -1801,7 +1801,7 @@ export default {
         'Lorsqu’aucun nom de canal n’est reconnaissable, aucune source n’est marquée et le premier canal est utilisé. Pour les microtubules, cela compte : le modèle ne fonctionne qu’en IRM, le pointer vers un canal de fluorescence produit donc des polylignes convaincantes sans rien dessous.',
       windowLevel: 'Afficher des données 16 bits',
       windowLevelDescription:
-        'Les images à grande profondeur de bits sont ajustées à l’affichage par les curseurs Min et Max, complétés par Luminosité et Contraste. La fenêtre est propre à chaque canal, et non partagée : un canal s’ajuste automatiquement à ses propres données la première fois que vous le voyez, conserve ensuite vos bornes et n’élargit sa plage que lorsque des images plus lumineuses arrivent. Ces réglages valent pour la session ; les couleurs et opacités des canaux, elles, sont mémorisées.',
+        'Les images à grande profondeur de bits sont ajustées à l’affichage par les curseurs Min et Max, complétés par Luminosité et Contraste. Au-dessus, un histogramme du canal actif partage l’axe des curseurs et trace la fenêtre sur les données, et Auto ajuste Min et Max à l’image courante comme l’Auto d’ImageJ ; chaque nouvel appui sature davantage. La fenêtre est propre à chaque canal, et non partagée : un canal s’ajuste automatiquement à ses propres données la première fois que vous le voyez, conserve ensuite vos bornes et n’élargit sa plage que lorsque des images plus lumineuses arrivent. Ces réglages valent pour la session ; les couleurs et opacités des canaux, elles, sont mémorisées.',
       navigation: 'Se déplacer dans les images',
       keys: {
         step: 'Image précédente / suivante',
@@ -2976,6 +2976,10 @@ export default {
       brightness: 'Luminosité',
       contrast: 'Contraste',
       reset: 'Réinitialiser',
+      histogram: 'Histogramme',
+      auto: 'Auto',
+      autoHint:
+        'Ajuste Min et Max à cette image, comme Auto dans ImageJ. Appuyez à nouveau pour saturer davantage.',
     },
     frameNavigation: {
       frame: 'Image',

@@ -1807,7 +1807,7 @@ export default {
         'Ist kein Kanalname erkennbar, wird keine Quelle markiert und der erste Kanal verwendet. Bei Mikrotubuli hat das Folgen: Das Modell arbeitet nur mit IRM, auf einem Fluoreszenzkanal erzeugt es überzeugend aussehende Polylinien, unter denen nichts liegt.',
       windowLevel: '16-Bit-Daten darstellen',
       windowLevelDescription:
-        'Bilder mit hoher Bittiefe werden über die Regler Min und Max dargestellt, ergänzt um Helligkeit und Kontrast. Das Fenster gilt je Kanal und nicht gemeinsam: Ein Kanal wird beim ersten Anzeigen automatisch an seine eigenen Daten angepasst, behält danach Ihre Grenzen und erweitert seinen Bereich nur, wenn hellere Bilder auftauchen. Diese Einstellungen gelten für die Sitzung; Kanalfarben und Deckkraft werden gespeichert.',
+        'Bilder mit hoher Bittiefe werden über die Regler Min und Max dargestellt, ergänzt um Helligkeit und Kontrast. Darüber zeigt ein Histogramm des aktiven Kanals die Daten auf derselben Achse wie die Regler, mit dem Fenster darüber, und Auto passt Min und Max wie Auto in ImageJ an das aktuelle Bild an; jedes weitere Drücken sättigt stärker. Das Fenster gilt je Kanal und nicht gemeinsam: Ein Kanal wird beim ersten Anzeigen automatisch an seine eigenen Daten angepasst, behält danach Ihre Grenzen und erweitert seinen Bereich nur, wenn hellere Bilder auftauchen. Diese Einstellungen gelten für die Sitzung; Kanalfarben und Deckkraft werden gespeichert.',
       navigation: 'Durch Einzelbilder navigieren',
       keys: {
         step: 'Vorheriges / nächstes Einzelbild',
@@ -2981,6 +2981,10 @@ export default {
       brightness: 'Helligkeit',
       contrast: 'Kontrast',
       reset: 'Zurücksetzen',
+      histogram: 'Histogramm',
+      auto: 'Auto',
+      autoHint:
+        'Passt Min und Max an dieses Bild an, wie Auto in ImageJ. Erneutes Drücken sättigt stärker.',
     },
     frameNavigation: {
       frame: 'Bild',
