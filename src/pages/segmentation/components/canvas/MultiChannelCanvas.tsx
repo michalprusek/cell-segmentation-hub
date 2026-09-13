@@ -352,9 +352,28 @@ export default function MultiChannelCanvas({
   // Gated on being able to DECODE one, not just on wanting one: a browser
   // without OffscreenCanvas would otherwise spend the bandwidth on bytes it
   // then cannot turn into samples, and draw those channels blank.
+  //
+  // NEVER BACK TO THE PROXY FOR A FRAME ALREADY DECODED AT FULL DEPTH. Opening
+  // a frame decodes it at full depth first — no channel has a window yet, and
+  // `anyWindowNeedsFullDepth` errs toward the original — and that decode is
+  // what reports the windows. When they come back wide while the frame is
+  // still inside PROXY_SETTLE_MS, the gate used to flip to the proxy: a second
+  // fetch, the lossy WebP drawn over the exact picture until the timer ran
+  // out, and its DCT noise folded into the channel's range for good. Measured
+  // on production (marika_stage3, 2026-09-13): the IRM channel's true minimum
+  // is 2941 and its proxy decodes to 2910 (TIRF_491: 1318 and 1269), which is
+  // where the Min/Max tracks and the histogram's axis then started. A scrub
+  // back to a frame still in the cache is the same case. Playback is NOT: the
+  // decode-ahead walk and the buffer probe key readiness on the proxy while
+  // playing, so the canvas has to keep asking for it there.
+  //
+  // `has`, not `get`: a probe must not reorder the cache's eviction.
+  const fullDepthDecoded =
+    fetchChannels.length > 0 &&
+    fetchChannels.every(c => decodedFrameCache.has(frameCacheKey(frameId, c)));
   const useProxy =
     canDecodeWebpGray() &&
-    (videoIsPlaying || !frameSettled) &&
+    (videoIsPlaying || (!frameSettled && !fullDepthDecoded)) &&
     !anyWindowNeedsFullDepth(
       channelWindows,
       proxyRangeMax,

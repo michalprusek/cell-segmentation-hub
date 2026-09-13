@@ -1147,6 +1147,79 @@ describe('MultiChannelCanvas — CPU composite windows', () => {
       );
       expect(mockReportDisplayedSamples).toHaveBeenCalledTimes(1);
     });
+
+    // Opening a frame decodes it at full depth, and that decode reports wide
+    // windows while the frame is still unsettled. The gate used to answer by
+    // flipping to the proxy: on production (2026-09-13) that re-drew the lossy
+    // WebP over the exact picture and widened the IRM channel's floor from its
+    // true 2941 to the proxy's 2910. Full-depth samples in the decoded cache
+    // are what "already decoded" means, however they got there.
+    const FULL_DEPTH = {
+      width: 2,
+      height: 1,
+      bitDepth: 16,
+      data: new Uint16Array([1000, 2000]),
+      min: 1000,
+      max: 2000,
+    };
+
+    async function seedFullDepth(frameId: string) {
+      const { decodedFrameCache, frameCacheKey } =
+        await import('@/lib/decodedFrameCache');
+      decodedFrameCache.clear();
+      for (const channel of DEFAULT_PROPS.visibleChannels) {
+        decodedFrameCache.set(frameCacheKey(frameId, channel), FULL_DEPTH);
+      }
+      return () => decodedFrameCache.clear();
+    }
+
+    it('does not go back to the proxy for a frame already decoded at full depth', async () => {
+      const clear = await seedFullDepth('frame-1');
+      try {
+        mockReportDisplayedSamples.mockClear();
+        const { fetchImpl } = makeSuccessfulFetch();
+        global.fetch = fetchImpl;
+
+        await act(async () => {
+          render(<MultiChannelCanvas {...DEFAULT_PROPS} />);
+          // Well inside PROXY_SETTLE_MS: the frame is still "moving".
+          await new Promise(r => setTimeout(r, 50));
+        });
+
+        expect(
+          urlsFor(fetchImpl, 'ch1').filter(u => u.endsWith('&repr=proxy'))
+        ).toEqual([]);
+        // Drawn from the cached full-depth samples, and published as such.
+        expect(mockReportDisplayedSamples).toHaveBeenCalledWith(
+          expect.objectContaining({ frameKey: 'frame-1' })
+        );
+      } finally {
+        clear();
+      }
+    });
+
+    it('still plays from the proxy when full depth happens to be cached', async () => {
+      // Deliberately out of scope for the rule above: while playing, the
+      // decode-ahead walk and the buffer probe key readiness on the proxy, so
+      // the canvas asking for anything else would gate playback on samples it
+      // never reads.
+      const clear = await seedFullDepth('frame-1');
+      try {
+        const { fetchImpl } = makeSuccessfulFetch();
+        global.fetch = fetchImpl;
+
+        await act(async () => {
+          render(<MultiChannelCanvas {...DEFAULT_PROPS} videoIsPlaying />);
+          await new Promise(r => setTimeout(r, 50));
+        });
+
+        expect(urlsFor(fetchImpl, 'ch1')).toEqual([
+          '/api/images/frame-1/frame-data?channel=ch1&repr=proxy',
+        ]);
+      } finally {
+        clear();
+      }
+    });
   });
 });
 
