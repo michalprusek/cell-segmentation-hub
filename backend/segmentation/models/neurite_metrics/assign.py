@@ -331,10 +331,15 @@ def add_bridges(g: Graph, soma_inst: np.ndarray, att: dict[int, int], p: Params,
     # order, so (a, b) has the SAME orientation the nested loops produced. That
     # matters: `cand` is sorted on the whole tuple, so swapping a and b could
     # order two equal-cost candidates differently and select a different bridge.
-    # Guarded on >= 2 leaves. A graph with none at all makes `np.array([])`,
-    # which cannot be reshaped to (0, 2) — and a frame whose every component is
-    # a closed loop or a single point has exactly that. Two existing tests cover
-    # it, which is how this was caught.
+    # Guarded because a graph with NO leaves makes `np.array([])`, which has
+    # shape (0,) rather than (0, 2) and blows up in the tree. A frame whose
+    # every component is a closed loop or a single point is exactly that, and
+    # two existing tests cover it — which is how this was caught.
+    #
+    # `> 1` rather than `> 0` only to skip building a tree that cannot produce a
+    # pair: with one leaf `query_pairs` returns an empty set, so the two
+    # thresholds are OBSERVABLY IDENTICAL (checked). A mutation between them
+    # therefore survives the suite on purpose — it is equivalent, not untested.
     if len(leaves) > 1:
         _pts = np.array([g.nodes[n] for n in leaves], dtype=float)
         _near = sorted(cKDTree(_pts).query_pairs(maxd))
