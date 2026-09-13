@@ -25,11 +25,20 @@
     "noFallthroughCasesInSwitch": true
   },
   "files": ["backend/src/services/export/imagejColor.ts"],
+  // ALL of src, not just the tests. `composite` (required: tsconfig.json
+  // references this project) demands that every file in the program be matched
+  // here, and tsc puts every file a test IMPORTS into the program and checks
+  // it. With a tests-only include each imported source raised TS6307 instead —
+  // 350 of the 1215 errors this project reported, all of them baselined, so a
+  // file-list mismatch hid behind the gate. Measured 2026-09-13: this include
+  // removes all 350 and adds 7, the files no test imports (src/test/setup.ts,
+  // src/test-utils/mockComponents.tsx, src/main.tsx). Sources stay on the
+  // stricter app project in the editor, which the solution config lists first.
   "include": [
-    "src/**/*.test.ts",
-    "src/**/*.test.tsx",
-    "src/**/*.spec.ts",
-    "src/**/*.spec.tsx",
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "src/**/*.js",
+    "src/**/*.jsx",
     "tests/**/*",
     "vitest.setup.ts",
     "**/*.test.ts",
@@ -37,5 +46,7 @@
     "**/*.spec.ts",
     "**/*.spec.tsx"
   ],
-  "exclude": ["node_modules", "dist", "backend", "coverage"]
+  // main.tsx is the browser entry: no test imports it, and it imports App with
+  // a `.tsx` extension that only the app project permits.
+  "exclude": ["node_modules", "dist", "backend", "coverage", "src/main.tsx"]
 }
