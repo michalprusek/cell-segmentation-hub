@@ -782,3 +782,74 @@ def test_add_bridges_matches_the_reference_exactly(side, seed):
         expected.append((a, b, round(L * g.um_per_px, 9)))
 
     assert [(br.u, br.v, round(br.length_um, 9)) for br in made] == expected
+
+
+def _pass_over_field():
+    """A soma with ONE neurite running straight across it, entering left and
+    leaving right — the type-3 "passing over" case.
+
+    Hand-placed, not random: 30 randomised fields never produced one, so two
+    mutations of the fast path survived them (the soma-area bincount, which
+    only gates type 3, and a shrunken search radius). A fixture that cannot
+    reach a branch cannot defend it.
+    """
+    side = 200
+    sem = np.zeros((side, side), np.uint8)
+    cy = cx = side // 2
+    r = 18
+    yy, xx = np.ogrid[:side, :side]
+    sem[(yy - cy) ** 2 + (xx - cx) ** 2 <= r * r] = 2
+    # the process, broken exactly where the soma sits
+    for x in range(20, side - 20):
+        if abs(x - cx) <= r:
+            continue
+        sem[cy - 1:cy + 1, x:x + 1] = 1
+    return sem
+
+
+def _near_radius_field():
+    """Two collinear tips separated by very nearly D_gap, so a radius shrunk by
+    one pixel changes the answer."""
+    side = 160
+    sem = np.zeros((side, side), np.uint8)
+    y = side // 2
+    # D_gap 3.0 um / 0.18 um/px = 16.667 px. The skeleton tips end up 16.000 px
+    # apart here, which is inside (maxd - 1, maxd] — the only band where a
+    # search radius short by one pixel changes the answer. Measured, not
+    # guessed: 14 px of hole gives 15.000 and 16 px gives 17.000, and neither
+    # would have killed that mutation.
+    sem[y - 1:y + 1, 20:70] = 1
+    sem[y - 1:y + 1, 85:135] = 1
+    return sem
+
+
+@pytest.mark.parametrize('field', ['pass_over', 'near_radius'])
+def test_add_bridges_matches_the_reference_on_hand_built_geometry(field):
+    si_mod = _load('_neurite_soma_instances', _VENDOR / 'soma_instances.py')
+    sem = _pass_over_field() if field == 'pass_over' else _near_radius_field()
+    inst = si_mod.s1_dt_hmaxima(sem == 2, 0.18, 3.0)
+    g, _ = sg_mod.build(sem == 1, 0.18)
+    p = assign_mod.Params()
+    att = assign_mod.attach_somas(g, inst, p)
+
+    import copy
+    ref = _add_bridges_reference(copy.deepcopy(g), inst, dict(att), p)
+    ref.sort()
+
+    g2 = copy.deepcopy(g)
+    before = set(g2.branches)
+    assign_mod.add_bridges(g2, inst, dict(att), p)
+    made = [g2.branches[b] for b in g2.branches if b not in before]
+
+    used: set[int] = set()
+    expected = []
+    for _, L, a, b, kind in ref:
+        if a in used or b in used:
+            continue
+        used.update((a, b))
+        expected.append((a, b, round(L * g.um_per_px, 9)))
+
+    # The fixture must actually REACH the branch it defends, or it defends
+    # nothing — the whole reason these two exist.
+    assert expected, f'{field}: fixture produced no bridge at all'
+    assert [(br.u, br.v, round(br.length_um, 9)) for br in made] == expected
