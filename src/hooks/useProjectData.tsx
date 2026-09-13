@@ -436,7 +436,6 @@ export const useProjectData = (
     projectPixelSizeUm,
     projectFolderId,
     setProjectVerified,
-    setProjectPixelSizeUm,
     images,
     projectChannels,
     projectSegmentationSources,

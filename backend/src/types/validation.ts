@@ -164,6 +164,34 @@ export const coerceProjectType = (v: unknown): ProjectType =>
 export const isMicrotubuleProject = (v: string | undefined | null): boolean =>
   v === 'microtubules';
 
+/** True for neurite projects. */
+export const isNeuriteProject = (v: string | undefined | null): boolean =>
+  v === 'neurite';
+
+/** Whether the STANDARD closed-polygon metrics report (area, perimeter,
+ *  circularity, Feret, solidity, sphericity) is meaningful for this project
+ *  type — i.e. whether its annotations are closed shapes whose outline is the
+ *  measurement.
+ *
+ *  Two types own their metrics files instead, and both would otherwise emit a
+ *  report that is at best empty and at worst misleading:
+ *
+ *  - `microtubules` annotates OPEN polylines, which the calculator discards
+ *    outright (`geometry !== 'polyline'`), so the file came out header-only.
+ *  - `neurite` annotates soma blobs and process masks. Those ARE closed, so
+ *    nothing filtered them and the report looked plausible — a neurite project
+ *    exported "Sphericity" per dendrite while the per-cell neurite/soma sheets
+ *    were missing entirely. Plausible-but-wrong is the worse failure of the
+ *    two, which is why this is a shared predicate rather than a second ad-hoc
+ *    `if` next to the first.
+ *
+ *  Unknown or absent types answer TRUE: the caller defaults a missing type to
+ *  `spheroid`, and erring toward the generic report keeps an unrecognised
+ *  project from exporting no metrics at all. */
+export const standardPolygonMetricsApply = (
+  v: string | undefined | null
+): boolean => !isMicrotubuleProject(v) && !isNeuriteProject(v);
+
 /** Model identifiers and the model↔project-type compatibility map now derive
  *  from the single source of truth in `../constants/modelRegistry`. Adding or
  *  removing a model there updates this automatically — no more hand-synced

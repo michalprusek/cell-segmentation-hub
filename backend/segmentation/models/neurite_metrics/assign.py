@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 from scipy import ndimage as ndi
+from scipy.spatial import cKDTree
 
 from skeleton_graph import Branch, Graph
 
@@ -272,8 +273,19 @@ def add_bridges(g: Graph, soma_inst: np.ndarray, att: dict[int, int], p: Params,
     cos_pass = np.cos(np.deg2rad(p.theta_pass))
     maxd = p.D_gap / g.um_per_px
 
+    # Memoised. `tangent` walks a branch path and is deterministic in its
+    # arguments, but the pair loops below used to call it for the INNER element
+    # of every pair: O(leaves^2) fits of a curve that has O(leaves) distinct
+    # answers. Measured 2026-09-11 on a 16 Mpx field, 1674 leaves — 1 400 301
+    # pair visits against 1674 real tangents.
+    _tan_cache: dict[int, np.ndarray] = {}
+
     def tan_of(n):
-        return tangent(g, n, g.incident[n][0], p.tangent_fit_len)
+        t = _tan_cache.get(n)
+        if t is None:
+            t = tangent(g, n, g.incident[n][0], p.tangent_fit_len)
+            _tan_cache[n] = t
+        return t
 
     cand = []
 
@@ -283,8 +295,13 @@ def add_bridges(g: Graph, soma_inst: np.ndarray, att: dict[int, int], p: Params,
     for n in leaves:
         if n in att:
             by_soma.setdefault(att[n], []).append(n)
+    # One pass over the frame for EVERY soma's area, not one pass per soma.
+    # `(soma_inst == lab).sum()` is a full-frame scan; at 169 somas on a 16 Mpx
+    # field that was 1.417 s against 0.050 s for a single bincount, and the
+    # counts are equal by construction (both count label occurrences).
+    _areas = np.bincount(soma_inst.ravel()) if soma_inst.size else np.zeros(1)
     for lab, ns in by_soma.items():
-        area = float((soma_inst == lab).sum())
+        area = float(_areas[lab]) if lab < _areas.size else 0.0
         diam = 2.0 * np.sqrt(area / np.pi)
         for i, a in enumerate(ns):
             ta = tan_of(a)
@@ -304,24 +321,48 @@ def add_bridges(g: Graph, soma_inst: np.ndarray, att: dict[int, int], p: Params,
                 cand.append((-_straightness(ta, tb), L, a, b, 'pass'))
 
     # --- types 1 and 2: a real gap in the mask, gated by D_gap AND by direction
-    for i, a in enumerate(leaves):
+    # Only the pairs that CAN pass the `L > maxd` gate are visited. The gate is
+    # a radius, so a KD-tree answers it exactly: `query_pairs(maxd)` is the set
+    # of pairs with distance <= maxd, which is precisely the complement of the
+    # `> maxd` skip below. On the measured 16 Mpx field that is 530 pairs out of
+    # 1 400 301 — the other 99.96 % only ever computed a norm and threw it away.
+    #
+    # Index pairs come back as i < j into `_pts`, which is built in `leaves`
+    # order, so (a, b) has the SAME orientation the nested loops produced. That
+    # matters: `cand` is sorted on the whole tuple, so swapping a and b could
+    # order two equal-cost candidates differently and select a different bridge.
+    # Guarded because a graph with NO leaves makes `np.array([])`, which has
+    # shape (0,) rather than (0, 2) and blows up in the tree. A frame whose
+    # every component is a closed loop or a single point is exactly that, and
+    # two existing tests cover it — which is how this was caught.
+    #
+    # `> 1` rather than `> 0` only to skip building a tree that cannot produce a
+    # pair: with one leaf `query_pairs` returns an empty set, so the two
+    # thresholds are OBSERVABLY IDENTICAL (checked). A mutation between them
+    # therefore survives the suite on purpose — it is equivalent, not untested.
+    if len(leaves) > 1:
+        _pts = np.array([g.nodes[n] for n in leaves], dtype=float)
+        _near = sorted(cKDTree(_pts).query_pairs(maxd))
+    else:
+        _near = []
+    for _i, _j in _near:
+        a, b = leaves[_i], leaves[_j]
         ta, ca = tan_of(a), g.nodes[a]
-        for b in leaves[i + 1:]:
-            if att.get(a) is not None and att.get(a) == att.get(b):
-                continue                      # handled above as a pass-over
-            d = g.nodes[b] - ca
-            L = float(np.linalg.norm(d))
-            if L < 1e-6 or L > maxd:
-                continue
-            u = d / L
-            tb = tan_of(b)
-            # `tangent` points INTO the branch, so the outward direction is -t:
-            # both ends must look AT each other, not merely lie close together
-            if not (np.dot(-ta, u) > cos_gap and np.dot(-tb, -u) > cos_gap):
-                continue
-            if att.get(a) is not None and att.get(b) is not None:
-                continue                      # both already emerge from somas
-            cand.append((L / maxd, L, a, b, 'gap'))
+        if att.get(a) is not None and att.get(a) == att.get(b):
+            continue                      # handled above as a pass-over
+        d = g.nodes[b] - ca
+        L = float(np.linalg.norm(d))
+        if L < 1e-6 or L > maxd:
+            continue
+        u = d / L
+        tb = tan_of(b)
+        # `tangent` points INTO the branch, so the outward direction is -t:
+        # both ends must look AT each other, not merely lie close together
+        if not (np.dot(-ta, u) > cos_gap and np.dot(-tb, -u) > cos_gap):
+            continue
+        if att.get(a) is not None and att.get(b) is not None:
+            continue                      # both already emerge from somas
+        cand.append((L / maxd, L, a, b, 'gap'))
 
     cand.sort()
     used: set[int] = set()

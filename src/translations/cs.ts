@@ -267,11 +267,6 @@ export default {
       '{{count}} existujících segmentací nemusí odpovídat exportnímu formátu "{{type}}". Re-segmentujte pro aktualizaci metrik.',
     verified: 'Ověřeno',
     toggleVerified: 'Přepnout ověření',
-    pixelSize: 'Měřítko:',
-    pixelSizeUnset: 'µm/px',
-    pixelSizeAria: 'Měřítko snímků projektu v mikrometrech na pixel',
-    pixelSizeHint:
-      'Mikrometry na pixel pro tento projekt. Potřebné pro měření v µm; nechte prázdné, pokud není známé.',
     projectVerified: 'Projekt byl označen jako ověřený',
     projectUnverified: 'Označení ověření projektu bylo zrušeno',
     failedToUpdateVerified: 'Nepodařilo se aktualizovat stav ověření',
@@ -1429,9 +1424,6 @@ export default {
       title: 'Metriky neuritů',
       description:
         'Přiřadí každý neurit k somě a vyexportuje tabulky po buňkách včetně vývojového stadia.',
-      enable: 'Zahrnout metriky neuritů',
-      enableHint:
-        'Jeden běh na snímek na ML službě; velké konfokální pole trvá zhruba minutu.',
       classify: 'Odfiltrovat neneuronální somy',
       classifyHint:
         'Doučený klasifikátor odmítne růstové kužely a fragmenty buněk. Odmítnuté objekty zůstanou v tabulce se soma_neuronal = 0.',

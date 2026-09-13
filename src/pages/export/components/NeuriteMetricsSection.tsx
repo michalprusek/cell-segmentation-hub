@@ -12,12 +12,18 @@ import { Label } from '@/components/ui/label';
 import { useLanguage } from '@/contexts/useLanguage';
 
 export interface NeuriteMetricsOptions {
-  /** Off by default: it is one ML round trip per frame, ~38 s for a 44 Mpx
-   *  confocal field, so it should be an opt-in rather than a surprise. */
-  enabled: boolean;
   /** Run the soma classifier. See the warning rendered when it is off. */
   classify: boolean;
 }
+
+/* `enabled` is gone. It was off by default because the report costs one ML
+ * round trip per frame (~38 s for a 44 Mpx confocal field), which is a real
+ * cost and the reason it was made a choice in the first place. But the
+ * standard closed-polygon report does not step aside for a neurite project on
+ * its own, so "off" did not mean "no report" — it meant a report of Area,
+ * Circularity and Sphericity per dendrite, with no neurite or soma sheet at
+ * all. A slow correct export beats a fast wrong one, and these two sheets ARE
+ * the metrics for this project type. */
 
 export interface NeuriteMetricsSectionProps {
   value: NeuriteMetricsOptions;
@@ -50,52 +56,37 @@ const NeuriteMetricsSection: React.FC<NeuriteMetricsSectionProps> = ({
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3 p-0">
+        {/* No "enable" checkbox. The neurite and soma sheets ARE the metrics
+            report for a neurite project — the standard closed-polygon one
+            steps aside — so gating them behind an opt-in that defaulted to off
+            meant a normal export produced spheroid metrics and neither sheet.
+            The classifier below stays a choice; producing the report at all is
+            not one. */}
         <div className="flex items-start gap-2">
           <Checkbox
-            id="neurite-metrics-enabled"
-            checked={value.enabled}
+            id="neurite-metrics-classify"
+            checked={value.classify}
             onCheckedChange={checked =>
-              onChange({ ...value, enabled: checked === true })
+              onChange({ ...value, classify: checked === true })
             }
           />
           <Label
-            htmlFor="neurite-metrics-enabled"
+            htmlFor="neurite-metrics-classify"
             className="cursor-pointer text-sm font-normal leading-snug"
           >
-            {t('export.neuriteMetrics.enable')}
+            {t('export.neuriteMetrics.classify')}
             <span className="mt-0.5 block text-xs text-gray-500 dark:text-gray-400">
-              {t('export.neuriteMetrics.enableHint')}
+              {t('export.neuriteMetrics.classifyHint')}
             </span>
           </Label>
         </div>
 
-        {value.enabled && (
-          <div className="flex items-start gap-2 pl-6">
-            <Checkbox
-              id="neurite-metrics-classify"
-              checked={value.classify}
-              onCheckedChange={checked =>
-                onChange({ ...value, classify: checked === true })
-              }
-            />
-            <Label
-              htmlFor="neurite-metrics-classify"
-              className="cursor-pointer text-sm font-normal leading-snug"
-            >
-              {t('export.neuriteMetrics.classify')}
-              <span className="mt-0.5 block text-xs text-gray-500 dark:text-gray-400">
-                {t('export.neuriteMetrics.classifyHint')}
-              </span>
-            </Label>
-          </div>
-        )}
-
-        {value.enabled && !value.classify && (
+        {!value.classify && (
           // Not a style preference. Without the classifier a neurite ending in
           // the cell's OWN growth cone is indistinguishable from one connecting
           // two cells, so connections are over-reported and their length is
           // credited to the wrong object.
-          <div className="ml-6 flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200">
+          <div className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200">
             <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
             <span>{t('export.neuriteMetrics.classifyOffWarning')}</span>
           </div>
