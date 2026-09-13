@@ -773,7 +773,8 @@ export class ExportService {
             options.metricsFormats,
             options.neuriteMetrics,
             mlRequestGate,
-            options.pixelToMicrometerScale ?? project.pixelSizeUm ?? undefined
+            options.pixelToMicrometerScale ?? project.pixelSizeUm ?? undefined,
+            jobId
           ).then(() => {
             progressStep++;
             this.updateJobProgress(
@@ -1885,7 +1886,10 @@ export class ExportService {
      *  typed for this one export still wins over the stored one; the stored
      *  value is what makes the export work without typing anything. Absent
      *  both, the frame is skipped rather than guessed. */
-    pixelToMicrometerScale?: number
+    pixelToMicrometerScale?: number,
+    /** Lets a failure reach `job.warnings` — the list the completion WebSocket
+     *  event and the status endpoint carry, i.e. the part the user sees. */
+    jobId?: string
   ): Promise<void> {
     try {
       const result = await computeNeuriteMetrics(
@@ -1931,6 +1935,19 @@ export class ExportService {
         error instanceof Error ? error : new Error(String(error)),
         'ExportService'
       );
+      // Empty fallback sheets alone are as mistakable as an absent file: the
+      // export completes, the workbook opens, and nothing says the report never
+      // ran. The warning is what makes it distinguishable from a real zero.
+      // The raw error stays in the log — it can name internal hosts.
+      if (jobId) {
+        const job = this.exportJobs.get(jobId);
+        if (job) {
+          job.warnings = [
+            ...(job.warnings ?? []),
+            'Neurite metrics could not be computed. The Neurites and Somas sheets in this export are empty because the report failed, not because no cells were found. Try the export again; if it keeps failing, report it.',
+          ];
+        }
+      }
       // Honour the contract in this method's docstring. Logging alone left the
       // metrics directory EMPTY, which reads as "this project has no cells"
       // rather than "the report did not run" — and now that the standard

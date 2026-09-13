@@ -206,7 +206,10 @@ vi.mock('../../types/validation', async importOriginal => {
 // ─── Imports (after mocks) ────────────────────────────────────────────────────
 
 import { ExportService, type ExportJob } from '../exportService';
-import { computeNeuriteMetrics } from '../export/neuriteMetricsExporter';
+import {
+  computeNeuriteMetrics,
+  writeNeuriteMetrics,
+} from '../export/neuriteMetricsExporter';
 import {
   sanitizeFilename,
   getProgressMessage,
@@ -750,6 +753,53 @@ describe('ExportService — generateNeuriteMetrics without an options object', (
     expect(vi.mocked(computeNeuriteMetrics).mock.calls[0][1]).toMatchObject({
       classify: true,
     });
+  });
+});
+
+describe('ExportService — a neurite report that fails says so', () => {
+  it('warns on the job AND still writes the empty sheets when the computation throws', async () => {
+    // The fallback sheets exist so an absent file cannot be mistaken for "no
+    // cells". But empty sheets with no reason are exactly as mistakable: the
+    // export completed, the workbook opened, and nothing said the report never
+    // ran. The warning is what the completion WebSocket event and the status
+    // endpoint carry, so it is the part the user actually sees.
+    const svc = new ExportService();
+    seedProcessingJob(svc, 'nm-fail');
+    vi.mocked(computeNeuriteMetrics).mockRejectedValueOnce(
+      new Error('ML service unreachable')
+    );
+    vi.mocked(writeNeuriteMetrics).mockClear();
+
+    await (
+      svc as unknown as {
+        generateNeuriteMetrics(
+          images: unknown[],
+          exportDir: string,
+          formats: readonly string[],
+          options: unknown,
+          mlGate?: unknown,
+          pixelToMicrometerScale?: number,
+          jobId?: string
+        ): Promise<void>;
+      }
+    ).generateNeuriteMetrics(
+      [{ id: 'i1', name: 'f.tif', originalPath: 'p.png', segmentation: { polygons: [] } }],
+      '/tmp/neurite',
+      ['csv'],
+      undefined,
+      undefined,
+      0.18,
+      'nm-fail'
+    );
+
+    const warnings = getJobs(svc).get('nm-fail')?.warnings ?? [];
+    expect(warnings.some(w => /neurite/i.test(w))).toBe(true);
+    // The fallback is preserved, not replaced by the warning.
+    expect(vi.mocked(writeNeuriteMetrics)).toHaveBeenCalledWith(
+      expect.objectContaining({ neurites: [], somas: [] }),
+      expect.any(String),
+      ['csv']
+    );
   });
 });
 
