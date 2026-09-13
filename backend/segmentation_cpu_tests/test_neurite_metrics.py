@@ -50,15 +50,52 @@ analyse_mod = _load('_neurite_analyse', _VENDOR / 'analyse.py')
 # -- so a stub stands in, pointing at the module that was just loaded by path.
 # Tests get the REAL pipeline by default (it needs no torch when classify is
 # off) and monkeypatch this one attribute when they want a spy instead.
+#
+# The stub is in `sys.modules` only while THIS module's tests run. It used to be
+# installed at import, and pytest imports every test module of a run before it
+# runs any test, so for the whole run `models` was an empty package with no
+# path and `models.neurite_metrics` this stub: a real `models.*` import in any
+# other suite would have failed. Where the real `models` was already imported,
+# `setdefault` handed back THAT package and the next line emptied its
+# `__path__`.
+import contextlib  # noqa: E402
 import types  # noqa: E402
 
-_models_pkg = sys.modules.setdefault('models', types.ModuleType('models'))
-_models_pkg.__path__ = []  # mark it a package so the submodule import resolves
 _stub = types.ModuleType('models.neurite_metrics')
 _stub.analyse_frame = analyse_mod.analyse_frame
 _stub.NeuriteMetricsResult = analyse_mod.NeuriteMetricsResult
-sys.modules['models.neurite_metrics'] = _stub
-_models_pkg.neurite_metrics = _stub
+
+
+@contextlib.contextmanager
+def _models_stub_installed():
+    """Resolve `models.neurite_metrics` to `_stub`; undo it all on exit."""
+    with pytest.MonkeyPatch.context() as mp:
+        if 'models' not in sys.modules:
+            package = types.ModuleType('models')
+            package.__path__ = []  # a package, so the submodule import resolves
+            mp.setitem(sys.modules, 'models', package)
+        mp.setitem(sys.modules, 'models.neurite_metrics', _stub)
+        mp.setattr(sys.modules['models'], 'neurite_metrics', _stub, raising=False)
+        yield
+
+
+@pytest.fixture(autouse=True, scope='module')
+def _models_stub():
+    with _models_stub_installed():
+        yield
+
+
+def test_the_models_stub_is_withdrawn_after_use():
+    with pytest.MonkeyPatch.context() as mp:
+        # Start from a run that has no `models` at all, as CI's does; the outer
+        # context puts back whatever the autouse fixture had installed.
+        mp.delitem(sys.modules, 'models.neurite_metrics', raising=False)
+        mp.delitem(sys.modules, 'models', raising=False)
+        with _models_stub_installed():
+            assert sys.modules['models.neurite_metrics'] is _stub
+        assert 'models.neurite_metrics' not in sys.modules
+        assert 'models' not in sys.modules
+
 
 route = _load('_neurite_route', _SEG / 'api' / 'neurite_metrics.py')
 
