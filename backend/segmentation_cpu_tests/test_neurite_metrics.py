@@ -785,24 +785,30 @@ def test_add_bridges_matches_the_reference_exactly(side, seed):
 
 
 def _pass_over_field():
-    """A soma with ONE neurite running straight across it, entering left and
-    leaving right — the type-3 "passing over" case.
+    """TWO somas, the larger one with a process running straight across it.
 
-    Hand-placed, not random: 30 randomised fields never produced one, so two
-    mutations of the fast path survived them (the soma-area bincount, which
-    only gates type 3, and a shrunken search radius). A fixture that cannot
-    reach a branch cannot defend it.
+    The type-3 "passing over" case, which 30 randomised fields never produced —
+    so the soma-area bincount, which gates only that branch, was undefended.
+
+    Two somas, not one, and the small one FIRST. The gate is one-sided
+    (`L > 1.2 * diam` only rejects), so reading the wrong label's area can only
+    be caught when the wrong area is SMALLER. With a single soma the mutation
+    reaches `_areas[0]`, the background — 65 479 px, a diameter of 289 px, and
+    the gate still passes. Here soma 1 is 1 009 px against soma 2's 2 121, so
+    the mutated gate is 1.2 x 35.8 = 43.0 px against a 52 px chord and the
+    pass-over vanishes.
     """
-    side = 200
+    side = 260
     sem = np.zeros((side, side), np.uint8)
-    cy = cx = side // 2
-    r = 18
     yy, xx = np.ogrid[:side, :side]
+    # r = 18 is the smallest disc that survives S1 instancing here as its own
+    # label; 10 and 14 are both swallowed (measured).
+    sem[(yy - 45) ** 2 + (xx - 45) ** 2 <= 18 * 18] = 2
+    cy, cx, r = 160, 150, 26
     sem[(yy - cy) ** 2 + (xx - cx) ** 2 <= r * r] = 2
-    # the process, broken exactly where the soma sits
-    for x in range(20, side - 20):
+    for x in range(60, side - 15):
         if abs(x - cx) <= r:
-            continue
+            continue                      # the process is broken by the soma
         sem[cy - 1:cy + 1, x:x + 1] = 1
     return sem
 
