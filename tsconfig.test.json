@@ -31,8 +31,9 @@
   // it. With a tests-only include each imported source raised TS6307 instead —
   // 350 of the 1215 errors this project reported, all of them baselined, so a
   // file-list mismatch hid behind the gate. Measured 2026-09-13: this include
-  // removes all 350 and adds 7, the files no test imports (src/test/setup.ts,
-  // src/test-utils/mockComponents.tsx, src/main.tsx). Sources stay on the
+  // removes all 350 and adds 6, from files no test imports and tsc therefore
+  // never checked (src/test/setup.ts, src/test-utils/mockComponents.tsx); a
+  // 7th, in src/main.tsx, is excluded below. Sources stay on the
   // stricter app project in the editor, which the solution config lists first.
   "include": [
     "src/**/*.ts",
