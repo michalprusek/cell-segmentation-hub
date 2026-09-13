@@ -106,6 +106,12 @@ export function binHistogram(
     if (count === 0) continue;
     pixelCount += count;
     let index = Math.trunc(scale * (v - hMin));
+    // ImageJ's guard, kept verbatim although no sample can reach it — removing
+    // it is an equivalent program, which is why no test fails without it. With
+    // m = histMin and M = histMax, v <= M gives v - trunc(m) < M - m + 1, so
+    // the product is below nBins by nBins / (M - m + 1): at least 0.0039 for
+    // any range of 16-bit values, ten orders of magnitude above the rounding
+    // of the two divisions that produce `scale`.
     if (index >= nBins) index = nBins - 1;
     counts[index] += count;
   }
