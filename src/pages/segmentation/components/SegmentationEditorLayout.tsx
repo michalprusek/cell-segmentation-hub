@@ -314,6 +314,18 @@ const SegmentationEditorLayout: React.FC<SegmentationEditorLayoutProps> = ({
   // domain cares, and threading it from the orchestrator would only add props.
   const sidebar = useSidebarWidth();
 
+  // A video whose channel list is still on its way, or not applied yet: the
+  // canvas and the prefetcher must not read "no visible channels" as a
+  // single-channel video meanwhile (see VideoFrameImage.awaitChannelSetup).
+  // `isVideoMode` cannot answer this — it stays false until the container has
+  // loaded. A container that failed to load stops the wait, so its frame
+  // still falls back to the plain image.
+  const awaitChannelSetup =
+    !!videoContainerId &&
+    (video.container
+      ? (video.container.channels?.length ?? 0) > 0
+      : video.isLoading);
+
   return (
     <ImageDisplayProvider userId={user?.id}>
       {/* Headless sliding-window prefetcher: warms the FrameImageCache
@@ -329,6 +341,7 @@ const SegmentationEditorLayout: React.FC<SegmentationEditorLayoutProps> = ({
           currentIndex={video.frameIndex}
           enabled={isVideoMode}
           registerBufferProbe={video.registerBufferProbe}
+          awaitChannelSetup={awaitChannelSetup}
         />
       )}
       <EditorLayout>
@@ -448,6 +461,7 @@ const SegmentationEditorLayout: React.FC<SegmentationEditorLayoutProps> = ({
                         height={imageDimensions?.height || canvasHeight}
                         alt={t('common.image')}
                         videoIsPlaying={isVideoMode && video.isPlaying}
+                        awaitChannelSetup={awaitChannelSetup}
                         onLoad={handleImageLoad}
                       />
                     )}
@@ -702,6 +716,7 @@ const SegmentationEditorLayout: React.FC<SegmentationEditorLayoutProps> = ({
                     <ChannelsSection
                       channels={video.container.channels}
                       containerId={videoContainerId}
+                      firstFrameId={video.container.frames[0]?.id ?? null}
                     />
                     <DisplaySection />
                   </>

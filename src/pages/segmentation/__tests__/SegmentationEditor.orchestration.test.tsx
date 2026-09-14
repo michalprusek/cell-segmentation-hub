@@ -89,6 +89,7 @@ const mockProjectData = vi.hoisted(() => ({
 /** Mutable video stub. */
 const mockVideo = vi.hoisted(() => ({
   container: null as any,
+  isLoading: false,
   frameIndex: 0,
   currentFrame: null as any,
   isPlaying: false,
@@ -303,12 +304,25 @@ vi.mock('../components/canvas/CanvasContent', () => ({
   ),
 }));
 
+/** Props the layout handed to the stubbed canvas children, for wiring tests. */
+const mockChildProps = vi.hoisted(() => ({
+  videoFrameImage: null as any,
+  frameWindowPrefetcher: null as any,
+  channelsSection: null as any,
+}));
+
 vi.mock('../components/canvas/VideoFrameImage', () => ({
-  default: () => <div data-testid="video-frame-image" />,
+  default: (props: any) => {
+    mockChildProps.videoFrameImage = props;
+    return <div data-testid="video-frame-image" />;
+  },
 }));
 
 vi.mock('../components/canvas/FrameWindowPrefetcher', () => ({
-  default: () => null,
+  default: (props: any) => {
+    mockChildProps.frameWindowPrefetcher = props;
+    return null;
+  },
 }));
 
 vi.mock('../components/canvas/FrameLoadingGate', () => ({
@@ -350,7 +364,10 @@ vi.mock('../components/canvas/CanvasTemporaryGeometryLayer', () => ({
 }));
 
 vi.mock('../components/sidebar/ChannelsSection', () => ({
-  default: () => null,
+  default: (props: any) => {
+    mockChildProps.channelsSection = props;
+    return null;
+  },
 }));
 
 vi.mock('../components/sidebar/DisplaySection', () => ({
@@ -854,6 +871,80 @@ describe('effectiveResegmentModel — project-type gating', () => {
 });
 
 // ─── Resegment — multi-channel dialog ────────────────────────────────────────
+
+describe('channel setup wiring — what the layout tells the canvas', () => {
+  // The layout decides when a video is still waiting for its channel list.
+  // The decision lives in props, so it is only tested if these are the props
+  // the real layout passes, not ones a component test chose for itself.
+  const frame = {
+    id: 'img-1',
+    name: 'x.tif',
+    segmentationStatus: 'completed',
+    parentVideoId: 'vid-1',
+  };
+
+  beforeEach(() => {
+    mockProjectData.images = [frame];
+    mockParams.imageId = 'img-1';
+    mockChildProps.videoFrameImage = null;
+    mockChildProps.frameWindowPrefetcher = null;
+    mockChildProps.channelsSection = null;
+  });
+
+  afterEach(() => {
+    mockVideo.container = null;
+    mockVideo.isLoading = false;
+  });
+
+  it('waits on a loaded container with channels, and hands over its first frame', () => {
+    mockVideo.container = {
+      frameCount: 3,
+      frames: [{ id: 'img-1' }, { id: 'img-2' }, { id: 'img-3' }],
+      channels: [
+        { name: 'IRM', isSegmentationSource: true, staticSource: true },
+        { name: '488_nm', isSegmentationSource: false },
+      ],
+    };
+    renderEditor();
+
+    expect(mockChildProps.videoFrameImage.awaitChannelSetup).toBe(true);
+    expect(mockChildProps.frameWindowPrefetcher.awaitChannelSetup).toBe(true);
+    expect(mockChildProps.channelsSection.firstFrameId).toBe('img-1');
+  });
+
+  it('waits while the container is still loading', () => {
+    mockVideo.isLoading = true;
+    renderEditor();
+
+    expect(mockChildProps.videoFrameImage.awaitChannelSetup).toBe(true);
+  });
+
+  it('stops waiting when the container failed to load, so the plain image still shows', () => {
+    mockVideo.isLoading = false;
+    renderEditor();
+
+    expect(mockChildProps.videoFrameImage.awaitChannelSetup).toBe(false);
+  });
+
+  it('does not wait on a container that has no channels', () => {
+    mockVideo.container = {
+      frameCount: 3,
+      frames: [{ id: 'img-1' }, { id: 'img-2' }, { id: 'img-3' }],
+      channels: [],
+    };
+    renderEditor();
+
+    expect(mockChildProps.videoFrameImage.awaitChannelSetup).toBe(false);
+  });
+
+  it('does not wait on a standalone image', () => {
+    mockProjectData.images = [{ ...frame, parentVideoId: null }];
+    mockVideo.isLoading = true;
+    renderEditor();
+
+    expect(mockChildProps.videoFrameImage.awaitChannelSetup).toBe(false);
+  });
+});
 
 describe('Resegment — multi-channel video opens picker', () => {
   const base = {

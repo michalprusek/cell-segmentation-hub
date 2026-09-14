@@ -72,7 +72,9 @@ describe('staticFrameChannels', () => {
     ).toBe(19);
   });
 
-  it('ignores a static channel that covers no frames', () => {
+  it('registers nothing while no frame of the container is known', () => {
+    // No `frameIds` and no first frame: there is no real id to point at, and a
+    // synthesised one would 404.
     setStaticChannelAnchors([{ name: 'irm', staticSource: true }]);
     expect(staticChannelAnchors()).toEqual({});
   });
@@ -90,6 +92,59 @@ describe('staticFrameChannels', () => {
     setStaticChannelAnchors([IRM]);
     expect(resolveFrameId('frame-7', null)).toBe('frame-7');
     expect(buildFrameImageUrl('frame-7', null)).toContain('frame-7');
+  });
+});
+
+/** Verbatim from production (container dbf5e30c, 2026-09-14). A static channel
+ *  that covers EVERY frame is written in the compact form: no `frameIds` at all
+ *  (`addChannelService` omits the list on full coverage). Every static channel
+ *  in production has this shape — 9 of 9 on that date — and the IRM PNG was
+ *  md5-identical across frames 1, 2 and 10, yet each frame fetched its own
+ *  copy, because the anchor was only ever read from `frameIds[0]`. */
+const IRM_FULL_COVERAGE = {
+  name: 'IRM',
+  type: 'irm',
+  pngBacked: true,
+  displayName: 'IRM',
+  displayColor: '#00ff00',
+  staticSource: true as const,
+  wavelengthNm: 510,
+  proxyRangeMax: 65535,
+  isSegmentationSource: true,
+};
+
+describe('staticFrameChannels — full coverage, `frameIds` omitted', () => {
+  it("collapses onto the container's first frame", () => {
+    setStaticChannelAnchors([IRM_FULL_COVERAGE, DYNAMIC], 'frame-0');
+
+    const urls = new Set(FRAME_IDS.map(id => buildFrameImageUrl(id, 'IRM')));
+    const keys = new Set(FRAME_IDS.map(id => frameCacheKey(id, 'IRM')));
+    expect(urls.size).toBe(1);
+    expect(keys.size).toBe(1);
+    expect([...urls][0]).toContain('frame-0');
+  });
+
+  it("prefers the channel's own coverage when it has one", () => {
+    // A partial channel does not exist on frame-0, so the container's first
+    // frame would be a 404; its own first covered frame is the right anchor.
+    setStaticChannelAnchors(
+      [{ ...IRM, frameIds: ['frame-3', 'frame-4'] }],
+      'frame-0'
+    );
+    expect(resolveFrameId('frame-4', 'irm')).toBe('frame-3');
+  });
+
+  it('still refuses copies that were aligned per frame', () => {
+    setStaticChannelAnchors(
+      [{ ...IRM_FULL_COVERAGE, staticShifts: { 'frame-1': [1, 0] } }],
+      'frame-0'
+    );
+    expect(staticChannelAnchors()).toEqual({});
+  });
+
+  it('leaves the per-frame channels of the same container alone', () => {
+    setStaticChannelAnchors([IRM_FULL_COVERAGE, DYNAMIC], 'frame-0');
+    expect(resolveFrameId('frame-7', '488_nm')).toBe('frame-7');
   });
 });
 

@@ -385,6 +385,47 @@ describe('useFrameWindowPrefetch', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it('warms no images while imagesEnabled=false, but still prefetches polygons', async () => {
+    // Opening a frame at full depth must not share the link with speculative
+    // neighbours: measured on production, the window warm put 10 MB beside the
+    // 10 MB the displayed frame needed. Polygons are small JSON and stay on.
+    const frames = makeFrames(3);
+    const { rerender } = renderHook(
+      ({ imagesEnabled }: { imagesEnabled: boolean }) =>
+        useFrameWindowPrefetch({
+          frames,
+          currentIndex: 1,
+          channels: ['ch1'],
+          enabled: true,
+          imagesEnabled,
+        }),
+      { wrapper: wrapper(qc), initialProps: { imagesEnabled: false } }
+    );
+    await settleWarms();
+
+    expect(warmCount()).toBe(0);
+    expect(qc.getQueryState(['segmentation-results', 'frame-1'])).toBeDefined();
+
+    rerender({ imagesEnabled: true });
+    await waitFor(() => expect(warmCount()).toBe(3));
+  });
+
+  it('warms no /display images either while imagesEnabled=false', async () => {
+    renderHook(
+      () =>
+        useFrameWindowPrefetch({
+          frames: makeFrames(3),
+          currentIndex: 1,
+          channels: [],
+          enabled: true,
+          imagesEnabled: false,
+        }),
+      { wrapper: wrapper(qc) }
+    );
+    await settleWarms();
+    expect(prefetchMock).not.toHaveBeenCalled();
+  });
+
   it('does nothing when enabled=false', () => {
     const frames = makeFrames(50);
     renderHook(

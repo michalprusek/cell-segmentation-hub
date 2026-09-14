@@ -80,6 +80,11 @@ export interface UseFrameWindowPrefetchOptions {
    *  match what the canvas asks for: warming the other representation fills the
    *  HTTP cache with bytes nothing goes on to read. */
   repr?: 'proxy';
+  /** False holds back the IMAGE warms only; polygon JSON is still prefetched.
+   *  The caller turns it off while the displayed frame is being fetched at
+   *  full depth, which the neighbours would otherwise share the link with.
+   *  Default true. */
+  imagesEnabled?: boolean;
   /** Override window. Default is 5 back / 10 ahead. */
   windowBack?: number;
   windowAhead?: number;
@@ -102,6 +107,7 @@ export function useFrameWindowPrefetch({
   enabled,
   channelCoverage = EMPTY_COVERAGE,
   repr,
+  imagesEnabled = true,
   windowBack = FRAME_PREFETCH_WINDOW.back,
   windowAhead = FRAME_PREFETCH_WINDOW.ahead,
 }: UseFrameWindowPrefetchOptions): UseFrameWindowPrefetchResult {
@@ -144,7 +150,7 @@ export function useFrameWindowPrefetch({
   // memo: parent renders that hand us a fresh `channels` array with
   // identical content won't recompute the URLs.
   const windowImageUrls = useMemo(() => {
-    if (!windowFrames.length) return [];
+    if (!windowFrames.length || !imagesEnabled) return [];
     const channelList = channels.length > 0 ? channels : [null];
     const urls: string[] = [];
     for (const frame of windowFrames) {
@@ -155,7 +161,7 @@ export function useFrameWindowPrefetch({
     }
     return urls;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [windowFrames, channelsKey, coverageKey, repr]);
+  }, [windowFrames, channelsKey, coverageKey, repr, imagesEnabled]);
 
   // Track the set of URLs we've already kicked off so a window
   // shift fires `prefetch()` only for the NEW URLs at the leading
@@ -219,7 +225,14 @@ export function useFrameWindowPrefetch({
     // because evicted entries (rare, only past the 200-LRU cap)
     // shouldn't trigger redundant re-fetches mid-playback — the
     // browser HTTP cache (30 min) will serve them on real mount.
-    const channelList = channels.length > 0 ? channels : [null];
+    //
+    // No channels at all while images are held back: every pending warm then
+    // falls out of the in-window set below and is retired, and none is queued.
+    const channelList = !imagesEnabled
+      ? []
+      : channels.length > 0
+        ? channels
+        : [null];
 
     // Retire warms that left the window BEFORE queueing new ones, so the
     // leading edge inherits the slots the trailing edge gives up. A warm still
@@ -355,7 +368,15 @@ export function useFrameWindowPrefetch({
     // the primitive prevents re-fires on parent-provided fresh
     // arrays with identical content.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, windowFrames, channelsKey, coverageKey, queryClient, repr]);
+  }, [
+    enabled,
+    windowFrames,
+    channelsKey,
+    coverageKey,
+    queryClient,
+    repr,
+    imagesEnabled,
+  ]);
 
   const readyCount = frameImageCache.readyCount(windowImageUrls);
   const isWindowReady =

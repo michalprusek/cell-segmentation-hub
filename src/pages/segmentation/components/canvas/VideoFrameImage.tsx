@@ -43,6 +43,13 @@ interface VideoFrameImageProps {
    *  keeps the frame on the 8-bit playback proxy while it moves and pulls the
    *  16-bit original once it settles. */
   videoIsPlaying?: boolean;
+  /** The frame belongs to a video whose channel list is still loading or not
+   *  yet applied. Draw nothing until it is: the only thing this component
+   *  could draw meanwhile is the single-channel `<img>`, and on production
+   *  that fetched a 4.25 MB `/display` twice per open — the fallback image
+   *  before the container arrived, then frame 0 — neither cancellable and
+   *  both thrown away the moment the multi-channel canvas took over. */
+  awaitChannelSetup?: boolean;
   /** `channelsKey` identifies which channel set produced the load,
    *  letting the parent invalidate "loaded" state when the channel
    *  mix changes on the same frame. Single-channel fallback emits
@@ -59,10 +66,16 @@ export default function VideoFrameImage({
   height,
   alt,
   videoIsPlaying,
+  awaitChannelSetup = false,
   onLoad,
 }: VideoFrameImageProps) {
-  const { channel, visibleChannels, channelColors, channelCoverage } =
-    useImageDisplay();
+  const {
+    channel,
+    visibleChannels,
+    channelColors,
+    channelCoverage,
+    channelsSeeded,
+  } = useImageDisplay();
 
   // Compute the legacy single-channel URL. We still use it when there
   // is no multi-channel overlay configured (visibleChannels is empty)
@@ -74,6 +87,8 @@ export default function VideoFrameImage({
     }
     return fallbackSrc;
   }, [isVideoMode, currentFrameId, channel, fallbackSrc]);
+
+  if (awaitChannelSetup && !channelsSeeded) return null;
 
   // Multi-channel overlay mode: composite each visible channel via
   // canvas with per-channel colour + min/max LUT remap. Falls through

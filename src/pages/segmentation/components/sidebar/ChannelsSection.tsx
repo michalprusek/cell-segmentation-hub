@@ -13,11 +13,14 @@ interface ChannelsSectionProps {
   /** Video container Image id. Required to persist channel renames
    *  via PATCH /images/:id/channels. When omitted, rename UI hides. */
   containerId?: string | null;
+  /** Forwarded to ChannelOverlayList — see its `firstFrameId`. */
+  firstFrameId?: string | null;
 }
 
 export default function ChannelsSection({
   channels,
   containerId,
+  firstFrameId,
 }: ChannelsSectionProps) {
   const { t } = useLanguage();
 
@@ -33,7 +36,11 @@ export default function ChannelsSection({
         </h3>
       </div>
       <div className="p-4">
-        <ChannelOverlayList channels={channels} containerId={containerId} />
+        <ChannelOverlayList
+          channels={channels}
+          containerId={containerId}
+          firstFrameId={firstFrameId}
+        />
       </div>
     </div>
   );

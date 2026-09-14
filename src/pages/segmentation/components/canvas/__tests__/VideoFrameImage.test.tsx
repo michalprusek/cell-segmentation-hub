@@ -31,12 +31,14 @@ import VideoFrameImage from '../VideoFrameImage';
 let mockChannel: string | null = null;
 let mockVisibleChannels: string[] = [];
 let mockChannelColors: Record<string, string> = {};
+let mockChannelsSeeded = false;
 
 vi.mock('@/pages/segmentation/contexts/ImageDisplayContext', () => ({
   useImageDisplay: () => ({
     channel: mockChannel,
     visibleChannels: mockVisibleChannels,
     channelColors: mockChannelColors,
+    channelsSeeded: mockChannelsSeeded,
     channelOpacities: {},
     windowMin: 0,
     windowMax: 255,
@@ -131,6 +133,73 @@ describe('VideoFrameImage', () => {
     mockVisibleChannels = [];
     mockChannelColors = {};
     multiChannelCalls.length = 0;
+    mockChannelsSeeded = false;
+  });
+
+  // -------------------------------------------------------------------------
+  // Waiting for the channel list
+  // -------------------------------------------------------------------------
+
+  describe('while the channel list is still being set up', () => {
+    it('draws nothing — no <img>, no canvas — before the container has loaded', () => {
+      // `isVideoMode` is still false here, which is exactly why the fallback
+      // <img> used to fetch a 4.25 MB `/display` nothing went on to draw.
+      render(
+        <VideoFrameImage
+          isVideoMode={false}
+          currentFrameId={null}
+          fallbackSrc="/api/images/f-1/display"
+          awaitChannelSetup
+        />
+      );
+      expect(screen.queryByTestId('canvas-image')).not.toBeInTheDocument();
+      expect(
+        screen.queryByTestId('multi-channel-canvas')
+      ).not.toBeInTheDocument();
+    });
+
+    it('draws nothing on a loaded container whose channels are not applied yet', () => {
+      render(
+        <VideoFrameImage
+          isVideoMode
+          currentFrameId="f-0"
+          fallbackSrc="/fallback"
+          awaitChannelSetup
+        />
+      );
+      expect(screen.queryByTestId('canvas-image')).not.toBeInTheDocument();
+    });
+
+    it('draws the composite once they are applied', () => {
+      mockChannelsSeeded = true;
+      mockVisibleChannels = ['IRM', '488_nm'];
+      render(
+        <VideoFrameImage
+          isVideoMode
+          currentFrameId="f-0"
+          fallbackSrc="/fallback"
+          awaitChannelSetup
+        />
+      );
+      expect(screen.getByTestId('multi-channel-canvas')).toBeInTheDocument();
+    });
+
+    it('keeps the single-channel fallback when the user has hidden every channel', () => {
+      // An empty visible set on a SET-UP video is a user choice, not a video
+      // that is still loading.
+      mockChannelsSeeded = true;
+      mockVisibleChannels = [];
+      mockChannel = 'IRM';
+      render(
+        <VideoFrameImage
+          isVideoMode
+          currentFrameId="f-0"
+          fallbackSrc="/fallback"
+          awaitChannelSetup
+        />
+      );
+      expect(screen.getByTestId('canvas-image')).toBeInTheDocument();
+    });
   });
 
   // -------------------------------------------------------------------------

@@ -101,6 +101,14 @@ interface ImageDisplayState {
    *  default). Lets the canvas + prefetcher skip requesting a channel for
    *  frames it doesn't cover, so a partial channel produces no 404 noise. */
   channelCoverage: Record<string, string[]>;
+  /** Whether the container's channel list has been applied (visible set,
+   *  colours, coverage, static anchors). Until it has, a multi-channel video
+   *  has no visible channels, and the canvas and prefetcher used to read that
+   *  as a single-channel video — measured on production, that fetched two
+   *  uncancellable 4.25 MB `/display` images nothing ever drew. Separate from
+   *  `visibleChannels` because an EMPTY set on a set-up video is the user
+   *  hiding every channel, which keeps its single-channel fallback. */
+  channelsSeeded: boolean;
   /** Upper bound on the container's sample values, or null before the backend
    *  has derived one. NOT the value that maps to 255 — that is per frame and
    *  arrives in `X-Proxy-Range`. It is the starting point for the banding
@@ -163,6 +171,9 @@ interface ImageDisplayContextValue extends ImageDisplayState {
   /** Seed the per-channel frame coverage map (from container metadata).
    *  Only PNG-backed partial channels appear here. */
   setChannelCoverage: (coverage: Record<string, string[]>) => void;
+  /** Set by the channel list once it has applied the container's channels,
+   *  cleared when it lets go of them. See {@link ImageDisplayState.channelsSeeded}. */
+  setChannelsSeeded: (seeded: boolean) => void;
   setProxyRangeMax: (rangeMax: number | null) => void;
   /** Set the display colour (hex `#RRGGBB`) for a single channel. Marks the
    *  channel as user-edited so a persisted pref cannot later overwrite it. */
@@ -217,6 +228,7 @@ const DEFAULT_STATE: ImageDisplayState = {
   channelColors: {},
   channelOpacities: {},
   channelCoverage: {},
+  channelsSeeded: false,
   proxyRangeMax: null,
   channelWindows: { [FALLBACK_CHANNEL]: DEFAULT_CHANNEL_WINDOW },
   activeWindowChannel: null,
@@ -557,6 +569,12 @@ export function ImageDisplayProvider({
     []
   );
 
+  const setChannelsSeeded = useCallback((seeded: boolean) => {
+    setState(s =>
+      s.channelsSeeded === seeded ? s : { ...s, channelsSeeded: seeded }
+    );
+  }, []);
+
   const setProxyRangeMax = useCallback((rangeMax: number | null) => {
     setState(s => ({ ...s, proxyRangeMax: rangeMax }));
   }, []);
@@ -742,6 +760,7 @@ export function ImageDisplayProvider({
       toggleChannelVisibility,
       setVisibleChannels,
       setChannelCoverage,
+      setChannelsSeeded,
       setProxyRangeMax,
       setChannelColor,
       seedChannelColors,
@@ -768,6 +787,7 @@ export function ImageDisplayProvider({
       toggleChannelVisibility,
       setVisibleChannels,
       setChannelCoverage,
+      setChannelsSeeded,
       setProxyRangeMax,
       setChannelColor,
       seedChannelColors,
