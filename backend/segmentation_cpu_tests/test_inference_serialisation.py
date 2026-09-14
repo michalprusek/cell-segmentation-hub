@@ -23,6 +23,7 @@ tests see — not a copy of it living here.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import importlib
 import sys
 import threading
@@ -39,20 +40,53 @@ _SEG = Path(__file__).resolve().parents[1] / 'segmentation'
 # `ml.inference_executor` it imports annotates `torch.cuda.Stream`. So: use the
 # real torch wherever there is one — stubbing over it would test a fiction —
 # and stand in only where the import genuinely fails.
-try:  # pragma: no cover - depends on the environment, not the code
-    import torch  # noqa: F401
-except ImportError:  # pragma: no cover
-    _torch = types.ModuleType('torch')
-    _torch.cuda = types.SimpleNamespace(
+#
+# The stand-in lives only as long as the IMPORTS that need it. pytest imports
+# every test module of a run before it runs any test, so a stub left in
+# `sys.modules` is the `torch` of every other suite in the run, and
+# `pytest.importorskip("torch")` returns it instead of skipping. That is how
+# essays/module/tests/test_checkpoint_portability.py failed with "module 'torch'
+# has no attribute 'load'" on any machine with the v5H checkpoint staged
+# (2026-09-13); CI has no checkpoint, so it skipped before getting that far.
+# The modules imported here keep their own reference to the stand-in, which is
+# all they need of it.
+@contextlib.contextmanager
+def _torch_or_stand_in():
+    try:  # pragma: no cover - depends on the environment, not the code
+        import torch  # noqa: F401
+    except ImportError:  # pragma: no cover
+        pass
+    else:
+        yield
+        return
+    stand_in = types.ModuleType('torch')
+    stand_in.cuda = types.SimpleNamespace(
         is_available=lambda: False,
         Stream=object,
         current_stream=lambda *a, **k: None,
     )
-    _torch.Tensor = object
-    sys.modules['torch'] = _torch
+    stand_in.Tensor = object
+    sys.modules['torch'] = stand_in
+    try:
+        yield
+    finally:
+        if sys.modules.get('torch') is stand_in:
+            del sys.modules['torch']
+
 
 sys.path.insert(0, str(_SEG))
-routes = importlib.import_module('api.routes')
+with _torch_or_stand_in():
+    routes = importlib.import_module('api.routes')
+
+
+def test_the_torch_stand_in_does_not_outlive_the_imports():
+    # Every test module of the run was imported before this runs, so this sees
+    # the `torch` that every other suite sees too.
+    torch = sys.modules.get('torch')
+    assert torch is None or hasattr(torch, 'load'), (
+        'a torch stand-in is still in sys.modules: pytest.importorskip("torch") '
+        'anywhere else in the run will return it instead of skipping'
+    )
 
 
 class _StubLoader:

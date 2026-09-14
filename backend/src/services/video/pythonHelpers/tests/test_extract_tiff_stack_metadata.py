@@ -20,7 +20,6 @@ import os
 import re
 import sys
 from types import SimpleNamespace
-from unittest.mock import MagicMock
 
 import pytest
 
@@ -30,8 +29,11 @@ HERE = os.path.dirname(__file__)
 HELPERS_DIR = os.path.abspath(os.path.join(HERE, ".."))
 sys.path.insert(0, HELPERS_DIR)
 
-# Stub tifffile so importing the module doesn't require it on the host.
-sys.modules.setdefault("tifffile", MagicMock())
+# No tifffile stub. extract_tiff_stack imports tifffile only inside the function
+# that opens a file, which nothing here calls. The `setdefault("tifffile",
+# MagicMock())` that stood here was never needed for this import, and whenever
+# this module was collected before anything imported the real tifffile, it was
+# the tifffile of every later import in the run.
 
 from extract_tiff_stack import (  # noqa: E402
     _all_distinct,
