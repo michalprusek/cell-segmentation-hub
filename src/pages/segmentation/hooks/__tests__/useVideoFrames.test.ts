@@ -203,6 +203,51 @@ describe('useVideoFrames — query behaviour', () => {
     // container should be null because data.id ('vid-1') !== 'vid-2'
     expect(result.current.container).toBeNull();
   });
+
+  it('reports loading, not a dead container, while the previous video is the placeholder', async () => {
+    // The test above mounts straight onto vid-2, where keepPreviousData has
+    // nothing to hand back. Production MOVES from one video to the next: vid-1
+    // was on screen, vid-2 is in flight, and React Query returns vid-1 as a
+    // `success` placeholder with isLoading=false. With the container hidden too,
+    // the editor read that as a container that failed and drew the fallback
+    // <img>, fetching `/display` five times (2026-09-14).
+    mockGet.mockImplementation((url: string) =>
+      url.includes('vid-1')
+        ? apiResponse(makeContainerPayload('vid-1', 5))
+        : new Promise(() => {})
+    );
+    const { result, rerender } = renderHook(
+      ({ id }: { id: string }) => useVideoFrames(id),
+      { wrapper: wrapQC(qc), initialProps: { id: 'vid-1' } }
+    );
+    await waitFor(() => expect(result.current.container?.id).toBe('vid-1'));
+
+    rerender({ id: 'vid-2' });
+
+    expect(result.current.container).toBeNull();
+    expect(result.current.isLoading).toBe(true);
+  });
+
+  it('stops reporting loading once the next video has failed', async () => {
+    // Otherwise a container that cannot load would keep the canvas waiting
+    // for ever instead of falling back to the plain image.
+    mockGet.mockImplementation((url: string) =>
+      url.includes('vid-1')
+        ? apiResponse(makeContainerPayload('vid-1', 5))
+        : Promise.reject(new Error('boom'))
+    );
+    const { result, rerender } = renderHook(
+      ({ id }: { id: string }) => useVideoFrames(id),
+      { wrapper: wrapQC(qc), initialProps: { id: 'vid-1' } }
+    );
+    await waitFor(() => expect(result.current.container?.id).toBe('vid-1'));
+
+    rerender({ id: 'vid-2' });
+    await waitFor(() => expect(result.current.error).not.toBeNull());
+
+    expect(result.current.container).toBeNull();
+    expect(result.current.isLoading).toBe(false);
+  });
 });
 
 // ------------------------------------------------------------------
