@@ -390,7 +390,7 @@ describe('useFrameWindowPrefetch', () => {
     // neighbours: measured on production, the window warm put 10 MB beside the
     // 10 MB the displayed frame needed. Polygons are small JSON and stay on.
     const frames = makeFrames(3);
-    const { rerender } = renderHook(
+    const { result, rerender } = renderHook(
       ({ imagesEnabled }: { imagesEnabled: boolean }) =>
         useFrameWindowPrefetch({
           frames,
@@ -405,9 +405,14 @@ describe('useFrameWindowPrefetch', () => {
 
     expect(warmCount()).toBe(0);
     expect(qc.getQueryState(['segmentation-results', 'frame-1'])).toBeDefined();
+    // The result describes what is being warmed, so it must not report a
+    // window of URLs nobody fetched: `readyCount` and `isWindowReady` are read
+    // off this list, and a readiness gate built on them would wait forever.
+    expect(result.current.windowImageUrls).toEqual([]);
 
     rerender({ imagesEnabled: true });
     await waitFor(() => expect(warmCount()).toBe(3));
+    expect(result.current.windowImageUrls).toHaveLength(3);
   });
 
   it('warms no /display images either while imagesEnabled=false', async () => {
