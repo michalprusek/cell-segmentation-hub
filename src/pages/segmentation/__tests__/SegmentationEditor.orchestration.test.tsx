@@ -306,6 +306,7 @@ vi.mock('../components/canvas/CanvasContent', () => ({
 
 /** Props the layout handed to the stubbed canvas children, for wiring tests. */
 const mockChildProps = vi.hoisted(() => ({
+  displayProvider: null as any,
   videoFrameImage: null as any,
   frameWindowPrefetcher: null as any,
   channelsSection: null as any,
@@ -383,7 +384,10 @@ vi.mock('../components/VideoModeOverlay', () => ({
 }));
 
 vi.mock('../contexts/ImageDisplayContext', () => ({
-  ImageDisplayProvider: ({ children }: any) => <>{children}</>,
+  ImageDisplayProvider: ({ children, ...props }: any) => {
+    mockChildProps.displayProvider = props;
+    return <>{children}</>;
+  },
 }));
 
 vi.mock('@/components/project/SegmentChannelDialog', () => ({
@@ -886,6 +890,7 @@ describe('channel setup wiring — what the layout tells the canvas', () => {
   beforeEach(() => {
     mockProjectData.images = [frame];
     mockParams.imageId = 'img-1';
+    mockChildProps.displayProvider = null;
     mockChildProps.videoFrameImage = null;
     mockChildProps.frameWindowPrefetcher = null;
     mockChildProps.channelsSection = null;
@@ -910,6 +915,19 @@ describe('channel setup wiring — what the layout tells the canvas', () => {
     expect(mockChildProps.videoFrameImage.awaitChannelSetup).toBe(true);
     expect(mockChildProps.frameWindowPrefetcher.awaitChannelSetup).toBe(true);
     expect(mockChildProps.channelsSection.firstFrameId).toBe('img-1');
+  });
+
+  it('scopes the display state to the container on screen', () => {
+    // The provider drops one video's channels, windows and setup flag when this
+    // changes, so it must be the container of the frame being shown.
+    renderEditor();
+    expect(mockChildProps.displayProvider.containerId).toBe('vid-1');
+  });
+
+  it('gives a standalone image no container', () => {
+    mockProjectData.images = [{ ...frame, parentVideoId: null }];
+    renderEditor();
+    expect(mockChildProps.displayProvider.containerId).toBeNull();
   });
 
   it('waits while the container is still loading', () => {

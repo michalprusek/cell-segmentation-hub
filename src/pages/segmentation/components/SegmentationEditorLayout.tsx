@@ -327,7 +327,7 @@ const SegmentationEditorLayout: React.FC<SegmentationEditorLayoutProps> = ({
       : video.isLoading);
 
   return (
-    <ImageDisplayProvider userId={user?.id}>
+    <ImageDisplayProvider userId={user?.id} containerId={videoContainerId}>
       {/* Headless sliding-window prefetcher: warms the FrameImageCache
           for the per-channel PNGs around `video.frameIndex` and seeds
           the React Query cache with polygon JSON for the same window.
