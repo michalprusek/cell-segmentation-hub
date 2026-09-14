@@ -33,6 +33,10 @@ interface FrameWindowPrefetcherProps {
    *  therefore cannot see the visible channels, the coverage map or the
    *  representation that decide which cache entries the canvas will read. */
   registerBufferProbe?: (probe: FrameBufferProbe | null) => void;
+  /** The container has channels whose list may not be applied yet; see
+   *  `VideoFrameImage`. Until it is, the visible set is empty and this
+   *  component would warm `/display` for the whole window. */
+  awaitChannelSetup?: boolean;
 }
 
 export default function FrameWindowPrefetcher({
@@ -40,6 +44,7 @@ export default function FrameWindowPrefetcher({
   currentIndex,
   enabled,
   registerBufferProbe,
+  awaitChannelSetup = false,
 }: FrameWindowPrefetcherProps) {
   const {
     visibleChannels,
@@ -48,6 +53,7 @@ export default function FrameWindowPrefetcher({
     channelWindows,
     fallbackWindow,
     proxyRangeMax,
+    channelsSeeded,
   } = useImageDisplay();
   // The same decision the canvas makes. Warming the representation the canvas
   // will not ask for is worse than not warming at all: it spends the request
@@ -70,6 +76,22 @@ export default function FrameWindowPrefetcher({
   const channels =
     visibleChannels.length > 0 ? visibleChannels : channel ? [channel] : [];
 
+  // Hold the neighbours back until the displayed frame has decoded.
+  //
+  // No visible channel has a window before that first decode, and the gate
+  // above answers "full depth" for a channel it cannot judge — right for the
+  // canvas, whose first decode is what measures the window, but it sent the
+  // prefetcher after the neighbours' 16-bit PNGs at the same moment. Measured
+  // on production at 10 Mbit/s (container dbf5e30c, 2026-09-14): the Min/Max
+  // sliders appeared after 27.0 s, with 21.5 MB started to show a frame that
+  // needs about 10. Once any window exists the frame is on screen, and the
+  // warm proceeds in whichever representation the gate then picks.
+  const setupPending = awaitChannelSetup && !channelsSeeded;
+  const awaitingFirstDecode =
+    visibleChannels.length > 0 &&
+    !visibleChannels.some(c => channelWindows[c] !== undefined);
+  const imagesEnabled = !setupPending && !awaitingFirstDecode;
+
   useFrameWindowPrefetch({
     repr,
     frames,
@@ -77,6 +99,7 @@ export default function FrameWindowPrefetcher({
     channels,
     enabled,
     channelCoverage,
+    imagesEnabled,
   });
 
   // Warming the HTTP cache above only removes the network from the critical
@@ -89,7 +112,7 @@ export default function FrameWindowPrefetcher({
     frames,
     currentIndex,
     channels: visibleChannels,
-    enabled,
+    enabled: enabled && imagesEnabled,
     channelCoverage,
   });
 

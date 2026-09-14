@@ -138,7 +138,12 @@ async function fetchVideoContainer(
 export function useVideoFrames(
   videoContainerId: string | null
 ): UseVideoFramesResult {
-  const { data, isLoading, error } = useQuery({
+  const {
+    data,
+    isLoading: queryIsLoading,
+    isPlaceholderData,
+    error,
+  } = useQuery({
     queryKey: ['video-frames', videoContainerId],
     queryFn: () => fetchVideoContainer(videoContainerId as string),
     enabled: !!videoContainerId,
@@ -156,6 +161,14 @@ export function useVideoFrames(
   // — guard so the consumer never derives `currentFrame` from a
   // mismatched container (see review pass-2 #1).
   const container = data && data.id === videoContainerId ? data : null;
+  // The same guard has to reach `isLoading`. While the placeholder is shown the
+  // query is `success`, so React Query reports `isLoading: false`
+  // (query-core `isLoading = isPending && isFetching`) — and a consumer then
+  // saw no container and no load, which reads as a container that failed. On
+  // production (2026-09-14) that is what made the editor draw the fallback
+  // <img> for one render after moving to another video, fetching `/display`
+  // five times: once as an image and four times through CanvasImage's probe.
+  const isLoading = queryIsLoading || (isPlaceholderData && container === null);
 
   const [frameIndex, setFrameIndexState] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);

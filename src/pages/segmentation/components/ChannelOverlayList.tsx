@@ -37,6 +37,9 @@ interface ChannelOverlayListProps {
   /** Video container Image id. Required for channel rename persistence;
    *  when absent the rename UI hides. */
   containerId?: string | null;
+  /** The container's first frame id: the anchor for a static channel that
+   *  covers every frame and so carries no `frameIds` of its own. */
+  firstFrameId?: string | null;
 }
 
 const DEFAULT_CHANNEL_COLOR = '#FFFFFF';
@@ -45,6 +48,7 @@ const MAX_DISPLAY_NAME_LEN = 128;
 export function ChannelOverlayList({
   channels,
   containerId,
+  firstFrameId,
 }: ChannelOverlayListProps) {
   const { t } = useLanguage();
   const queryClient = useQueryClient();
@@ -55,6 +59,7 @@ export function ChannelOverlayList({
     toggleChannelVisibility,
     setVisibleChannels,
     setChannelCoverage,
+    setChannelsSeeded,
     setProxyRangeMax,
     setChannelColor,
     seedChannelColors,
@@ -105,19 +110,23 @@ export function ChannelOverlayList({
     // fetched and decoded once, not 299 times. Registered from the same list
     // and in the same pass as the coverage above, so the two derived views
     // cannot drift; the registry itself declines the aligned case.
-    setStaticChannelAnchors(channels);
+    setStaticChannelAnchors(channels, firstFrameId);
     // One range for the whole container. The backend writes the same number to
     // every channel, so the first one that has it answers for all of them;
     // null until the first playback has caused any proxies to be built.
     const withRange = channels.find(c => typeof c.proxyRangeMax === 'number');
     setProxyRangeMax(withRange?.proxyRangeMax ?? null);
+    // Last, so the canvas and prefetcher only stop waiting once everything
+    // above is in the same commit.
+    setChannelsSeeded(true);
     return () => {
+      setChannelsSeeded(false);
       clearStaticChannelAnchors();
       // Ranges learned from headers describe THIS container's encodes.
       clearProxyRanges();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [channels]);
+  }, [channels, firstFrameId]);
 
   const [editingColor, setEditingColor] = useState<string | null>(null);
   const [renamingChannel, setRenamingChannel] = useState<string | null>(null);

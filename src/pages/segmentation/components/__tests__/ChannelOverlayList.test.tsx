@@ -77,6 +77,7 @@ const mockSetColor = vi.fn();
 const mockSeedColors = vi.fn();
 const mockSetOpacity = vi.fn();
 const mockSetChannel = vi.fn();
+const mockSetChannelsSeeded = vi.fn();
 
 let mockVisibleChannels: string[] = ['ch1', 'ch2'];
 let mockChannelColors: Record<string, string> = {};
@@ -90,6 +91,7 @@ vi.mock('@/pages/segmentation/contexts/ImageDisplayContext', () => ({
     toggleChannelVisibility: mockToggle,
     setVisibleChannels: mockSetVisible,
     setChannelCoverage: mockSetCoverage,
+    setChannelsSeeded: mockSetChannelsSeeded,
     setProxyRangeMax: vi.fn(),
     setChannelColor: mockSetColor,
     seedChannelColors: mockSeedColors,
@@ -103,6 +105,11 @@ import { ChannelOverlayList } from '../ChannelOverlayList';
 import apiClient from '@/lib/api';
 import { toast } from 'sonner';
 import type { VideoChannel } from '@/types';
+// The REAL registry: the anchor has to arrive in it, not merely be passed on.
+import {
+  clearStaticChannelAnchors,
+  staticChannelAnchors,
+} from '@/lib/staticFrameChannels';
 
 // ── helpers ─────────────────────────────────────────────────────────────────
 
@@ -433,6 +440,47 @@ describe('ChannelOverlayList', () => {
     it('publishes nothing for a container of ordinary full-coverage channels', () => {
       setup(TWO_CHANNELS);
       expect(mockSetCoverage).toHaveBeenCalledWith({});
+    });
+  });
+
+  describe('static channel anchors and setup state', () => {
+    afterEach(() => clearStaticChannelAnchors());
+
+    it("anchors a full-coverage static channel on the container's first frame", () => {
+      // The production shape: a static channel covering every frame carries no
+      // `frameIds`, so the first frame is the only real id it can resolve to.
+      render(
+        <ChannelOverlayList
+          channels={[
+            makeChannel({
+              name: 'IRM',
+              type: 'irm',
+              pngBacked: true,
+              staticSource: true,
+              isSegmentationSource: true,
+            }),
+            makeChannel({ name: '488_nm' }),
+          ]}
+          firstFrameId="frame-0"
+        />
+      );
+
+      expect(staticChannelAnchors()).toEqual({ IRM: 'frame-0' });
+    });
+
+    it('marks the channels as applied, and unmarks them when it lets go', () => {
+      const { unmount } = render(
+        <ChannelOverlayList channels={TWO_CHANNELS} firstFrameId="frame-0" />
+      );
+      expect(mockSetChannelsSeeded).toHaveBeenLastCalledWith(true);
+
+      unmount();
+      expect(mockSetChannelsSeeded).toHaveBeenLastCalledWith(false);
+    });
+
+    it('marks nothing for a container without channels', () => {
+      render(<ChannelOverlayList channels={[]} firstFrameId="frame-0" />);
+      expect(mockSetChannelsSeeded).not.toHaveBeenCalled();
     });
   });
 });

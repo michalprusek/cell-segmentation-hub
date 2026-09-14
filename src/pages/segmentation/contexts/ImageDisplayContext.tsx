@@ -101,6 +101,14 @@ interface ImageDisplayState {
    *  default). Lets the canvas + prefetcher skip requesting a channel for
    *  frames it doesn't cover, so a partial channel produces no 404 noise. */
   channelCoverage: Record<string, string[]>;
+  /** Whether the container's channel list has been applied (visible set,
+   *  colours, coverage, static anchors). Until it has, a multi-channel video
+   *  has no visible channels, and the canvas and prefetcher used to read that
+   *  as a single-channel video — measured on production, that fetched two
+   *  uncancellable 4.25 MB `/display` images nothing ever drew. Separate from
+   *  `visibleChannels` because an EMPTY set on a set-up video is the user
+   *  hiding every channel, which keeps its single-channel fallback. */
+  channelsSeeded: boolean;
   /** Upper bound on the container's sample values, or null before the backend
    *  has derived one. NOT the value that maps to 255 — that is per frame and
    *  arrives in `X-Proxy-Range`. It is the starting point for the banding
@@ -163,6 +171,9 @@ interface ImageDisplayContextValue extends ImageDisplayState {
   /** Seed the per-channel frame coverage map (from container metadata).
    *  Only PNG-backed partial channels appear here. */
   setChannelCoverage: (coverage: Record<string, string[]>) => void;
+  /** Set by the channel list once it has applied the container's channels,
+   *  cleared when it lets go of them. See {@link ImageDisplayState.channelsSeeded}. */
+  setChannelsSeeded: (seeded: boolean) => void;
   setProxyRangeMax: (rangeMax: number | null) => void;
   /** Set the display colour (hex `#RRGGBB`) for a single channel. Marks the
    *  channel as user-edited so a persisted pref cannot later overwrite it. */
@@ -217,6 +228,7 @@ const DEFAULT_STATE: ImageDisplayState = {
   channelColors: {},
   channelOpacities: {},
   channelCoverage: {},
+  channelsSeeded: false,
   proxyRangeMax: null,
   channelWindows: { [FALLBACK_CHANNEL]: DEFAULT_CHANNEL_WINDOW },
   activeWindowChannel: null,
@@ -445,12 +457,17 @@ export function ImageDisplayProvider({
   children,
   initialChannel = null,
   userId,
+  containerId = null,
 }: {
   children: ReactNode;
   initialChannel?: string | null;
   /** Drives per-user persistence of channel-colour overrides. When
    *  unset (anonymous browsing) channel colours stay session-only. */
   userId?: string;
+  /** The video container on screen, or null for a still image. Everything
+   *  derived from one container's channels is dropped the moment it changes;
+   *  see the reset next to `displayedSamples`. */
+  containerId?: string | null;
 }) {
   // Lazy initializer: hydrate the user's channel-colour preferences
   // from localStorage on first render so reopens of the editor preserve
@@ -556,6 +573,12 @@ export function ImageDisplayProvider({
     },
     []
   );
+
+  const setChannelsSeeded = useCallback((seeded: boolean) => {
+    setState(s =>
+      s.channelsSeeded === seeded ? s : { ...s, channelsSeeded: seeded }
+    );
+  }, []);
 
   const setProxyRangeMax = useCallback((rangeMax: number | null) => {
     setState(s => ({ ...s, proxyRangeMax: rangeMax }));
@@ -711,6 +734,40 @@ export function ImageDisplayProvider({
   const [displayedSamples, setDisplayedSamples] =
     useState<DisplayedSamples | null>(null);
 
+  // Everything learned from ONE container's channels belongs to that container.
+  //
+  // The editor stays mounted when the route moves to a frame of another video,
+  // and this state used to survive the move. Reproduced on production
+  // (2026-09-14, twochan.tif -> sparse_ref.ome.tif, same channel names): the
+  // channel tabs kept the first video's `StaticIRM`, the second video's frames
+  // were asked for it ten times (HTTP 400), a stale `channelsSeeded` let the
+  // fallback <img> fetch `/display` five times, and a stale window let the
+  // prefetcher warm the neighbours before the new frame had decoded.
+  //
+  // Reset DURING RENDER, not in an effect: an effect runs after the children
+  // have rendered and started their own effects against the old state, which
+  // is exactly when those requests were issued. Keying the whole subtree would
+  // reset it too, but it remounts the canvas, and the wheel listener that
+  // `useEnhancedSegmentationEditor` binds through a ref would stay on the
+  // detached element.
+  //
+  // What the user chose is kept: colours, opacities, brightness, contrast.
+  const [scopedContainerId, setScopedContainerId] = useState(containerId);
+  if (containerId !== scopedContainerId) {
+    setScopedContainerId(containerId);
+    setState(s => ({
+      ...s,
+      channel: null,
+      visibleChannels: [],
+      channelCoverage: {},
+      channelsSeeded: false,
+      proxyRangeMax: null,
+      channelWindows: { [FALLBACK_CHANNEL]: DEFAULT_CHANNEL_WINDOW },
+      activeWindowChannel: null,
+    }));
+    setDisplayedSamples(null);
+  }
+
   const reportDisplayedSamples = useCallback((samples: DisplayedSamples) => {
     setDisplayedSamples(samples);
   }, []);
@@ -742,6 +799,7 @@ export function ImageDisplayProvider({
       toggleChannelVisibility,
       setVisibleChannels,
       setChannelCoverage,
+      setChannelsSeeded,
       setProxyRangeMax,
       setChannelColor,
       seedChannelColors,
@@ -768,6 +826,7 @@ export function ImageDisplayProvider({
       toggleChannelVisibility,
       setVisibleChannels,
       setChannelCoverage,
+      setChannelsSeeded,
       setProxyRangeMax,
       setChannelColor,
       seedChannelColors,

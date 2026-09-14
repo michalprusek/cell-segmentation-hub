@@ -41,6 +41,14 @@ let mockChannelWindows: Record<
   { min: number; max: number; rangeMax: number; dataMin: number }
 > = {};
 let mockProxyRangeMax: number | null = null;
+let mockChannelsSeeded = false;
+
+// Captured, like the window hook: decode-ahead fetches as well, so it has to
+// be held back by the same rule.
+const mockUseDecodeAhead = vi.fn();
+vi.mock('../../../hooks/useDecodeAhead', () => ({
+  useDecodeAhead: (...args: unknown[]) => mockUseDecodeAhead(...args),
+}));
 
 vi.mock('../../../contexts/ImageDisplayContext', () => ({
   useImageDisplay: () => ({
@@ -50,6 +58,7 @@ vi.mock('../../../contexts/ImageDisplayContext', () => ({
     fallbackWindow: { min: 0, max: 255, rangeMax: 255, dataMin: 0 },
     proxyRangeMax: mockProxyRangeMax,
     channelCoverage: {},
+    channelsSeeded: mockChannelsSeeded,
   }),
 }));
 
@@ -288,5 +297,73 @@ describe('FrameWindowPrefetcher — proxy vs original', () => {
     expect(mockUseFrameWindowPrefetch).toHaveBeenCalledWith(
       expect.objectContaining({ repr: undefined })
     );
+  });
+});
+
+// -----------------------------------------------------------------------
+// Held back until the displayed frame is on screen.
+//
+// Measured on production at 10 Mbit/s (container dbf5e30c, 2026-09-14): with
+// no window yet the gate answers "full depth", so the neighbours' 16-bit PNGs
+// shared the link with the displayed frame's and the Min/Max sliders took
+// 27.0 s to appear.
+// -----------------------------------------------------------------------
+
+const WINDOW = { min: 2941, max: 4145, rangeMax: 4145, dataMin: 2941 };
+
+function lastImagesEnabled(): unknown {
+  const calls = mockUseFrameWindowPrefetch.mock.calls as unknown as Array<
+    [{ imagesEnabled?: boolean }]
+  >;
+  return calls[calls.length - 1][0].imagesEnabled;
+}
+
+function lastDecodeAheadEnabled(): unknown {
+  const calls = mockUseDecodeAhead.mock.calls as Array<[{ enabled: boolean }]>;
+  return calls[calls.length - 1][0].enabled;
+}
+
+describe('FrameWindowPrefetcher — waits for the displayed frame', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockCanDecode = true;
+    mockChannel = null;
+    mockProxyRangeMax = 65535;
+    mockChannelWindows = {};
+    mockVisibleChannels = [];
+    mockChannelsSeeded = false;
+  });
+
+  it('warms no images while the channel list is not applied yet', () => {
+    renderPrefetcher({ awaitChannelSetup: true });
+
+    expect(lastImagesEnabled()).toBe(false);
+    expect(lastDecodeAheadEnabled()).toBe(false);
+  });
+
+  it('warms no images until some visible channel has a window', () => {
+    mockChannelsSeeded = true;
+    mockVisibleChannels = ['irm', '488_nm'];
+    renderPrefetcher({ awaitChannelSetup: true });
+
+    expect(lastImagesEnabled()).toBe(false);
+    expect(lastDecodeAheadEnabled()).toBe(false);
+  });
+
+  it('warms them once the displayed frame has reported a window', () => {
+    mockChannelsSeeded = true;
+    mockVisibleChannels = ['irm', '488_nm'];
+    mockChannelWindows = { irm: WINDOW };
+    renderPrefetcher({ awaitChannelSetup: true });
+
+    expect(lastImagesEnabled()).toBe(true);
+    expect(lastDecodeAheadEnabled()).toBe(true);
+  });
+
+  it('leaves a single-channel video exactly as it was', () => {
+    // No channel list to wait for and no multi-channel window to measure.
+    renderPrefetcher();
+
+    expect(lastImagesEnabled()).toBe(true);
   });
 });

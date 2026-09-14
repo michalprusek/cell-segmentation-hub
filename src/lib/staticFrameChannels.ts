@@ -78,7 +78,14 @@ export interface StaticChannelSource {
  * previous one's anchors pointing at frames that no longer exist.
  */
 export function setStaticChannelAnchors(
-  channels: readonly StaticChannelSource[]
+  channels: readonly StaticChannelSource[],
+  /** The container's first frame. A static channel that covers EVERY frame
+   *  arrives without `frameIds` — `addChannelService` writes the list only for
+   *  partial coverage — so this is the only real frame id such a channel has.
+   *  Reading the anchor from `frameIds[0]` alone left every production static
+   *  channel (9 of 9, 2026-09-14) un-collapsed: the IRM plane of container
+   *  dbf5e30c is md5-identical across frames yet was fetched once per frame. */
+  firstFrameId?: string | null
 ): void {
   const next: Record<string, string> = {};
   const nextSparse: Record<string, Record<string, string>> = {};
@@ -94,7 +101,9 @@ export function setStaticChannelAnchors(
     if (c.staticSource !== true) continue;
     // Added with alignment: the copies differ. Leave every frame its own id.
     if (c.staticShifts && Object.keys(c.staticShifts).length > 0) continue;
-    const anchor = c.frameIds?.[0];
+    // A channel's own coverage wins: a partial channel has no copy on the
+    // container's first frame. Only an ABSENT list means full coverage.
+    const anchor = Array.isArray(c.frameIds) ? c.frameIds[0] : firstFrameId;
     if (anchor) next[c.name] = anchor;
   }
   anchors = next;
