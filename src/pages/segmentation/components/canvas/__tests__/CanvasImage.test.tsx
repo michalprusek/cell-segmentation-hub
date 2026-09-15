@@ -6,7 +6,7 @@
 
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { act, render, screen, fireEvent } from '@testing-library/react';
 import CanvasImage from '../CanvasImage';
 
 // ---------------------------------------------------------------------------
@@ -194,11 +194,9 @@ describe('CanvasImage 16-bit window', () => {
     vi.clearAllMocks();
   });
 
-  async function renderDeep(
-    ctx: Partial<Record<string, unknown>> | null,
-    props: Record<string, unknown> = {},
-    decoded: unknown = deep
-  ) {
+  /** The component and its context module, loaded fresh against a decoder that
+   *  yields `decoded` and a spy on the LUT every paint goes through. */
+  async function loadDeep(decoded: unknown = deep) {
     vi.doMock('@/lib/png16', () => ({
       decodeGrayPng: vi.fn().mockResolvedValue(decoded),
     }));
@@ -209,25 +207,35 @@ describe('CanvasImage 16-bit window', () => {
     const buildLut = vi.fn(realLut.buildLut);
     vi.doMock('@/lib/windowLevel', () => ({ ...realLut, buildLut }));
     const png16 = await import('@/lib/png16');
-    const { ImageDisplayContext } =
-      await import('../../../contexts/ImageDisplayContext');
+    const display = await import('../../../contexts/ImageDisplayContext');
     const Comp = (await import('../CanvasImage')).default;
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue({ ok: true, blob: async () => new Blob() })
     );
+    return { png16, buildLut, display, Comp };
+  }
+
+  /** Lets the decode promise settle. */
+  const settle = () => new Promise(resolve => setTimeout(resolve, 0));
+
+  async function renderDeep(
+    ctx: Partial<Record<string, unknown>> | null,
+    props: Record<string, unknown> = {},
+    decoded: unknown = deep
+  ) {
+    const { png16, buildLut, display, Comp } = await loadDeep(decoded);
     const el = <Comp src="/images/deep.png" {...props} />;
     const r = render(
       ctx ? (
-        <ImageDisplayContext.Provider value={ctx as never}>
+        <display.ImageDisplayContext.Provider value={ctx as never}>
           {el}
-        </ImageDisplayContext.Provider>
+        </display.ImageDisplayContext.Provider>
       ) : (
         el
       )
     );
-    // Let the decode promise settle.
-    await new Promise(resolve => setTimeout(resolve, 0));
+    await settle();
     return { ...r, png16, buildLut };
   }
 
@@ -337,5 +345,46 @@ describe('CanvasImage 16-bit window', () => {
     unmount();
 
     expect(ctx.clearDisplayedSamples).toHaveBeenCalledWith(owner);
+  });
+
+  it('paints a video with every channel hidden through a window fitted to its data', async () => {
+    // Hiding the last channel makes this component the video's canvas, and it
+    // reports under the container key the channels already used. The real
+    // provider rather than a stub: the defect lived where the two meet — that
+    // key is not new, so the fallback window's 8-bit placeholder was widened
+    // instead of fitted and the 16-bit frame painted through 0..255, all white.
+    vi.mocked(localStorage.getItem).mockImplementation(() => null);
+    const { buildLut, display, Comp } = await loadDeep();
+    const probe: { api?: ReturnType<typeof display.useImageDisplay> } = {};
+    const Probe = () => {
+      probe.api = display.useImageDisplay();
+      return null;
+    };
+    const tree = (withCanvas: boolean) => (
+      <display.ImageDisplayProvider>
+        <Probe />
+        {withCanvas && <Comp src="/images/deep.png" windowKey="container-42" />}
+      </display.ImageDisplayProvider>
+    );
+    const { rerender } = render(tree(false));
+    // What the multi-channel canvas leaves behind for this video...
+    act(() => {
+      probe.api!.setVisibleChannels(['irm']);
+      probe.api!.reportChannelRanges(
+        { irm: { min: 2941, max: 4145 } },
+        'container-42'
+      );
+    });
+    // ...then the user hides the last channel.
+    act(() => probe.api!.setVisibleChannels([]));
+    rerender(tree(true));
+    await act(settle);
+
+    expect(probe.api!.windowChannel).toBe('');
+    expect(buildLut).toHaveBeenCalled();
+    // Every paint, not only the last: a white first frame is the bug too.
+    for (const args of buildLut.mock.calls) {
+      expect(args).toEqual([deep.min, deep.max, deep.max]);
+    }
   });
 });
