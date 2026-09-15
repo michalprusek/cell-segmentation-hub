@@ -43,7 +43,9 @@ export interface ChannelWindow {
    *  and an 8-bit image that never reports is not, and the two are otherwise
    *  indistinguishable from the numbers. The sidebar hides Min/Max when it is
    *  false, because on a plain 8-bit image nothing decodes the samples and the
-   *  cutoffs would move a slider that changes no pixel. */
+   *  cutoffs would move a slider that changes no pixel. For the same reason the
+   *  first report FITS an unmeasured window instead of widening it: there are
+   *  no cutoffs of the user's in it to keep. */
   measured: boolean;
 }
 
@@ -284,13 +286,14 @@ function refitAllWindows(
 /**
  * Fold decoded sample ranges into the per-channel windows.
  *
- * A channel seen for the first time (or every channel, when `refitAll` is set
- * because the container changed) AUTO-FITS to its own data — ImageJ's behaviour
- * on opening a 16-bit image. A channel already carrying a window keeps the
- * user's cutoffs and only widens its bounds, so scrubbing to a brighter or
- * dimmer frame never yanks the view but also never leaves the new extremes
- * unreachable by the sliders. The one exception is a channel that has never had
- * a usable range to fit to; see the re-fit branch below.
+ * A channel seen for the first time or still holding the 8-bit placeholder (or
+ * every channel, when `refitAll` is set because the container changed)
+ * AUTO-FITS to its own data — ImageJ's behaviour on opening a 16-bit image. A
+ * channel already carrying a measured window keeps the user's cutoffs and only
+ * widens its bounds, so scrubbing to a brighter or dimmer frame never yanks the
+ * view but also never leaves the new extremes unreachable by the sliders. The
+ * one exception is a channel that has never had a usable range to fit to; see
+ * the re-fit branch below.
  *
  * `refitAll` and `dropUnlisted` are not independent in practice: `dropUnlisted`
  * clears `current`, which already forces the fit, and the sole caller passes
@@ -318,7 +321,13 @@ function applyRanges(
     const hi = Math.max(1, Math.round(raw.max));
     const lo = Math.max(0, Math.min(Math.round(raw.min), hi));
     const current = dropUnlisted ? undefined : s.channelWindows[channel];
-    if (!current || refitAll) {
+    // A placeholder describes no data, so it holds nothing of the user's to
+    // keep: only the sidebar writes a window, and it offers Min/Max once the
+    // window is measured. The fallback window of a video whose channels are all
+    // hidden arrives here as one — its canvas reports under the container key
+    // the channels already used, so `refitAll` is false — and widening it kept
+    // 0..255 over 16-bit data, which paints the frame fully white.
+    if (!current || refitAll || !current.measured) {
       const fitted = {
         min: lo,
         max: hi,
@@ -362,13 +371,8 @@ function applyRanges(
       changed = true;
       continue;
     }
-    if (
-      rangeMax === current.rangeMax &&
-      dataMin === current.dataMin &&
-      current.measured
-    )
-      continue;
-    next[channel] = { ...current, rangeMax, dataMin, measured: true };
+    if (rangeMax === current.rangeMax && dataMin === current.dataMin) continue;
+    next[channel] = { ...current, rangeMax, dataMin };
     changed = true;
   }
 

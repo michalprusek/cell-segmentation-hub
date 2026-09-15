@@ -1277,3 +1277,79 @@ describe('a channel whose first frame decodes flat', () => {
     expect(result.current.channelWindows.irm?.rangeMax).toBe(9500);
   });
 });
+
+describe('the fallback window of a video whose channels are all hidden', () => {
+  // Hiding the last channel hands the frame to the single-channel canvas, which
+  // reports under the SAME container key the channels already used — so the
+  // report is not a new container and nothing forces a fit. The fallback window
+  // is still the 8-bit placeholder then (a container's first report keeps it
+  // rather than sweeping it), and the widening branch kept its 0..255 cutoffs
+  // over 16-bit data: a fully white frame.
+  function hideEveryChannelOfAVideo() {
+    const hook = renderHook(() => useImageDisplay(), {
+      wrapper: makeWrapper(),
+    });
+    act(() => {
+      hook.result.current.setVisibleChannels(['irm', 'tirf']);
+      hook.result.current.reportChannelRanges(
+        { irm: { min: 2941, max: 4145 }, tirf: { min: 489, max: 53927 } },
+        'container-1'
+      );
+    });
+    act(() => {
+      hook.result.current.setVisibleChannels([]);
+    });
+    return hook;
+  }
+
+  it('fits the placeholder to the first frame it reports', () => {
+    const { result } = hideEveryChannelOfAVideo();
+    expect(result.current.windowChannel).toBe('');
+    expect(result.current.windowIsMeasured).toBe(false);
+
+    act(() => {
+      result.current.reportChannelRanges(
+        { '': { min: 1729, max: 27417 } },
+        'container-1'
+      );
+    });
+
+    expect(result.current.channelWindows['']).toEqual({
+      min: 1729,
+      max: 27417,
+      rangeMax: 27417,
+      dataMin: 1729,
+      measured: true,
+    });
+  });
+
+  it('then keeps the user’s cutoffs across frames, like any measured window', () => {
+    // Fitting is for the placeholder only. Were every report to fit, scrubbing
+    // would throw away the window on each frame.
+    const { result } = hideEveryChannelOfAVideo();
+    act(() => {
+      result.current.reportChannelRanges(
+        { '': { min: 1729, max: 27417 } },
+        'container-1'
+      );
+    });
+    act(() => {
+      result.current.setWindow(2000, 9000);
+    });
+
+    act(() => {
+      result.current.reportChannelRanges(
+        { '': { min: 1500, max: 30000 } },
+        'container-1'
+      );
+    });
+
+    expect(result.current.channelWindows['']).toEqual({
+      min: 2000,
+      max: 9000,
+      rangeMax: 30000,
+      dataMin: 1500,
+      measured: true,
+    });
+  });
+});
