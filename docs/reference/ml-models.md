@@ -28,7 +28,7 @@ incompatible pair with a 400 even if you post it directly.
 | `spheroid_disintegration` | Spheroid Disintegration            | `spheroid_invasive` | Core + corona   | 0.2               | ~0.70 s              | medium      |
 | `wound`                   | Wound Healing (Scratch Assay)      | `wound`             | Closed polygons | 0.5               | ~0.03 s              | medium      |
 | `sperm`                   | Sperm Morphology                   | `sperm`             | Part polylines  | 0.5               | ~0.30 s              | medium      |
-| `microtubule`             | Microtubule (ResEnc-M + instancer) | `microtubules`      | **Polylines**   | 0.98 (fixed)      | ~0.6 s (p95 ~2 s)     | large       |
+| `microtubule`             | Microtubule (ResEnc-M + instancer) | `microtubules`      | **Polylines**   | 0.98 (fixed)      | ~0.6 s (p95 ~2 s)    | large       |
 | `microcapsule`            | Microcapsule                       | `microcapsule`      | Closed polygons | 0.5               | ~0.30 s              | small       |
 | `neurite_soma`            | Neurite / Soma                     | `neurite`           | Closed polygons | n/a (argmax)      | ~12 s at 2048²       | large       |
 
