@@ -478,7 +478,7 @@ core normally is free.
 
 | Symptom | Fix |
 | ------- | --- |
-| `microtubule v5H checkpoint not found` | Stage it with `scripts/download-microtubule-weights.sh` from the repo root, or pass `--weights /path/to/microtubule_v5h.pth`. The error lists every path that was searched. |
+| `microtubule SPARSE35 ep040 checkpoint not found` | Stage it with `scripts/download-microtubule-weights.sh` from the repo root, or pass `--weights /path/to/microtubule_v5h.pth`. The error lists every path that was searched. |
 | `Could not locate the shared 'microtubule' package` | The model code lives in the ML service at `backend/segmentation/models/microtubule`. Run from a full checkout, or set `MT_PACKAGE_DIR` to the directory that *contains* the `microtubule` package. |
 | `no .nd2 files found` | Check `--data`; the folder is searched recursively for `*.nd2`. |
 | `no channel matching ('irm',)` | The well has no IRM channel under that name — pass `--irm-name <substring>`. Segmentation needs IRM; the well is skipped rather than segmented on another channel. |

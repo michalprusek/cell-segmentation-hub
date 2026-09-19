@@ -78,7 +78,7 @@ python infer.py --image frame.tif --device cpu        # CPU (default on Mac)
 | `--output` | `<image>.mt.json` | Output JSON path. |
 | `--overlay` | *(off)* | Render centerlines over the frame to this PNG. |
 | `--device` | `auto` | `auto` = CUDA if present else CPU. `cpu` / `cuda` / `mps`. |
-| `--threshold` | `0.97` | Foreground probability threshold. Comes from the fitted params vector; the generic 0.5 used by other models would flood the instancer. |
+| `--threshold` | `0.98` | Foreground probability threshold. Comes from the shipped params vector (`params_sparse35.json`); the generic 0.5 used by other models would flood the instancer. |
 | `--frame` | `0` | Frame index for multi-page TIFF / ND2 stacks. |
 
 > **Input intensity:** do **not** pre-scale your images. The model
@@ -102,7 +102,7 @@ measurement of well recordings, use `evaluate.py` instead.
 ```jsonc
 {
   "model_used": "microtubule",
-  "threshold_used": 0.97,
+  "threshold_used": 0.98,
   "image_size": { "width": 1024, "height": 1024 },
   "polygons": [],
   "polylines": [
@@ -132,7 +132,7 @@ from _mt_package import default_weights, ensure_on_path
 ensure_on_path()                            # shared package from the ML service
 from microtubule import MicrotubuleModel
 model = MicrotubuleModel().load_weights(str(default_weights()), "cpu")
-out = model.predict(frame_2d)               # seed_threshold=None -> fitted 0.97
+out = model.predict(frame_2d)               # seed_threshold=None -> the model's own 0.98
 out["centerlines_rc"]      # list of (M_i, 2) float64 (row, col) px
 out["prob"]                # (H, W) float32 foreground probability
 ```
@@ -145,7 +145,7 @@ out["prob"]                # (H, W) float32 foreground probability
 | ------- | --- |
 | `checkpoint has no decoder.seg_layers.*.weight` | The file is not a ResEnc U-Net checkpoint — you are probably still pointing at `microtubule_v7.pt`. Stage the v5H weights. |
 | `ModuleNotFoundError: dynamic_network_architectures` | The vendored library under `microtubule/vendor/` was not copied. Keep the shared package intact at `backend/segmentation/models/microtubule`, or point `MT_PACKAGE_DIR` at its parent. |
-| Far too many tiny instances | The threshold was overridden to a generic 0.5. Leave `--threshold` unset so the fitted 0.97 is used. |
+| Far too many tiny instances | The threshold was overridden to a generic 0.5. Leave `--threshold` unset so the model's own 0.98 is used. |
 | Shape mismatch inside the residual adds | The tile size was changed. It must stay divisible by 128 (seven /2 stages); 512 is correct, and v4b's 518 is not. |
 | MPS error / odd results on Mac | Use `--device cpu`; `mps` is experimental for this model. |
 

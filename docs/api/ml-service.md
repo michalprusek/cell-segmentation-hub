@@ -50,8 +50,8 @@ differently from the generic one — or does not exist:
 
 - **`sperm`** uses its own mask threshold (0.3) and score threshold (0.95);
 - **`wound`** does its own grayscale pre-processing;
-- **`microtubule`** applies the fitted `prob_thr` of 0.97 from its parameter
-  file. The backend deliberately sends **no** threshold for it. Note that 0.97
+- **`microtubule`** applies its own `prob_thr` of 0.98 (SPARSE35 ep040; v5H used 0.97) from its parameter
+  file. The backend deliberately sends **no** threshold for it. Note that 0.98
   is not even expressible through some callers' constraints, so forwarding a
   user value would either cut a very confident foreground at 0.5 and flood the
   instancer with noise, or fail validation.

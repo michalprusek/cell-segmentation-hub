@@ -8,7 +8,8 @@
 | `reference_prob_eval_scale.npz` | the harness's 1.5× probability map (float16, key `prob`, 1536 × 1536) |
 | `manifest.json` | provenance: checkpoint / params sha256, tile, stride, torch, GPU, and the six candidate seeds with their scores |
 
-Produced on tulen by `make_mt_fixture.py` (research repo), which renders the frame, writes the PNG,
+Produced on tulen by `make_mt_fixture.py` (a copy is committed beside this README; the research repo
+carries it as `scripts/make_mt_fixture.py`), which renders the frame, writes the PNG,
 **reads it back**, and runs the measured path (`norm01` → `predict` at native scale →
 `resample_to_eval` → `instance_a`) on the re-read image, so the quantisation the fixture carries is
 the quantisation the reference saw.

@@ -242,5 +242,5 @@ export uses (`backend/segmentation/models/mt_measure.py`). See
 
 - [Microtubule projects](project-types/microtubules.md) — the interactive path
   over the same model
-- [ML models: microtubule v5H](../reference/ml-models.md#microtubule--microtubule-v5h)
+- [ML models: microtubule SPARSE35 ep040](../reference/ml-models.md#microtubule--microtubule-sparse35-ep040)
 - [REST API](../api/README.md#automated-essays) — the endpoints behind this page

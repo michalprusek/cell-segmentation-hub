@@ -32,8 +32,13 @@ pipeline the model was MEASURED with (the declared read of 2026-09-15, run with
   carries ``min_length`` 15.0 at the 1.5x scale (the rule ``3 x tolerance``,
   declared before any number was read) instead of v5H's 44.74 fitted on real
   validation frames. The user-visible effect is that short microtubules that
-  the network finds are no longer dropped: on an oracle mask the 44.74 filter
-  alone cost 0.30 of centerline-F1.
+  the network finds are no longer dropped. What that is worth depends on the
+  block: on the cross-lab htw TEST set (median filament 29 px) the 44.74 filter
+  costs an ORACLE mask 0.30 of macro F1 (0.634 vs 0.930 at 10) and this model
+  0.06 of micro F1; on the primary roi303 block the oracle gains 0.03 and the
+  model scores 0.02 LOWER with 15 than with 44.74 (recall +0.04, precision
+  -0.06). The derived constant was chosen by a rule declared before those
+  numbers were read, and is the same on every block. See MODEL_CARD.md 4.
 - **Foreground cut 0.98**, the model's own optimum on the roi303 validation
   block (13-node sweep at per-model thresholds). It is not a user setting; see
   ``DEFAULT_SEED_THRESHOLD``.
@@ -272,8 +277,9 @@ class MicrotubuleModel:
                     # The eight-stage ResEnc plan downsamples seven times, so its
                     # residual adds need every side divisible by 128. A full tile
                     # is 512 and satisfies that; a frame SMALLER than the tile
-                    # does not, and the last tile of a frame that is not a
-                    # multiple of the stride does not either. Unpadded, those
+                    # in either dimension does not (the tile-start rule pins the
+                    # last tile to `extent - TILE`, so on a frame >= 512 px every
+                    # tile is a full 512 and this branch never runs). Unpadded, those
                     # reached the network and died on a shape mismatch deep in
                     # the decoder -- "size of tensor a (13) must match tensor b
                     # (12)" for a 200 px frame -- which says nothing about the
@@ -369,7 +375,16 @@ class MicrotubuleModel:
         from instance.instancer_a import instance_a
 
         maps = self.infer_maps(image_np)   # raises the same errors predict used to
-        merged = {**self.params, **(params or {})}
+        overrides = dict(params or {})
+        if "kappa_max" in overrides:
+            # The curvature bound is a constant of the method (KAPPA_MAX), never a
+            # parameter: instance_a does not read it from the vector, so a caller's
+            # value would be silently ignored. Say so instead.
+            logger.warning(
+                "kappa_max=%r in params is ignored: the bound is the derived constant %.2f",
+                overrides.pop("kappa_max"), KAPPA_MAX,
+            )
+        merged = {**self.params, **overrides}
         thr = (
             seed_threshold
             if seed_threshold is not None

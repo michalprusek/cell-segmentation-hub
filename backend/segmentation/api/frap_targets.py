@@ -549,7 +549,7 @@ def frap_targets(
 ) -> Dict[str, Any]:
     """Segment the IRM page, choose bleach spots, return them in image pixels.
 
-    There is deliberately NO threshold parameter. v5H applies its own fitted
+    There is deliberately NO threshold parameter. The microtubule model applies its own
     foreground cut of 0.98 from params_sparse35.json, and forwarding a user value would
     cut a very confident foreground at 0.5 and flood the instancer with noise. A
     knob that is silently ignored is worse than no knob.

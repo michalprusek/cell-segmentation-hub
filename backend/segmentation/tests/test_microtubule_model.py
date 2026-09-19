@@ -52,14 +52,18 @@ class _StubNet:
         return out
 
 
-def _loaded_model(min_length: float = 20.0) -> MicrotubuleModel:
-    """A model with the network stubbed out and the load guard satisfied."""
+def _loaded_model(min_length: float | None = None) -> MicrotubuleModel:
+    """A model with the network stubbed out and the load guard satisfied.
+
+    Runs with the SHIPPED params vector (min_length 15.0 at the 1.5x scale);
+    ``min_length`` is an optional override for a test that needs one. No test
+    here does -- the stub band spans the whole frame.
+    """
     m = MicrotubuleModel()
     m._model = _StubNet()
     m._device = "cpu"
-    # The shipped min_length (15 px at the 1.5x scale) is kept unless a test
-    # overrides it; everything else stays as shipped.
-    m._params = {**m.params, "min_length": min_length}
+    if min_length is not None:
+        m._params = {**m.params, "min_length": min_length}
     return m
 
 
@@ -129,6 +133,18 @@ def test_network_sees_native_tiles_not_an_upscaled_frame():
     seen = model._model.seen
     assert seen and all(s == (1, 3, 512, 512) for s in seen), seen
     assert len(seen) == 4, seen
+
+
+def test_tile_stride_is_the_harness_stride():
+    """387 = round(512 * 392 / 518), the evaluation harness's stride. The v5H
+    wrapper used 388; a 600 px frame cannot tell them apart (starts 0 and 88
+    either way), so pin the constant itself and the 3 x 3 tiling of 1024 px."""
+    from net import STRIDE, TILE
+
+    assert TILE == 512 and STRIDE == 387
+    model = _loaded_model()
+    model.predict(np.random.rand(1024, 1024).astype(np.float32))
+    assert len(model._model.seen) == 9, model._model.seen
 
 
 def test_probability_map_is_native_and_unresampled():

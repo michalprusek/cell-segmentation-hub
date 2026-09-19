@@ -30,7 +30,7 @@ under a hard curvature bound. Nothing downstream is learned.
 - **Training data.** 100 % synthetic: the project's IRM generator (stiff worm-like
   filament morphology, two-beam-interference photometry with polarity flips, real
   empty-field IRM backgrounds, a fitted heavy-tailed dirt model) rendered online during
-  training, 40 epochs × 6 000 frames, 512 px crops of 768 px renders. 35 % of frames were
+  training, 40 epochs × 6 000 frames, 512 px crops of 640 px renders. 35 % of frames were
   rendered in the TIRF appearance with a sparse fluorophore label (the "SPARSE35" of the
   name). Calibration file `calib_V6_c070_narrow.json` with its `gen_overrides` (length
   prior fix, photometry fix, crossing height guard).
@@ -58,23 +58,28 @@ Declared on 2026-09-15, before any of the numbers below were read:
 - **Metric:** centerline-F1 at tolerance 5 px on the 1.5× frame, length-coverage and
   precision-coverage 0.80, **pooled micro** over frames as the primary (≥10-GT macro
   alongside); `instance.metrics.aggregate_benchmark`.
-- **Threshold:** chosen per model on the block's own VAL split (13-node grid 0.50…0.999).
-  SPARSE35's optimum is 0.98 on roi303 VAL (micro 0.6558) and 0.995 on the htw VAL frames
-  (0.6261). Production carries one value; 0.98 is the primary block's.
+- **Threshold:** chosen per model on the block's own VAL split. SPARSE35's own sweep held
+  9 nodes (0.90…0.999; every later arm 13, 0.50…0.999): optimum 0.98 on roi303 VAL (micro
+  0.6558, with lower neighbours on both sides) and 0.995 on the htw VAL frames (0.6261).
+  Production carries ONE value; 0.98 is the primary block's, and §3 gives htw at that cut.
 - **Inference:** native scale, no field-of-view mask, empty frames included, derived
   instancer constants, ep040.
-- **Test sets:** roi303 TEST (137 frames, 14 123 human-drawn curves in the whole block,
-  BIOCEV manual annotation) primary; htw TEST (33 frames, cross-lab, two annotators)
-  secondary. Each scored once.
+- **Test sets:** roi303 TEST (137 frames; the whole block is 276 frames and 14 012
+  human-drawn curves after the 2026-09 repair, 14 123 before it; BIOCEV manual annotation)
+  primary; htw TEST (33 frames, cross-lab, two annotators) secondary. Each was read once
+  under this instrument; the research ledger counts earlier exposures of the same frames
+  under the previous metrics.
 
 ## 3. What it scores
 
-| block | SPARSE35 ep040 | oracle mask through the same instancer |
-|---|---|---|
-| roi303 TEST (137) | **0.641 ± 0.006** | 0.935 |
-| htw TEST (33) | **0.601 ± 0.012** | 0.871 |
+| block | SPARSE35 ep040, own cut | at the deployed cut 0.98 | oracle mask, same instancer |
+|---|---|---|---|
+| roi303 TEST (137) | **0.641 ± 0.006** (0.98) | 0.641 | 0.935 |
+| htw TEST (33) | **0.601 ± 0.012** (0.995) | 0.565 | 0.871 |
 
-± is the three-seed spread of the recipe on the primary reading.
+± is the three-seed spread of the recipe on the primary reading. Production ships one cut,
+so on the cross-lab block the deployed configuration scores 0.565, not 0.601; the htw
+optimum (0.995) trades recall for precision (P 0.614 / R 0.589 against 0.528 / 0.607 at 0.98).
 
 **Caveat that travels with every roi303 number:** the block's VAL and TEST splits share
 fields — `roi_img_208` (VAL) is byte-identical to `roi_img_209` (TEST), and 94 sibling
@@ -95,23 +100,36 @@ null or negative under this instrument, which is why this checkpoint is the one 
 v5H and SPARSE35 are the same topology; v5H was trained 2026-08-17 on an earlier
 calibration, ran the network on a 1.5×-upscaled image, and shipped an instancer vector
 **fitted on real validation frames** with `min_length` 44.74. Two of those three are
-known costs:
+measured, and one of them is a trade rather than a gain:
 
-- Native-scale inference was worth +0.02 to +0.05 F1 on every real block it was tried on
-  (the one consistent effect of a 2×2 factorial in September).
-- The 44.74 filter drops short microtubules the network found: on an oracle mask of roi303
-  VAL, 44.74 → 0.634 against 20 → 0.874 and 10 → 0.930.
+- **Native-scale inference** was worth +0.02 to +0.05 in every cell of the September 2×2
+  factorial on roi303 VAL (its own paired test did not reach significance, p 0.23); the
+  same-block read below carries the whole recipe difference, scale included.
+- **The instancer vector.** The 44.74 filter drops short microtubules the network found.
+  On the cross-lab htw TEST block (median filament 29 px) that costs an ORACLE mask 0.30
+  of macro F1 (44.74 → 0.634, 20 → 0.874, 10 → 0.930, 5 → 0.947; oracle micro 0.614 →
+  0.871 at 15) and this model 0.06 of micro F1 at 0.98 (0.505 → 0.565). On the primary
+  roi303 block the oracle gains 0.03 (TEST micro 0.904 → 0.935) and **the model scores
+  0.02 LOWER with 15 than with 44.74** (TEST micro at own cuts 0.665 → 0.644; recall
+  +0.04, precision −0.06). The derived constant was chosen by a rule declared before any
+  of these numbers were read, because a filter fitted on one block's validation frames
+  is a fit to that block's filament-length distribution; the price on roi303 is paid
+  knowingly.
 
 **Same-block read of the deployed v5H weights under the declared instrument** (2026-09-19,
-`runs/V5Hread` on tulen, identical protocol to every arm):
+`runs/V5Hread` on tulen; the deployed `microtubule_v5h.pth` symlinked as `runs/V5H/ep040.pth`,
+identical protocol to every arm: native inference, derived vector, own thresholds, so the
+read isolates the weights + training recipe):
 
-| block (VAL, own thresholds) | v5H | SPARSE35 ep040 | Δ |
-|---|---|---|---|
-| roi303 VAL micro | _pending — see §8_ | 0.6558 | |
-| htw VAL micro | _pending — see §8_ | 0.6261 | |
+| block (VAL, own thresholds) | v5H | SPARSE35 ep040 | Δ micro | paired (≥ 10-GT frames) |
+|---|---|---|---|---|
+| roi303 VAL micro (139) | 0.6091 (0.99) | **0.6558** (0.98) | **+0.047** | SPARSE35 better on 76 / 107, Wilcoxon p 3e-7 |
+| htw VAL micro (33) | 0.5695 (0.99) | **0.6261** (0.995) | **+0.057** | better on 18 / 26, p 0.20 |
+| alice / 586 sources (6 / 11 frames) | 0.815 / 0.499 | 0.727 / 0.430 | −0.088 / −0.069 | inside the spread of sources this small |
 
-v5H's only previous numbers were on the old strict metric (MT-34 VAL 0.495, combined
-MT-34 + HTW TEST 0.409), which is not comparable with the figures above.
+At matched recall v5H's precision is 0.062 lower on roi303 and 0.131 lower on htw. v5H's
+only previous numbers were on the old strict metric (MT-34 VAL 0.495, combined MT-34 + HTW
+TEST 0.409) and are not comparable with the figures above.
 
 ## 5. What users will notice
 
@@ -122,10 +140,11 @@ MT-34 + HTW TEST 0.409), which is not comparable with the figures above.
   input resolution (no 1.5× round trip), and the instancer's polylines are mapped back
   from 1.5× as before. Coordinates, key set and the polyline contract are unchanged.
 - **Cut 0.98 instead of 0.97.** Not user-adjustable; the `/segment` route passes none.
-- **Faster.** 0.53 s per 1024×1024 frame on an A5000 for `predict()` (research host);
-  v5H was measured at 4.0–4.4 s in the container for a 65-microtubule frame. The network
-  now sees 2.25× fewer pixels. VRAM peak can only be lower than v5H's 0.73 GiB (same tile,
-  same topology).
+- **Faster.** 0.53 s per 1024×1024 frame (22 microtubules, synthetic) on the research
+  host's A5000 for `predict()`; the container figure on a real 88-microtubule frame is in
+  §8. v5H was measured at 4.0–4.4 s in the container for a 65-microtubule frame at 1.5×.
+  The network now sees 2.25× fewer pixels; the instancer's cost scales with filament
+  count. VRAM peak can only be lower than v5H's 0.73 GiB (same tile, same topology).
 
 ## 6. Inference path, exactly
 
@@ -140,7 +159,8 @@ MT-34 + HTW TEST 0.409), which is not comparable with the figures above.
    at the border), the harness's own rounding
 4. mask = p > 0.98 → `instance_a(mask, κ_max = 0.25, params_sparse35, channels = p, prob = p)`
 5. polylines (x, y at 1.5×) → (row, col) / 1.5 → RDP simplification at 0.30 px (output
-   formatting only)
+   formatting only: the measured path stores the dense polylines, production stores the
+   simplified ones, which deviate from them by at most 0.30 input px by construction)
 
 ## 7. Verification
 
@@ -166,13 +186,17 @@ single F1 could not say which half drifted.
 |---|---|---|---|---|
 | tulen A5000, torch 2.5.1 (the harness's own environment), strict | fixture | 0.0002 | 0 | 22 / 22 matched, 0.000 px |
 | same | `training_img_114.tif` (a real 1024² IRM frame kept on the production host, not in git) | 0.0002 | 0 | 88 / 88 matched, 0.000 px |
-| production container (`spheroseg-ml`, torch 2.6.0) | fixture + `training_img_114.tif` | _filled in at deployment — see §8_ | | |
+| production container (`spheroseg-ml`, torch 2.6.0) | fixture + `training_img_114.tif` | _see §8_ | | |
 
-The 0.0002 is the float16 storage of the reference map, not the model.
+The 0.0002 is the float16 storage of the reference map, not the model. A checkpoint-free
+copy of level 2 runs in every test session (`test_vendored_instancer_reproduces_the_reference_from_the_committed_map`):
+the committed map thresholded at 0.98 through the vendored instancer gives 22 / 22, and it
+is discriminative (min_length 44.74 → 7 / 22, merge_radius 8.98 → 21 / 22).
 
 ## 8. Deployment record
 
-Filled in as the deployment proceeds; a blank cell means the step has not happened.
+Filled in as the deployment proceeds; a blank cell means the step has not happened. The
+rows below the merge are filled by the follow-up commit that records the deployment.
 
 | step | result |
 |---|---|
@@ -183,7 +207,7 @@ Filled in as the deployment proceeds; a blank cell means the step has not happen
 | container pinned to the commit (`md5sum /app/models/microtubule/wrapper.py`) | |
 | `scripts/verify_microtubule_model.py` in the container | |
 | browser check (test account, microtubule project, fixture upload, segmentation) | |
-| v5H same-block read (§4) | |
+| v5H same-block read (§4) | ✅ 2026-09-19 14:25 CEST, `runs/V5Hread`, read with `read_arm.py` |
 
 ## 9. The Automated Essays worker
 
@@ -191,7 +215,9 @@ Filled in as the deployment proceeds; a blank cell means the step has not happen
 (`_mt_package.WEIGHTS_NAME`). Its **code** changed in this commit so both consumers name
 the same model; its **container** (`spheroseg-essays`) bakes the package at image build
 and was **not** rebuilt in this deployment — it keeps running v5H until it is rebuilt
-(`make build-essays` or the equivalent, then recreate). Reason: the essays outputs are a
+(`make build-essays` or the equivalent, then recreate). Until then the two consumers run
+different models; rolling the `ml` service back (§11) restores agreement, rebuilding
+`essays` moves both to SPARSE35. Reason: the essays outputs are a
 running assay that collaborators consume, and `min_length` 44.74 → 15 changes what they
 get; that is a decision, not a side effect. Recorded here so the "one package, two
 consumers" trap is visible rather than silent.
@@ -213,9 +239,11 @@ consumers" trap is visible rather than silent.
 ## 11. Rollback
 
 Everything v5H needs is still in place: `weights/microtubule_v5h.pth` on the host,
-`params_v5h.json` in this directory. To roll back, revert the commit that made this card,
-rebuild and recreate the `ml` service. The v5H wrapper ran the network at 1.5×, so the
-revert must include `wrapper.py` and `net.py`, not just the file names.
+`params_v5h.json` in this directory. To roll back, revert the commits of PR #551 (this
+card, the wrapper, the UI name), rebuild and recreate the `ml` service and the `frontend`.
+The v5H wrapper ran the network at 1.5×, so the revert must include `wrapper.py` and
+`net.py`, not just the file names. If the `essays` image has been rebuilt onto SPARSE35 in
+the meantime, rebuild it again after the revert, or the two consumers disagree.
 
 ## 12. Updating the model again
 
@@ -224,7 +252,8 @@ revert must include `wrapper.py` and `net.py`, not just the file names.
 2. Stage the checkpoint with a new versioned name; pin its sha256 in
    `scripts/download-microtubule-weights.sh`.
 3. Regenerate the fixture references with the research harness on the committed PNG
-   (`make_mt_fixture.py` on tulen reads the PNG back, so the quantisation is shared).
+   (`make_mt_fixture.py` — committed beside the fixture and as `scripts/make_mt_fixture.py`
+   in the research repo — reads the PNG back, so the quantisation is shared).
 4. Run `tests/test_microtubule_reference.py` with `MT_REF_STRICT=1` on the research host,
    then `scripts/verify_microtubule_model.py` in the container after the rebuild.
 5. Update §3, §4, §7, §8 of this card and the `batch_sizes.json` note.

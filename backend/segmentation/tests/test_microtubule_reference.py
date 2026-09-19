@@ -109,8 +109,43 @@ def test_model_still_finds_the_ground_truth(loaded):
     assert g["pred_on_gt"] >= 0.7, g
 
 
-def test_default_threshold_is_the_reference_threshold(loaded):
-    model, fx = loaded
+# ---------------------------------------------------------------------------
+# Checkpoint-free. The reference 1.5x map is committed, so level 2 (the vendored
+# instancer + the shipped params vector) can be pinned on any box, including CI
+# and a fresh clone with no weights. Review finding 2026-09-19: without this, an
+# instancer or params regression passed every weights-free run.
+# ---------------------------------------------------------------------------
+
+
+def _fixture_or_skip():
+    if not (FIXTURE / "reference_prob_eval_scale.npz").exists():
+        pytest.skip(f"fixture missing at {FIXTURE}")
+    return rc.load_fixture(FIXTURE)
+
+
+def test_default_threshold_is_the_reference_threshold():
+    fx = _fixture_or_skip()
+    model = MicrotubuleModel()
     assert model.params["prob_thr"] == pytest.approx(fx["thr"])
     assert model.DEFAULT_SEED_THRESHOLD == pytest.approx(fx["thr"])
     assert model.params["min_length"] == pytest.approx(15.0)
+
+
+def test_vendored_instancer_reproduces_the_reference_from_the_committed_map():
+    """Level 2 without the network: threshold the committed reference map at the
+    reference cut and run the vendored instance_a with the shipped vector. The
+    map is float16, so 24 pixels sit inside the rounding band of the cut and a
+    few vertices move by a fraction of a pixel; the count must be exact and every
+    reference polyline matched within 1 px. Discriminative: min_length 44.74
+    gives 7/22, merge_radius 8.98 gives 21/22 (measured 2026-09-19)."""
+    from instance.instancer_a import instance_a
+
+    fx = _fixture_or_skip()
+    prob = fx["ref_prob_eval"]
+    params = {**MicrotubuleModel().params, "polyline_eps_px": 0.0}
+    polylines, _ = instance_a(prob > fx["thr"], 0.25, params, channels=prob[None], prob=prob,
+                              return_masks=False)
+    pred = [np.asarray(p, float) for p in polylines]
+    p = rc.compare_polylines(pred, fx["ref_xy_eval"], 1.0)
+    assert p["n_pred"] == p["n_ref"] == 22, p
+    assert p["matched"] == 22, p

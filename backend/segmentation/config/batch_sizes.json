@@ -107,16 +107,16 @@
     "microtubule": {
       "optimal_batch_size": 1,
       "max_safe_batch_size": 1,
-      "expected_throughput": 0.22,
+      "expected_throughput": 1.7,
       "memory_limit_mb": 1500,
-      "p95_latency_ms": 9000.0,
+      "p95_latency_ms": 2000.0,
       "production_optimized": false,
       "concurrent_processing": {
         "max_concurrent_users": 1,
         "memory_per_user_mb": 1500,
-        "expected_concurrent_throughput": 0.22
+        "expected_concurrent_throughput": 1.7
       },
-      "note": "Microtubule SPARSE35 ep040 (2026-09-19; nnU-Net ResEnc-M + curvature-bounded instancer, NATIVE-scale inference). Measured 2026-09-19 on the research host's A5000: 0.53 s predict() for a 1024x1024 frame carrying 22 microtubules; the network now sees 2.25x fewer pixels than v5H did, and the VRAM peak can only be lower than v5H's 0.73 GiB (same tile, same topology) -- the container figures below are v5H's and are kept until re-measured there. v5H record: Measured 2026-08-17 on an A5000: 4.0-4.4 s for a 1024x1024 frame carrying 65 microtubules, and 0.73 GiB peak VRAM -- FLAT at 2048x2048, because the network tiles at 512x512 instead of running a ViT over the whole frame. The 1500 MB here is that peak plus headroom for the CUDA context. Runtime is dominated by the single-threaded numpy instancer, so it scales with MT count rather than frame area. Batch size pinned to 1 -- frame-parallelism happens upstream via the queue. These numbers are SERVED over GET /api/v1/models and are what a VRAM-budget decision reads; the previous entry still described v7 (DINOv3-L + PySOAX, 6500 MB)."
+      "note": "Microtubule SPARSE35 ep040 (2026-09-19; nnU-Net ResEnc-M + curvature-bounded instancer, NATIVE-scale inference). Throughput/latency: 0.53 s predict() for a 1024x1024 synthetic frame with 22 microtubules on the research host's A5000 (the container figure on a real 88-microtubule frame is recorded in models/microtubule/MODEL_CARD.md section 8 after deployment). The network sees 2.25x fewer pixels than v5H did, so the VRAM peak can only be lower than v5H's 0.73 GiB (same tile, same topology); memory_per_user_mb keeps v5H's 1500 = that peak plus CUDA-context headroom. Runtime is dominated by the single-threaded numpy instancer, so it scales with MT count rather than frame area. Batch size pinned to 1 -- frame-parallelism happens upstream via the queue. These numbers are SERVED over GET /api/v1/models and are what a VRAM-budget decision reads."
     },
     "microcapsule": {
       "optimal_batch_size": 1,

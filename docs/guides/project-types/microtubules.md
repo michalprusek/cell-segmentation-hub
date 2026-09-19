@@ -18,7 +18,7 @@ your first run.
 
 ## Model
 
-One model, forced: **Microtubule v5H** — an nnU-Net ResEnc-M network (~140 M
+One model, forced: **Microtubule SPARSE35 ep040** — an nnU-Net ResEnc-M network (~140 M
 parameters) predicting the filament foreground, followed by a curvature-bounded
 instancer that separates it into individual centerlines, resolving every
 crossing by min-cost matching under a hard 0.25 rad/px curvature bound.
@@ -31,7 +31,7 @@ cost is dominated by the _instancer_, so it scales with the number of
 microtubules, not just with frame size — a dense field is slower than a large
 empty one.
 
-See [ML models](../../reference/ml-models.md#microtubule--microtubule-v5h).
+See [ML models](../../reference/ml-models.md#microtubule--microtubule-sparse35-ep040).
 
 ---
 
@@ -50,6 +50,8 @@ IRM is _darker_ than its surround):
 | Input | Threshold | Detections | Contrast separation |
 | ----- | --------- | ---------- | ------------------- |
 | IRM   | 0.97      | 128        | **−1.73 SD**        |
+
+_Measured on v5H at its 0.97 cut (2026-08-17); the argument carries over to SPARSE35 ep040 at 0.98 and was not re-measured._
 | IRM   | 0.35      | 155        | −1.44 SD            |
 | TIRF  | any       | many       | **≈ −0.02 SD**      |
 
@@ -64,7 +66,7 @@ before Segment All.
 
 ### 2. The threshold is not a user setting
 
-The registry records 0.97, and the segmentation request deliberately passes **no
+The registry records 0.98, and the segmentation request deliberately passes **no
 threshold at all** for this model — it applies its own. Lowering it does not fix
 a low detection count; the table above is the measurement that settled this.
 More detections at a lower threshold means _worse_ evidence, and on TIRF the
@@ -268,7 +270,7 @@ measurement code, and returns one CSV row per microtubule.
 
 ## Related
 
-- [ML models: microtubule v5H](../../reference/ml-models.md#microtubule--microtubule-v5h)
+- [ML models: microtubule SPARSE35 ep040](../../reference/ml-models.md#microtubule--microtubule-sparse35-ep040)
 - [Videos, frames and channels](../videos-and-channels.md)
 - [Metrics](../../reference/metrics.md#microtubule-intensity)
 - [Export](../export.md#microtubule-exports)

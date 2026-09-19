@@ -46,6 +46,40 @@ def test_instancer_params_are_the_derived_sparse35_vector():
     assert params["min_length"] == pytest.approx(15.0)
 
 
+#: params_a_derived.json of the research repo (sha256 98f2cc49…), verbatim -- the vector every
+#: declared number was read with. prob_thr is the production cut (0.98; the harness sweeps it) and
+#: polyline_eps_px is output formatting, so those two are the only keys allowed to differ.
+DERIVED_VECTOR = {
+        "prob_thr": 0.97,
+        "merge_radius": 5.0,
+        "bridge_max_len": 11.535402577528444,
+        "window": 28.4061495451,
+        "w_theta": 2.4108987954215335,
+        "w_kappa": 16.10643963709496,
+        "w_gap": 0.023943431708221545,
+        "c_open": 3.5105243273445317,
+        "min_length": 15.0,
+        "smooth_size": 11,
+        "gap_floor": 9.580777678689557,
+        "w_ori": 2.6027267692410323,
+        "link_max_gap": 35.74047484783207,
+        "c_open_link": 2.31855842251525,
+        "bridge_thr": 0.07121686958579185,
+        "min_arc_len": 3,
+        "ds": 2.0,
+        "half_width": 1.0,
+}
+
+
+def test_every_instancer_key_is_the_derived_value():
+    """A drift in any of the keys the instancer reads (window, weights, gap rules...) would
+    make the deployed pipeline differ from the measured one with every other test green."""
+    params = json.loads((PKG / "params_sparse35.json").read_text())
+    shipped = {k: v for k, v in params.items() if not k.startswith("_")}
+    expected = {**DERIVED_VECTOR, "prob_thr": 0.98, "polyline_eps_px": 0.30}
+    assert shipped == expected
+
+
 def test_the_wrapper_reads_the_sparse35_params():
     """A stale DEFAULT_PARAMS_PATH would silently ship the previous vector."""
     src = (PKG / "wrapper.py").read_text()

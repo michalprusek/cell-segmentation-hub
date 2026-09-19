@@ -1771,7 +1771,7 @@ class ModelLoader:
 
             processing_time = _time.time() - start_time
             logger.info(
-                f"Microtubule v5H: {len(polylines)} centerlines in {processing_time:.2f}s"
+                f"Microtubule SPARSE35: {len(polylines)} centerlines in {processing_time:.2f}s"
             )
 
             return {
