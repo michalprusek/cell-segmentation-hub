@@ -21,7 +21,7 @@ the Node backend.
 | `api/frap_targets.py`       | FRAP target selection                                                                |
 | `ml/model_loader.py`        | The model catalogue, loading, caching and unloading                                  |
 | `models/`                   | One wrapper per model                                                                |
-| `models/microtubule/`       | The microtubule network (SPARSE35 ep040), its instancer and its parameters                                    |
+| `models/microtubule/`       | The microtubule network (SPARSE35 ep040), its instancer and its parameters           |
 | `models/mt_measure.py`      | Band/ring rasterisation and ImageJ-convention statistics                             |
 | `models/kymobutler/`        | Vendored KymoButler (MIT) — the kymograph trajectory networks                        |
 | `weights/`                  | Checkpoints; not in the repository                                                   |

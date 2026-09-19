@@ -52,8 +52,8 @@ IRM is _darker_ than its surround):
 | IRM   | 0.97      | 128        | **−1.73 SD**        |
 
 _Measured on v5H at its 0.97 cut (2026-08-17); the argument carries over to SPARSE35 ep040 at 0.98 and was not re-measured._
-| IRM   | 0.35      | 155        | −1.44 SD            |
-| TIRF  | any       | many       | **≈ −0.02 SD**      |
+| IRM | 0.35 | 155 | −1.44 SD |
+| TIRF | any | many | **≈ −0.02 SD** |
 
 The symptom of feeding it TIRF is exactly that: many plausible polylines with
 no contrast underneath them.

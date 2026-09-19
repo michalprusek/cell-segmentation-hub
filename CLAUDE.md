@@ -506,15 +506,15 @@ There are no longer `scripts/deploy-production.sh` / `rollback-deployment.sh` / 
 
 ## Tech Stack
 
-| Layer      | Technology                                                                                 |
-| ---------- | ------------------------------------------------------------------------------------------ |
-| Frontend   | React 18 + TypeScript + Vite + shadcn/ui (Radix + Tailwind)                                |
-| Backend    | Node.js + Express + TypeScript + Prisma                                                    |
-| ML Service | Python + FastAPI + PyTorch (HRNet, CBAM-ResUNet, U-Net, Sperm, Wound, Microtubule SPARSE35 ep040)     |
-| Database   | PostgreSQL (dev + prod via Docker compose)                                                 |
-| Real-time  | Socket.io with auto-reconnect + exponential backoff                                        |
-| Auth       | JWT access + refresh tokens                                                                |
-| i18n       | 6 languages (EN, CS, ES, DE, FR, ZH) via a hand-rolled `LanguageContext` — **not i18next** |
+| Layer      | Technology                                                                                        |
+| ---------- | ------------------------------------------------------------------------------------------------- |
+| Frontend   | React 18 + TypeScript + Vite + shadcn/ui (Radix + Tailwind)                                       |
+| Backend    | Node.js + Express + TypeScript + Prisma                                                           |
+| ML Service | Python + FastAPI + PyTorch (HRNet, CBAM-ResUNet, U-Net, Sperm, Wound, Microtubule SPARSE35 ep040) |
+| Database   | PostgreSQL (dev + prod via Docker compose)                                                        |
+| Real-time  | Socket.io with auto-reconnect + exponential backoff                                               |
+| Auth       | JWT access + refresh tokens                                                                       |
+| i18n       | 6 languages (EN, CS, ES, DE, FR, ZH) via a hand-rolled `LanguageContext` — **not i18next**        |
 
 ---
 
