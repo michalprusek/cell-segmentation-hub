@@ -144,7 +144,13 @@ TEST 0.409) and are not comparable with the figures above.
   host's A5000 for `predict()`; the container figure on a real 88-microtubule frame is in
   §8. v5H was measured at 4.0–4.4 s in the container for a 65-microtubule frame at 1.5×.
   The network now sees 2.25× fewer pixels; the instancer's cost scales with filament
-  count. VRAM peak can only be lower than v5H's 0.73 GiB (same tile, same topology).
+  count. **VRAM peak went UP, not down** — 0.932 GiB peak allocated against v5H's 0.729,
+  both measured in the production container on the same real frame (§8). The tile is 512
+  either way, so native scale changes the tile COUNT and not the peak; the whole 0.203 GiB
+  is the bf16 autocast weight cache, which holds a bf16 copy of the 0.524 GiB of fp32
+  weights for the duration of the autocast region. Disabling autocast returns the figure
+  to v5H's 0.205 GiB of activations exactly. Do not reason about this peak from pixel
+  count.
 
 ## 6. Inference path, exactly
 
@@ -201,26 +207,92 @@ rows below the merge are filled by the follow-up commit that records the deploym
 | step | result |
 |---|---|
 | checkpoint staged on cvat2 (`/home/cvat/tmp/mt_sparse35/`), sha256 verified | ✅ 2026-09-19 13:31 CEST |
-| copied into `backend/segmentation/weights/` (uid 999) | |
-| `make build-service SERVICE=ml` + `--force-recreate ml` | |
-| `/health` | |
-| container pinned to the commit (`md5sum /app/models/microtubule/wrapper.py`) | |
-| `scripts/verify_microtubule_model.py` in the container | |
-| browser check (test account, microtubule project, fixture upload, segmentation) | |
+| copied into `backend/segmentation/weights/` (uid 999) | ✅ sha256 `db78ec2d…33531` re-verified in the container, 560 307 978 B |
+| `make build-service SERVICE=ml` + `--force-recreate ml` | ✅ 2026-09-19 14:26 CEST |
+| `/health` | ✅ `production-healthy`; ml `{"status":"healthy","models_loaded":5,"gpu_available":true}` |
+| container pinned to the commit (`md5sum /app/models/microtubule/wrapper.py`) | ✅ all **56** files of `api/`, `ml/`, `config/` and `models/microtubule` match `HEAD` — 0 differ, 0 missing |
+| `scripts/verify_microtubule_model.py` in the container | ✅ ALL OK. fixture 22/22 at 0.000 px median (max 0.081), map max \|Δp\| 0.0113 with 0 flips; `training_img_114.tif` 88/88 at 0.000 px (max 0.573), max \|Δp\| 0.0108, 13 flips (5.5e-6). Tolerance is `CUDA_TOL` (0.05 / 2e-4 / 1.0 px / 0.95 / ±1) |
+| browser check (test account, microtubule project, fixture upload, segmentation) | ✅ 2026-09-19 17:52 CEST, `claude.e2e.export@example.com`, project "claude e2e SPARSE35 check". Upload → Segment All → editor: 22 polylines, 162 vertices, **0 console errors**. ML log: `Microtubule SPARSE35: 22 centerlines in 0.50s`, threshold 0.98 |
 | v5H same-block read (§4) | ✅ 2026-09-19 14:25 CEST, `runs/V5Hread`, read with `read_arm.py` |
+
+### Measured in the production container, 2026-09-19
+
+`predict()` on the A5000, torch 2.6.0+cu124, three runs after a warm-up, against the
+**same** frames through the v5H package imported from a scratch path (`git archive
+0ec7f61d`) so the two are one measurement and not two:
+
+| | v5H | SPARSE35 ep040 |
+|---|---|---|
+| `training_img_114.tif` 1024² | 0.83–0.84 s, 65 MT | **0.60–0.62 s, 88 MT** |
+| 2048² | 3.66–3.74 s, 266 MT | **2.69–2.72 s, 345 MT** |
+| 1924×1476 (the modal production MT frame, 1 800 of them) | — | **1.79–1.88 s, 256 MT** |
+| weights resident on GPU | 0.524 GiB | 0.524 GiB |
+| peak allocated, FLAT across 512² / 1024² / 2048² | 0.729 GiB | 0.932 GiB |
+| peak reserved | 0.881 GiB | 1.043 GiB |
+
+So the served `batch_sizes.json` figures are sound: `expected_throughput` 1.7 img/s against
+1.6–1.7 measured, and `p95_latency_ms` 2000 against 1.88 s at the modal frame size carrying
+256 microtubules — above the production p95 of 146 polylines per frame (4 031 microtubule
+segmentations: p50 73, p95 146, max 311). `memory_limit_mb` 1500 still clears the measured
+1.043 GiB peak reserved, but see §5: the REASON recorded for it was wrong.
+
+The v5H entry's `expected_throughput` 0.22 img/s (p95 9 s) was not wrong when written on
+2026-08-17 — it was stale. The instancer was made ~5× faster on 2026-09-04/05 (`23847736`,
+`04a08463`), so the same v5H weights now measure 0.83 s where they measured 4.0–4.4 s.
+
+**Does the derived vector actually earn its keep?** On the committed fixture, whose ground
+truth is exact: 16 of the 22 polylines are shorter than the v5H filter (44.74 at 1.5× =
+29.8 input px) and would have been dropped. **14 of those 16 lie 100 % on a true filament**;
+2 are false positives. Ground-truth length covered goes from **0.438 with the long ones only
+to 0.907 with all 22**. On a real production IRM frame (`denisa_test`, 1924×1476, the `IRM`
+channel of a 3-channel ND2) the stored v5H result has 142 polylines and SPARSE35 finds 160;
+sampling background-flattened contrast along each centerline against the same curve
+translated elsewhere gives **−1.54 SD** overall and −1.18 SD for the 13 new short ones —
+negative is a real IRM microtubule, so they carry evidence.
+
+**Caveat the change makes louder.** A channel that is typed `irm` only because a multi-page
+TIFF carries no wavelength is not IRM, and the length filter used to hide that. On
+`20260429_CH2_DNA_origami…TEST_3frames.tif` (all three channels typed `irm`; the frame is
+fluorescent puncta, no filaments at all) v5H emitted 7 polylines and SPARSE35 emits **36**,
+at **+2.42 SD** — positive, i.e. sitting on pixels BRIGHTER than their surround, the
+opposite of an IRM microtubule. Nothing regressed in the model; the wrong-channel symptom
+simply got ~5× louder. Diagnose such a project by its `channels` JSON, not by the count.
 
 ## 9. The Automated Essays worker
 
 `backend/essays` imports this package and reads the same weights file name
-(`_mt_package.WEIGHTS_NAME`). Its **code** changed in this commit so both consumers name
-the same model; its **container** (`spheroseg-essays`) bakes the package at image build
-and was **not** rebuilt in this deployment — it keeps running v5H until it is rebuilt
-(`make build-essays` or the equivalent, then recreate). Until then the two consumers run
-different models; rolling the `ml` service back (§11) restores agreement, rebuilding
-`essays` moves both to SPARSE35. Reason: the essays outputs are a
-running assay that collaborators consume, and `min_length` 44.74 → 15 changes what they
-get; that is a decision, not a side effect. Recorded here so the "one package, two
-consumers" trap is visible rather than silent.
+(`_mt_package.WEIGHTS_NAME`). Its **code** changed in the deploy commit so both consumers
+name the same model; its **container** (`spheroseg-essays`) bakes the package at image
+build and was deliberately left alone there, because `min_length` 44.74 → 15 changes
+outputs collaborators already have — a decision, not a side effect.
+
+**Resolved 2026-09-19 18:22 UTC: the owner chose to rebuild, and it is done.**
+`make build-essays` + `--force-recreate essays`. Verified in the recreated container:
+`wrapper.py`, `net.py` and `params_sparse35.json` all match `HEAD`,
+`WEIGHTS_NAME = microtubule_sparse35_ep040.pth` resolves to `/app/mt_weights/`, the model
+loads at `DEFAULT_SEED_THRESHOLD` 0.98 / `min_length` 15.0, and `/health` reports
+`{"status":"ok","queued":0,"gpu":"ok"}`. The queue was empty at rebuild time (10 completed
+jobs, 1 failed, newest 2026-08-25) so no run was interrupted. **Both consumers now run
+SPARSE35 ep040**, and essays numbers from before this date are not comparable with later
+ones for the same reason §4 gives.
+
+Worth recording because it was not what the deploy notes assumed: the container had been
+running the wrapper from `9d4cb6c4` (2026-08-26), not the v5H that was on `main` before
+the swap — it was two wrapper-touching commits behind, missing `04a08463`. That commit is
+a pure performance rewrite proven bit-identical by `test_instancer_perf_identity.py`, so
+the assay's numbers were unaffected and only its speed was; but "the essays worker runs
+what `main` ran" was not true, and a baked image is not pinned by the branch it was built
+from. Pin it with `md5sum`, as §8 does for `ml`.
+
+GPU budget re-checked after the rebuild rather than assumed: SPARSE35 measures 1.043 GiB
+peak reserved / 0.932 allocated on a 2048² frame inside the essays container under the
+production cap (`ESSAYS_GPU_MEM_FRACTION` 0.12 = 2.83 GiB). `GPU_WORKING_SET_GB` is left
+at 1.41 — that constant came from a whole `evaluate.py` run over a real multi-position
+well and is not the same quantity as a model-only peak, so lowering it on this evidence
+would weaken a safety bound on weaker data than set it. All five invariants in
+`tests/test_gpu_budget.py` still hold with room: cap 2.83 ≥ 1.41, cap ≥ 1.5× working set
+(2.83 ≥ 2.12), gate 4 ≥ 1.41, gate ≥ cap + 0.4 (4 ≥ 3.23), cap ≤ working set + 2.0
+(2.83 ≤ 3.41).
 
 ## 10. Limitations
 
