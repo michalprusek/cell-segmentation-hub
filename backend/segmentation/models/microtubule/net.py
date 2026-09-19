@@ -1,4 +1,7 @@
-"""The semantic network for the v5H package: nnU-Net's ResEnc-M topology, binary head.
+"""The semantic network for the microtubule package: nnU-Net's ResEnc-M topology, binary head.
+
+Shared by v5H and SPARSE35 ep040 (2026-09-19): same plan, same key set, same shapes -- the
+checkpoints are drop-in for each other and the head width is still read off the file.
 
 Deliberately NOT imported from scripts/train_v5.py. That module pulls in the training stack
 (the generator, the instancer, the benchmark loader) and hard-codes development paths; a
@@ -30,7 +33,10 @@ PLAN = dict(
 #: Input must be divisible by 128 (seven /2 stages) or the residual adds hit a shape mismatch
 #: on the way back up. 518 -- the previous package's tile, matching DINOv2's /14 patch grid --
 #: is not, and fails at run time rather than at load time.
-TILE, STRIDE = 512, 388
+TILE = 512
+#: Tile stride of the EVALUATION harness (``train_v5.predict``: round(512 * 392 / 518)). Was 388
+#: in the v5H wrapper, which computed its own; the declared numbers were read at 387.
+STRIDE = int(round(TILE * 392 / 518))
 
 IMA_M = [0.485, 0.456, 0.406]
 IMA_S = [0.229, 0.224, 0.225]

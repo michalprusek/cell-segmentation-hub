@@ -65,7 +65,7 @@ Written for the person in front of the browser. No code knowledge assumed.
 | `spheroid_invasive` | [Invasive spheroid](guides/project-types/spheroid-invasive.md) | Spheroid Disintegration (UNet++/EfficientNet-B5, 3-class)   | Core + corona polygons       |
 | `wound`             | [Wound healing](guides/project-types/wound.md)                 | Wound Healing (U-Net / MiT-B5)                              | Closed polygons              |
 | `sperm`             | [Sperm morphology](guides/project-types/sperm.md)              | Sperm Morphology                                            | Per-part polygons + skeleton |
-| `microtubules`      | [Microtubules](guides/project-types/microtubules.md)           | Microtubule v5H (nnU-Net ResEnc-M + curvature instancer)    | **Open polylines**           |
+| `microtubules`      | [Microtubules](guides/project-types/microtubules.md)           | Microtubule SPARSE35 ep040 (nnU-Net ResEnc-M + curvature instancer)    | **Open polylines**           |
 | `microcapsule`      | [Microcapsules](guides/project-types/microcapsule.md)          | Microcapsule (distilled U-Net + watershed)                  | Closed polygons              |
 | `neurite`           | [Neurites and somas](guides/project-types/neurite.md)          | Neurite / Soma (nnU-Net ResEnc-M, 3-fold)                   | Closed polygons, two classes |
 

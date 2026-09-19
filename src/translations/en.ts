@@ -620,7 +620,7 @@ export default {
         microtubule: {
           name: 'Microtubule (ResEnc-M + curvature instancer)',
           description:
-            'Instance segmentation for IRM microtubule time-lapses. An nnU-Net ResEnc-M network predicts the filament foreground, then a curvature-bounded instancer separates it into individual centerlines, resolving every crossing under a hard 0.25 rad/px bound. Trained entirely on synthetic frames — no human annotation. ~4.5 s/frame; the only model in the platform with native polyline output.',
+            'Instance segmentation for IRM microtubule time-lapses. An nnU-Net ResEnc-M network predicts the filament foreground, then a curvature-bounded instancer separates it into individual centerlines, resolving every crossing under a hard 0.25 rad/px bound. Trained entirely on synthetic frames — no human annotation. ~0.6 s/frame; the only model in the platform with native polyline output.',
         },
         microcapsule: {
           name: 'Microcapsule',
@@ -1879,9 +1879,9 @@ export default {
             'Multi-class instance segmentation producing head, midpiece and tail as polylines natively, via skeleton extraction rather than thresholded blobs.',
         },
         microtubule: {
-          name: 'Microtubule (v5H)',
+          name: 'Microtubule (SPARSE35)',
           inferenceTime:
-            'About 4.5 s per frame · threshold fixed at 0.97 and not user-settable',
+            'About 0.6 s per frame · threshold fixed at 0.98 and not user-settable',
           bestFor: 'Used by: Microtubule projects. IRM images only.',
           description:
             'An nnU-Net ResEnc-M network predicts the filament foreground, then a curvature-bounded instancer separates it into individual centerlines, resolving every crossing under a hard curvature bound. Trained entirely on synthetic frames. Runtime scales with the number of filaments, not just frame size.',
@@ -1916,7 +1916,7 @@ export default {
       },
       thresholdNote: 'Detection thresholds are fixed per model.',
       thresholdNoteText:
-        'There is no threshold control in the interface: each model applies the cut it was validated with, and the microtubule model’s is 0.97. Lowering a threshold does not find more real objects — it finds more with weaker evidence, and on a non-IRM channel the microtubule output does not follow the image at any setting. If detections are missing, check the input channel instead.',
+        'There is no threshold control in the interface: each model applies the cut it was validated with, and the microtubule model’s is 0.98. Lowering a threshold does not find more real objects — it finds more with weaker evidence, and on a non-IRM channel the microtubule output does not follow the image at any setting. If detections are missing, check the input channel instead.',
       tip: 'Tip:',
       tipText:
         'Start with the default model. Reach for CBAM-ResUNet when boundaries matter more than speed, and for Mamba-UNet when your images do not look like anyone’s training set.',
@@ -1960,7 +1960,7 @@ export default {
       },
       processingNote: 'Processing time depends on the model:',
       processingTimes:
-        'the wound model takes about 0.03 s per image and the spheroid models about 0.2–0.4 s, while the microtubule model takes around 4.5 s per frame because separating individual filaments is the expensive part.',
+        'the wound model takes about 0.03 s per image and the spheroid models about 0.2–0.4 s, while the microtubule model takes around 0.6 s per frame because separating individual filaments is the expensive part.',
     },
 
     // Editor

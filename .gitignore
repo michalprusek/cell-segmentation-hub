@@ -199,6 +199,7 @@ path_c_v24c/
 /mt34-benchmark/
 /mt-instance-seg/
 /mt-instance-seg-v5H/
+/mt-model-src/
 /neurite-soma-seg/
 
 # HuggingFace model cache (transformers + DINOv3 backbone downloads)

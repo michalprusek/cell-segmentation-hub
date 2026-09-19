@@ -603,7 +603,7 @@ export default {
         microtubule: {
           name: 'Microtúbulos (ResEnc-M + instanciador por curvatura)',
           description:
-            'Segmentación de instancias para time-lapses de microtúbulos IRM. Una red nnU-Net ResEnc-M predice el primer plano de los filamentos y un instanciador acotado por curvatura lo separa en centerlines individuales, resolviendo cada cruce bajo un límite duro de 0,25 rad/px. Entrenado íntegramente con imágenes sintéticas, sin anotación humana. ~4,5 s por cuadro; único modelo de la plataforma con salida polilínea nativa.',
+            'Segmentación de instancias para time-lapses de microtúbulos IRM. Una red nnU-Net ResEnc-M predice el primer plano de los filamentos y un instanciador acotado por curvatura lo separa en centerlines individuales, resolviendo cada cruce bajo un límite duro de 0,25 rad/px. Entrenado íntegramente con imágenes sintéticas, sin anotación humana. ~0,6 s por cuadro; único modelo de la plataforma con salida polilínea nativa.',
         },
         microcapsule: {
           name: 'Microcapsule',
@@ -1877,9 +1877,9 @@ export default {
             'Segmentación de instancias multiclase que produce cabeza, pieza intermedia y cola directamente como polilíneas, mediante extracción del esqueleto en vez de manchas umbralizadas.',
         },
         microtubule: {
-          name: 'Microtúbulos (v5H)',
+          name: 'Microtúbulos (SPARSE35)',
           inferenceTime:
-            'Unos 4,5 s por fotograma · umbral fijado en 0,97 y no configurable',
+            'Unos 0,6 s por fotograma · umbral fijado en 0,98 y no configurable',
           bestFor: 'Lo usan: los proyectos de microtúbulos. Solo imágenes IRM.',
           description:
             'Una red nnU-Net ResEnc-M predice el primer plano de los filamentos y después un separador acotado por curvatura lo divide en líneas centrales individuales, resolviendo cada cruce bajo un límite estricto de curvatura. Entrenado exclusivamente con fotogramas sintéticos. El tiempo de ejecución crece con el número de filamentos, no solo con el tamaño del fotograma.',
@@ -1913,7 +1913,7 @@ export default {
       },
       thresholdNote: 'Los umbrales de detección son fijos para cada modelo.',
       thresholdNoteText:
-        'No hay ningún control de umbral en la interfaz: cada modelo aplica el corte con el que fue validado, y el de microtúbulos es 0,97. Bajar un umbral no encuentra más objetos reales: encuentra más con evidencia más débil, y en un canal que no sea IRM la salida de microtúbulos no sigue la imagen con ningún ajuste. Si faltan detecciones, revise el canal de entrada.',
+        'No hay ningún control de umbral en la interfaz: cada modelo aplica el corte con el que fue validado, y el de microtúbulos es 0,98. Bajar un umbral no encuentra más objetos reales: encuentra más con evidencia más débil, y en un canal que no sea IRM la salida de microtúbulos no sigue la imagen con ningún ajuste. Si faltan detecciones, revise el canal de entrada.',
       tip: 'Consejo:',
       tipText:
         'Empiece con el modelo predeterminado. Recurra a CBAM-ResUNet cuando los bordes importen más que la velocidad, y a Mamba-UNet cuando sus imágenes no se parezcan al conjunto de entrenamiento de nadie.',
@@ -1958,7 +1958,7 @@ export default {
       },
       processingNote: 'El tiempo de proceso depende del modelo:',
       processingTimes:
-        'el modelo de heridas tarda unos 0,03 s por imagen y los de esferoides entre 0,2 y 0,4 s, mientras que el de microtúbulos ronda los 4,5 s por fotograma porque separar filamentos individuales es la parte cara.',
+        'el modelo de heridas tarda unos 0,03 s por imagen y los de esferoides entre 0,2 y 0,4 s, mientras que el de microtúbulos ronda los 0,6 s por fotograma porque separar filamentos individuales es la parte cara.',
     },
 
     // Editor

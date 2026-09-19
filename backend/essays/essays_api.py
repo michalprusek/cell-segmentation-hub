@@ -44,7 +44,7 @@ MODULE_DIR = Path(os.environ.get("ESSAYS_MODULE_DIR", "/app/essays_module"))
 # make the endpoint authenticated, and is not a substitute for keeping the
 # port off the public interface.
 ESSAYS_ROOT = os.path.realpath(os.environ.get("ESSAYS_ROOT", "/app/uploads"))
-WEIGHTS = os.environ.get("ESSAYS_WEIGHTS", "/app/mt_weights/microtubule_v5h.pth")
+WEIGHTS = os.environ.get("ESSAYS_WEIGHTS", "/app/mt_weights/microtubule_sparse35_ep040.pth")
 # Measured on the 24 GB A5000 against a real 2048x2048 IRM well. Under
 # microtubule **v7** a forward pass wanted a 16.36 GiB working set; the cap was
 # once set to 0.6 (14.13 GiB), i.e. BELOW it. Every position therefore hit the

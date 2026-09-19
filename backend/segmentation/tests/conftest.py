@@ -11,18 +11,18 @@ sys.path.insert(0, "/app")
 #:
 #: RELATIVE, resolved against the cwd, because that is what the thing it guards
 #: does: ``ModelLoader.AVAILABLE_MODELS['microtubule']['pretrained_path']`` is
-#: the string ``'weights/microtubule_v5h.pth'`` and torch.load opens it from
+#: the string ``'weights/microtubule_sparse35_ep040.pth'`` and torch.load opens it from
 #: wherever the process happens to be. Hardcoding ``/app/weights/...`` would
 #: agree with the loader only under ``make test-ml``'s ``-w /app``, and would
 #: skip everything — silently, which is the failure this guard exists to
 #: prevent — for anyone running pytest from ``backend/segmentation``.
 def _mt_checkpoint() -> Path:
-    return Path.cwd() / "weights" / "microtubule_v5h.pth"
+    return Path.cwd() / "weights" / "microtubule_sparse35_ep040.pth"
 
 
 @pytest.fixture(scope="session")
 def mt_model():
-    """The real v5H model, or a skip when its checkpoint is not staged.
+    """The real SPARSE35 ep040 model, or a skip when its checkpoint is not staged.
 
     Without the skip, every test taking this fixture ERRORS during setup with a
     "Model weights not found" traceback. Ten of them did, in

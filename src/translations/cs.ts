@@ -604,7 +604,7 @@ export default {
         microtubule: {
           name: 'Mikrotubuly (ResEnc-M + zakřivený instancer)',
           description:
-            'Instanční segmentace mikrotubulů pro IRM časosběrná videa. Síť nnU-Net ResEnc-M předpoví popředí vláken a instancer je rozdělí na jednotlivé centerline, přičemž každé křížení řeší pod tvrdou mezí zakřivení 0,25 rad/px. Trénováno výhradně na syntetických snímcích — bez lidských anotací. ~4,5 s/frame; jediný model v platformě s nativním polyline výstupem.',
+            'Instanční segmentace mikrotubulů pro IRM časosběrná videa. Síť nnU-Net ResEnc-M předpoví popředí vláken a instancer je rozdělí na jednotlivé centerline, přičemž každé křížení řeší pod tvrdou mezí zakřivení 0,25 rad/px. Trénováno výhradně na syntetických snímcích — bez lidských anotací. ~0,6 s/frame; jediný model v platformě s nativním polyline výstupem.',
         },
         microcapsule: {
           name: 'Microcapsule',
@@ -1852,9 +1852,9 @@ export default {
             'Víceklasová instanční segmentace, která hlavičku, krček i bičík rovnou vytváří jako polyline pomocí extrakce kostry, nikoli prahovaných skvrn.',
         },
         microtubule: {
-          name: 'Mikrotubuly (v5H)',
+          name: 'Mikrotubuly (SPARSE35)',
           inferenceTime:
-            'Přibližně 4,5 s na snímek · práh je pevně 0,97 a uživatel jej nemění',
+            'Přibližně 0,6 s na snímek · práh je pevně 0,98 a uživatel jej nemění',
           bestFor: 'Používá: projekty s mikrotubuly. Pouze snímky IRM.',
           description:
             'Síť nnU-Net ResEnc-M predikuje popředí vláken a pak instancer omezený křivostí rozdělí popředí na jednotlivé osy, přičemž každé křížení řeší pod pevnou mezí křivosti. Trénováno výhradně na syntetických snímcích. Doba běhu roste s počtem vláken, nejen s velikostí snímku.',
@@ -1889,7 +1889,7 @@ export default {
       },
       thresholdNote: 'Prahy detekce jsou pevně dané pro každý model.',
       thresholdNoteText:
-        'V rozhraní žádné nastavení prahu není: každý model používá řez, se kterým byl validován, u mikrotubulů je to 0,97. Snížení prahu nenajde více skutečných objektů — najde jich více se slabším důkazem, a na jiném než IRM kanálu výstup mikrotubulového modelu nesleduje obraz při žádném nastavení. Pokud detekce chybí, zkontrolujte raději vstupní kanál.',
+        'V rozhraní žádné nastavení prahu není: každý model používá řez, se kterým byl validován, u mikrotubulů je to 0,98. Snížení prahu nenajde více skutečných objektů — najde jich více se slabším důkazem, a na jiném než IRM kanálu výstup mikrotubulového modelu nesleduje obraz při žádném nastavení. Pokud detekce chybí, zkontrolujte raději vstupní kanál.',
       tip: 'Tip:',
       tipText:
         'Začněte výchozím modelem. Po CBAM-ResUNetu sáhněte, když jsou hranice důležitější než rychlost, a po Mamba-UNetu, když vaše snímky nevypadají jako ničí trénovací data.',
@@ -1933,7 +1933,7 @@ export default {
       },
       processingNote: 'Doba zpracování závisí na modelu:',
       processingTimes:
-        'model hojení ran zabere zhruba 0,03 s na snímek a sferoidové modely 0,2–0,4 s, zatímco model mikrotubulů asi 4,5 s na snímek, protože oddělení jednotlivých vláken je ta nákladná část.',
+        'model hojení ran zabere zhruba 0,03 s na snímek a sferoidové modely 0,2–0,4 s, zatímco model mikrotubulů asi 0,6 s na snímek, protože oddělení jednotlivých vláken je ta nákladná část.',
     },
 
     // Editor

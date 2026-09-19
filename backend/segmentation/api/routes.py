@@ -176,15 +176,15 @@ def _dispatch_inference(loader, model, image, threshold, detect_holes):
             # Wound model expects grayscale 512×512 — custom preprocessing lives in WoundModel
             result = loader.predict_wound(image, threshold, detect_holes)
         elif model == 'microtubule':
-            # Microtubule v5H uses its OWN fitted foreground cut (0.97, from
-            # params_v5h.json), not the user's threshold — the same reason
+            # The microtubule model uses its OWN foreground cut (0.98, from
+            # params_sparse35.json), not the user's threshold — the same reason
             # sperm ignores it above: it is calibrated differently.
             #
             # This is not merely a preference. `threshold` is declared
-            # `le=0.9`, so 0.97 is not even expressible on this endpoint:
+            # `le=0.9`, so 0.98 is not even expressible on this endpoint:
             # forwarding the user's value would silently cut this model's
             # (very confident) foreground at 0.5 and flood the instancer with
-            # noise, and "fixing" that by sending 0.97 would 422. The cut
+            # noise, and "fixing" that by sending 0.98 would 422. The cut
             # belongs to the fitted parameter vector, so it travels with it.
             #
             # detect_holes is not meaningful for polylines.
@@ -287,7 +287,7 @@ async def segment_image(
     threshold: float = Form(
         0.5,
         ge=0.1,
-        le=0.99,  # v5H's fitted cut is 0.97 — see api/models.py
+        le=0.99,  # the microtubule model's own cut is 0.98 — see api/models.py
         description="Segmentation threshold",
     ),
     detect_holes: bool = Form(True, description="Whether to detect holes in segmentation"),
@@ -403,7 +403,7 @@ async def batch_segment_images(
     threshold: float = Form(
         0.5,
         ge=0.1,
-        le=0.99,  # v5H's fitted cut is 0.97 — see api/models.py
+        le=0.99,  # the microtubule model's own cut is 0.98 — see api/models.py
         description="Segmentation threshold",
     ),
     detect_holes: bool = Form(True, description="Whether to detect holes in segmentation"),

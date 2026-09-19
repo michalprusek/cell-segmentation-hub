@@ -223,19 +223,19 @@ describe('model registry SSOT', () => {
       },
       microtubule: {
         id: 'microtubule',
-        name: 'Microtubule (v5H)',
+        name: 'Microtubule (SPARSE35)',
         displayName: 'Microtubule (ResEnc-M + curvature instancer)',
         description:
-          'Instance segmentation for IRM microtubule time-lapses. An nnU-Net ResEnc-M network predicts the filament foreground, then a curvature-bounded instancer separates it into individual centerlines, resolving every crossing by min-cost matching under a hard 0.25 rad/px bound. Trained entirely on synthetic frames — no human annotation at any stage. Cross-frame tracking for kymograph analysis is geometric. The only model in the platform producing polyline output.',
+          'Instance segmentation for IRM microtubule time-lapses. An nnU-Net ResEnc-M network predicts the filament foreground, then a curvature-bounded instancer separates it into individual centerlines, resolving every crossing by min-cost matching under a hard 0.25 rad/px bound. The network runs at native resolution. Trained entirely on synthetic frames — no human annotation at any stage. Cross-frame tracking for kymograph analysis is geometric. The only model in the platform producing polyline output.',
         size: 'large',
         // NOT the generic 0.5: this model's foreground is very confident and
-        // the instancer's fitted vector cuts at 0.97.
-        defaultThreshold: 0.97,
+        // the model's own vector cuts at 0.98.
+        defaultThreshold: 0.98,
         category: 'microtubule',
         performance: {
-          avgTimePerImage: 4.5,
-          throughput: 0.22,
-          p95Latency: 9.0,
+          avgTimePerImage: 0.6,
+          throughput: 1.7,
+          p95Latency: 2.0,
           batchSize: 1,
         },
       },

@@ -18,7 +18,7 @@ read first and the load then died on the trailing dict, returning nothing:
 Reported from the field 2026-07-29 and fixed in PR #306 with a cross-platform
 ``pickle_module`` in ``segment_mt.py``.
 
-`microtubule_v5h.pth` is a bare ``OrderedDict`` of tensors — no argparse
+`microtubule_sparse35_ep040.pth` (like `microtubule_v5h.pth` before it) is a bare ``OrderedDict`` of tensors — no argparse
 namespace, no paths, nothing to unpickle but storage. The hazard is therefore
 structural rather than patched, and the shim was removed with the rest of the
 v7 loader. What is left here is the ONE assertion that keeps it structural: if

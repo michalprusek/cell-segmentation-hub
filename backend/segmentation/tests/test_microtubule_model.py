@@ -24,30 +24,46 @@ for _p in (str(_PKG), str(_PKG / "vendor")):
 from models.microtubule.wrapper import MicrotubuleModel, _simplify_polyline  # noqa: E402
 
 
+#: Row of the stub's filament, in NATIVE tile pixels. Fixed rather than ``h // 2`` because the
+#: network now runs at native scale and a frame smaller than the 512 tile is reflect-padded
+#: up to it: a band at the padded tile's middle would fall outside a 256 px frame and be
+#: cropped away.
+BAND_ROW = 120
+
+
 class _StubNet:
-    """Returns a horizontal filament through the middle of every tile.
+    """Returns a horizontal filament at ``BAND_ROW`` of every tile, and records the tensor
+    shapes it was given.
 
     The band is 3 px so it survives skeletonisation, and the logits are
-    saturated so the 0.97 threshold keeps exactly this band.
+    saturated so the 0.98 threshold keeps exactly this band.
     """
+
+    def __init__(self):
+        self.seen = []
 
     def __call__(self, t):
         import torch
 
+        self.seen.append(tuple(t.shape))
         b, _, h, w = t.shape
         out = torch.full((b, 1, h, w), -12.0)
-        out[:, :, h // 2 - 1 : h // 2 + 2, :] = 12.0
+        out[:, :, BAND_ROW - 1 : BAND_ROW + 2, :] = 12.0
         return out
 
 
-def _loaded_model(min_length: float = 20.0) -> MicrotubuleModel:
-    """A model with the network stubbed out and the load guard satisfied."""
+def _loaded_model(min_length: float | None = None) -> MicrotubuleModel:
+    """A model with the network stubbed out and the load guard satisfied.
+
+    Runs with the SHIPPED params vector (min_length 15.0 at the 1.5x scale);
+    ``min_length`` is an optional override for a test that needs one. No test
+    here does -- the stub band spans the whole frame.
+    """
     m = MicrotubuleModel()
     m._model = _StubNet()
     m._device = "cpu"
-    # The shipped min_length (44.7 px at the 1.5x scale) would reject the
-    # filament in a small test frame; everything else stays as shipped.
-    m._params = {**m.params, "min_length": min_length}
+    if min_length is not None:
+        m._params = {**m.params, "min_length": min_length}
     return m
 
 
@@ -96,8 +112,69 @@ def test_horizontal_filament_lands_in_the_middle_ROW():
     assert out["centerlines_rc"], "stub foreground produced no instance"
     cl = max(out["centerlines_rc"], key=len)
     assert cl[:, 0].std() < cl[:, 1].std(), "rows vary more than cols -- transposed"
-    # The band sits at the vertical middle of the frame.
-    assert 100 < float(np.median(cl[:, 0])) < 156
+    # The band sits at BAND_ROW of the (single, native) tile; the instancer's 1.5x frame must
+    # have been mapped back exactly, so the row lands within a pixel of it.
+    assert abs(float(np.median(cl[:, 0])) - BAND_ROW) <= 1.5
+
+
+# ---------------------------------------------------------------------------
+# Native-scale inference (SPARSE35 ep040, 2026-09-19). The network must see the
+# frame at INPUT resolution; only the probabilities are resampled to the 1.5x
+# instancer frame. These pin the geometry the reference fixture then confirms
+# on the real checkpoint (test_microtubule_reference.py).
+# ---------------------------------------------------------------------------
+
+
+def test_network_sees_native_tiles_not_an_upscaled_frame():
+    """A 600 px frame is two 512 tiles per axis at native scale (starts 0 and 88).
+    Under the old 1.5x path the network would have seen a 900 px frame instead."""
+    model = _loaded_model()
+    model.predict(np.random.rand(600, 600).astype(np.float32))
+    seen = model._model.seen
+    assert seen and all(s == (1, 3, 512, 512) for s in seen), seen
+    assert len(seen) == 4, seen
+
+
+def test_tile_stride_is_the_harness_stride():
+    """387 = round(512 * 392 / 518), the evaluation harness's stride. The v5H
+    wrapper used 388; a 600 px frame cannot tell them apart (starts 0 and 88
+    either way), so pin the constant itself and the 3 x 3 tiling of 1024 px."""
+    from net import STRIDE, TILE
+
+    assert TILE == 512 and STRIDE == 387
+    model = _loaded_model()
+    model.predict(np.random.rand(1024, 1024).astype(np.float32))
+    assert len(model._model.seen) == 9, model._model.seen
+
+
+def test_probability_map_is_native_and_unresampled():
+    """`prob` is the network's own map at input resolution: saturated on the
+    band row, ~0 elsewhere, and never blurred by a resample round-trip."""
+    out = _loaded_model().predict(np.random.rand(256, 256).astype(np.float32))
+    prob = out["prob"]
+    assert prob.shape == (256, 256) and prob.dtype == np.float32
+    assert prob[BAND_ROW].min() > 0.99
+    assert prob[BAND_ROW - 20].max() < 0.01
+
+
+def test_eval_shape_matches_the_harness_rounding():
+    from models.microtubule.wrapper import eval_shape
+
+    assert eval_shape((1024, 1024)) == (1536, 1536)
+    assert eval_shape((938, 1120)) == (1407, 1680)
+    assert eval_shape((1027, 333)) == (1540, 500)
+
+
+def test_resample_to_eval_geometry():
+    from models.microtubule.wrapper import resample_to_eval
+
+    ch = np.zeros((1, 100, 100), np.float32)
+    ch[0, 40, :] = 1.0
+    up = resample_to_eval(ch, (150, 150))
+    assert up.shape == (1, 150, 150) and up.dtype == np.float32
+    assert abs(int(np.argmax(up[0, :, 75])) - 60) <= 1
+    same = resample_to_eval(ch, (100, 100))
+    np.testing.assert_array_equal(same, ch)
 
 
 def test_threshold_override_is_honoured():
@@ -145,7 +222,7 @@ def test_rdp_simplification_wired_into_predict_output():
     model = _loaded_model()
 
     unsimplified = model.predict(image, params={"polyline_eps_px": 0.0})["centerlines_rc"]
-    simplified = model.predict(image)["centerlines_rc"]  # shipped params_v5h.json eps (0.30)
+    simplified = model.predict(image)["centerlines_rc"]  # shipped params_sparse35.json eps (0.30)
 
     assert unsimplified, "stub foreground produced no instance"
     assert simplified

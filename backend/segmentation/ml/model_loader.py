@@ -50,7 +50,8 @@ except ImportError as e:
     WoundModel = None
     _wound_import_error = e
 
-# Optional microtubule v5H model import. Self-contained since the v7 → v5H
+# Optional microtubule model import (SPARSE35 ep040 since 2026-09-19, v5H before
+# that; see models/microtubule/MODEL_CARD.md). Self-contained since the v7 → v5H
 # swap: an nnU-Net ResEnc-M network with dynamic_network_architectures vendored
 # alongside it, so an ImportError here means the vendored library or the
 # instancer failed to import — NOT a missing HuggingFace token.
@@ -269,8 +270,8 @@ class ModelLoader:
         'microtubule': {
             # Will be None if the vendored network library failed to import
             'class': MicrotubuleModel,
-            'pretrained_path': 'weights/microtubule_v5h.pth',
-            'finetuned_path': 'weights/microtubule_v5h.pth',
+            'pretrained_path': 'weights/microtubule_sparse35_ep040.pth',
+            'finetuned_path': 'weights/microtubule_sparse35_ep040.pth',
             'config_path': None
         },
         'microcapsule': {
@@ -457,7 +458,7 @@ class ModelLoader:
                 logger.info(f"Successfully loaded wound model from: {weights_full_path}")
                 return model
             elif model_name == 'microtubule':
-                # Microtubule v5H — nnU-Net ResEnc-M + curvature-bounded
+                # Microtubule SPARSE35 ep040 — nnU-Net ResEnc-M + curvature-bounded
                 # instancer. The wrapper reads the head width off the checkpoint
                 # before building the network, so we skip the generic torch.load
                 # path below and let it drive loading end-to-end.
@@ -469,7 +470,7 @@ class ModelLoader:
                 model = MicrotubuleModel()
                 model.load_weights(str(weights_full_path), self.device)
                 self.loaded_models[model_name] = model
-                logger.info(f"Successfully loaded microtubule v5H model from: {weights_full_path}")
+                logger.info(f"Successfully loaded microtubule SPARSE35 ep040 model from: {weights_full_path}")
                 return model
             elif model_name == 'microcapsule':
                 # Microcapsule distilled U-Net — the wrapper builds the smp
@@ -1691,7 +1692,7 @@ class ModelLoader:
     def predict_microtubule(self, image: Image.Image,
                             threshold: Optional[float] = None,
                             timeout: Optional[float] = None) -> Dict[str, Any]:
-        """Run microtubule v5H (ResEnc-M + curvature instancer) on one frame.
+        """Run the microtubule model (SPARSE35 ep040: ResEnc-M + curvature instancer) on one frame.
 
         Differs from the standard predict() path:
 
@@ -1706,7 +1707,7 @@ class ModelLoader:
           model runs inside MicrotubuleModel.predict().
 
         ``threshold=None`` (the default, and what the /segment route passes)
-        means "use the fitted foreground cut from params_v5h.json" — 0.97,
+        means "use the model's own foreground cut from params_sparse35.json" — 0.98,
         which the generic 0.1-0.9 API bound cannot even express. Pass a float
         only to deliberately override it.
         """
@@ -1770,7 +1771,7 @@ class ModelLoader:
 
             processing_time = _time.time() - start_time
             logger.info(
-                f"Microtubule v5H: {len(polylines)} centerlines in {processing_time:.2f}s"
+                f"Microtubule SPARSE35: {len(polylines)} centerlines in {processing_time:.2f}s"
             )
 
             return {

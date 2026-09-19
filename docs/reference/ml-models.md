@@ -28,7 +28,7 @@ incompatible pair with a 400 even if you post it directly.
 | `spheroid_disintegration` | Spheroid Disintegration            | `spheroid_invasive` | Core + corona   | 0.2               | ~0.70 s              | medium      |
 | `wound`                   | Wound Healing (Scratch Assay)      | `wound`             | Closed polygons | 0.5               | ~0.03 s              | medium      |
 | `sperm`                   | Sperm Morphology                   | `sperm`             | Part polylines  | 0.5               | ~0.30 s              | medium      |
-| `microtubule`             | Microtubule (ResEnc-M + instancer) | `microtubules`      | **Polylines**   | 0.97 (fixed)      | ~4.5 s (p95 9 s)     | large       |
+| `microtubule`             | Microtubule (ResEnc-M + instancer) | `microtubules`      | **Polylines**   | 0.98 (fixed)      | ~0.6 s (p95 ~2 s)     | large       |
 | `microcapsule`            | Microcapsule                       | `microcapsule`      | Closed polygons | 0.5               | ~0.30 s              | small       |
 | `neurite_soma`            | Neurite / Soma                     | `neurite`           | Closed polygons | n/a (argmax)      | ~12 s at 2048²       | large       |
 
@@ -183,7 +183,13 @@ behaviour built on those fields.
 
 ---
 
-## `microtubule` — Microtubule v5H
+## `microtubule` — Microtubule SPARSE35 ep040
+
+> Swapped 2026-09-19 (v5H → SPARSE35 ep040): same ResEnc-M topology, network now at NATIVE
+> resolution, derived instancer vector (`min_length` 15 at 1.5×), cut 0.98. Everything the model is,
+> scores and how it was verified: `backend/segmentation/models/microtubule/MODEL_CARD.md`. The
+> threshold evidence table below was measured on v5H at 0.97 and is kept as the record of why the
+> cut is not a setting.
 
 The most specialised model in the platform, and the only one producing **open
 polylines**. Read this section before running a microtubule project — several
@@ -193,7 +199,7 @@ of its properties are deliberate and surprising.
   foreground, followed by a pure-NumPy **curvature-bounded instancer** that cuts
   the foreground into individual centerlines. Every crossing is resolved by
   min-cost matching under a hard **0.25 rad/px** curvature bound.
-- Checkpoint: `weights/microtubule_v5h.pth` (~535 MB). It is a complete
+- Checkpoint: `weights/microtubule_sparse35_ep040.pth` (~535 MB). It is a complete
   `state_dict` with no frozen backbone, so **nothing is downloaded at
   inference time** — no HuggingFace token, no network access, and the first call
   is no slower than the rest.
@@ -225,9 +231,9 @@ segmentation source.
 
 ### Its threshold is not a user setting
 
-The registry records a default of **0.97**, and the `/segment` route
+The registry records a default of **0.98**, and the `/segment` route
 deliberately passes **no threshold at all** for `microtubule`: the model applies
-`prob_thr` from its own `params_v5h.json`. Lowering it does not fix a low
+`prob_thr` from its own `params_sparse35.json`. Lowering it does not fix a low
 detection count — the table above is the measurement that settled this. If you
 are getting too few microtubules, the input channel is the thing to check.
 

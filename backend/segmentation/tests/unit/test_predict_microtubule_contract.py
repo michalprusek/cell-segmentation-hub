@@ -20,7 +20,7 @@ class _StubMT:
     actually applied when the caller passes none.
     """
 
-    DEFAULT_SEED_THRESHOLD = 0.97
+    DEFAULT_SEED_THRESHOLD = 0.98
 
     def __init__(self, centerlines=None):
         self._cls = (
@@ -28,7 +28,7 @@ class _StubMT:
             if centerlines is not None
             else [np.array([[10.0, 20.0], [11.0, 21.0], [12.0, 22.0]])]
         )
-        self.params = {"prob_thr": 0.97}
+        self.params = {"prob_thr": 0.98}
         self.seen_threshold = "unset"
 
     def predict(self, image_np, seed_threshold=None, params=None):
@@ -104,7 +104,7 @@ def test_no_threshold_means_the_models_own_fitted_cut(loader):
 
     The stack-wide default of 0.5 would cut a very confident foreground far too
     low and flood the instancer. Passing None lets the wrapper use
-    params_v5h.json's prob_thr — and the response must report what was APPLIED,
+    params_sparse35.json's prob_thr — and the response must report what was APPLIED,
     not the empty request.
 
     (This used to add that 0.97 was not expressible on /segment at all, whose
@@ -114,7 +114,7 @@ def test_no_threshold_means_the_models_own_fitted_cut(loader):
     """
     out = loader.predict_microtubule(Image.new("L", (64, 64)))
     assert loader.loaded_models["microtubule"].seen_threshold is None
-    assert out["threshold_used"] == 0.97
+    assert out["threshold_used"] == 0.98
 
 
 def test_response_envelope_is_unchanged(loader):

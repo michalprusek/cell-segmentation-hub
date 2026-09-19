@@ -1,0 +1,79 @@
+{
+ "ckpt": "/disk2/prusek/mt_work/runs/SPARSE35/ep040.pth",
+ "ckpt_sha256": "db78ec2d661c4f92557a02378f30b0f710c681c7609061e41828f92acd633531",
+ "params": "/disk2/prusek/mt_work/mt34_work/src/instance/params_a_derived.json",
+ "params_sha256": "98f2cc4933178b9f743d08aea3269329a6a6d56335a565d805ad270b96b5b29c",
+ "thr": 0.98,
+ "up": 1.5,
+ "kappa_max": 0.25,
+ "tile": 512,
+ "stride": 387,
+ "torch": "2.5.1+cu121",
+ "gpu": "NVIDIA RTX A5000",
+ "fixture": {
+  "n_gt": 32,
+  "background": "A_iris-open_50ms_006_f0230.tif",
+  "seed": 20260924,
+  "candidates": {
+   "20260919": {
+    "f1": 0.4444444444444445,
+    "tp": 6,
+    "fp": 8,
+    "fn": 7,
+    "n_gt": 13,
+    "background": "A_iris-medium_75ms_003_optical-cabel-wiggle_f0170.tif"
+   },
+   "20260920": {
+    "f1": 0.25,
+    "tp": 1,
+    "fp": 4,
+    "fn": 2,
+    "n_gt": 3,
+    "background": "B_iris-closed_70ms_010_f0000.tif"
+   },
+   "20260921": {
+    "f1": 0.22222222222222224,
+    "tp": 3,
+    "fp": 9,
+    "fn": 12,
+    "n_gt": 15,
+    "background": "A_iris-closed_95ms_004_f0150.tif"
+   },
+   "20260922": {
+    "f1": 0.4126984126984127,
+    "tp": 13,
+    "fp": 18,
+    "fn": 19,
+    "n_gt": 32,
+    "background": "C_iris-close_80ms_018_f0120.tif"
+   },
+   "20260923": {
+    "f1": 0.6557377049180327,
+    "tp": 20,
+    "fp": 6,
+    "fn": 15,
+    "n_gt": 35,
+    "background": "A_iris-closed_95ms_004_f0150.tif"
+   },
+   "20260924": {
+    "f1": 0.7407407407407406,
+    "tp": 20,
+    "fp": 2,
+    "fn": 12,
+    "n_gt": 32,
+    "background": "A_iris-open_50ms_006_f0230.tif"
+   }
+  },
+  "selection": "highest F1 vs exact GT among the candidate seeds"
+ },
+ "images": {
+  "mt_sparse35_synthetic_irm": {
+   "n_polylines": 22,
+   "image_sha256": "7f57287c1077e92c9ef090d4b668f859d17bd4a2e5d6c0b5d479547d3e951f69"
+  },
+  "training_img_114": {
+   "n_polylines": 88,
+   "image_sha256": "918093f8704469155bceff6240a9801d76ec9c0294269d8a2075db67f5cbcc5f"
+  }
+ }
+}

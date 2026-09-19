@@ -6,7 +6,7 @@ for ``channel_registration`` (``MT_REGISTRATION_DIR``). Both env vars are set
 explicitly in ``docker/essays.Dockerfile`` so a future move of either source
 fails the build there rather than silently finding nothing at run time.
 
-Single source of truth: the microtubule v5H model code (wrapper, net, the
+Single source of truth: the microtubule model code (SPARSE35 ep040; wrapper, net, the
 instancer, the vendored network library) lives ONCE, in the ML service at
 ``backend/segmentation/models/microtubule``. Both the interactive segmentation
 service and this batch evaluator import that one package.
@@ -130,11 +130,11 @@ def ensure_registration_on_path() -> Path:
     )
 
 
-WEIGHTS_NAME = "microtubule_v5h.pth"
+WEIGHTS_NAME = "microtubule_sparse35_ep040.pth"
 
 
 def weights_candidates() -> list[Path]:
-    """Where the v5H checkpoint may be staged, most-specific first.
+    """Where the microtubule checkpoint may be staged, most-specific first.
 
     The checkpoint (~535 MB) is too large for git and is staged out-of-band by
     ``scripts/download-microtubule-weights.sh`` into the ML service's weights
@@ -173,7 +173,7 @@ def missing_weights_message(weights: Path) -> str:
     download that 404s.
     """
     return (
-        f"microtubule v5H checkpoint not found at {weights}.\n"
+        f"microtubule SPARSE35 ep040 checkpoint not found at {weights}.\n"
         "Looked in: " + ", ".join(str(p) for p in weights_candidates()) + "\n"
         "Stage it with scripts/download-microtubule-weights.sh (writes "
         "backend/segmentation/weights/" + WEIGHTS_NAME + "), or pass an explicit "

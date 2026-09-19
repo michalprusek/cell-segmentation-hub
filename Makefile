@@ -576,7 +576,7 @@ clean-monitoring:
 # Download ML model weights
 download-weights:
 	@echo "📥 Downloading ML model weights..."
-	@echo "This will download ~2.6 GB of model weights (incl. microtubule v5H + KymoButler)"
+	@echo "This will download ~2.6 GB of model weights (incl. microtubule SPARSE35 ep040 + KymoButler)"
 	@if [ \! -d "backend/segmentation/weights" ]; then mkdir -p backend/segmentation/weights; fi
 	@cd backend/segmentation && python scripts/download_weights.py
 	@./scripts/download-microtubule-weights.sh
@@ -593,10 +593,10 @@ check-weights:
 		echo "   Run: make download-weights"; \
 		exit 1; \
 	fi
-	@if [ -f "backend/segmentation/weights/microtubule_v5h.pth" ]; then \
-		echo "✅ Microtubule v5H weights found ($$(du -h backend/segmentation/weights/microtubule_v5h.pth | cut -f1))"; \
+	@if [ -f "backend/segmentation/weights/microtubule_sparse35_ep040.pth" ]; then \
+		echo "✅ Microtubule SPARSE35 ep040 weights found ($$(du -h backend/segmentation/weights/microtubule_sparse35_ep040.pth | cut -f1))"; \
 	else \
-		echo "⚠️  Microtubule v5H weights missing (microtubule_v5h.pth)"; \
+		echo "⚠️  Microtubule SPARSE35 ep040 weights missing (microtubule_sparse35_ep040.pth)"; \
 		echo "   Run: ./scripts/download-microtubule-weights.sh"; \
 	fi
 	@# KymoButler backs kymograph trajectory detection. Missing weights do not

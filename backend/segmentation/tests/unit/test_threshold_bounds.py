@@ -2,7 +2,7 @@
 
 WHY THIS EXISTS. The Node API validates `threshold` before queueing, and this
 service validates it again on /api/v1/segment. When only the first was raised
-from 0.9 to 0.99, the microtubule model's fitted cut of 0.97 sailed through the
+from 0.9 to 0.99, the microtubule model's own cut (0.97 then, 0.98 now) sailed through the
 queue with a 200 and "20 images queued", then every single job died here with
 
     422 Unprocessable Entity — Input should be less than or equal to 0.9
@@ -30,16 +30,16 @@ from api.models import SegmentationRequest
 # the layout-independent way to find it.
 SEG_ROOT = Path(__file__).resolve().parents[2]
 
-# The value the microtubule v5H model actually uses (params_v5h.json prob_thr),
+# The value the microtubule model actually uses (params_sparse35.json prob_thr),
 # and the one src/lib/models/modelRegistry.ts sends as its defaultThreshold.
-V5H_FITTED_CUT = 0.97
+MT_MODEL_CUT = 0.98
 
 
-def test_the_v5h_fitted_cut_is_accepted():
-    assert SegmentationRequest(threshold=V5H_FITTED_CUT).threshold == V5H_FITTED_CUT
+def test_the_models_own_cut_is_accepted():
+    assert SegmentationRequest(threshold=MT_MODEL_CUT).threshold == MT_MODEL_CUT
 
 
-@pytest.mark.parametrize("value", [0.1, 0.5, 0.9, 0.97, 0.99])
+@pytest.mark.parametrize("value", [0.1, 0.5, 0.9, 0.97, 0.98, 0.99])
 def test_the_usable_range_is_accepted(value):
     assert SegmentationRequest(threshold=value).threshold == value
 

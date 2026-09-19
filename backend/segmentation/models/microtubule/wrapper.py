@@ -1,6 +1,6 @@
-"""Microtubule instance segmentation model wrapper (v5H).
+"""Microtubule instance segmentation model wrapper (SPARSE35 ep040).
 
-Wraps the v5H package -- an nnU-Net ResEnc-M semantic stage plus a
+Wraps the microtubule package -- an nnU-Net ResEnc-M semantic stage plus a
 curvature-bounded instancer -- so the ModelLoader can drive it through the same
 ``load_weights`` / ``predict`` surface used by the other models.
 
@@ -13,25 +13,39 @@ TWO callers share this package, so it is not free to change:
 They used to be separate copies that silently drifted apart. Re-verify BOTH
 paths when changing this file or anything under ``instance/``.
 
-How this differs from the v7 wrapper it replaces
-------------------------------------------------
-- **No frozen backbone.** v7 was DINOv3-L + DPT and fetched a gated backbone
-  from HuggingFace on first use. This checkpoint is a complete state_dict, so
-  there is no ``HF_TOKEN``, no download, and no network access at run time.
-- **One output channel, not a seed map plus a 32-d embedding field.** Nothing
-  downstream receives ``embedding_samples`` any more. Cross-frame identity is
-  established geometrically in ``api/mt_geometry_cost.py``.
-- **The postprocessor is the instancer, not PySOAX.** Junction clusters are
-  contracted, tangents fitted over a window, and each junction resolved by a
-  min-cost perfect matching over its arms with a priced "leave this arm open"
-  option. Every join is constrained by ``kappa <= 0.25 rad/px`` as a HARD
-  constraint -- derived, not tuned: just above the 0.239 rad/px maximum over
-  957 human-annotated microtubules at an 8 px baseline. Microtubules bend;
-  they do not kink.
+What changed on 2026-09-19 (v5H -> SPARSE35 ep040)
+---------------------------------------------------
+Read ``MODEL_CARD.md`` next to this file for the model itself. The wrapper
+changed in three places, each of them so that the deployed pipeline is the
+pipeline the model was MEASURED with (the declared read of 2026-09-15, run with
+``eval_v5.py --infer-scale 1.0 --no-fov`` and ``params_a_derived.json``):
 
-Inference runs at 1.5x upscale internally because that is the scale the model
-was trained and evaluated at. Output coordinates are mapped back, so callers
-never see the 1.5x.
+- **The network runs at NATIVE resolution.** v5H upscaled the image by 1.5x
+  before the network. The synthetic training frames are rendered on
+  native-resolution backgrounds and never upscaled, and inference at the
+  training scale was worth +0.02 to +0.05 F1 on every real block it was tried
+  on. Only the PROBABILITIES are resampled to the 1.5x frame afterwards, because
+  the instancer's constants (tolerances, ``min_length``, the curvature bound)
+  are defined there. Output coordinates are mapped back, so callers never see
+  the 1.5x.
+- **The instancer vector is DERIVED, not fitted.** ``params_sparse35.json``
+  carries ``min_length`` 15.0 at the 1.5x scale (the rule ``3 x tolerance``,
+  declared before any number was read) instead of v5H's 44.74 fitted on real
+  validation frames. The user-visible effect is that short microtubules that
+  the network finds are no longer dropped. What that is worth depends on the
+  block: on the cross-lab htw TEST set (median filament 29 px) the 44.74 filter
+  costs an ORACLE mask 0.30 of macro F1 (0.634 vs 0.930 at 10) and this model
+  0.06 of micro F1; on the primary roi303 block the oracle gains 0.03 and the
+  model scores 0.02 LOWER with 15 than with 44.74 (recall +0.04, precision
+  -0.06). The derived constant was chosen by a rule declared before those
+  numbers were read, and is the same on every block. See MODEL_CARD.md 4.
+- **Foreground cut 0.98**, the model's own optimum on the roi303 validation
+  block (13-node sweep at per-model thresholds). It is not a user setting; see
+  ``DEFAULT_SEED_THRESHOLD``.
+
+Inference precision matches the measurement too: bf16 autocast on CUDA, the
+tile stride the evaluation harness uses, the same whole-frame percentile
+normalisation.
 """
 
 from __future__ import annotations
@@ -57,18 +71,26 @@ for _extra_path in (_PKG_DIR, _PKG_DIR / "vendor"):
     if str(_extra_path) not in sys.path:
         sys.path.insert(0, str(_extra_path))
 
-#: Internal working scale. Fixed by training; not a tunable.
+#: Name of the deployed model, for logs and error messages.
+MODEL_NAME = "SPARSE35 ep040"
+
+#: Scale of the INSTANCER's frame relative to the input. The network runs at
+#: native scale; its probabilities are resampled by this factor before
+#: instancing, because every instancer constant (tolerance, min_length, the
+#: curvature bound) is defined on the 1.5x frame the benchmark is scored on.
 UP = 1.5
 
 #: Hard curvature bound, rad/px. Derived from data, never read from the params
-#: file -- see the module docstring.
+#: file -- just above the 0.239 rad/px maximum over 957 human-annotated
+#: microtubules at an 8 px baseline. Microtubules bend; they do not kink.
 KAPPA_MAX = 0.25
 
-DEFAULT_PARAMS_PATH = _PKG_DIR / "params_v5h.json"
+DEFAULT_PARAMS_PATH = _PKG_DIR / "params_sparse35.json"
 
 
 def _normalize(a: np.ndarray, p: tuple[float, float] = (1.0, 99.0)) -> np.ndarray:
-    """Percentile stretch over the whole frame -- exactly what training used.
+    """Percentile stretch over the whole frame -- exactly what training and the
+    evaluation harness use (``train_v5.norm01``).
 
     An FOV-restricted variant was tested upstream and lost on validation
     (0.412 vs 0.438). Do not "improve" this without re-measuring: the model was
@@ -76,6 +98,30 @@ def _normalize(a: np.ndarray, p: tuple[float, float] = (1.0, 99.0)) -> np.ndarra
     """
     lo, hi = np.percentile(a, p)
     return np.clip((a - lo) / (hi - lo + 1e-6), 0.0, 1.0)
+
+
+def eval_shape(shape: tuple[int, int], up: float = UP) -> tuple[int, int]:
+    """Shape of the 1.5x instancer frame for a native ``(H, W)`` -- scipy's own
+    rounding, the same the evaluation harness uses (``eval_v5.eval_frame_shape``),
+    so a resampled probability map lines up with ``zoom(mask, UP)``."""
+    return tuple(int(round(s * up)) for s in shape)
+
+
+def resample_to_eval(ch: np.ndarray, target_hw: tuple[int, int]) -> np.ndarray:
+    """Resample a ``(C, h, w)`` probability stack to the instancer frame,
+    bilinear per channel. Transcribed from ``eval_v5.resample_to_eval`` so the
+    deployed map is the measured map; identity when the shape already matches."""
+    from scipy.ndimage import zoom
+
+    if tuple(ch.shape[1:]) == tuple(target_hw):
+        return np.asarray(ch, np.float32)
+    f = (target_hw[0] / ch.shape[1], target_hw[1] / ch.shape[2])
+    out = np.stack(
+        [zoom(np.asarray(c, np.float32), f, order=1, mode="nearest") for c in ch]
+    ).astype(np.float32)
+    if tuple(out.shape[1:]) != tuple(target_hw):
+        raise ValueError(f"resampled to {out.shape[1:]}, expected {target_hw}")
+    return out
 
 
 def _simplify_polyline(cl: np.ndarray, eps_px: float) -> np.ndarray:
@@ -129,10 +175,12 @@ class MicrotubuleModel:
     learned weights at all.
     """
 
-    #: Foreground cut. The shipped params vector carries 0.97, fitted to this
-    #: model's (very confident) foreground; the ModelLoader's generic 0.5
-    #: default would flood the instancer with noise.
-    DEFAULT_SEED_THRESHOLD: float = 0.97
+    #: Foreground cut. The shipped params vector carries 0.98 -- SPARSE35's own
+    #: optimum on the roi303 validation block under the declared metric (the
+    #: 13-node sweep 0.50..0.999 at per-model thresholds; the htw block
+    #: preferred 0.995, and one value had to be chosen for production). The
+    #: ModelLoader's generic 0.5 default would flood the instancer with noise.
+    DEFAULT_SEED_THRESHOLD: float = 0.98
 
     def __init__(self) -> None:
         self._model: Optional[Any] = None
@@ -142,14 +190,15 @@ class MicrotubuleModel:
 
     @property
     def params(self) -> dict:
-        """Instancer hyperparameters, fitted to THIS model's foreground.
+        """Instancer hyperparameters: the DERIVED vector (``params_sparse35.json``).
 
-        A large junction-contraction radius suits a shattered mask and damages
-        a clean one, so v4b's vector would actively penalise this foreground.
+        Underscore-prefixed keys are provenance notes, not parameters, and
+        ``kappa_max`` is a constant of the method, never read from a file.
         """
         if self._params is None:
             params = json.loads(DEFAULT_PARAMS_PATH.read_text())
-            params.pop("kappa_max", None)   # derived, never read from a file
+            params = {k: v for k, v in params.items() if not k.startswith("_")}
+            params.pop("kappa_max", None)
             self._params = params
         return self._params
 
@@ -171,7 +220,7 @@ class MicrotubuleModel:
         path = Path(weights_path)
         if not path.is_file():
             raise FileNotFoundError(
-                f"microtubule v5H checkpoint not found at {path} (~535 MB). "
+                f"microtubule {MODEL_NAME} checkpoint not found at {path} (~535 MB). "
                 "Stage it with scripts/download-microtubule-weights.sh."
             )
 
@@ -184,7 +233,8 @@ class MicrotubuleModel:
         self._model = model
         self._ckpt_path = path
         logger.info(
-            "Loaded microtubule v5H from %s on %s (head width %d)",
+            "Loaded microtubule %s from %s on %s (head width %d)",
+            MODEL_NAME,
             path,
             self._device,
             width,
@@ -192,26 +242,28 @@ class MicrotubuleModel:
         return self
 
     def _channels(self, img01: np.ndarray) -> np.ndarray:
-        """Tiled prediction over an already-upscaled, already-normalised frame.
+        """Tiled prediction over a NATIVE-resolution, already-normalised frame.
 
         Returns ``(C, H, W)`` in [0, 1]; C is 1 for this checkpoint. Tiles
         overlap and are averaged, so a filament crossing a tile seam is not cut
         in two. The tile is 512 because the eight-stage plan downsamples seven
         times and the residual adds need the input divisible by 128 -- the v4b
         package's 518 (DINOv2's /14 patch grid) is not, and would fail at run
-        time rather than at load time.
+        time rather than at load time. The stride is the evaluation harness's
+        (``train_v5.predict``: ``round(512 * 392 / 518)`` = 387), and on CUDA
+        the forward pass runs under bf16 autocast, as the measurement did.
         """
         import torch
 
-        from net import IMA_M, IMA_S, TILE
+        from net import IMA_M, IMA_S, STRIDE, TILE
 
         mean = torch.tensor(IMA_M).view(3, 1, 1)
         std = torch.tensor(IMA_S).view(3, 1, 1)
-        stride = int(round(TILE * 0.757))
         height, width = img01.shape
+        use_bf16 = str(self._device).startswith("cuda")
 
         def _starts(extent: int) -> list[int]:
-            starts = list(range(0, max(1, extent - TILE + 1), stride)) or [0]
+            starts = list(range(0, max(1, extent - TILE + 1), STRIDE)) or [0]
             if starts[-1] != max(0, extent - TILE):
                 starts.append(max(0, extent - TILE))
             return starts
@@ -225,8 +277,9 @@ class MicrotubuleModel:
                     # The eight-stage ResEnc plan downsamples seven times, so its
                     # residual adds need every side divisible by 128. A full tile
                     # is 512 and satisfies that; a frame SMALLER than the tile
-                    # does not, and the last tile of a frame that is not a
-                    # multiple of the stride does not either. Unpadded, those
+                    # in either dimension does not (the tile-start rule pins the
+                    # last tile to `extent - TILE`, so on a frame >= 512 px every
+                    # tile is a full 512 and this branch never runs). Unpadded, those
                     # reached the network and died on a shape mismatch deep in
                     # the decoder -- "size of tensor a (13) must match tensor b
                     # (12)" for a 200 px frame -- which says nothing about the
@@ -239,7 +292,10 @@ class MicrotubuleModel:
                     # border is precisely the thing the instancer is hunting for.
                     # Reflection keeps the local statistics the network was
                     # trained on. The output is cropped back to (th, tw) below,
-                    # so nothing found inside the padding can survive.
+                    # so nothing found inside the padding can survive. The
+                    # evaluation harness has no padding at all: every benchmark
+                    # frame is at least 512 px, so this branch never fires there
+                    # and the two paths are identical on such frames.
                     pad_h = (-th) % 128
                     pad_w = (-tw) % 128
                     if pad_h or pad_w:
@@ -250,16 +306,40 @@ class MicrotubuleModel:
                         tile = np.pad(tile, ((0, pad_h), (0, pad_w)), mode=mode)
                     t = torch.from_numpy(tile.astype(np.float32))[None].repeat(3, 1, 1)
                     t = ((t - mean) / std)[None].to(self._device)
-                    out = self._model(t)
-                    if isinstance(out, (tuple, list)):
+                    with torch.autocast("cuda", dtype=torch.bfloat16, enabled=use_bf16):
+                        out = self._model(t)
+                    while isinstance(out, (tuple, list)):
                         out = out[0]   # deep supervision off, but be defensive
-                    out = torch.sigmoid(out)[0].float().cpu().numpy()
+                    out = torch.sigmoid(out.float())[0].cpu().numpy()
                     if acc is None:
-                        acc = np.zeros((out.shape[0], height, width), dtype=np.float32)
-                        cnt = np.zeros((height, width), dtype=np.float32)
+                        acc = np.zeros((out.shape[0], height, width), dtype=np.float64)
+                        cnt = np.zeros((height, width), dtype=np.float64)
                     acc[:, y : y + th, x : x + tw] += out[:, :th, :tw]
                     cnt[y : y + th, x : x + tw] += 1
         return acc / np.maximum(cnt, 1)[None]
+
+    def infer_maps(self, image_np: np.ndarray) -> dict:
+        """The probability maps ``predict`` is built on, exposed for verification.
+
+        Returns ``{'prob': (H, W) float32 native, 'chans_eval': (C, 1.5H, 1.5W)
+        float32, 'prob_eval': (1.5H, 1.5W) float32}``. ``prob_eval`` is what the
+        instancer thresholds; the reference fixture pins it.
+        """
+        if self._model is None:
+            raise RuntimeError("Model not loaded. Call load_weights() first.")
+        img = np.asarray(image_np)
+        if img.ndim == 3:
+            img = img.mean(axis=-1)
+        if img.ndim != 2:
+            raise ValueError(f"expected 2D image, got shape {img.shape}")
+        img01 = _normalize(img.astype(np.float64))
+        chans = self._channels(img01)                                   # native
+        chans_eval = resample_to_eval(chans, eval_shape(img01.shape))   # instancer frame
+        return {
+            "prob": chans.max(axis=0).astype(np.float32),
+            "chans_eval": chans_eval,
+            "prob_eval": chans_eval.max(axis=0),
+        }
 
     def predict(
         self,
@@ -267,7 +347,7 @@ class MicrotubuleModel:
         seed_threshold: Optional[float] = None,
         params: Optional[dict] = None,
     ) -> dict:
-        """Run v5H on a single 2D grayscale frame.
+        """Run the model on a single 2D grayscale frame.
 
         Args:
             image_np: numpy ndarray of shape ``(H, W)`` -- an IRM/TIRF intensity
@@ -275,9 +355,9 @@ class MicrotubuleModel:
                 over the channel axis) for convenience.
             seed_threshold: Foreground cut applied to the probability map before
                 instancing. ``None`` uses the shipped params vector's
-                ``prob_thr`` (0.97), which is what the model was tuned with.
+                ``prob_thr`` (0.98), which is what the model was measured with.
             params: Overrides of the instancer hyperparameters. Also accepts
-                ``polyline_eps_px`` (default from params_v5h.json), the RDP
+                ``polyline_eps_px`` (default from params_sparse35.json), the RDP
                 tolerance applied to the OUTPUT geometry -- see
                 :func:`_simplify_polyline`. It is not read by ``instance_a``;
                 the instancer's working resolution stays ``ds``, unaffected.
@@ -285,37 +365,32 @@ class MicrotubuleModel:
         Returns:
             ``{
                 'centerlines_rc': list[(M_i, 2) float64],  # row, col, INPUT px
-                'prob':           (H, W) float32,          # foreground prob
+                'prob':           (H, W) float32,          # foreground prob, INPUT px
             }``
 
             Note the absence of ``embedding_samples``: it is gone rather than
             empty, so a consumer that was not updated fails loudly instead of
             silently tracking on zeros.
         """
-        if self._model is None:
-            raise RuntimeError("Model not loaded. Call load_weights() first.")
-
-        from scipy.ndimage import zoom
-
         from instance.instancer_a import instance_a
 
-        img = np.asarray(image_np)
-        if img.ndim == 3:
-            img = img.mean(axis=-1)
-        if img.ndim != 2:
-            raise ValueError(f"expected 2D image, got shape {img.shape}")
-
-        height, width = img.shape
-        merged = {**self.params, **(params or {})}
+        maps = self.infer_maps(image_np)   # raises the same errors predict used to
+        overrides = dict(params or {})
+        if "kappa_max" in overrides:
+            # The curvature bound is a constant of the method (KAPPA_MAX), never a
+            # parameter: instance_a does not read it from the vector, so a caller's
+            # value would be silently ignored. Say so instead.
+            logger.warning(
+                "kappa_max=%r in params is ignored: the bound is the derived constant %.2f",
+                overrides.pop("kappa_max"), KAPPA_MAX,
+            )
+        merged = {**self.params, **overrides}
         thr = (
             seed_threshold
             if seed_threshold is not None
             else merged.get("prob_thr", self.DEFAULT_SEED_THRESHOLD)
         )
-
-        img01 = zoom(_normalize(img.astype(np.float64)), UP, order=1)
-        chans = self._channels(img01)
-        prob_up = chans.max(axis=0)
+        chans_eval, prob_eval = maps["chans_eval"], maps["prob_eval"]
 
         # return_masks=False: this method reads only `polylines`, and so does
         # every caller of it (interactive segmentation via
@@ -325,11 +400,11 @@ class MicrotubuleModel:
         # and 0.133 s on a real 1476x1924 production frame, 2.84 GB on a dense
         # 2048^2 essays position. See instance_a's docstring.
         polylines, _ = instance_a(
-            prob_up > thr, KAPPA_MAX, merged, channels=chans, prob=prob_up,
+            prob_eval > thr, KAPPA_MAX, merged, channels=chans_eval, prob=prob_eval,
             return_masks=False,
         )
 
-        # instance_a returns (x=col, y=row) at the 1.5x working scale. Every
+        # instance_a returns (x=col, y=row) at the 1.5x instancer scale. Every
         # downstream consumer -- mt_measure, mt_metrics, the essays adapter --
         # reads (row, col) at INPUT scale, so transpose and rescale here. A
         # silent flip is the single most expensive bug this pipeline has
@@ -340,7 +415,7 @@ class MicrotubuleModel:
 
         # RDP simplification, in INPUT-px space (after the /UP rescale above,
         # so `polyline_eps_px` means what it says: pixels of the frame that
-        # was passed in, not the 1.5x working scale). This is the ONE
+        # was passed in, not the 1.5x instancer scale). This is the ONE
         # chokepoint both callers share -- interactive segmentation via
         # ModelLoader.predict_microtubule() and the essays batch worker via
         # `evaluate.py` / `infer.py` -- both consume `centerlines_rc` from
@@ -350,13 +425,6 @@ class MicrotubuleModel:
         if eps_px > 0:
             centerlines_rc = [_simplify_polyline(cl, eps_px) for cl in centerlines_rc]
 
-        # Map the probability map back so callers see the frame they passed in.
-        prob = zoom(prob_up, 1.0 / UP, order=1).astype(np.float32)
-        if prob.shape != (height, width):
-            fitted = np.zeros((height, width), dtype=np.float32)
-            rows = min(height, prob.shape[0])
-            cols = min(width, prob.shape[1])
-            fitted[:rows, :cols] = prob[:rows, :cols]
-            prob = fitted
-
-        return {"centerlines_rc": centerlines_rc, "prob": prob}
+        # The network ran at input resolution, so its map IS the caller's frame:
+        # no resampling back, no shape fitting.
+        return {"centerlines_rc": centerlines_rc, "prob": maps["prob"]}
