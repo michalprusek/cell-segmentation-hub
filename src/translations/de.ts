@@ -627,7 +627,7 @@ export default {
         microtubule: {
           name: 'Mikrotubuli (ResEnc-M + krümmungsbegrenzter Instancer)',
           description:
-            'Instanz-Segmentierung für IRM-Mikrotubuli-Zeitrafferaufnahmen. Ein nnU-Net-ResEnc-M-Netz sagt den Filament-Vordergrund vorher, ein krümmungsbegrenzter Instancer trennt ihn in einzelne Centerlines und löst jede Kreuzung unter einer harten Schranke von 0,25 rad/px. Ausschließlich auf synthetischen Bildern trainiert — ohne menschliche Annotation. ~4,5 s/Bild; einziges Modell der Plattform mit nativer Polylinien-Ausgabe.',
+            'Instanz-Segmentierung für IRM-Mikrotubuli-Zeitrafferaufnahmen. Ein nnU-Net-ResEnc-M-Netz sagt den Filament-Vordergrund vorher, ein krümmungsbegrenzter Instancer trennt ihn in einzelne Centerlines und löst jede Kreuzung unter einer harten Schranke von 0,25 rad/px. Ausschließlich auf synthetischen Bildern trainiert — ohne menschliche Annotation. ~0,6 s/Bild; einziges Modell der Plattform mit nativer Polylinien-Ausgabe.',
         },
         microcapsule: {
           name: 'Microcapsule',
@@ -1894,9 +1894,9 @@ export default {
             'Mehrklassige Instanzsegmentierung, die Kopf, Mittelstück und Schwanz direkt als Polylinien erzeugt — über Skelettextraktion statt über geschwellte Flecken.',
         },
         microtubule: {
-          name: 'Mikrotubuli (v5H)',
+          name: 'Mikrotubuli (SPARSE35)',
           inferenceTime:
-            'Etwa 4,5 s pro Bild · Schwellwert fest auf 0,97, nicht einstellbar',
+            'Etwa 0,6 s pro Bild · Schwellwert fest auf 0,98, nicht einstellbar',
           bestFor: 'Verwendet von: Mikrotubuli-Projekten. Nur IRM-Bilder.',
           description:
             'Ein nnU-Net-ResEnc-M-Netz sagt den Filamentvordergrund vorher; ein krümmungsbegrenzter Instancer trennt ihn anschließend in einzelne Mittellinien und löst jede Kreuzung unter einer festen Krümmungsschranke auf. Ausschließlich auf synthetischen Bildern trainiert. Die Laufzeit skaliert mit der Zahl der Filamente, nicht nur mit der Bildgröße.',
@@ -1933,7 +1933,7 @@ export default {
       },
       thresholdNote: 'Erkennungsschwellwerte sind je Modell fest.',
       thresholdNoteText:
-        'Es gibt keine Schwellwert-Einstellung in der Oberfläche: Jedes Modell verwendet den Schnitt, mit dem es validiert wurde, beim Mikrotubuli-Modell 0,97. Ein niedrigerer Schwellwert findet nicht mehr echte Objekte — er findet mehr mit schwächerer Evidenz, und auf einem Nicht-IRM-Kanal folgt die Mikrotubuli-Ausgabe bei keiner Einstellung dem Bild. Fehlen Detektionen, prüfen Sie stattdessen den Eingangskanal.',
+        'Es gibt keine Schwellwert-Einstellung in der Oberfläche: Jedes Modell verwendet den Schnitt, mit dem es validiert wurde, beim Mikrotubuli-Modell 0,98. Ein niedrigerer Schwellwert findet nicht mehr echte Objekte — er findet mehr mit schwächerer Evidenz, und auf einem Nicht-IRM-Kanal folgt die Mikrotubuli-Ausgabe bei keiner Einstellung dem Bild. Fehlen Detektionen, prüfen Sie stattdessen den Eingangskanal.',
       tip: 'Tipp:',
       tipText:
         'Beginnen Sie mit dem Standardmodell. Greifen Sie zu CBAM-ResUNet, wenn Ränder wichtiger sind als Geschwindigkeit, und zu Mamba-UNet, wenn Ihre Bilder niemandes Trainingsdaten ähneln.',
@@ -1979,7 +1979,7 @@ export default {
       },
       processingNote: 'Die Rechenzeit hängt vom Modell ab:',
       processingTimes:
-        'Das Wundmodell braucht rund 0,03 s pro Bild und die Sphäroidmodelle 0,2–0,4 s, während das Mikrotubuli-Modell etwa 4,5 s pro Bild benötigt, weil das Trennen einzelner Filamente der teure Teil ist.',
+        'Das Wundmodell braucht rund 0,03 s pro Bild und die Sphäroidmodelle 0,2–0,4 s, während das Mikrotubuli-Modell etwa 0,6 s pro Bild benötigt, weil das Trennen einzelner Filamente der teure Teil ist.',
     },
 
     // Editor

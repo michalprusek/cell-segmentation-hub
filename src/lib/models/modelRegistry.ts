@@ -217,25 +217,29 @@ export const MODEL_REGISTRY = {
   },
   microtubule: {
     size: 'large',
-    // The instancer's own fitted foreground cut. This model's foreground is
-    // very confident, so the generic 0.5 other models use would flood it.
-    defaultThreshold: 0.97,
+    // The model's own foreground cut (SPARSE35 ep040's optimum on its
+    // validation block; the ML route applies it from params_sparse35.json and
+    // ignores anything sent here). This model's foreground is very confident,
+    // so the generic 0.5 other models use would flood it.
+    defaultThreshold: 0.98,
     category: 'microtubule',
     performance: {
       // nnU-Net ResEnc-M (140M params) + a pure-numpy curvature-bounded
-      // instancer. Measured on an A5000: 4.0-4.4 s for a 1024x1024 frame
-      // carrying 65 microtubules. Runtime is dominated by the instancer and
-      // therefore scales with MT count, not just frame size. No backbone
-      // download, so the first call is no slower than the rest.
-      avgTimePerImage: 4.5,
-      throughput: 0.22,
-      p95Latency: 9.0,
+      // instancer, run at NATIVE resolution since 2026-09-19 (SPARSE35 ep040).
+      // Measured on an A5000: 0.5 s for a 1024x1024 frame carrying 22
+      // microtubules (research host); v5H at 1.5x took 4.0-4.4 s for 65.
+      // Runtime is dominated by the instancer and therefore scales with MT
+      // count, not just frame size. No backbone download, so the first call
+      // is no slower than the rest.
+      avgTimePerImage: 0.6,
+      throughput: 1.7,
+      p95Latency: 2.0,
       batchSize: 1,
     },
-    name: 'Microtubule (v5H)',
+    name: 'Microtubule (SPARSE35)',
     displayName: 'Microtubule (ResEnc-M + curvature instancer)',
     description:
-      'Instance segmentation for IRM microtubule time-lapses. An nnU-Net ResEnc-M network predicts the filament foreground, then a curvature-bounded instancer separates it into individual centerlines, resolving every crossing by min-cost matching under a hard 0.25 rad/px bound. Trained entirely on synthetic frames — no human annotation at any stage. Cross-frame tracking for kymograph analysis is geometric. The only model in the platform producing polyline output.',
+      'Instance segmentation for IRM microtubule time-lapses. An nnU-Net ResEnc-M network predicts the filament foreground, then a curvature-bounded instancer separates it into individual centerlines, resolving every crossing by min-cost matching under a hard 0.25 rad/px bound. The network runs at native resolution. Trained entirely on synthetic frames — no human annotation at any stage. Cross-frame tracking for kymograph analysis is geometric. The only model in the platform producing polyline output.',
     i18nKey: 'microtubule',
     compatibleProjectTypes: ['microtubules'],
   },

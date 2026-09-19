@@ -554,7 +554,7 @@ export const SPECIMENS: readonly Specimen[] = [
     id: 'microtubule',
     image: '/specimens/microtubule.webp',
     modelId: 'microtubule',
-    model: 'Microtubule (v5H)',
+    model: 'Microtubule (SPARSE35)',
     projectType: 'microtubules',
     outlines: [
       {
