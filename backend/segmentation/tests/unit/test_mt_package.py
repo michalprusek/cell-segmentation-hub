@@ -1,4 +1,4 @@
-"""The v5H microtubule package is self-contained.
+"""The microtubule package (SPARSE35 ep040) is self-contained.
 
 Guards the three properties that make the swap from v7 safe:
 
@@ -6,9 +6,10 @@ Guards the three properties that make the swap from v7 safe:
    and could be picked up by a caller that was not updated.
 2. The network library is vendored. The ML container does not have
    ``dynamic_network_architectures`` installed and has no network at run time.
-3. The instancer parameters are the ones fitted to THIS foreground. Shipping
-   v4b's vector here would actively penalise a clean mask -- a large
-   junction-contraction radius suits a shattered mask and damages a clean one.
+3. The instancer parameters are the DERIVED vector the model was measured with
+   (``params_sparse35.json``): ``min_length`` 15.0 by the declared rule, the
+   production cut 0.98. Shipping v5H's real-VAL-fitted 44.74 here would drop
+   every short microtubule the network finds (0.30 F1 on an oracle mask).
 
 These are cheap file-level assertions on purpose: they must pass on a driverless
 box, so nothing here may import torch.
@@ -34,24 +35,34 @@ def test_vendored_network_library_is_present():
     assert unet.is_file(), f"vendored library missing at {unet}"
 
 
-def test_instancer_params_are_the_v5h_vector():
-    """merge_radius 8.98 -> 5.0 and prob_thr 0.44 -> 0.97 are what distinguishes
-    the fitted vector from v4b's."""
-    params = json.loads((PKG / "params_v5h.json").read_text())
+def test_instancer_params_are_the_derived_sparse35_vector():
+    """The three numbers that distinguish the deployed vector: the DERIVED
+    min_length (15.0 at the 1.5x scale, rule 3 x tolerance), the model's own
+    cut (0.98, roi303 VAL optimum) and the junction radius the v5H-era fit
+    established (5.0; v4b's 8.98 damages a clean mask)."""
+    params = json.loads((PKG / "params_sparse35.json").read_text())
     assert params["merge_radius"] == pytest.approx(5.0)
-    assert params["prob_thr"] == pytest.approx(0.97)
+    assert params["prob_thr"] == pytest.approx(0.98)
+    assert params["min_length"] == pytest.approx(15.0)
+
+
+def test_the_wrapper_reads_the_sparse35_params():
+    """A stale DEFAULT_PARAMS_PATH would silently ship the previous vector."""
+    src = (PKG / "wrapper.py").read_text()
+    assert 'DEFAULT_PARAMS_PATH = _PKG_DIR / "params_sparse35.json"' in src
+    assert "DEFAULT_SEED_THRESHOLD: float = 0.98" in src
 
 
 def test_kappa_max_is_not_configurable():
     """The curvature bound is DERIVED (just above the 0.239 rad/px maximum over
     957 human-annotated microtubules), not tuned. A params file that carried one
     would silently override the derived constant."""
-    params = json.loads((PKG / "params_v5h.json").read_text())
+    params = json.loads((PKG / "params_sparse35.json").read_text())
     assert "kappa_max" not in params
 
 
 def test_no_code_path_reaches_for_the_gated_backbone():
-    """v5H's checkpoint is complete, so nothing may try a gated HF download --
+    """The checkpoint is complete, so nothing may try a gated HF download --
     it would fail on a network-isolated box and is the failure mode that took
     the ML service down in 2026-07 (project_ml_hf_token_recovery).
 

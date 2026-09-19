@@ -6,7 +6,7 @@ every position and writes one table row per microtubule with its length and its
 on-MT vs. background fluorescence — plus the well's solution concentration.
 
 It wraps a trained instance-segmentation model (**nnU-Net ResEnc-M → a
-curvature-bounded instancer**, "microtubule v5H") that traces each microtubule
+curvature-bounded instancer**, "microtubule SPARSE35 ep040") that traces each microtubule
 as an open centerline; a
 measurement layer turns those centerlines into numbers.
 
@@ -241,17 +241,17 @@ CPU.
 
 ## 4. The model weights
 
-The 535 MB checkpoint `microtubule_v5h.pth` is **not** stored in git — it is the
+The 535 MB checkpoint `microtubule_sparse35_ep040.pth` is **not** stored in git — it is the
 same file the ML service uses, staged out-of-band from the repo root:
 
 ```bash
-scripts/download-microtubule-weights.sh    # -> backend/segmentation/weights/microtubule_v5h.pth
+scripts/download-microtubule-weights.sh    # -> backend/segmentation/weights/microtubule_sparse35_ep040.pth
 ```
 
 `evaluate.py` finds it automatically, looking in this order: `$ESSAYS_WEIGHTS`,
 `backend/segmentation/weights/`, then `/app/mt_weights/` (where the essays
 container bind-mounts that same directory read-only). Pass
-`--weights /path/to/microtubule_v5h.pth` to override.
+`--weights /path/to/microtubule_sparse35_ep040.pth` to override.
 
 > **No HuggingFace token or login is required.** The checkpoint is a complete
 > `state_dict` with no frozen backbone to fetch — the pipeline runs with no network

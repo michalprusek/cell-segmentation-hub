@@ -1,4 +1,8 @@
-# Microtubule v5H — segmentation model internals
+# Microtubule SPARSE35 ep040 — segmentation model internals
+
+> Model swapped 2026-09-19 (v5H → SPARSE35 ep040). The authoritative description, numbers,
+> provenance and rollback live in `backend/segmentation/models/microtubule/MODEL_CARD.md`;
+> this file covers the pipeline shape and the single-frame CLI, which did not change.
 
 Reference for the bundled segmentation model. For the **batch well-recording
 analysis** (the normal entry point) see [`README.md`](README.md); this document
@@ -33,7 +37,7 @@ with exact ground truth.
 
 ## Nothing is downloaded at run time
 
-`microtubule_v5h.pth` is a complete `state_dict` — a bare `OrderedDict` of 1364
+`microtubule_sparse35_ep040.pth` is a complete `state_dict` — a bare `OrderedDict` of 1364
 tensors and no other payload. There is no frozen backbone to fetch, so:
 
 * **no `HF_TOKEN`**, no HuggingFace account, no license acceptance;
@@ -147,10 +151,12 @@ out["prob"]                # (H, W) float32 foreground probability
 
 ## Provenance
 
-Model microtubule **v5H** (nnU-Net ResEnc-M, binary head), checkpoint
-`microtubule_v5h.pth`; instancer hyperparameters `params_v5h.json`, fitted on
-stratified synthetic frames with exact ground truth and re-ranked on a disjoint
-synthetic set. Packaged 2026-08-17.
+Model microtubule **SPARSE35 ep040** (nnU-Net ResEnc-M, binary head), checkpoint
+`microtubule_sparse35_ep040.pth` (sha256 `db78ec2d…`); instancer hyperparameters
+`params_sparse35.json` — the DERIVED vector (`min_length` 15.0 by the rule 3 × tolerance,
+declared before any number was read) with the model's own cut 0.98. Packaged 2026-09-19;
+see `MODEL_CARD.md` in the package for the declared metric, the numbers and the rollback.
+The paragraphs below describe the v5H-era evidence and are kept as history.
 
 **On the evidence for this model.** Against v4b, its predecessor, strict
 centerline-F1 on the real MT-34 validation split was 0.4953 vs 0.4655:

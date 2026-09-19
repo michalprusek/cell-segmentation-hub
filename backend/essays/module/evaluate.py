@@ -206,12 +206,12 @@ def build_args() -> argparse.Namespace:
     ap.add_argument("--out", type=Path, default=Path("results"),
                     help="Output directory (results.csv, overlays/, annotations/).")
     ap.add_argument("--weights", type=Path, default=DEFAULT_WEIGHTS,
-                    help="Path to microtubule_v5h.pth (staged out-of-band; see README).")
+                    help="Path to microtubule_sparse35_ep040.pth (staged out-of-band; see README).")
     ap.add_argument("--device", default="auto", choices=["auto", "cuda", "cpu", "mps"],
                     help="Compute device.")
     ap.add_argument("--threshold", type=float, default=None,
-                    help="Foreground probability cut. Default: the fitted value "
-                         "from params_v5h.json (0.97). The generic 0.5 other "
+                    help="Foreground probability cut. Default: the model's own value "
+                         "from params_sparse35.json (0.98). The generic 0.5 other "
                          "models use would flood the instancer.")
     # Measurement geometry. Shared with the project export's /mt-metrics
     # endpoint (models/mt_measure.py), so these two flags mean exactly what
@@ -271,7 +271,7 @@ def main() -> int:
         print(f"[error] {exc}", file=sys.stderr)
         return 2
     device = resolve_device(args.device)
-    thr_label = "fitted (params_v5h.json)" if args.threshold is None else args.threshold
+    thr_label = "model's own (params_sparse35.json)" if args.threshold is None else args.threshold
     print(f"[info] device={device}  threshold={thr_label}  "
           f"mt_width={args.mt_width} bg_margin={args.bg_margin}")
     # Say out loud which channel plays which role. A run that segments the wrong

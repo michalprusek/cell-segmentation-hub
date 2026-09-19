@@ -361,7 +361,8 @@ services:
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility
     volumes:
-      # Reuse the byte-identical microtubule_v5h.pth already on disk (no download).
+      # Reuse the byte-identical microtubule checkpoint already on disk (no download;
+      # the file name is ESSAYS_WEIGHTS, baked into the essays image).
       - ./backend/segmentation/weights:/app/mt_weights:ro
       # Same host uploads dir the backend writes to — the FS handoff for job I/O.
       - ./backend/uploads/blue:/app/uploads

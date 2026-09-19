@@ -119,7 +119,7 @@ standard spheroid projects offer a choice; every other type has exactly one.
 | Spheroid Disintegration | spheroid_invasive | ~0.70 s   | 1.5 img/s  |
 | Wound Healing           | wound             | ~0.03 s   | 35 img/s   |
 | Sperm Morphology        | sperm             | ~0.30 s   | 3.3 img/s  |
-| Microtubule (v5H)       | microtubules      | ~4.5 s    | 0.22 img/s |
+| Microtubule (SPARSE35)  | microtubules      | ~0.6 s    | 1.7 img/s  |
 | Microcapsule            | microcapsule      | ~0.30 s   | 3.0 img/s  |
 | Neurite / Soma          | neurite           | ~12 s     | 0.08 img/s |
 

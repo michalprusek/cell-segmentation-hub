@@ -45,12 +45,12 @@ def test_microtubule_package_is_not_a_local_copy():
     )
 
 
-def test_weights_name_is_the_v5h_checkpoint():
+def test_weights_name_is_the_sparse35_checkpoint():
     """The essays container bind-mounts the ML service's weights directory
     read-only. If the two callers named different files, the batch assay would
     silently run a different model from interactive segmentation — exactly the
     drift that vendoring the module was meant to end."""
-    assert _mt_package.WEIGHTS_NAME == "microtubule_v5h.pth"
+    assert _mt_package.WEIGHTS_NAME == "microtubule_sparse35_ep040.pth"
 
 
 def test_the_shared_package_never_reaches_for_a_gated_backbone():
@@ -101,7 +101,7 @@ def test_the_vendored_network_library_travels_with_the_package():
 
 
 def test_instancer_params_travel_with_the_package():
-    """The hyperparameters are fitted to THIS model's foreground; without the
+    """The derived instancer vector travels with the package; without the
     file the wrapper cannot pick a threshold."""
     pkg = ensure_on_path() / "microtubule"
-    assert (pkg / "params_v5h.json").is_file()
+    assert (pkg / "params_sparse35.json").is_file()

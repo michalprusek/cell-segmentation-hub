@@ -19,8 +19,8 @@ class ModelType(str, Enum):
 
 class SegmentationRequest(BaseModel):
     model: ModelType = Field(default=ModelType.HRNET, description="Model to use for segmentation")
-    # Ceiling 0.99, not 0.9. The microtubule v5H model ships a FITTED
-    # foreground cut of 0.97, so a 0.9 bound rejected every request the
+    # Ceiling 0.99, not 0.9. The microtubule model ships its OWN foreground
+    # cut (0.98; 0.97 under v5H), so a 0.9 bound rejected every request the
     # frontend made for it. Kept in step with the Node API's
     # thresholdSchema (backend/src/types/validation.ts) — the two validate
     # the same value one hop apart, and only the second one is visible to
