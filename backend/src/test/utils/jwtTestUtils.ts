@@ -26,8 +26,6 @@ export interface TestUser {
     location?: string | null;
     title?: string | null;
     publicProfile: boolean;
-    preferredModel: string;
-    modelThreshold: number;
     preferredLang: string;
     preferredTheme: string;
     emailNotifications: boolean;
@@ -65,8 +63,6 @@ export const defaultTestUser: TestUser = {
     location: 'Test Environment',
     title: 'Test Engineer',
     publicProfile: false,
-    preferredModel: 'hrnetv2',
-    modelThreshold: 0.5,
     preferredLang: 'en',
     preferredTheme: 'light',
     emailNotifications: true,

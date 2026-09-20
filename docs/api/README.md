@@ -88,12 +88,11 @@ A second surface over the same data, used by the settings pages.
 | GET    | `/api/users/activity`        | Recent activity, `limit` + `offset`     |
 | DELETE | `/api/users/account`         | **Delete the account and all its data** |
 
-> `Profile.preferredModel` and `Profile.modelThreshold` are still on the wire
-> but **nothing reads them**. The segmentation model became a property of the
-> project on 2026-09-20 (`projects.segmentationModel`), and the threshold is a
-> per-model constant. They were already vestigial before that: measured
-> 2026-09-20, 52 of 53 production profiles hold the placeholder `'model1'`,
-> which is not a model id. Do not wire anything new to them.
+> `Profile.preferredModel` and `Profile.modelThreshold` were **dropped** on
+> 2026-09-20. Nothing read them: the model is a property of the project
+> (`projects.segmentationModel`) and the threshold is a per-model registry
+> constant. They had been dead long enough that 52 of 53 production profiles
+> held the placeholder `'model1'`, which is not a model id.
 
 ---
 

@@ -77,8 +77,6 @@ async function seedDatabase(): Promise<void> {
             create: {
               username: 'admin',
               bio: 'Administrátor systému',
-              preferredModel: 'hrnet',
-              modelThreshold: 0.5,
               preferredLang: 'en',
               preferredTheme: 'light',
               emailNotifications: true,
@@ -131,8 +129,6 @@ async function seedDatabase(): Promise<void> {
             create: {
               username: 'testuser',
               bio: 'Testovací uživatel',
-              preferredModel: 'hrnet',
-              modelThreshold: 0.6,
               preferredLang: 'en',
               preferredTheme: 'dark',
               emailNotifications: false,
@@ -158,8 +154,6 @@ async function seedDatabase(): Promise<void> {
             userId: existingTest.id,
             username: 'testuser',
             bio: 'Testovací uživatel',
-            preferredModel: 'hrnet',
-            modelThreshold: 0.6,
             preferredLang: 'en',
             preferredTheme: 'dark',
             emailNotifications: false,

@@ -73,8 +73,6 @@ export const updateProfileSchema = z.object({
   title: z.string().max(100, 'Titul může mít maximálně 100 znaků').optional(),
   publicProfile: z.boolean().optional(),
   avatarUrl: z.string().url('Neplatná URL adresa').optional(),
-  preferredModel: z.string().optional(),
-  modelThreshold: z.number().min(0).max(1).optional(),
   preferredLang: supportedLanguage.optional(),
   preferredTheme: z.enum(['light', 'dark']).optional(),
   // Wire aliases the frontend actually sends: getUserProfile() serialises

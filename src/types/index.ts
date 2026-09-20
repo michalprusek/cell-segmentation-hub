@@ -22,8 +22,6 @@ export interface Profile {
   location?: string;
   title?: string;
   publicProfile?: boolean;
-  preferredModel?: string;
-  modelThreshold?: number;
   preferredLang?: string;
   preferredTheme?: string;
   emailNotifications?: boolean;
@@ -511,8 +509,6 @@ export interface UpdateProfile {
   location?: string;
   title?: string;
   publicProfile?: boolean;
-  preferredModel?: string;
-  modelThreshold?: number;
   preferredLang?: string;
   preferredTheme?: string;
   emailNotifications?: boolean;

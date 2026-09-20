@@ -77,8 +77,7 @@ speed/accuracy trade-off and in robustness to unfamiliar optics.
 
 High-Resolution Network keeping a high-resolution branch throughout the
 network instead of the usual encode-then-decode collapse, which preserves
-boundary detail. The default recommendation and the platform-wide default
-(`Profile.preferredModel` defaults to `hrnet`).
+boundary detail.
 
 - Checkpoint: `weights/hrnet_best_model.pth`
 - Best for: general spheroid work where you want one model and no thinking.
@@ -351,8 +350,8 @@ More in [Neurite and soma projects](../guides/project-types/neurite.md).
 ## How a model gets chosen at run time
 
 Rewritten 2026-09-20 (PRs #553/#554). It used to start from a per-user
-`Profile.preferredModel` chosen in Settings; that setting and its screen are
-gone, because one global model had no relationship to the project being
+a per-user `Profile.preferredModel` chosen in Settings; that column, that
+setting and its screen are all gone, because one global model had no relationship to the project being
 segmented and was wrong by construction on six of the seven project types.
 
 1. **The project holds it** — `projects.segmentationModel`, nullable. `NULL`

@@ -57,8 +57,6 @@ model Profile {
   location                      String?
   title                         String?
   publicProfile                 Boolean   @default(false)
-  preferredModel                String    @default("hrnet")
-  modelThreshold                Float     @default(0.5)
   preferredLang                 String    @default("en")
   preferredTheme                String    @default("light")
   emailNotifications            Boolean   @default(true)

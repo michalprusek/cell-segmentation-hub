@@ -1,0 +1,24 @@
+-- Drop the two per-user model preferences. Nothing reads them.
+--
+-- `preferredModel` was "the model to pre-select where the project type allows a
+-- choice" and `modelThreshold` its confidence cut. Both stopped meaning
+-- anything on 2026-09-20 (PRs #553/#554): the model became a property of the
+-- PROJECT (`projects.segmentationModel`, resolved by `resolveProjectModel`) and
+-- the threshold became a per-model constant read from the registry, with no
+-- control for it anywhere in the interface.
+--
+-- They were already vestigial before that, which is the part worth recording:
+-- measured 2026-09-20, 52 of the 53 production profiles held the literal
+-- string 'model1' — not a model id, and not a value any code path could have
+-- used. The 53rd held 'hrnet'. Every `modelThreshold` was the 0.5 default.
+-- Nothing has read either column for long enough that the data became
+-- meaningless without anyone noticing.
+--
+-- The data is not worth preserving and is not preserved. A CSV of both columns
+-- was taken before this ran, purely so the claim above can be re-checked; it is
+-- not a restore path, because there is nothing to restore into.
+--
+-- Hand-written rather than from `prisma migrate diff`, per the drift note in
+-- `20260902_add_export_log/migration.sql`. Idempotent so a re-run is a no-op.
+ALTER TABLE "profiles" DROP COLUMN IF EXISTS "preferredModel";
+ALTER TABLE "profiles" DROP COLUMN IF EXISTS "modelThreshold";

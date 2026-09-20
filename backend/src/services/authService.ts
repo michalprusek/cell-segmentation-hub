@@ -31,8 +31,6 @@ export interface ProfileUpdateData {
   title?: string;
   publicProfile?: boolean;
   avatarUrl?: string;
-  preferredModel?: string;
-  modelThreshold?: number;
   preferredLang?: string;
   preferredTheme?: string;
   // Wire aliases the frontend sends (see updateProfileSchema); mapped onto
@@ -112,8 +110,6 @@ export async function register(data: RegisterData): Promise<{
           profile: {
             create: {
               username: data.username,
-              preferredModel: 'model1',
-              modelThreshold: 0.5,
               // Language the client detected for this visitor (browser
               // preference or an explicit pick made before signing up).
               // English is the fallback, NOT Czech: hard-coding 'cs' here
@@ -679,8 +675,6 @@ export async function updateProfile(
       title: profileData.title,
       publicProfile: profileData.publicProfile,
       avatarUrl: profileData.avatarUrl,
-      preferredModel: profileData.preferredModel,
-      modelThreshold: profileData.modelThreshold,
       // Accept both the DB column names and the wire aliases the frontend
       // sends (`language`/`theme`). Without the alias fallback the language
       // and theme changes are silently dropped and the app reverts to the
