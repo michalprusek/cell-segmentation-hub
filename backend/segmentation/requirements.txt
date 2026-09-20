@@ -152,7 +152,11 @@ segmentation-models-pytorch==0.5.0
 # 4.57.2 silently degraded the ViT features (303 real MTs -> 76 scattered, no
 # error, no failed load). That reason is GONE: v5H (2026-08-17) replaced v7 with
 # an nnU-Net whose checkpoint carries every weight, so MT imports no transformers
-# and needs no HF_TOKEN. Only SegFormer and sperm still call `from_pretrained`.
+# and needs no HF_TOKEN. Nothing else calls `from_pretrained` on a shipped path
+# either: SegFormer's config is vendored (models/segformer_config.json) and the
+# sperm checkpoint declares the ConvNeXt backbone, whose implementation takes no
+# HuggingFace dependency. transformers is an architecture library here, not a
+# download client.
 #
 # 5.5.4 was verified against BOTH survivors by loading their real checkpoints and
 # hashing a fixed-input forward. Output is BIT-IDENTICAL to 4.57.1:

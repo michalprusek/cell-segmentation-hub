@@ -247,24 +247,18 @@ services:
       - PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512,garbage_collection_threshold:0.6
       - CUDA_LAUNCH_BLOCKING=0
       - ML_GPU_PRIORITY=high
-      # HuggingFace token, read from .env.production at compose time so it is
-      # not baked into the image.
-      #
-      # NO LONGER for microtubule: v5H's checkpoint is a complete state_dict
-      # with no frozen backbone, so MT segmentation needs neither a token nor
-      # network access. Kept because SegFormer and the sperm model still call
-      # from_pretrained() -- neither repo is gated today, so the token is
-      # belt-and-braces, but the cache mount below is load-bearing for them.
-      - HF_TOKEN=${HF_TOKEN}
+      # No HF_TOKEN and no HuggingFace cache mount: NOTHING here fetches from
+      # the Hub. Verified 2026-09-20 by loading all 11 models in this image with
+      # no cache, no token and `--network none`, so a fetch could not silently
+      # succeed -- 11/11 loaded. SegFormer reads a vendored config
+      # (models/segformer_config.json), sperm's checkpoint declares the ConvNeXt
+      # backbone whose implementation states "No HuggingFace or timm
+      # dependency", and every other checkpoint carries its own weights.
+      # Re-run that check before adding either back.
     volumes:
       - ./backend/segmentation/weights:/app/weights:ro
       - ./backend/segmentation/sperm_final/best_model.pth:/app/sperm_final/best_model.pth:ro
       - ./backend/uploads/blue:/app/uploads
-      # Persist the HuggingFace cache across container restarts. It held the
-      # 1.1 GB DINOv3 backbone for microtubule v7; that model is gone, but
-      # SegFormer and sperm still resolve configs/weights through this cache,
-      # so removing it would put a network fetch on their first load.
-      - ./backend/segmentation/.hf-cache:/home/app/.cache/huggingface
     restart: always
     deploy:
       resources:

@@ -127,12 +127,15 @@ one blocks that thread, not the event loop.
   them**; tuning them changes nothing.
 - The checkpoint is a complete `state_dict`, so **nothing is downloaded at run
   time**: no HuggingFace token and no network access are needed for microtubule
-  work. Since 2026-09-20 the same holds for every model **on its shipped path**:
-  SegFormer's config is vendored rather than fetched (and that was verified
-  offline, with the network disabled and no cache), and the sperm model's
-  `from_pretrained` sits on a DINOv2 branch production does not take — it uses
-  the ConvNeXt backbone. A grep for every HuggingFace entry point across
-  `backend/segmentation/` and `backend/essays/` finds no other call site.
+  work. Since 2026-09-20 the same holds for **every** model, and the service is
+  no longer configured for HuggingFace at all — `HF_TOKEN` and the `.hf-cache`
+  bind mount are gone from the `ml` service. SegFormer's config is vendored
+  rather than fetched, and the sperm model's `from_pretrained` sits on a DINOv2
+  branch production does not take — it uses the ConvNeXt backbone, whose
+  implementation takes no HuggingFace dependency. Besides the grep across
+  `backend/segmentation/` and `backend/essays/`, this was verified the way a
+  grep cannot: **all 11 models loaded in the production image with no cache, no
+  token and `--network none`**, so a fetch could not have passed as a success.
 
 ---
 

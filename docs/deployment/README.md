@@ -85,15 +85,15 @@ host paths on every start, and `/dev/nvidia-uvm` is created lazily, so with
 ML health endpoint probes `/dev/nvidiactl` for exactly this reason; recreate the
 container to recover.
 
-**The HuggingFace cache bind mount must exist with the right ownership** before
-the ML container starts. Keep it. As of 2026-09-20 (PR #556) no model fetches
-on its shipped path — SegFormer's config is vendored
-(`models/segformer_config.json`, verified offline with the network disabled);
-the sperm model's `from_pretrained` is on a DINOv2 branch production does not
-take; and every checkpoint carries its own weights — so the mount and
-`HF_TOKEN` _look_ removable. That is not the same as knowing the container
-starts without them, which is a deploy change with its own verification. Until
-someone does that, treat both as still required.
+**The ML service needs no HuggingFace access at all**, and since 2026-09-20 it
+is no longer configured for any: `HF_TOKEN` and the `.hf-cache` bind mount are
+gone from the `ml` service. The deploy-shaped check that justified removing them
+loaded **all 11 models in the production image with no cache, no token and
+`--network none`** — so a fetch could not have silently succeeded — and 11 of 11
+loaded. SegFormer reads a vendored config (`models/segformer_config.json`), the
+sperm checkpoint declares the ConvNeXt backbone whose implementation takes no
+HuggingFace dependency, and every other checkpoint carries its own weights.
+Re-run that offline load before adding either back.
 
 **Upload limits are coupled across three layers** — a frontend constant, the
 multer config and nginx's `client_max_body_size`. The smallest wins. Images
