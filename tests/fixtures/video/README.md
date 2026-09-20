@@ -39,6 +39,5 @@ not set in env. To run it locally:
 ```bash
 export E2E_USER_EMAIL=<test user>
 export E2E_USER_PASSWORD=<test password>
-export HF_TOKEN=<your gated DINOv3 token>   # required by ML container
 make test-e2e -- microtubule-video-workflow
 ```

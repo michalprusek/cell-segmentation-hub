@@ -65,7 +65,8 @@ class SegFormerModel(torch.nn.Module):
         # Build the architecture from a VENDORED config. Only the tiny
         # config.json was ever needed here — never the ADE pretrained weights,
         # which our own checkpoint overwrites wholesale — so there is no reason
-        # for this to touch the network or `.hf-cache` at all.
+        # for this to touch the network at all. (The `.hf-cache` bind mount it
+        # used to resolve through was removed from the ml service in PR #559.)
         #
         # It used to call `SegformerConfig.from_pretrained(HF_BASE, ...)`, which
         # made the spheroid default (SegFormer since 2026-09-20) depend on the
