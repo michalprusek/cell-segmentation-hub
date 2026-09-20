@@ -716,6 +716,39 @@ describe('field mapping', () => {
       );
     });
 
+    // Ownership decides whether the project page offers rename, type and
+    // model at all. Stripped here, every viewer of every project reads as
+    // "unknown ownership", which the page treats as owner — putting the
+    // 404-on-click behaviour straight back.
+    it('preserves isOwned=false for a shared viewer', async () => {
+      mockAxiosInstance.get.mockResolvedValue(
+        wrap({ ...baseProject, isOwned: false })
+      );
+      const result = await apiClient.getProject('proj-1');
+      expect(Object.prototype.hasOwnProperty.call(result, 'isOwned')).toBe(
+        true
+      );
+      expect(result.isOwned).toBe(false);
+    });
+
+    it('preserves isOwned=true', async () => {
+      mockAxiosInstance.get.mockResolvedValue(
+        wrap({ ...baseProject, isOwned: true })
+      );
+      const result = await apiClient.getProject('proj-1');
+      expect(result.isOwned).toBe(true);
+    });
+
+    it('omits isOwned when the backend did not send it', async () => {
+      // Distinct from false: absent means "this surface does not say", which
+      // the page reads as "assume owner" rather than locking the header.
+      mockAxiosInstance.get.mockResolvedValue(wrap({ ...baseProject }));
+      const result = await apiClient.getProject('proj-1');
+      expect(Object.prototype.hasOwnProperty.call(result, 'isOwned')).toBe(
+        false
+      );
+    });
+
     it('preserves verified=true', async () => {
       mockAxiosInstance.get.mockResolvedValue(
         wrap({ ...baseProject, verified: true })

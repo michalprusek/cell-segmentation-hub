@@ -264,7 +264,16 @@ describe('ProjectService', () => {
 
       const result = await projectService.getProjectById(projectId, userId);
 
-      expect(result).toEqual({ ...mockProject, folderId: null });
+      // `isOwned`/`isShared` are part of the shape `getUserProjects` returns
+      // and were missing here, which is why the project page could not tell an
+      // owner from an accepted-share annotator and offered both the rename,
+      // type and model controls that `updateProject` then refused with a 404.
+      expect(result).toEqual({
+        ...mockProject,
+        folderId: null,
+        isOwned: true,
+        isShared: false,
+      });
       expect(prismaMock.project.findUnique).toHaveBeenCalledWith({
         where: {
           id: projectId,

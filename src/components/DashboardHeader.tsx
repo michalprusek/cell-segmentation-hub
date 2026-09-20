@@ -233,18 +233,19 @@ const DashboardHeader = () => {
               onto the project page and that settings section is gone, but the
               dot is not about the model at all — it is whether the ML service
               is reachable and whether anything is processing, which has no
-              other surface in the app. It stays, on its own. */}
+              other surface in the app. It stays, on its own — as a bare dot:
+              the status text beside it was asked to go, and the tooltip plus
+              `aria-label` carry the same words for anyone who needs them. */}
           <div
-            className="flex items-center gap-2 rounded-md border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-600 dark:border-gray-700 dark:text-gray-300"
+            className="flex items-center"
             title={String(getStatusTooltip())}
+            aria-label={String(getStatusTooltip())}
+            role="status"
             data-testid="ml-status-indicator"
           >
             <div
               className={`w-2 h-2 ${getStatusColor()} rounded-full animate-pulse`}
             ></div>
-            <span className="hidden lg:inline">
-              {String(getStatusTooltip())}
-            </span>
           </div>
           <FeedbackButton />
           <UserProfileDropdown

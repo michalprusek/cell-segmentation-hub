@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useLanguage } from '@/contexts/useLanguage';
 import {
   MODEL_TYPE_COMPATIBILITY,
+  projectTypeOffersHoleDetection,
   resolveProjectModel,
   type ModelType,
 } from '@/lib/models/modelRegistry';
@@ -20,6 +21,10 @@ export interface UseProjectModelResult {
   /** True when the type offers exactly one model, so there is nothing to pick.
    *  Six of the seven project types are in this state. */
   isLocked: boolean;
+  /** Whether this project type offers the hole-detection toggle. Only
+   *  `spheroid` and `wound` do; everywhere else the parameter is fixed at its
+   *  default, so the control would be a setting with no meaning. */
+  offersDetectHoles: boolean;
   /** The model's calibrated inference threshold. Read from the RESOLVED model,
    *  not from a global setting — the values differ by a factor of five between
    *  models (microtubule 0.98, spheroid_disintegration 0.2, the rest 0.5), so
@@ -66,6 +71,7 @@ export function useProjectModel(
         modelInfo: undefined,
         compatibleModels: [],
         isLocked: false,
+        offersDetectHoles: false,
         threshold: undefined,
       };
     }
@@ -82,6 +88,7 @@ export function useProjectModel(
       modelInfo,
       compatibleModels,
       isLocked: compatibleIds.length <= 1,
+      offersDetectHoles: projectTypeOffersHoleDetection(projectType),
       threshold: modelInfo.defaultThreshold,
     };
   }, [projectType, storedModel, tr]);

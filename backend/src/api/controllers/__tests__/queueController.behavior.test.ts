@@ -127,6 +127,17 @@ vi.mock('../../../db', () => ({
   },
 }));
 
+// The single-image enqueue reads the project's type and stored model: the type
+// decides whether `detectHoles` is honoured, and the model is what a request
+// omitting `model` falls back to (never a hard-coded 'hrnet', which only
+// `spheroid` can run). Default to a spheroid project so the existing cases
+// keep their meaning.
+vi.mock('../../../services/projectService', () => ({
+  getProjectSegmentationContext: vi
+    .fn()
+    .mockResolvedValue({ model: 'segformer', type: 'spheroid' }),
+}));
+
 // ── Import AFTER all mocks ─────────────────────────────────────────────────
 import { queueController } from '../queueController';
 import { ImageService } from '../../../services/imageService';

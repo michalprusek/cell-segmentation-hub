@@ -476,3 +476,56 @@ export function resolveProjectModel(
   }
   return DEFAULT_MODEL_BY_PROJECT_TYPE[type];
 }
+
+/**
+ * Project types whose picker offers the hole-detection toggle.
+ *
+ * `detect_holes` decides whether an internal hole in the predicted mask becomes
+ * a hole polygon or is filled in. It is a meaningful choice only where the
+ * annotation is a closed shape that can plausibly HAVE an interior the user
+ * cares about — a standard spheroid, and a scratch-assay wound whose field
+ * contains islands of cells.
+ *
+ * Deliberately excluded, and why it is not an oversight:
+ *  - `microtubules` produces POLYLINES. The parameter never reaches
+ *    polygonisation at all, so the toggle was pure noise there.
+ *  - `sperm`, `microcapsule`, `neurite` and `spheroid_invasive` DO honour it in
+ *    the ML service (`predict`, `predict_neurite_soma`, `predict_disintegration`
+ *    in `model_loader.py`), but interior holes in a sperm head, a capsule, a
+ *    soma or a disintegrating spheroid's corona are noise rather than
+ *    structure. Hiding the control fixes them at the documented default.
+ *
+ * A type that does not offer the toggle sends `true` — the default — rather
+ * than whatever the per-user global happens to hold. A parameter the user
+ * cannot see must not be one they are silently subject to; see
+ * `resolveDetectHoles`.
+ */
+export const PROJECT_TYPES_WITH_HOLE_DETECTION = [
+  'spheroid',
+  'wound',
+] as const satisfies readonly ProjectTypeKey[];
+
+/** Whether this project type's picker offers the hole-detection toggle. */
+export function projectTypeOffersHoleDetection(
+  projectType: ProjectTypeKey | string | undefined
+): boolean {
+  return (PROJECT_TYPES_WITH_HOLE_DETECTION as readonly string[]).includes(
+    projectType ?? ''
+  );
+}
+
+/**
+ * The `detectHoles` value a request for this project type should carry: the
+ * user's preference where the toggle is offered, and the default `true`
+ * everywhere else.
+ *
+ * Applied on BOTH sides. Normalising only in the browser would leave the rule
+ * cosmetic — a stale tab, or any other client, could still send `false` for a
+ * type whose UI does not expose it, and the ML service would honour it.
+ */
+export function resolveDetectHoles(
+  projectType: ProjectTypeKey | string | undefined,
+  userPreference: boolean
+): boolean {
+  return projectTypeOffersHoleDetection(projectType) ? userPreference : true;
+}

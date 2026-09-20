@@ -4,6 +4,9 @@ import {
   SEGMENTATION_MODELS,
   MODEL_TYPE_COMPATIBILITY,
   DEFAULT_MODEL_BY_PROJECT_TYPE,
+  PROJECT_TYPES_WITH_HOLE_DETECTION,
+  projectTypeOffersHoleDetection,
+  resolveDetectHoles,
   resolveProjectModel,
   type ProjectTypeKey,
 } from '../modelRegistry';
@@ -106,6 +109,52 @@ describe('resolveProjectModel', () => {
           resolveProjectModel(type, stored)
         );
       }
+    }
+  });
+});
+
+// ─── hole detection ──────────────────────────────────────────────────────────
+
+describe('resolveDetectHoles', () => {
+  it("passes the user's preference through on the two types that offer it", () => {
+    for (const type of PROJECT_TYPES_WITH_HOLE_DETECTION) {
+      expect(resolveDetectHoles(type, false)).toBe(false);
+      expect(resolveDetectHoles(type, true)).toBe(true);
+    }
+    expect([...PROJECT_TYPES_WITH_HOLE_DETECTION]).toEqual([
+      'spheroid',
+      'wound',
+    ]);
+  });
+
+  it('forces the default everywhere else', () => {
+    // Normalising only in the browser would leave the rule cosmetic: a stale
+    // tab, or any other client, could still POST `detectHoles: false` for a
+    // type whose UI does not expose it, and the ML service would honour it.
+    for (const type of [
+      'microtubules',
+      'sperm',
+      'microcapsule',
+      'neurite',
+      'spheroid_invasive',
+    ] as const) {
+      expect(resolveDetectHoles(type, false)).toBe(true);
+    }
+  });
+
+  it('is total over an absent or unrecognised type', () => {
+    expect(resolveDetectHoles(undefined, false)).toBe(true);
+    expect(resolveDetectHoles('some_retired_type', false)).toBe(true);
+  });
+
+  it('classifies every project type one way or the other', () => {
+    const offered = new Set(
+      PROJECT_TYPES_WITH_HOLE_DETECTION as readonly string[]
+    );
+    for (const type of Object.keys(
+      DEFAULT_MODEL_BY_PROJECT_TYPE
+    ) as ProjectTypeKey[]) {
+      expect(projectTypeOffersHoleDetection(type)).toBe(offered.has(type));
     }
   });
 });

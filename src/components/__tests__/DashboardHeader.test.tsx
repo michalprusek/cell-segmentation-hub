@@ -214,6 +214,18 @@ describe('DashboardHeader', () => {
     expect(statusDot).toHaveClass('bg-green-500'); // idle status
   });
 
+  it('shows the status as a bare dot, with no text beside it', () => {
+    render(<DashboardHeader />);
+
+    const indicator = screen.getByTestId('ml-status-indicator');
+    // The words were asked to go; the tooltip and aria-label keep them for
+    // anyone who needs them, so this stays announced without being rendered.
+    expect(indicator.textContent).toBe('');
+    expect(indicator).toHaveAttribute('title', expect.stringContaining(''));
+    expect(indicator.getAttribute('aria-label')).toBeTruthy();
+    expect(indicator).toHaveAttribute('role', 'status');
+  });
+
   it('no longer names a model in the header', () => {
     render(<DashboardHeader />);
 

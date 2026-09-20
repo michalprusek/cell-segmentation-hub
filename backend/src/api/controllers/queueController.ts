@@ -7,7 +7,10 @@ import { logger } from '../../utils/logger';
 import { ResponseHelper } from '../../utils/response';
 import { prisma } from '../../db';
 import * as ProjectService from '../../services/projectService';
-import { resolveProjectModel } from '../../constants/modelRegistry';
+import {
+  resolveDetectHoles,
+  resolveProjectModel,
+} from '../../constants/modelRegistry';
 
 // Import queue-specific types (some types for future use)
 import {
@@ -122,12 +125,23 @@ class QueueController {
       // hard-coded one. `'hrnet'` used to stand here and is compatible with
       // exactly one of the seven project types, so on the other six it queued
       // a job the worker immediately rejected.
-      const resolvedModel =
-        model ?? (await ProjectService.getProjectModel(image.projectId));
-      if (!resolvedModel) {
+      const ctx = await ProjectService.getProjectSegmentationContext(
+        image.projectId
+      );
+      if (!ctx) {
         ResponseHelper.notFound(res, 'Projekt nenalezen');
         return;
       }
+
+      const resolvedModel = model ?? ctx.model;
+      // Hole detection is honoured only on the project types whose UI offers
+      // it. Normalising in the browser alone would leave the rule cosmetic —
+      // a stale tab, or any other client, could still send `false` for a type
+      // that does not expose the control, and the ML service would obey it.
+      const resolvedDetectHoles = resolveDetectHoles(
+        ctx.type,
+        detectHoles !== undefined ? detectHoles : true
+      );
 
       const queueEntry = await this.queueService.addToQueue(
         imageId,
@@ -136,7 +150,7 @@ class QueueController {
         resolvedModel,
         threshold || 0.5,
         priority || 0,
-        detectHoles !== undefined ? detectHoles : true
+        resolvedDetectHoles
       );
 
       // Emit WebSocket update with proper typing
@@ -278,6 +292,10 @@ class QueueController {
       const resolvedModel =
         model ?? resolveProjectModel(project.type, project.segmentationModel);
 
+      // Same normalisation as the single-image path; the project row is
+      // already loaded here, so it costs nothing.
+      const resolvedDetectHoles = resolveDetectHoles(project.type, detectHoles);
+
       const queueEntries = await this.queueService.addBatchToQueue(
         imageIds,
         projectId,
@@ -286,7 +304,7 @@ class QueueController {
         threshold,
         priority,
         forceResegment,
-        detectHoles,
+        resolvedDetectHoles,
         channel
       );
 
