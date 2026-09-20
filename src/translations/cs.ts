@@ -1864,6 +1864,8 @@ export default {
         step4:
           'Každý model má vlastní práh detekce, pevně daný při jeho validaci — pro jednotlivý běh není co nastavovat',
         step5: 'U vícekanálového videa zvolte, který kanál má model číst',
+        step6:
+          'Model může měnit jen vlastník projektu; spolupracovníci segmentují jeho volbou',
       },
       thresholdNote: 'Prahy detekce jsou pevně dané pro každý model.',
       thresholdNoteText:
@@ -2163,7 +2165,7 @@ export default {
       sharingFeatures: 'Co sdílení umožňuje',
       features: {
         collaborative:
-          'Spolupracující přístup: spolupracovník může prohlížet, upravovat anotace, spouštět segmentaci, exportovat i označit projekt za zkontrolovaný',
+          'Společný přístup: spolupracovník může prohlížet, upravovat anotace, spouštět segmentaci, exportovat a označit projekt jako zkontrolovaný — ale nemůže ho přejmenovat ani měnit jeho typ či segmentační model, ty zůstávají vlastníkovi',
         emailInvite:
           'E-mailové pozvánky: sdílení funguje, ať už e-mail dorazí, nebo ne — doručení může trvat i několik minut',
         linkShare:

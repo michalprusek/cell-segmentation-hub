@@ -1907,6 +1907,8 @@ export default {
           'Jedes Modell bringt seinen eigenen Erkennungsschwellwert mit, festgelegt bei der Validierung — pro Lauf gibt es nichts einzustellen',
         step5:
           'Wählen Sie bei einem Mehrkanalvideo, welchen Kanal das Modell lesen soll',
+        step6:
+          'Nur die Projektinhaberin oder der Projektinhaber kann das Modell ändern; Mitarbeitende segmentieren mit dieser Wahl',
       },
       thresholdNote: 'Erkennungsschwellwerte sind je Modell fest.',
       thresholdNoteText:
@@ -2210,7 +2212,7 @@ export default {
       sharingFeatures: 'Was die Freigabe erlaubt',
       features: {
         collaborative:
-          'Gemeinsamer Zugriff: Mitarbeitende können ansehen, Annotationen bearbeiten, segmentieren, exportieren und das Projekt als geprüft markieren',
+          'Gemeinsamer Zugriff: Mitarbeitende können ansehen, Annotationen bearbeiten, segmentieren, exportieren und das Projekt als geprüft markieren — aber nicht umbenennen und weder Typ noch Segmentierungsmodell ändern; das bleibt bei der Eigentümerin oder dem Eigentümer',
         emailInvite:
           'E-Mail-Einladungen: Die Freigabe wirkt unabhängig davon, ob die E-Mail ankommt — die Zustellung kann einige Minuten dauern',
         linkShare:

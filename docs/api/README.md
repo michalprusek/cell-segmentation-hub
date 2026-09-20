@@ -86,6 +86,7 @@ A second surface over the same data, used by the settings pages.
 | GET    | `/api/users/settings`        | Preferences (language, theme, consents) |
 | GET    | `/api/users/storage-stats`   | Storage usage                           |
 | GET    | `/api/users/activity`        | Recent activity, `limit` + `offset`     |
+| DELETE | `/api/users/account`         | **Delete the account and all its data** |
 
 > `Profile.preferredModel` and `Profile.modelThreshold` are still on the wire
 > but **nothing reads them**. The segmentation model became a property of the
@@ -93,7 +94,6 @@ A second surface over the same data, used by the settings pages.
 > per-model constant. They were already vestigial before that: measured
 > 2026-09-20, 52 of 53 production profiles hold the placeholder `'model1'`,
 > which is not a model id. Do not wire anything new to them.
-> | DELETE | `/api/users/account` | **Delete the account and all its data** |
 
 ---
 
@@ -200,9 +200,15 @@ router; see [Microtubule projects](../guides/project-types/microtubules.md).
 | POST   | `/api/queue/reset-stuck`               | Requeue items stuck longer than N minutes                                                                                                                                                                                                  |
 | POST   | `/api/queue/cleanup`                   | Prune finished items older than N days                                                                                                                                                                                                     |
 
-> **Enqueuing is not a guarantee.** Model/project-type compatibility is checked
-> by the **worker** at dispatch, not at enqueue, so an accepted item can still
-> be rejected.
+> **Enqueuing is not execution.** These endpoints answer `200` once the queue
+> row exists; they do not wait for the segmentation. The worker picks the row
+> up later and can still fail it, retry it, or reject it — compatibility is
+> checked there, not at enqueue. Watch the WebSocket events or poll the queue
+> for the outcome.
+>
+> Since 2026-09-20 the interface can no longer produce an incompatible
+> model/type pair (the model is resolved FROM the project's type), so that
+> particular rejection is now defence in depth for direct API callers.
 
 ---
 

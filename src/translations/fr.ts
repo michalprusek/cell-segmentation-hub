@@ -1899,6 +1899,8 @@ export default {
           'Chaque modèle porte son propre seuil de détection, fixé lors de sa validation : il n’y a rien à régler à chaque exécution',
         step5:
           'Sur une vidéo multicanale, choisissez le canal que le modèle doit lire',
+        step6:
+          'Seul le propriétaire du projet peut changer le modèle ; les collaborateurs segmentent avec son choix',
       },
       thresholdNote: 'Les seuils de détection sont fixes pour chaque modèle.',
       thresholdNoteText:
@@ -2201,7 +2203,7 @@ export default {
       sharingFeatures: 'Ce que le partage permet',
       features: {
         collaborative:
-          'Accès collaboratif : un collaborateur peut consulter, modifier les annotations, lancer la segmentation, exporter et marquer le projet comme relu',
+          'Accès collaboratif : un collaborateur peut consulter, modifier les annotations, lancer la segmentation, exporter et marquer le projet comme vérifié — mais pas le renommer, ni changer son type ou son modèle de segmentation, qui restent au propriétaire',
         emailInvite:
           'Invitations par e-mail : le partage fonctionne que le message arrive ou non, la remise pouvant prendre plusieurs minutes',
         linkShare:

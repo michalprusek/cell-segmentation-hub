@@ -1888,6 +1888,8 @@ export default {
         step4:
           'Cada modelo lleva su propio umbral de detección, fijado al validarlo: no hay nada que ajustar en cada ejecución',
         step5: 'En un vídeo multicanal, elija qué canal debe leer el modelo',
+        step6:
+          'Solo el propietario del proyecto puede cambiar el modelo; los colaboradores segmentan con su elección',
       },
       thresholdNote: 'Los umbrales de detección son fijos para cada modelo.',
       thresholdNoteText:
@@ -2190,7 +2192,7 @@ export default {
       sharingFeatures: 'Qué permite compartir',
       features: {
         collaborative:
-          'Acceso colaborativo: quien colabora puede ver, editar anotaciones, ejecutar la segmentación, exportar y marcar el proyecto como revisado',
+          'Acceso colaborativo: un colaborador puede ver, editar anotaciones, ejecutar la segmentación, exportar y marcar el proyecto como revisado, pero no renombrarlo ni cambiar su tipo o su modelo de segmentación, que son del propietario',
         emailInvite:
           'Invitaciones por correo: el acceso funciona llegue o no el mensaje, ya que la entrega puede tardar varios minutos',
         linkShare:

@@ -342,6 +342,11 @@ export function buildDocsSections(t: Translate): DocsSection[] {
             'step3',
             'step4',
             'step5',
+            // step6: who may change the model. Adding a key to the
+            // translations is not enough — `list()` enumerates explicitly, so
+            // an unlisted step renders nowhere and the i18n validator counts
+            // it as merely "unused".
+            'step6',
           ]),
         },
         {

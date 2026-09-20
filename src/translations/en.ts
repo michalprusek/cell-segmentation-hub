@@ -1893,6 +1893,8 @@ export default {
           'Each model carries its own detection threshold, fixed when it was validated — there is nothing to tune per run',
         step5:
           'On a multi-channel video, choose which channel the model should read',
+        step6:
+          "Only the project's owner can change the model; collaborators segment with the owner's choice",
       },
       thresholdNote: 'Detection thresholds are fixed per model.',
       thresholdNoteText:
@@ -2192,7 +2194,7 @@ export default {
       sharingFeatures: 'What sharing gives them',
       features: {
         collaborative:
-          'Collaborative access: a collaborator can view, edit annotations, run segmentation, export, and mark the project reviewed',
+          'Collaborative access: a collaborator can view, edit annotations, run segmentation, export, and mark the project reviewed — but not rename it, change its type, or change its segmentation model, which stay with the owner',
         emailInvite:
           'Email invitations: the share works whether or not the email arrives, since delivery can take several minutes',
         linkShare:

@@ -61,10 +61,13 @@ The worker:
 
 1. selects a batch, **deprioritising users who were recently served** so one
    200-frame video cannot monopolise the GPU;
-2. **enforces model/project-type compatibility here**, not at enqueue. Since
-   2026-09-20 the interface cannot produce a mismatch — the model is resolved
-   FROM the project's type — so this is defence in depth for direct API
-   callers rather than a failure mode users meet;
+2. **enforces model/project-type compatibility here**, not at enqueue. The
+   enqueue endpoints answer `200` as soon as the row exists, which confirms
+   queueing and nothing more: the worker can still fail the item, retry it or
+   reject it. Since 2026-09-20 the interface cannot produce a mismatch — the
+   model is resolved FROM the project's type — so this particular rejection is
+   defence in depth for direct API callers rather than a failure mode users
+   meet;
 3. rewrites the frame's path when a channel override is set;
 4. POSTs to the ML service and stores the result;
 5. emits WebSocket events.
