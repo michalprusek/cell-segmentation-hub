@@ -127,8 +127,9 @@ one blocks that thread, not the event loop.
   them**; tuning them changes nothing.
 - The checkpoint is a complete `state_dict`, so **nothing is downloaded at run
   time**: no HuggingFace token and no network access are needed for microtubule
-  work. (SegFormer and sperm still call `from_pretrained`, so their cache mount
-  is load-bearing.)
+  work. Since 2026-09-20 that is true of **every** model — SegFormer's config is
+  vendored rather than fetched, and the sperm model's `from_pretrained` sits on
+  a branch production does not take (it uses the ConvNeXt backbone).
 
 ---
 
