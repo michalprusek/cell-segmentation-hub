@@ -16,8 +16,6 @@ approval queue.
 
 In **Settings** you can set:
 
-- your **preferred model** and **default confidence threshold** (used wherever
-  the project type allows a choice);
 - **language** — English, Czech, Spanish, German, French or Chinese;
 - **theme**;
 - e-mail notification and data-use consent preferences.
@@ -70,9 +68,14 @@ a stack: [Uploading data](uploading-data.md) and
 
 ## 4. Segment
 
-Select images (or none, for all) and press **Segment**. You choose the model —
-where your project type offers a choice — and the confidence threshold. On a
+Select images (or none, for all) and press **Segment**. The model used is **the
+project's** — the pill at the top of the project page, immediately right of the
+project type. There is nothing to choose at this point, and no confidence
+threshold to set: each model applies the cut it was validated with. On a
 multi-channel video a **channel picker** appears first.
+
+Only the project's **owner** can change the model; a shared annotator sees it as
+a read-only label and segments with whatever the owner chose.
 
 Work is queued and processed in the background:
 
@@ -82,9 +85,10 @@ Work is queued and processed in the background:
   video cannot monopolise the GPU;
 - interrupted work is recovered rather than lost.
 
-Model compatibility is enforced by the worker, not at submission, so an accepted
-job can still be rejected at dispatch if the model does not match the project
-type.
+The worker still checks model-vs-type compatibility, but the interface can no
+longer produce a mismatch: since 2026-09-20 the model is resolved **from** the
+project's type, so it is always one the type can run. The check remains as
+defence in depth for direct API callers.
 
 ---
 

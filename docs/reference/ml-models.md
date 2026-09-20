@@ -350,15 +350,36 @@ More in [Neurite and soma projects](../guides/project-types/neurite.md).
 
 ## How a model gets chosen at run time
 
-1. **Default** — every user has `Profile.preferredModel` (defaults to `hrnet`)
-   and `Profile.modelThreshold` (defaults to `0.5`), set in Settings.
-2. **Per run** — the segmentation dialog offers only the models compatible with
-   the project's type, pre-selecting the user default when it is compatible.
-3. **Enqueue** — the choice is stored on the `SegmentationQueue` row (`model`,
-   `threshold`, `detectHoles`, and for multi-channel video frames `channel`).
-4. **Worker** — compatibility is enforced _in the queue worker_, not at enqueue.
-   A `202 Accepted` therefore does not guarantee the item will run; an
-   incompatible pair fails at dispatch.
+Rewritten 2026-09-20 (PRs #553/#554). It used to start from a per-user
+`Profile.preferredModel` chosen in Settings; that setting and its screen are
+gone, because one global model had no relationship to the project being
+segmented and was wrong by construction on six of the seven project types.
+
+1. **The project holds it** — `projects.segmentationModel`, nullable. `NULL`
+   means "follow the type's default" and is deliberately never backfilled.
+2. **Resolution** — `resolveProjectModel(type, stored)` returns the stored
+   model when it is still compatible with the project's type, and
+   `DEFAULT_MODEL_BY_PROJECT_TYPE[type]` otherwise. The default is the most
+   ACCURATE compatible model, not the fastest: `spheroid` → `segformer`
+   (93 % IoU). The same function exists on both sides, and the default map's
+   two copies are kept in step by `scripts/verify-shared-types.cjs`.
+3. **Who may change it** — the project's owner only. A shared annotator sees a
+   read-only label, and a `model` in their request body is ignored in favour of
+   the project's.
+4. **Threshold** — not a choice at all. It is derived read-only from the
+   registry entry for the resolved model, and the values differ by a factor of
+   five between models (`microtubule` 0.98, `spheroid_disintegration` 0.2, the
+   rest 0.5).
+5. **Hole detection** — offered only on `spheroid` and `wound`
+   (`PROJECT_TYPES_WITH_HOLE_DETECTION`). Everywhere else the request carries
+   the default `true`, normalised on both sides by `resolveDetectHoles`.
+6. **Enqueue** — the resolved values are stored on the `SegmentationQueue` row
+   (`model`, `threshold`, `detectHoles`, and for multi-channel video frames
+   `channel`). A request that omits `model` is resolved from the project by the
+   controller, never from a hard-coded fallback.
+7. **Worker** — compatibility is still enforced in the queue worker. The
+   interface can no longer produce a mismatch, since the model is resolved from
+   the type; the check remains as defence in depth for direct API callers.
 
 ## Adding a model
 

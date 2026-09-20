@@ -92,7 +92,8 @@ Three ways, all equivalent:
 - Drop a whole **folder** — it is walked recursively.
 
 There is an **"Auto-segment images after upload"** checkbox: tick it and every
-uploaded image is queued with your default model as soon as it lands.
+uploaded image is queued as soon as it lands, using **the project's model** —
+the one shown next to the project type at the top of the page.
 
 **Cancel** aborts the upload actually in flight and marks everything still
 queued as cancelled.

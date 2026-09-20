@@ -300,7 +300,11 @@ export function buildDocsSections(t: Translate): DocsSection[] {
         { kind: 'heading', text: s('docs.modelSelection.spheroidModels') },
         {
           kind: 'cards',
-          items: ['unet', 'hrnet', 'cbam', 'segformer', 'mamba'].map(key => ({
+          // SegFormer first: it is what a new spheroid project starts on
+          // (DEFAULT_MODEL_BY_PROJECT_TYPE), so a reader scanning this list
+          // should meet the one they will actually get before the
+          // alternatives. The rest keep their previous order.
+          items: ['segformer', 'unet', 'hrnet', 'cbam', 'mamba'].map(key => ({
             title: s(`docs.modelSelection.models.${key}.name`),
             lines: [
               s(`docs.modelSelection.models.${key}.inferenceTime`),

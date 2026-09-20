@@ -287,9 +287,9 @@ On a **multi-channel video** a channel picker opens first, pre-selecting the
 channel currently marked as the segmentation source. On single-channel data the
 run starts immediately.
 
-The model is your Settings preference **only where the project type has more
-than one compatible model** (i.e. plain spheroid projects). Every other type is
-forced to its single model.
+The model is **the project's**, shown next to the project type at the top of
+the project page. Only plain spheroid projects have a real choice among five;
+every other type has exactly one compatible model and is forced to it.
 
 > **Resegmenting replaces the frame's segmentation.** Manual edits to that frame
 > are overwritten by the new model output, and unsaved local edits are discarded

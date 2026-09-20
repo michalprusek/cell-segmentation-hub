@@ -261,7 +261,7 @@ Update user profile information.
 {
   "username": "new_username",
   "bio": "Updated bio text",
-  "preferredModel": "resunet_advanced",
+  "preferredModel": "hrnet",
   "modelThreshold": 0.7,
   "preferredLang": "en",
   "preferredTheme": "dark",
@@ -273,8 +273,11 @@ Update user profile information.
 
 - `username`: 3-30 characters, alphanumeric and underscores only, unique
 - `bio`: Maximum 500 characters
-- `preferredModel`: Must be one of: `hrnet`, `resunet_advanced`, `resunet_small`
-- `modelThreshold`: Number between 0.0 and 1.0
+- `preferredModel`, `modelThreshold`: **accepted and ignored.** The model is a
+  property of the project (`projects.segmentationModel`) and the threshold is a
+  per-model registry constant; nothing reads either field. The example values
+  `resunet_advanced` / `resunet_small` were never valid model ids even when the
+  field was live
 - `preferredLang`: Must be one of: `cs`, `en`
 - `preferredTheme`: Must be one of: `light`, `dark`
 
@@ -289,7 +292,7 @@ Update user profile information.
       "id": "profile_456",
       "username": "new_username",
       "bio": "Updated bio text",
-      "preferredModel": "resunet_advanced",
+      "preferredModel": "hrnet",
       "modelThreshold": 0.7,
       "preferredLang": "en",
       "preferredTheme": "dark",

@@ -21,12 +21,20 @@ primitives). Single-page app; every route is lazy-loaded.
 | `translations/`       | Six locale files                                                  |
 | `types/`              | Shared types, including the project-type and model unions         |
 
+The segmentation model is resolved by `hooks/useProjectModel.ts` from the
+project's type and its stored `segmentationModel`, and rendered by
+`components/project/ProjectModelSelector.tsx` beside the project-type pill in
+`components/project/ProjectHeader.tsx`. There is no global model state: see
+[the model section in CLAUDE.md](../../CLAUDE.md#the-segmentation-model-belongs-to-the-project-since-2026-09-20-prs-553554).
+
 ## Routes
 
 `/`, `/sign-in`, `/sign-up`, `/forgot-password`, `/reset-password`,
 `/documentation`, `/terms-of-service`, `/privacy-policy`,
 `/share/accept/:token` are public. Behind auth: `/dashboard`, `/project/:id`,
-`/project/:id/export`, `/segmentation/:projectId/:imageId`, `/settings`,
+`/project/:id/export`, `/segmentation/:projectId/:imageId`, `/settings`
+(three tabs — profile, account, appearance; the models tab was removed on
+2026-09-20 and `?tab=models` now falls back to profile),
 `/profile`, `/automated-essays`, and `/segmenter`, `/segmenter/:datasetId`,
 `/segmenter/:datasetId/image/:imageId`.
 
@@ -51,7 +59,7 @@ than to carry authoritative data.
 | `WebSocketContext`    | The Socket.io connection and its lifecycle                                |
 | `UploadContext`       | Upload queue, routing between the image and video endpoints, cancellation |
 | `ExportContext`       | Export job state                                                          |
-| `ModelContext`        | Selected model, threshold, hole detection                                 |
+| `ModelContext`        | Hole detection only — the model and its threshold moved onto the project  |
 | `ImageDisplayContext` | Per-channel window/level, colours, opacities (editor only)                |
 
 `ImageDisplayContext` is the one with non-obvious rules — window/level is

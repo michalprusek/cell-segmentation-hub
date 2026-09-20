@@ -1636,7 +1636,7 @@ export default {
         step2: 'Saisissez votre adresse e-mail et choisissez un mot de passe',
         step3: 'Complétez votre profil avec votre nom et votre établissement',
         step4:
-          'Dans les Paramètres, réglez le modèle préféré, la langue et le thème',
+          'Dans les Paramètres, réglez la langue et le thème — le modèle de segmentation se choisit par projet',
       },
       firstProject: 'Votre premier projet',
       projectDescription:
@@ -1804,7 +1804,7 @@ export default {
           name: 'HRNet (équilibré)',
           inferenceTime: 'Environ 0,20 s par image',
           bestFor:
-            'Idéal pour : un modèle unique, sans se poser de question. Le choix par défaut de la plateforme.',
+            'Idéal pour : un point de départ équilibré quand les contours et la vitesse comptent autant.',
           description:
             'Conserve une branche haute résolution dans tout le réseau au lieu d’encoder puis de décoder, ce qui préserve le détail des contours.',
         },
@@ -1890,10 +1890,11 @@ export default {
       howToSelect: 'Choisir un modèle',
       selectionSteps: {
         step1:
-          'Définissez votre modèle par défaut dans les Paramètres : il s’applique partout où le type de projet laisse le choix',
-        step2: 'Ouvrez un projet et sélectionnez les images à traiter',
+          'Ouvrez un projet — le modèle se trouve en haut, juste à droite du type de projet',
+        step2:
+          'Le sélecteur ne propose que les modèles que ce type de projet peut exécuter, et démarre sur le plus précis',
         step3:
-          'Cliquez sur Segmenter ; la boîte de dialogue ne propose que des modèles compatibles',
+          'Sélectionnez les images puis cliquez sur Segmenter ; le modèle du projet est utilisé',
         step4:
           'Chaque modèle porte son propre seuil de détection, fixé lors de sa validation : il n’y a rien à régler à chaque exécution',
         step5:
@@ -1928,7 +1929,8 @@ export default {
         step1: 'Importez vos images ou vidéos dans un projet',
         step2:
           'Sélectionnez les images à traiter, ou aucune pour toutes les traiter',
-        step3: 'Choisissez le modèle',
+        step3:
+          'Cliquez sur Segmenter — le modèle du projet est utilisé, il n’y a rien à choisir',
         step4:
           'Sur une vidéo multicanale, choisissez le canal que le modèle doit lire',
         step5: 'Suivez la progression sur les indicateurs d’état',

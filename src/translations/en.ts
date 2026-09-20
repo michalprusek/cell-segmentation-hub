@@ -1631,7 +1631,8 @@ export default {
         step1: 'Go to the sign-up page',
         step2: 'Enter your email address and choose a password',
         step3: 'Complete your profile with your name and institution',
-        step4: 'In Settings, set your preferred model, language and theme',
+        step4:
+          'In Settings, choose your language and theme — the segmentation model is set per project',
       },
       firstProject: 'Creating your first project',
       projectDescription:
@@ -1797,7 +1798,8 @@ export default {
         hrnet: {
           name: 'HRNet (Balanced)',
           inferenceTime: 'About 0.20 s per image',
-          bestFor: 'Best for: one model, no thinking. The platform default.',
+          bestFor:
+            'Best for: a balanced starting point when boundaries and speed both matter.',
           description:
             'Keeps a high-resolution branch throughout the network instead of encoding then decoding, which preserves boundary detail.',
         },
@@ -1882,9 +1884,11 @@ export default {
       howToSelect: 'Choosing a model',
       selectionSteps: {
         step1:
-          'Set your default model in Settings — it is used wherever the project type allows a choice',
-        step2: 'Open a project and select the images you want to process',
-        step3: 'Click Segment; the dialog offers only compatible models',
+          'Open a project — the model sits at the top, immediately right of the project type',
+        step2:
+          'The picker offers only models that project type can run, and starts on the most accurate one',
+        step3:
+          "Select the images you want and click Segment; the project's model is used",
         step4:
           'Each model carries its own detection threshold, fixed when it was validated — there is nothing to tune per run',
         step5:
@@ -1918,7 +1922,8 @@ export default {
       workflowSteps: {
         step1: 'Upload your images or videos into a project',
         step2: 'Select the images to process, or none to process all of them',
-        step3: 'Choose the model',
+        step3:
+          "Press Segment — the project's model is used, so there is nothing to pick",
         step4:
           'On a multi-channel video, pick the channel the model should read',
         step5: 'Watch progress on the status indicators',

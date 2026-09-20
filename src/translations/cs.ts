@@ -1603,7 +1603,8 @@ export default {
         step1: 'Přejděte na stránku registrace',
         step2: 'Zadejte e-mailovou adresu a zvolte heslo',
         step3: 'Doplňte profil se svým jménem a institucí',
-        step4: 'V Nastavení zvolte preferovaný model, jazyk a motiv',
+        step4:
+          'V Nastavení zvolte jazyk a motiv — segmentační model se nastavuje u každého projektu zvlášť',
       },
       firstProject: 'První projekt',
       projectDescription:
@@ -1770,7 +1771,7 @@ export default {
           name: 'HRNet (vyvážený)',
           inferenceTime: 'Přibližně 0,20 s na snímek',
           bestFor:
-            'Nejlepší pro: jeden model a žádné přemýšlení. Výchozí volba platformy.',
+            'Nejlepší pro: vyvážený výchozí bod, když záleží na hranicích i na rychlosti.',
           description:
             'Udržuje větev s vysokým rozlišením napříč celou sítí místo kódování a dekódování, což zachovává detail hranic.',
         },
@@ -1855,10 +1856,11 @@ export default {
       howToSelect: 'Výběr modelu',
       selectionSteps: {
         step1:
-          'V Nastavení zvolte výchozí model — použije se všude, kde typ projektu dovoluje výběr',
-        step2: 'Otevřete projekt a vyberte snímky ke zpracování',
+          'Otevřete projekt — model je nahoře, hned napravo od typu projektu',
+        step2:
+          'Nabídka obsahuje jen modely, které daný typ projektu umí, a začíná na tom nejpřesnějším',
         step3:
-          'Klikněte na Segmentovat; dialog nabídne jen kompatibilní modely',
+          'Vyberte snímky a klikněte na Segmentovat; použije se model daného projektu',
         step4:
           'Každý model má vlastní práh detekce, pevně daný při jeho validaci — pro jednotlivý běh není co nastavovat',
         step5: 'U vícekanálového videa zvolte, který kanál má model číst',
@@ -1892,7 +1894,8 @@ export default {
         step1: 'Nahrajte do projektu snímky nebo videa',
         step2:
           'Vyberte snímky ke zpracování, nebo nevybírejte nic a zpracují se všechny',
-        step3: 'Zvolte model',
+        step3:
+          'Klikněte na Segmentovat — použije se model projektu, není co vybírat',
         step4: 'U vícekanálového videa zvolte kanál, který má model číst',
         step5: 'Sledujte průběh na ukazatelích stavu',
         step6:

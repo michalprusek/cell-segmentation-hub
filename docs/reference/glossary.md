@@ -84,8 +84,16 @@ the platform falls back to channel 0, which may not be what you want.
 **Static channel** — a channel added from a single image and stamped onto every
 selected frame. Segmented once and projected, not segmented per frame.
 
-**Threshold** — the confidence cut applied to a model's output. Adjustable for
-most models; **fixed at 0.97 and not user-settable** for the microtubule model.
+**Segmentation model** — a property of the **project**, not of the user:
+`projects.segmentationModel`, shown beside the project type at the top of the
+project page. The picker offers only models the project's type can run, and a
+project that has never chosen one follows `DEFAULT_MODEL_BY_PROJECT_TYPE` —
+the most accurate compatible model, not the fastest. Owner-only to change.
+
+**Threshold** — the confidence cut applied to a model's output. **Not settable
+anywhere in the interface**: each model applies the value it was validated
+with, read from the registry. They differ by a factor of five — 0.98 for the
+microtubule model, 0.2 for spheroid disintegration, 0.5 for the rest.
 
 **TIRF** — Total Internal Reflection Fluorescence. Measured for microtubule
 work, **never segmented** — the model does not track image content on it.

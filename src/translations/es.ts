@@ -1627,7 +1627,8 @@ export default {
         step1: 'Vaya a la página de registro',
         step2: 'Introduzca su correo electrónico y elija una contraseña',
         step3: 'Complete su perfil con su nombre y su institución',
-        step4: 'En Configuración, elija modelo preferido, idioma y tema',
+        step4:
+          'En Configuración, elija idioma y tema: el modelo de segmentación se define en cada proyecto',
       },
       firstProject: 'Su primer proyecto',
       projectDescription:
@@ -1794,7 +1795,7 @@ export default {
           name: 'HRNet (equilibrado)',
           inferenceTime: 'Unos 0,20 s por imagen',
           bestFor:
-            'Mejor para: un solo modelo y sin pensárselo. La opción predeterminada de la plataforma.',
+            'Mejor para: un punto de partida equilibrado cuando importan tanto los bordes como la velocidad.',
           description:
             'Mantiene una rama de alta resolución a lo largo de toda la red en lugar de codificar y luego decodificar, lo que preserva el detalle de los bordes.',
         },
@@ -1879,9 +1880,11 @@ export default {
       howToSelect: 'Elegir un modelo',
       selectionSteps: {
         step1:
-          'Fije su modelo predeterminado en Configuración: se usa allí donde el tipo de proyecto permite elegir',
-        step2: 'Abra un proyecto y seleccione las imágenes a procesar',
-        step3: 'Pulse Segmentar; el diálogo solo ofrece modelos compatibles',
+          'Abra un proyecto: el modelo está arriba, justo a la derecha del tipo de proyecto',
+        step2:
+          'El selector solo ofrece modelos que ese tipo de proyecto puede ejecutar, y empieza por el más preciso',
+        step3:
+          'Seleccione las imágenes y haga clic en Segmentar; se usa el modelo del proyecto',
         step4:
           'Cada modelo lleva su propio umbral de detección, fijado al validarlo: no hay nada que ajustar en cada ejecución',
         step5: 'En un vídeo multicanal, elija qué canal debe leer el modelo',
@@ -1915,7 +1918,8 @@ export default {
         step1: 'Suba sus imágenes o vídeos a un proyecto',
         step2:
           'Seleccione las imágenes a procesar, o ninguna para procesarlas todas',
-        step3: 'Elija el modelo',
+        step3:
+          'Pulse Segmentar: se usa el modelo del proyecto, no hay nada que elegir',
         step4: 'En un vídeo multicanal, elija el canal que debe leer el modelo',
         step5: 'Siga el progreso en los indicadores de estado',
         step6:
