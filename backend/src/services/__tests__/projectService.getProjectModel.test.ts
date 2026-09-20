@@ -20,6 +20,8 @@ import * as projectService from '../projectService';
  * on the other six, failing every image in the batch — and made the new column
  * authoritative only in the browser.
  */
+const OWNER = 'owner-1';
+
 describe('ProjectService.getProjectSegmentationContext', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -29,6 +31,7 @@ describe('ProjectService.getProjectSegmentationContext', () => {
     prismaMock.project.findUnique.mockResolvedValue({
       type,
       segmentationModel,
+      userId: OWNER,
     });
 
   it.each([
@@ -41,19 +44,19 @@ describe('ProjectService.getProjectSegmentationContext', () => {
     ['neurite', 'neurite_soma'],
   ])('resolves an unset %s project to %s', async (type, expected) => {
     project(type, null);
-    await expect(projectService.getProjectSegmentationContext('p')).resolves.toMatchObject({ model: expected });
+    await expect(projectService.getProjectSegmentationContext('p', OWNER)).resolves.toMatchObject({ model: expected });
   });
 
   it('returns the stored model when it is valid for the type', async () => {
     project('spheroid', 'mamba_unet');
-    await expect(projectService.getProjectSegmentationContext('p')).resolves.toMatchObject({
+    await expect(projectService.getProjectSegmentationContext('p', OWNER)).resolves.toMatchObject({
       model: 'mamba_unet',
     });
   });
 
   it('ignores a stored model stranded by a type change', async () => {
     project('wound', 'segformer');
-    await expect(projectService.getProjectSegmentationContext('p')).resolves.toMatchObject({ model: 'wound' });
+    await expect(projectService.getProjectSegmentationContext('p', OWNER)).resolves.toMatchObject({ model: 'wound' });
   });
 
   it('never returns hrnet for a project type that cannot run it', async () => {
@@ -68,7 +71,7 @@ describe('ProjectService.getProjectSegmentationContext', () => {
       'spheroid_invasive',
     ]) {
       project(type, null);
-      await expect(projectService.getProjectSegmentationContext('p')).resolves.not.toMatchObject({
+      await expect(projectService.getProjectSegmentationContext('p', OWNER)).resolves.not.toMatchObject({
         model: 'hrnet',
       });
     }
@@ -79,7 +82,7 @@ describe('ProjectService.getProjectSegmentationContext', () => {
     // precisely because unrecognised values occur. This must yield a default,
     // not throw.
     project('some_retired_type', null);
-    await expect(projectService.getProjectSegmentationContext('p')).resolves.toMatchObject({
+    await expect(projectService.getProjectSegmentationContext('p', OWNER)).resolves.toMatchObject({
       model: 'segformer',
     });
   });
@@ -89,16 +92,16 @@ describe('ProjectService.getProjectSegmentationContext', () => {
     // Not a model: the caller keeps its own not-found handling rather than
     // queueing work for a project it could not read.
     await expect(
-      projectService.getProjectSegmentationContext('ghost')
+      projectService.getProjectSegmentationContext('ghost', OWNER)
     ).resolves.toBeNull();
   });
 
   it('reads only the two columns it needs', async () => {
     project('spheroid', null);
-    await projectService.getProjectSegmentationContext('p');
+    await projectService.getProjectSegmentationContext('p', OWNER);
     expect(prismaMock.project.findUnique).toHaveBeenCalledWith({
       where: { id: 'p' },
-      select: { type: true, segmentationModel: true },
+      select: { type: true, segmentationModel: true, userId: true },
     });
   });
 });
@@ -108,9 +111,10 @@ describe('the context also carries the type', () => {
     prismaMock.project.findUnique.mockResolvedValue({
       type: 'neurite',
       segmentationModel: null,
+      userId: OWNER,
     });
     await expect(
-      projectService.getProjectSegmentationContext('p')
+      projectService.getProjectSegmentationContext('p', OWNER)
     ).resolves.toMatchObject({ model: 'neurite_soma', type: 'neurite' });
   });
 
@@ -121,9 +125,37 @@ describe('the context also carries the type', () => {
     prismaMock.project.findUnique.mockResolvedValue({
       type: 'some_retired_type',
       segmentationModel: null,
+      userId: OWNER,
     });
     await expect(
-      projectService.getProjectSegmentationContext('p')
+      projectService.getProjectSegmentationContext('p', OWNER)
     ).resolves.toMatchObject({ type: 'some_retired_type' });
+  });
+});
+
+describe('ownership, so the caller knows whether to honour a body model', () => {
+  it('reports isOwned for the owner', async () => {
+    prismaMock.project.findUnique.mockResolvedValue({
+      type: 'spheroid',
+      segmentationModel: null,
+      userId: OWNER,
+    });
+    await expect(
+      projectService.getProjectSegmentationContext('p', OWNER)
+    ).resolves.toMatchObject({ isOwned: true });
+  });
+
+  it('reports NOT owned for a shared annotator', async () => {
+    // They may segment the project — `queueController` admits accepted shares
+    // — but the model is the owner's choice, so the controller must be able to
+    // tell them apart.
+    prismaMock.project.findUnique.mockResolvedValue({
+      type: 'spheroid',
+      segmentationModel: 'mamba_unet',
+      userId: OWNER,
+    });
+    await expect(
+      projectService.getProjectSegmentationContext('p', 'annotator-9')
+    ).resolves.toMatchObject({ isOwned: false, model: 'mamba_unet' });
   });
 });

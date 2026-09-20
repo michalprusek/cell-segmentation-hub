@@ -104,6 +104,14 @@ export const useProjectData = (
     if (lastFetchedProjectRef.current !== projectId) {
       lastFetchedProjectRef.current = projectId;
       setProjectFolderId(undefined);
+      // Ownership has the same requirement, and a sharper failure mode:
+      // carried across a switch, navigating from an owned project to a shared
+      // one briefly offers rename/type/model that the backend will 404, and
+      // the other direction briefly locks the real owner out. `undefined`
+      // means "not known yet", which reads as owned — the same benign state
+      // as a first load. Reset only on a SWITCH, for the reason above: a
+      // `reloadNonce` refresh of the same project has not changed who owns it.
+      setProjectIsOwned(undefined);
     }
 
     const fetchData = async () => {

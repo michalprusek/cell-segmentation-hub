@@ -135,7 +135,7 @@ vi.mock('../../../db', () => ({
 vi.mock('../../../services/projectService', () => ({
   getProjectSegmentationContext: vi
     .fn()
-    .mockResolvedValue({ model: 'segformer', type: 'spheroid' }),
+    .mockResolvedValue({ model: 'segformer', type: 'spheroid', isOwned: true }),
 }));
 
 // ── Import AFTER all mocks ─────────────────────────────────────────────────
@@ -143,6 +143,7 @@ import { queueController } from '../queueController';
 import { ImageService } from '../../../services/imageService';
 import { QueueService } from '../../../services/queueService';
 import { prisma } from '../../../db';
+import * as ProjectService from '../../../services/projectService';
 
 // ── Resolve the instances the controller captured at construction time ─────
 
@@ -283,6 +284,119 @@ describe('QueueController — behavioral', () => {
   });
 
   // ── addBatchToQueue ─────────────────────────────────────────────────────
+
+  describe('the model a single-image enqueue uses', () => {
+    const ctx = vi.mocked(ProjectService.getProjectSegmentationContext);
+
+    const wireImage = () => {
+      imageServiceInstance.getImageById.mockResolvedValue({
+        id: IMAGE_ID,
+        projectId: PROJECT_ID,
+      } as any);
+      queueServiceInstance.addToQueue.mockResolvedValue({
+        id: QUEUE_ID,
+        imageId: IMAGE_ID,
+        projectId: PROJECT_ID,
+      } as any);
+    };
+
+    const modelPassed = () =>
+      queueServiceInstance.addToQueue.mock.calls[0]?.[3];
+
+    it("honours the owner's body model", async () => {
+      wireImage();
+      ctx.mockResolvedValue({
+        model: 'segformer',
+        type: 'spheroid',
+        isOwned: true,
+      } as any);
+
+      const app = buildApp(queueController.addImageToQueue, 'imageId');
+      await request(app)
+        .post(`/${IMAGE_ID}`)
+        .send({ model: 'hrnet' })
+        .expect(200);
+
+      expect(modelPassed()).toBe('hrnet');
+    });
+
+    it("ignores a shared annotator's body model", async () => {
+      wireImage();
+      ctx.mockResolvedValue({
+        model: 'segformer',
+        type: 'spheroid',
+        isOwned: false,
+      } as any);
+
+      const app = buildApp(queueController.addImageToQueue, 'imageId');
+      await request(app)
+        .post(`/${IMAGE_ID}`)
+        .send({ model: 'hrnet' })
+        .expect(200);
+
+      expect(modelPassed()).toBe('segformer');
+    });
+  });
+
+  describe('the model an enqueue actually uses', () => {
+    // The model is an OWNER-controlled property of the project. This endpoint
+    // admits shared annotators (its `findFirst` has an `OR` over accepted
+    // shares), and they may segment — but a `model` in their request body must
+    // not override the owner's choice, or the column is advisory for everyone
+    // but its owner.
+    const SHARED_USER = 'cccccccc-cccc-4ccc-cccc-cccccccccccc';
+
+    const wire = (projectOwnerId: string) => {
+      vi.mocked(prisma.user.findUnique).mockResolvedValue({
+        id: USER_ID,
+        email: 'u@t.com',
+      } as any);
+      vi.mocked(prisma.project.findFirst).mockResolvedValue({
+        id: PROJECT_ID,
+        userId: projectOwnerId,
+        type: 'spheroid',
+        segmentationModel: 'mamba_unet',
+      } as any);
+      queueServiceInstance.addBatchToQueue.mockResolvedValue([]);
+    };
+
+    const modelPassedToTheQueue = () =>
+      queueServiceInstance.addBatchToQueue.mock.calls[0]?.[3];
+
+    it("honours the owner's body model", async () => {
+      wire(USER_ID);
+      const app = buildApp(queueController.addBatchToQueue);
+      await request(app)
+        .post('/')
+        .send({ imageIds: [IMAGE_ID], projectId: PROJECT_ID, model: 'hrnet' })
+        .expect(200);
+
+      expect(modelPassedToTheQueue()).toBe('hrnet');
+    });
+
+    it("ignores a shared annotator's body model", async () => {
+      wire(SHARED_USER);
+      const app = buildApp(queueController.addBatchToQueue);
+      await request(app)
+        .post('/')
+        .send({ imageIds: [IMAGE_ID], projectId: PROJECT_ID, model: 'hrnet' })
+        .expect(200);
+
+      // The project's stored model, not the one they asked for.
+      expect(modelPassedToTheQueue()).toBe('mamba_unet');
+    });
+
+    it("falls back to the project's model when the body names none", async () => {
+      wire(USER_ID);
+      const app = buildApp(queueController.addBatchToQueue);
+      await request(app)
+        .post('/')
+        .send({ imageIds: [IMAGE_ID], projectId: PROJECT_ID })
+        .expect(200);
+
+      expect(modelPassedToTheQueue()).toBe('mamba_unet');
+    });
+  });
 
   describe('addBatchToQueue', () => {
     it('returns 401 when unauthenticated', async () => {

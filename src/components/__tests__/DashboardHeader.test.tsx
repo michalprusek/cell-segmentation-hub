@@ -221,8 +221,12 @@ describe('DashboardHeader', () => {
     // The words were asked to go; the tooltip and aria-label keep them for
     // anyone who needs them, so this stays announced without being rendered.
     expect(indicator.textContent).toBe('');
-    expect(indicator).toHaveAttribute('title', expect.stringContaining(''));
-    expect(indicator.getAttribute('aria-label')).toBeTruthy();
+    // `expect.stringContaining('')` matches every string, so the first draft
+    // of this line asserted nothing at all. Pin the actual value: the tooltip
+    // and the accessible name must both carry the status, and must agree.
+    const title = indicator.getAttribute('title');
+    expect(title).toBe('Ready');
+    expect(indicator.getAttribute('aria-label')).toBe(title);
     expect(indicator).toHaveAttribute('role', 'status');
   });
 
