@@ -1,0 +1,40 @@
+-- The segmentation model a project runs, moved from a per-user global setting
+-- onto the project itself.
+--
+-- WHY IT IS ON THE PROJECT. The model was a single value in the browser's
+-- localStorage (`user_<id>_selectedModel`), chosen in Settings and shown as a
+-- badge in the header. Nothing tied it to the project being segmented, so
+-- opening a wound project while `hrnet` was selected produced a blocking
+-- "model not compatible with this project type" modal at the Segment button —
+-- the compatibility rule was enforced, but only after the user had already
+-- made the wrong choice somewhere else entirely. Six of the seven project
+-- types have exactly one compatible model, so for those the global setting
+-- could only ever be right by luck.
+--
+-- Storing it here rather than in localStorage also makes it the same value for
+-- everyone: a project shared with an annotator is segmented with the model its
+-- owner chose, and the choice survives a different browser.
+--
+-- NULL = "never chosen", resolved on read by `resolveProjectModel()` to the
+-- most accurate model compatible with `type` (see
+-- `backend/src/constants/modelRegistry.ts`). DELIBERATELY NOT BACKFILLED: the
+-- resolver gives every pre-existing row the right default for free, whereas a
+-- backfill would freeze today's default into every row and make a later change
+-- to it invisible to exactly the projects that predate it. NULL must therefore
+-- keep meaning "follow the default", not "broken row".
+--
+-- TEXT, not an enum, matching the `type` column beside it: the registry is the
+-- authority on the model set, and a Postgres enum would need a migration every
+-- time a model is added. Validity is enforced on write (`updateProjectSchema`
+-- plus the compatibility check in `ProjectService.updateProject`) and again on
+-- read, because changing a project's `type` can strand a value that was valid
+-- when it was stored.
+--
+-- Hand-written rather than taken from `prisma migrate diff`, for the reason
+-- spelled out in `20260902_add_export_log/migration.sql`: the production schema
+-- has drifted from the migration history since 2026-06, and a diff against it
+-- proposes dropping real tables. Only the statement below is intended here.
+--
+-- Idempotent, so re-running against a database that already has the column is
+-- a no-op rather than a failed deploy.
+ALTER TABLE "projects" ADD COLUMN IF NOT EXISTS "segmentationModel" TEXT;

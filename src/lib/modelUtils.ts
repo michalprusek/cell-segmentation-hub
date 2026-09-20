@@ -1,10 +1,17 @@
-// Model identity, display metadata, and project-type compatibility now live
-// in the model registry SSOT (`@/lib/models/modelRegistry`). This module
-// re-exports the public model surface and the localization helpers built on
-// top of it. The spheroid-preset framing below is view-layer only (not model
-// identity) and intentionally stays here, not in the registry.
+// Model identity, display metadata, and project-type compatibility live in the
+// model registry SSOT (`@/lib/models/modelRegistry`). This module re-exports
+// the public model surface and the one localization helper built on top of it.
+//
+// It used to also carry a "recommended preset" framing for the spheroid models
+// (SPHEROID_PRESETS / getSpheroidPreset / SPHEROID_PRESET_META, tiers
+// fast / accurate / robust). That existed solely for the Settings -> Models
+// section, which is gone: the model is chosen on the project page now, filtered
+// to what the project's type can run. The tiers were also actively misleading —
+// they filed SegFormer under 'fast' and CBAM-ResUNet under 'accurate' when
+// SegFormer is the more accurate of the two (93 % IoU, the only published
+// figure among the five), because a model that is both cannot occupy two of
+// three recommendation slots.
 import {
-  ALL_MODEL_IDS,
   BASE_MODEL_INFO,
   BASIC_MODEL_INFO,
   keyMap,
@@ -18,43 +25,6 @@ import {
 // (`import { ... } from '@/lib/modelUtils'`) are untouched.
 export { BASIC_MODEL_INFO };
 export type { ModelCategory, ModelInfo, ModelPerformance, ModelType };
-
-/**
- * Recommended-preset framing for the standard spheroid models. Three tiers are
- * surfaced as primary cards (Fast/Accurate/Robust); the rest fall into a
- * collapsed "Additional" group. View-layer only — not part of ModelInfo.
- */
-export type SpheroidPresetTier = 'fast' | 'accurate' | 'robust' | 'additional';
-
-/** The standard spheroid models that participate in the preset framing.
- *  Excludes `spheroid_disintegration` (the disintegrated/invasive model, shown in
- *  its own section). `satisfies Record<SpheroidModelId, …>` makes forgetting to
- *  classify a newly-added spheroid model a compile error. */
-type SpheroidModelId =
-  'hrnet' | 'cbam_resunet' | 'unet_spherohq' | 'segformer' | 'mamba_unet';
-
-export const SPHEROID_PRESETS = {
-  segformer: 'fast',
-  cbam_resunet: 'accurate',
-  mamba_unet: 'robust',
-  hrnet: 'additional',
-  unet_spherohq: 'additional',
-} as const satisfies Record<SpheroidModelId, SpheroidPresetTier>;
-
-/** Preset tier for a model id. Non-spheroid (or unmapped) ids fall back to
- *  'additional' so the lookup stays total over ModelType. */
-export const getSpheroidPreset = (id: ModelType): SpheroidPresetTier =>
-  (SPHEROID_PRESETS as Record<string, SpheroidPresetTier>)[id] ?? 'additional';
-
-/** Icon for each of the three primary preset tiers. */
-export const SPHEROID_PRESET_META: Record<
-  Exclude<SpheroidPresetTier, 'additional'>,
-  { icon: string }
-> = {
-  fast: { icon: '⚡' },
-  accurate: { icon: '🎯' },
-  robust: { icon: '🌍' },
-};
 
 /**
  * Get localized model information using the translation function
@@ -72,11 +42,4 @@ export function getLocalizedModelInfo(
     displayName: t(`settings.modelSelection.models.${key}.name`),
     description: t(`settings.modelSelection.models.${key}.description`),
   };
-}
-
-/**
- * Get all localized models
- */
-export function getAllLocalizedModels(t: (key: string) => string): ModelInfo[] {
-  return ALL_MODEL_IDS.map(id => getLocalizedModelInfo(id, t));
 }

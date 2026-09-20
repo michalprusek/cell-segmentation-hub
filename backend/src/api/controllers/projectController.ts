@@ -9,6 +9,7 @@ import {
   ProjectQueryParams,
 } from '../../types/validation';
 import { logger } from '../../utils/logger';
+import { ApiError } from '../../middleware/error';
 
 /**
  * Create a new project
@@ -361,6 +362,15 @@ export const updateProject = asyncHandler(
 
       ResponseHelper.success(res, project, 'Projekt byl úspěšně aktualizován');
     } catch (error) {
+      // A rejected model/type combination is the caller's mistake, not ours.
+      // Without this branch it fell into the 500 below and the picker showed
+      // "server error" for what is a plain validation failure — and the
+      // message naming the allowed models never reached the user.
+      if (error instanceof ApiError && error.statusCode < 500) {
+        ResponseHelper.badRequest(res, error.message, 'ProjectController');
+        return;
+      }
+
       logger.error(
         'Failed to update project:',
         error as Error,

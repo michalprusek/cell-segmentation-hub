@@ -550,32 +550,7 @@ export default {
     currentPassword: 'Current Password',
     newPassword: 'New Password',
     confirmNewPassword: 'Confirm New Password',
-    models: 'Models',
     modelSelection: {
-      title: 'Model Selection',
-      description: 'Choose the AI model to use for cell segmentation',
-      sections: {
-        spheroid: 'Spheroid Models',
-        spheroid_invasive: 'Disintegrated Spheroid Models',
-        sperm: 'Sperm Models',
-        wound: 'Wound Healing Models',
-        microtubule: 'Microtubule Models',
-        microcapsule: 'Microcapsule Models',
-        neurite: 'Neurite / Soma Models',
-      },
-      presets: {
-        fast: 'Fast',
-        accurate: 'Accurate',
-        robust: 'Robust',
-        showMore: 'Show additional models',
-        showLess: 'Hide additional models',
-      },
-      presetDescriptions: {
-        fast: 'Real-time preview, large batches, weak GPU',
-        accurate: 'Labs with HQ-like images, when time is not critical',
-        robust:
-          'External labs, unknown optics, drug-treated, unusual morphologies',
-      },
       models: {
         hrnet: {
           name: 'HRNet',
@@ -771,11 +746,6 @@ export default {
       deleteScopeUnavailable:
         'The video is still loading — try deleting this microtubule again in a moment',
     },
-    modelNotCompatible:
-      'Model "{{model}}" is not compatible with project type "{{type}}". Allowed: {{allowed}}.',
-    incompatibleModelTitle: 'Cannot segment with this model',
-    incompatibleModelDesc:
-      'The currently selected model "{{model}}" is not compatible with this project\'s type ({{type}}). Allowed models for this type: {{allowed}}. Please change the model in Settings or change the project type.',
     channelPicker: {
       title: 'Select channel to segment',
       description:
@@ -1352,6 +1322,12 @@ export default {
     exportFailed: 'Export failed. Please try again.',
   },
   project: {
+    // Segmentation-model picker, beside the project-type pill.
+    changeSegmentationModel: 'Change the segmentation model',
+    modelChoiceForType: 'Models available for this project type',
+    modelOnlyOptionForType: 'The only model for this project type',
+    modelUpdated: 'Segmentation model updated',
+    modelUpdateFailed: 'Could not change the segmentation model',
     selected: '{{count}} image selected',
     selected_other: '{{count}} images selected',
     deleteSelected: 'Delete Selected',
@@ -2864,6 +2840,7 @@ export default {
   },
   feedback: {
     buttonTitle: 'Send feedback',
+    buttonLabel: 'Report a bug or idea',
     buttonAriaLabel: 'Open feedback form',
     title: 'Send feedback',
     subtitle: 'Found a bug or have an idea? Tell us — we read every report.',

@@ -6,7 +6,6 @@ import { ArrowLeft } from 'lucide-react';
 import AccountSection from '@/components/settings/AccountSection';
 import AppearanceSection from '@/components/settings/AppearanceSection';
 import UserProfileSection from '@/components/settings/UserProfileSection';
-import ModelSettingsSection from '@/components/settings/ModelSettingsSection';
 import { useLanguage, useAuth } from '@/contexts/exports';
 import { motion } from 'framer-motion';
 import apiClient from '@/lib/api';
@@ -94,13 +93,12 @@ const Settings = () => {
             onValueChange={handleTabChange}
             className="w-full"
           >
-            <TabsList className="mb-8 grid w-full grid-cols-4">
+            <TabsList className="mb-8 grid w-full grid-cols-3">
               <TabsTrigger value="profile">{t('settings.profile')}</TabsTrigger>
               <TabsTrigger value="account">{t('settings.account')}</TabsTrigger>
               <TabsTrigger value="appearance">
                 {t('settings.appearance')}
               </TabsTrigger>
-              <TabsTrigger value="models">{t('settings.models')}</TabsTrigger>
             </TabsList>
 
             <TabsContent value="profile">
@@ -115,10 +113,6 @@ const Settings = () => {
 
             <TabsContent value="appearance">
               <AppearanceSection />
-            </TabsContent>
-
-            <TabsContent value="models">
-              <ModelSettingsSection />
             </TabsContent>
           </Tabs>
         )}

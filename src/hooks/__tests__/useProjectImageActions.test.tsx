@@ -107,6 +107,8 @@ describe('useProjectImageActions', () => {
             projectId: 'proj-1',
             images,
             onImagesChange,
+            selectedModel: 'hrnet',
+            confidenceThreshold: 0.5,
           }),
         { wrapper }
       );
@@ -135,6 +137,8 @@ describe('useProjectImageActions', () => {
             projectId: 'proj-1',
             images,
             onImagesChange,
+            selectedModel: 'hrnet',
+            confidenceThreshold: 0.5,
           }),
         { wrapper }
       );
@@ -157,6 +161,8 @@ describe('useProjectImageActions', () => {
             projectId: undefined,
             images,
             onImagesChange,
+            selectedModel: 'hrnet',
+            confidenceThreshold: 0.5,
           }),
         { wrapper }
       );
@@ -182,6 +188,8 @@ describe('useProjectImageActions', () => {
             projectId: 'proj-1',
             images,
             onImagesChange,
+            selectedModel: 'hrnet',
+            confidenceThreshold: 0.5,
           }),
         { wrapper }
       );
@@ -218,6 +226,8 @@ describe('useProjectImageActions', () => {
             projectId: 'proj-1',
             images,
             onImagesChange,
+            selectedModel: 'hrnet',
+            confidenceThreshold: 0.5,
           }),
         { wrapper }
       );
@@ -246,6 +256,8 @@ describe('useProjectImageActions', () => {
             projectId: 'proj-1',
             images,
             onImagesChange,
+            selectedModel: 'hrnet',
+            confidenceThreshold: 0.5,
           }),
         { wrapper }
       );
@@ -279,6 +291,8 @@ describe('useProjectImageActions', () => {
             projectId: 'proj-1',
             images,
             onImagesChange,
+            selectedModel: 'hrnet',
+            confidenceThreshold: 0.5,
           }),
         { wrapper }
       );
@@ -302,6 +316,8 @@ describe('useProjectImageActions', () => {
             projectId: 'proj-1',
             images,
             onImagesChange,
+            selectedModel: 'hrnet',
+            confidenceThreshold: 0.5,
           }),
         { wrapper }
       );
@@ -330,6 +346,8 @@ describe('useProjectImageActions', () => {
             projectId: 'proj-1',
             images,
             onImagesChange,
+            selectedModel: 'hrnet',
+            confidenceThreshold: 0.5,
           }),
         { wrapper }
       );
@@ -364,6 +382,8 @@ describe('useProjectImageActions', () => {
             projectId: 'proj-1',
             images,
             onImagesChange,
+            selectedModel: 'hrnet',
+            confidenceThreshold: 0.5,
           }),
         { wrapper }
       );
@@ -395,6 +415,8 @@ describe('useProjectImageActions', () => {
             projectId: 'proj-1',
             images,
             onImagesChange,
+            selectedModel: 'hrnet',
+            confidenceThreshold: 0.5,
           }),
         { wrapper }
       );
@@ -418,6 +440,8 @@ describe('useProjectImageActions', () => {
             projectId: 'proj-1',
             images,
             onImagesChange,
+            selectedModel: 'hrnet',
+            confidenceThreshold: 0.5,
           }),
         { wrapper }
       );
@@ -441,6 +465,8 @@ describe('useProjectImageActions', () => {
             projectId: undefined,
             images,
             onImagesChange,
+            selectedModel: 'hrnet',
+            confidenceThreshold: 0.5,
           }),
         { wrapper }
       );
@@ -462,6 +488,8 @@ describe('useProjectImageActions', () => {
             projectId: 'proj-1',
             images,
             onImagesChange,
+            selectedModel: 'hrnet',
+            confidenceThreshold: 0.5,
           }),
         { wrapper }
       );

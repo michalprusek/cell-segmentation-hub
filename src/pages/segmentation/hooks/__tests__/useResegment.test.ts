@@ -43,7 +43,6 @@ const makeParams = (
 ) => ({
   projectId: 'proj-1',
   imageId: 'img-1',
-  projectType: 'spheroid' as string,
   selectedModel: 'hrnet',
   confidenceThreshold: 0.5,
   detectHoles: false,
@@ -89,29 +88,27 @@ describe('useResegment', () => {
     expect(result.current.showResegmentChannelDialog).toBe(false);
   });
 
-  // ─── effectiveResegmentModel gating ────────────────────────────────────────
+  // The project-type → model mapping this hook used to perform itself now
+  // lives in `useProjectModel` (see its own test file), because the model is
+  // resolved once from the project rather than corrected at each dispatch
+  // site. This hook dispatches whatever model it is handed; what it must still
+  // guarantee is that it dispatches NOTHING while the project is loading.
 
-  it.each([
-    // [projectType, selectedModel, expected] — single-model types force their
-    // whitelisted model regardless of selectedModel.
-    ['microtubules', 'hrnet', 'microtubule'],
-    ['sperm', 'hrnet', 'sperm'],
-    ['wound', 'hrnet', 'wound'],
-    ['microcapsule', 'hrnet', 'microcapsule'],
-    ['spheroid_invasive', 'hrnet', 'spheroid_disintegration'],
-    // spheroid has >1 compatible model → the user's pick is honored. Use a model
-    // distinct from compat[0] ('hrnet') so this proves selectedModel wins,
-    // rather than coincidentally matching the first registry entry.
-    ['spheroid', 'cbam_resunet', 'cbam_resunet'],
-  ])(
-    'maps projectType=%s (selectedModel=%s) → effectiveResegmentModel=%s',
-    (projectType, selectedModel, expected) => {
-      const { result } = renderHook(() =>
-        useResegment(makeParams({ projectType, selectedModel }))
-      );
-      expect(result.current.effectiveResegmentModel).toBe(expected);
-    }
-  );
+  it('does not dispatch a resegment before the model has resolved', async () => {
+    const params = makeParams({
+      selectedModel: undefined,
+      confidenceThreshold: undefined,
+      videoChannels: null,
+    });
+    const { result } = renderHook(() => useResegment(params));
+
+    await act(async () => {
+      await result.current.runResegment();
+    });
+
+    expect(mockRequestBatch).not.toHaveBeenCalled();
+    expect(result.current.isResegmenting).toBe(false);
+  });
 
   // ─── handleResegmentCurrentFrame — single channel ─────────────────────────
 

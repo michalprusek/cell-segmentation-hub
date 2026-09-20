@@ -27,6 +27,14 @@ export const useProjectData = (
   const [projectPixelSizeUm, setProjectPixelSizeUm] = useState<number | null>(
     null
   );
+  // The project's STORED model choice, exactly as the column holds it —
+  // `null` meaning "never chosen". Deliberately not resolved here: the
+  // resolution needs the project type, and holding the raw value keeps the
+  // picker able to tell "explicitly set to the default" from "never touched".
+  // Consumers call `useProjectModel(projectType, projectSegmentationModel)`.
+  const [projectSegmentationModel, setProjectSegmentationModel] = useState<
+    string | null
+  >(null);
   // Where THIS viewer filed the project: a folder id, or null for the
   // dashboard root. `undefined` until the project has loaded — the three
   // states are distinct on purpose, because "not loaded yet" must not be
@@ -111,6 +119,7 @@ export const useProjectData = (
         setProjectType(project.type);
         setProjectVerified(project.verified ?? false);
         setProjectPixelSizeUm(project.pixelSizeUm ?? null);
+        setProjectSegmentationModel(project.segmentationModel ?? null);
         // `?? null` collapses only the ABSENT case; an older backend that does
         // not send the field lands on "root", which is the pre-existing
         // behaviour rather than a broken link.
@@ -434,6 +443,8 @@ export const useProjectData = (
     setProjectType,
     projectVerified,
     projectPixelSizeUm,
+    projectSegmentationModel,
+    setProjectSegmentationModel,
     projectFolderId,
     setProjectVerified,
     images,

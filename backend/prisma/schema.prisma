@@ -109,6 +109,21 @@ model Project {
   // is the right grain. An image row that DOES carry its own value still wins,
   // leaving room for a calibrated ND2 to fill it in future.
   pixelSizeUm       Float?
+  // The segmentation model this project runs, as a model id from the registry
+  // SSOT (`backend/src/constants/modelRegistry.ts`).
+  //
+  // NULL means "never chosen" and is resolved by `resolveProjectModel()` to the
+  // most accurate model compatible with `type`. Deliberately NOT backfilled:
+  // every row predating this column answers with the current default for free,
+  // whereas a backfill would freeze today's default into 10 000+ rows and make
+  // a later change to it invisible to existing projects.
+  //
+  // A plain String, like `type` above, rather than an enum: the registry is the
+  // authority and a Postgres enum would need a migration per model. Validity is
+  // enforced on write (`updateProjectSchema` + the compatibility check in
+  // `ProjectService.updateProject`) and again on read, since changing `type`
+  // can strand a value that was valid when it was stored.
+  segmentationModel String?
   images            Image[]
   exportLogs        ExportLog[]
   user              User                @relation(fields: [userId], references: [id], onDelete: Cascade)

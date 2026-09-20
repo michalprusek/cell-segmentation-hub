@@ -495,6 +495,12 @@ export interface Project {
   // thresholds downstream are in micrometres and a guess yields confidently
   // wrong numbers rather than approximate ones.
   pixelSizeUm?: number | null;
+  // The segmentation model this project runs, as a registry model id.
+  // null/absent = "never chosen": resolve with `resolveProjectModel`, which
+  // answers with the most accurate model compatible with `type`. Never read
+  // this raw when you need a model to run — a stored value can be stranded by
+  // a later type change.
+  segmentationModel?: string | null;
 }
 
 export interface ProjectFolder {

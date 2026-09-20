@@ -13,7 +13,7 @@
  *   • loading=true renders spinner, hides tabs
  *   • loading=false + profile loaded renders tabs
  *   • tab defaults to 'profile' when no ?tab param
- *   • each tab (profile / account / appearance / models) is selectable
+ *   • each tab (profile / account / appearance) is selectable
  *   • UserProfileSection rendered only when user + profile present
  *   • API fetch failure falls back to user stub profile
  *   • Back button calls navigate(-1)
@@ -176,10 +176,6 @@ vi.mock('@/components/settings/AppearanceSection', () => ({
   default: () => <div data-testid="appearance-section" />,
 }));
 
-vi.mock('@/components/settings/ModelSettingsSection', () => ({
-  default: () => <div data-testid="model-settings-section" />,
-}));
-
 vi.mock('@/components/DashboardHeader', () => ({
   default: () => <div data-testid="dashboard-header" />,
 }));
@@ -293,7 +289,10 @@ describe('Profile loaded state — tabs visible', () => {
     });
     expect(screen.getByTestId('tab-account')).toBeInTheDocument();
     expect(screen.getByTestId('tab-appearance')).toBeInTheDocument();
-    expect(screen.getByTestId('tab-models')).toBeInTheDocument();
+    // Three, not four: the Models tab was removed with the global model
+    // selector. Asserting its ABSENCE here is what would catch a revert that
+    // re-added the tab without re-adding the section behind it.
+    expect(screen.queryByTestId('tab-models')).not.toBeInTheDocument();
   });
 
   it('does not render loading text after profile resolves', async () => {
@@ -343,7 +342,11 @@ describe('Default tab selection', () => {
     expect(tabs.getAttribute('data-value')).toBe('appearance');
   });
 
-  it('uses ?tab=models when search param is set', async () => {
+  // The Models tab is gone: the model is chosen on the project page now, so a
+  // global selector contradicted it. A stale ?tab=models bookmark simply
+  // renders no tab content — Radix ignores a value with no trigger — which is
+  // the same as any other unknown tab value and needs no redirect.
+  it('renders no tab content for a stale ?tab=models bookmark', async () => {
     mockSearchParamsGet.mockReturnValue('models');
 
     renderSettings();
@@ -351,8 +354,10 @@ describe('Default tab selection', () => {
       expect(screen.queryByText('common.loading')).not.toBeInTheDocument();
     });
 
-    const tabs = screen.getByTestId('tabs');
-    expect(tabs.getAttribute('data-value')).toBe('models');
+    expect(screen.queryByTestId('tab-models')).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId('model-settings-section')
+    ).not.toBeInTheDocument();
   });
 });
 
@@ -372,19 +377,6 @@ describe('Tab switching — handleTabChange', () => {
     });
 
     expect(mockSetSearchParams).toHaveBeenCalledWith({ tab: 'account' });
-  });
-
-  it('calls setSearchParams with models when models tab is clicked', async () => {
-    renderSettings();
-    await waitFor(() => {
-      expect(screen.getByTestId('tab-models')).toBeInTheDocument();
-    });
-
-    await act(async () => {
-      screen.getByTestId('tab-models').click();
-    });
-
-    expect(mockSetSearchParams).toHaveBeenCalledWith({ tab: 'models' });
   });
 });
 
@@ -428,17 +420,6 @@ describe('UserProfileSection conditional render', () => {
     });
 
     expect(screen.getByTestId('appearance-section')).toBeInTheDocument();
-  });
-
-  it('renders ModelSettingsSection on models tab', async () => {
-    mockSearchParamsGet.mockReturnValue('models');
-
-    renderSettings();
-    await waitFor(() => {
-      expect(screen.queryByText('common.loading')).not.toBeInTheDocument();
-    });
-
-    expect(screen.getByTestId('model-settings-section')).toBeInTheDocument();
   });
 });
 

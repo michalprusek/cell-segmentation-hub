@@ -731,7 +731,7 @@ describe('polylineKind discriminator — sidebar panel selection', () => {
   });
 });
 
-// ─── effectiveResegmentModel ──────────────────────────────────────────────────
+// ─── the model the editor resegments with ─────────────────────────────────────
 
 describe('the annotation-geometry gate reaches the rail', () => {
   // The gate's own unit tests render VerticalToolbar with the prop directly.
@@ -765,7 +765,13 @@ describe('the annotation-geometry gate reaches the rail', () => {
   );
 });
 
-describe('effectiveResegmentModel — project-type gating', () => {
+// These assert the SEAM, and they survived the model moving onto the project
+// unchanged — which is the point. `useResegment` used to correct the global
+// model itself (an `effectiveResegmentModel` memo); the editor now resolves it
+// once from the project type via `useProjectModel`. Same answers, different
+// route, so the tests that pin the answers are exactly what should not have
+// needed editing.
+describe('resegment model follows the project type', () => {
   const base = {
     id: 'img-1',
     name: 'x.jpg',

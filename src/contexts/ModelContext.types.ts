@@ -1,39 +1,29 @@
 import { createContext } from 'react';
-import {
-  BASIC_MODEL_INFO,
-  ModelType,
-  ModelInfo,
-  ModelPerformance,
-} from '@/lib/modelUtils';
+import { ModelType, ModelInfo, ModelPerformance } from '@/lib/modelUtils';
 
-// Re-export types for convenience
+// Re-export types for convenience. These no longer describe anything this
+// context holds — the model moved onto the project — but a dozen modules
+// import them from here, and the registry is the definition either way.
 export type { ModelType, ModelInfo, ModelPerformance };
 
+/**
+ * What is left of the per-user model settings: hole detection.
+ *
+ * `selectedModel`, `confidenceThreshold`, `getModelInfo` and `availableModels`
+ * were removed when the model became a property of the project. Use
+ * `useProjectModel(projectType, storedModel)` for all four — it resolves the
+ * model, its calibrated threshold, and the list this project type may run.
+ */
 export interface ModelContextType {
-  selectedModel: ModelType;
-  /**
-   * Read-only inference threshold for the currently selected model.
-   * Derived from `getModelInfo(selectedModel).defaultThreshold` — calibrated
-   * per-model in `modelUtils.ts`. No longer user-configurable: each model
-   * has its own calibrated value (e.g. `spheroid_disintegration` uses 0.2,
-   * others 0.5) and a global slider produced inconsistent results.
-   */
-  confidenceThreshold: number;
+  /** Whether an internal hole in the predicted mask becomes a hole polygon
+   *  (true) or is filled in (false). Reaches the ML service as
+   *  `detect_holes`. Per-user rather than per-project: it describes how the
+   *  user wants to annotate, not what is being annotated. */
   detectHoles: boolean;
-  setSelectedModel: (model: ModelType) => void;
   setDetectHoles: (detectHoles: boolean) => void;
-  getModelInfo: (modelId: ModelType) => ModelInfo;
-  availableModels: ModelInfo[];
 }
 
-const AVAILABLE_MODELS: ModelInfo[] = Object.values(BASIC_MODEL_INFO);
-
 export const ModelContext = createContext<ModelContextType>({
-  selectedModel: 'hrnet',
-  confidenceThreshold: 0.5,
   detectHoles: true,
-  setSelectedModel: () => {},
   setDetectHoles: () => {},
-  getModelInfo: () => AVAILABLE_MODELS[0],
-  availableModels: AVAILABLE_MODELS,
 });

@@ -514,7 +514,6 @@ export default {
     pageTitle: 'Nastavení',
     profile: 'Profil',
     account: 'Účet',
-    models: 'Modely',
     manageSettings: 'Spravujte své nastavení účtu',
     appearance: 'Vzhled',
     themeSettings: 'Nastavení motivu',
@@ -538,30 +537,6 @@ export default {
       billing: 'Oznámení o fakturaci',
     },
     modelSelection: {
-      title: 'Výběr modelu',
-      description: 'Vyberte AI model pro segmentaci buněk',
-      sections: {
-        spheroid: 'Modely sféroidů',
-        spheroid_invasive: 'Modely rozprsknutých sféroidů',
-        sperm: 'Modely spermií',
-        wound: 'Modely hojení ran',
-        microtubule: 'Modely mikrotubulů',
-        microcapsule: 'Modely mikrokapsulí',
-        neurite: 'Modely neuritů a somat',
-      },
-      presets: {
-        fast: 'Rychlý',
-        accurate: 'Přesný',
-        robust: 'Robustní',
-        showMore: 'Zobrazit další modely',
-        showLess: 'Skrýt další modely',
-      },
-      presetDescriptions: {
-        fast: 'Náhled v reálném čase, velké dávky, slabší GPU',
-        accurate: 'Laboratoře s HQ snímky, když nezáleží na čase',
-        robust:
-          'Externí laboratoře, neznámá optika, léčené vzorky, neobvyklé morfologie',
-      },
       models: {
         hrnet: {
           name: 'HRNet',
@@ -768,11 +743,6 @@ export default {
       deleteScopeUnavailable:
         'Video se ještě načítá — zkuste mikrotubulus smazat za okamžik znovu',
     },
-    modelNotCompatible:
-      'Model "{{model}}" není kompatibilní s typem projektu "{{type}}". Povolené: {{allowed}}.',
-    incompatibleModelTitle: 'Tímto modelem nelze segmentovat',
-    incompatibleModelDesc:
-      'Aktuálně vybraný model "{{model}}" není kompatibilní s typem tohoto projektu ({{type}}). Povolené modely pro tento typ: {{allowed}}. Změňte prosím model v Nastavení nebo změňte typ projektu.',
     channelPicker: {
       title: 'Vyberte kanál k segmentaci',
       description:
@@ -1359,6 +1329,12 @@ export default {
     noImagesAvailable: 'Žádné obrázky nejsou k dispozici',
   },
   project: {
+    // Segmentation-model picker, beside the project-type pill.
+    changeSegmentationModel: 'Změnit segmentační model',
+    modelChoiceForType: 'Modely dostupné pro tento typ projektu',
+    modelOnlyOptionForType: 'Jediný model pro tento typ projektu',
+    modelUpdated: 'Segmentační model byl změněn',
+    modelUpdateFailed: 'Segmentační model se nepodařilo změnit',
     selected: '{{count}} obrázek vybrán',
     selected_other: '{{count}} obrázky vybrány',
     deleteSelected: 'Smazat vybrané',
@@ -2808,6 +2784,7 @@ export default {
   },
   feedback: {
     buttonTitle: 'Odeslat zpětnou vazbu',
+    buttonLabel: 'Nahlásit chybu nebo nápad',
     buttonAriaLabel: 'Otevřít formulář zpětné vazby',
     title: 'Odeslat zpětnou vazbu',
     subtitle:

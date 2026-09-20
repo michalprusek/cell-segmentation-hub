@@ -3,13 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import apiClient from '@/lib/api';
 import { toast } from 'sonner';
 import { updateImageProcessingStatus } from '@/lib/imageProcessingService';
-import {
-  isModelCompatibleWithType,
-  MODEL_TYPE_COMPATIBILITY,
-  type ProjectImage,
-  type ProjectType,
-  type SegmentationData,
-} from '@/types';
+import { type ProjectImage, type SegmentationData } from '@/types';
+import type { ModelType } from '@/lib/models/modelRegistry';
 import { getLocalizedErrorMessage } from '@/lib/errorUtils';
 import { useLanguage } from '@/contexts/useLanguage';
 import { useModel } from '@/contexts/useModel';
@@ -17,26 +12,30 @@ import { logger } from '@/lib/logger';
 
 interface UseProjectImageActionsProps {
   projectId?: string;
-  projectType?: ProjectType;
   onImagesChange: (images: ProjectImage[]) => void;
   images: ProjectImage[];
-  /** Called when an action is blocked because the selected model is not
-   * compatible with the project type. Lets the parent component open a
-   * blocking modal instead of relying on a toast. */
-  onIncompatibleModel?: () => void;
+  /** The project's resolved segmentation model and its calibrated threshold,
+   *  from `useProjectModel` in the caller. Passed in rather than read from a
+   *  context because the model is a property of the project now, and the
+   *  caller already holds it — which also makes this hook a pure function of
+   *  its inputs. `undefined` only while the project type is still loading. */
+  selectedModel: ModelType | undefined;
+  confidenceThreshold: number | undefined;
 }
 
 export const useProjectImageActions = ({
   projectId,
-  projectType,
   onImagesChange,
   images,
-  onIncompatibleModel,
+  selectedModel,
+  confidenceThreshold,
 }: UseProjectImageActionsProps) => {
   const navigate = useNavigate();
   const [processingImages, setProcessingImages] = useState<string[]>([]);
   const { t } = useLanguage();
-  const { selectedModel, confidenceThreshold, detectHoles } = useModel();
+  // Only hole detection is still a per-user global; the model and its
+  // threshold arrive from the project.
+  const { detectHoles } = useModel();
 
   // Create refs to avoid stale closure issues
   const imagesRef = useRef<ProjectImage[]>(images);
@@ -88,24 +87,12 @@ export const useProjectImageActions = ({
 
   // Process an image segmentation and return a Promise that resolves when completed
   const handleProcessImage = async (imageId: string): Promise<boolean> => {
-    // Pre-flight: ensure the globally selected model is compatible with this
-    // project's type. Backend enforces the same rule (defense in depth), but
-    // we abort here so the user gets immediate feedback. Prefer opening the
-    // parent's modal so the user sees a blocking explanation rather than a
-    // fading toast; fall back to toast if no modal handler is wired.
-    if (projectType && !isModelCompatibleWithType(selectedModel, projectType)) {
-      if (onIncompatibleModel) {
-        onIncompatibleModel();
-      } else {
-        const allowed = MODEL_TYPE_COMPATIBILITY[projectType].join(', ');
-        toast.error(
-          t('segmentation.modelNotCompatible', {
-            model: selectedModel,
-            type: projectType,
-            allowed,
-          })
-        );
-      }
+    // No compatibility pre-flight any more: `selectedModel` is resolved FROM
+    // this project's type, so it cannot disagree with it. The only reachable
+    // absence is "the project has not loaded yet", which is a race, not a
+    // misconfiguration — hence a plain guard rather than the blocking modal
+    // this used to open.
+    if (!selectedModel || confidenceThreshold === undefined) {
       return false;
     }
 

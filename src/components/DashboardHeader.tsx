@@ -3,8 +3,6 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { Menu, BookOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth, useLanguage } from '@/contexts/exports';
-import { useLocalizedModels } from '@/hooks/useLocalizedModels';
-import { Badge } from '@/components/ui/badge';
 import Logo from '@/components/header/Logo';
 import UserProfileDropdown from '@/components/header/UserProfileDropdown';
 import FeedbackButton from '@/components/feedback/FeedbackButton';
@@ -50,8 +48,6 @@ const DashboardHeader = () => {
   const mlStatusRef = useRef(mlServiceStatus);
   mlStatusRef.current = mlServiceStatus;
   const { user } = useAuth();
-  const { selectedModel: _selectedModel, getSelectedModelInfo } =
-    useLocalizedModels();
   const { t } = useLanguage();
   const location = useLocation();
   const navigate = useNavigate();
@@ -231,18 +227,25 @@ const DashboardHeader = () => {
             {t('common.documentation', 'Documentation')}
           </Button>
 
-          {/* Current Model Badge - Clickable */}
-          <Badge
-            variant="secondary"
-            className="flex items-center gap-2 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-            onClick={() => navigate('/settings?tab=models')}
-            title={getStatusTooltip()}
+          {/* ML service + queue status.
+              This dot used to ride inside a badge naming the globally selected
+              model, which also linked to Settings → Models. The model moved
+              onto the project page and that settings section is gone, but the
+              dot is not about the model at all — it is whether the ML service
+              is reachable and whether anything is processing, which has no
+              other surface in the app. It stays, on its own. */}
+          <div
+            className="flex items-center gap-2 rounded-md border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-600 dark:border-gray-700 dark:text-gray-300"
+            title={String(getStatusTooltip())}
+            data-testid="ml-status-indicator"
           >
             <div
               className={`w-2 h-2 ${getStatusColor()} rounded-full animate-pulse`}
             ></div>
-            {getSelectedModelInfo().displayName}
-          </Badge>
+            <span className="hidden lg:inline">
+              {String(getStatusTooltip())}
+            </span>
+          </div>
           <FeedbackButton />
           <UserProfileDropdown
             username={user?.email?.split('@')[0] || 'User'}

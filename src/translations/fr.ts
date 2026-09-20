@@ -549,32 +549,6 @@ export default {
     newPassword: 'Nouveau mot de passe',
     confirmNewPassword: 'Confirmer le nouveau mot de passe',
     modelSelection: {
-      title: 'Sélection de modèle',
-      description:
-        'Choisissez le modèle IA à utiliser pour la segmentation cellulaire',
-      sections: {
-        spheroid: 'Modèles de sphéroïdes',
-        spheroid_invasive: 'Modèles de sphéroïdes désintégrés',
-        sperm: 'Modèles de spermatozoïdes',
-        wound: 'Modèles de cicatrisation',
-        microtubule: 'Modèles de microtubules',
-        microcapsule: 'Modèles de microcapsules',
-        neurite: 'Modèles neurites / somas',
-      },
-      presets: {
-        fast: 'Rapide',
-        accurate: 'Précis',
-        robust: 'Robuste',
-        showMore: 'Afficher plus de modèles',
-        showLess: 'Masquer les modèles supplémentaires',
-      },
-      presetDescriptions: {
-        fast: 'Aperçu en temps réel, grands lots, GPU faible',
-        accurate:
-          "Laboratoires avec images HQ, quand le temps n'est pas critique",
-        robust:
-          'Laboratoires externes, optique inconnue, échantillons traités, morphologies inhabituelles',
-      },
       models: {
         hrnet: {
           name: 'HRNet',
@@ -733,7 +707,6 @@ export default {
     pageTitle: 'Settings',
     profile: 'Profile',
     account: 'Account',
-    models: 'Models',
   },
   auth: {
     signIn: 'Se connecter',
@@ -931,11 +904,6 @@ export default {
       deleteScopeUnavailable:
         'La vidéo est encore en cours de chargement — réessayez dans un instant',
     },
-    modelNotCompatible:
-      'Le modèle "{{model}}" n\'est pas compatible avec le type de projet "{{type}}". Autorisés : {{allowed}}.',
-    incompatibleModelTitle: 'Impossible de segmenter avec ce modèle',
-    incompatibleModelDesc:
-      'Le modèle sélectionné "{{model}}" n\'est pas compatible avec le type de ce projet ({{type}}). Modèles autorisés : {{allowed}}. Veuillez changer le modèle dans les Paramètres ou modifier le type de projet.',
     channelPicker: {
       title: 'Sélectionner le canal à segmenter',
       description:
@@ -1370,6 +1338,12 @@ export default {
     },
   },
   project: {
+    // Segmentation-model picker, beside the project-type pill.
+    changeSegmentationModel: 'Changer le modèle de segmentation',
+    modelChoiceForType: 'Modèles disponibles pour ce type de projet',
+    modelOnlyOptionForType: 'Le seul modèle pour ce type de projet',
+    modelUpdated: 'Modèle de segmentation mis à jour',
+    modelUpdateFailed: 'Impossible de changer le modèle de segmentation',
     selected: '{{count}} image sélectionnée',
     selected_other: '{{count}} images sélectionnées',
     deleteSelected: 'Supprimer la sélection',
@@ -2859,6 +2833,7 @@ export default {
   },
   feedback: {
     buttonTitle: 'Envoyer un retour',
+    buttonLabel: 'Signaler un bug ou une idée',
     buttonAriaLabel: 'Ouvrir le formulaire de retour',
     title: 'Envoyer un retour',
     subtitle:

@@ -6,6 +6,9 @@ import {
 } from '../types/validation';
 import { calculatePagination } from '../utils/response';
 import { logger } from '../utils/logger';
+import { coerceProjectType } from '../types/validation';
+import { MODEL_TYPE_COMPATIBILITY } from '../constants/modelRegistry';
+import { ApiError } from '../middleware/error';
 import * as SharingService from './sharingService';
 import type { Project, Prisma, User } from '@prisma/client';
 
@@ -427,6 +430,39 @@ export async function updateProject(
       return null; // Project not found or user is not the owner
     }
 
+    // The model must be compatible with the type the project will HAVE once
+    // this request lands — not necessarily the type it has now, since a single
+    // PUT may carry both. Checking against the stored type would let
+    // `{ type: 'wound', segmentationModel: 'segformer' }` through.
+    const effectiveType = coerceProjectType(data.type ?? existingProject.type);
+
+    if (data.segmentationModel != null) {
+      const compatible = MODEL_TYPE_COMPATIBILITY[effectiveType];
+      if (
+        !(compatible as readonly string[]).includes(data.segmentationModel)
+      ) {
+        throw ApiError.validationError(
+          `Model ${data.segmentationModel} není kompatibilní s typem projektu ${effectiveType}. Povolené modely: ${compatible.join(', ')}`,
+          'MODEL_TYPE_INCOMPATIBLE'
+        );
+      }
+    }
+
+    // Changing the type strands whatever model was stored for the old one, so
+    // it is cleared unless this same request names a replacement. Cleared to
+    // NULL rather than to the new type's default literal: NULL means "follow
+    // the default", so the row keeps tracking the registry, whereas writing
+    // the literal would freeze today's default into it — the same reason the
+    // migration deliberately backfills nothing.
+    const typeChanged =
+      data.type !== undefined && data.type !== existingProject.type;
+    const segmentationModelUpdate =
+      data.segmentationModel !== undefined
+        ? { segmentationModel: data.segmentationModel }
+        : typeChanged
+          ? { segmentationModel: null }
+          : {};
+
     // Update the project
     const updatedProject = await prisma.project.update({
       where: {
@@ -442,6 +478,7 @@ export async function updateProject(
         ...(data.pixelSizeUm !== undefined && {
           pixelSizeUm: data.pixelSizeUm,
         }),
+        ...segmentationModelUpdate,
         updatedAt: new Date(),
       },
       include: {

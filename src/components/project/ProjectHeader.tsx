@@ -12,7 +12,9 @@ import {
 } from '@/components/ui/select';
 import { useLanguage } from '@/contexts/useLanguage';
 import DashboardHeader from '@/components/DashboardHeader';
+import ProjectModelSelector from '@/components/project/ProjectModelSelector';
 import { PROJECT_TYPES, type ProjectType } from '@/types';
+import type { ModelType } from '@/lib/models/modelRegistry';
 import { cn } from '@/lib/utils';
 
 /** Color-code each project type so disintegrated spheroids visually stand
@@ -44,6 +46,17 @@ interface ProjectHeaderProps {
   loading: boolean;
   projectType?: ProjectType;
   onTypeChange?: (type: ProjectType) => void;
+  /** The project's RAW stored model (`null` = never chosen, follow the type's
+   *  default). Rendered by the picker immediately right of the type pill —
+   *  the two are one decision, since the type is what filters the models. */
+  segmentationModel?: string | null;
+  /** Omitted for a viewer who may not change it, which renders a static pill
+   *  instead of a menu (same convention as `onTypeChange`). */
+  onModelChange?: (model: ModelType) => void | Promise<void>;
+  /** Hole detection, carried here only because the model menu hosts its
+   *  checkbox — it is a per-user setting, not a project property. */
+  detectHoles?: boolean;
+  onDetectHolesChange?: (detectHoles: boolean) => void;
   // "All annotations in the project have been reviewed and passed." Owner OR
   // an accepted-share annotator may toggle it — the handler is passed
   // unconditionally by ProjectDetail (same shape as onTypeChange); the
@@ -68,6 +81,10 @@ const ProjectHeader = ({
   loading,
   projectType,
   onTypeChange,
+  segmentationModel,
+  onModelChange,
+  detectHoles = true,
+  onDetectHolesChange,
   verified,
   onVerifiedChange,
   folderId,
@@ -252,6 +269,18 @@ const ProjectHeader = ({
                     {t(`projects.types.${projectType}`)}
                   </Badge>
                 )}
+                {/* Immediately right of the type pill, inside the SAME flex
+                    row, so the pair cannot be split by a wrap and the type
+                    shifts left by exactly the picker's width. They are one
+                    decision: the type is what filters the model list, and six
+                    of the seven types leave a single candidate. */}
+                <ProjectModelSelector
+                  projectType={projectType}
+                  storedModel={segmentationModel}
+                  onModelChange={onModelChange}
+                  detectHoles={detectHoles}
+                  onDetectHolesChange={onDetectHolesChange ?? (() => {})}
+                />
               </div>
             )}
             {(onVerifiedChange || verified) && (

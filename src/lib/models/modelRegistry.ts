@@ -378,3 +378,77 @@ export const MODEL_TYPE_COMPATIBILITY = (() => {
   }
   return out as Record<ProjectTypeKey, ModelType[]>;
 })();
+
+/**
+ * Type-level set of the models compatible with a given project type, derived
+ * by filtering the registry. Used only to CONSTRAIN
+ * `DEFAULT_MODEL_BY_PROJECT_TYPE` below, so picking a default that the
+ * compatibility map would reject is a compile error rather than a runtime 400
+ * the user meets at the Segment button.
+ */
+type CompatibleModelFor<PT extends ProjectTypeKey> = {
+  [
+    M in ModelType
+  ]: PT extends (typeof MODEL_REGISTRY)[M]['compatibleProjectTypes'][number]
+    ? M
+    : never;
+}[ModelType];
+
+/**
+ * The model a project of each type starts on — the most ACCURATE compatible
+ * model, deliberately NOT the fastest.
+ *
+ * Six of the seven types have exactly one compatible model, so their entry is
+ * forced. `spheroid` is the only real choice, and it resolves to `segformer`
+ * on the only accuracy figure any of the five candidates actually carries:
+ * 93 % IoU on bright-field spheroids (see its `description`). `cbam_resunet`
+ * claims "most precise" in prose but publishes no number, and `mamba_unet`'s
+ * strength is out-of-distribution robustness rather than in-distribution
+ * accuracy.
+ *
+ * A `SPHEROID_PRESETS` map in `modelUtils.ts` used to file `segformer` under a
+ * `'fast'` tier and `cbam_resunet` under `'accurate'`, which reads as a
+ * contradiction of this default. It was not a claim about accuracy — it was a
+ * view-layer framing of three recommendation slots, and a model that is both
+ * the fastest and the most accurate can only occupy one of them. It was
+ * deleted along with the Settings → Models section it existed for. Do not
+ * reintroduce that framing as a reason to move this default: it would trade
+ * 93 % IoU for a slogan.
+ *
+ * The `satisfies` clause is load-bearing twice over: `Record<ProjectTypeKey,…>`
+ * makes a newly-added project type a compile error until it declares a
+ * default, and `CompatibleModelFor<K>` makes an incompatible default a compile
+ * error. Mirrored in `backend/src/constants/modelRegistry.ts`.
+ */
+export const DEFAULT_MODEL_BY_PROJECT_TYPE = {
+  spheroid: 'segformer',
+  spheroid_invasive: 'spheroid_disintegration',
+  wound: 'wound',
+  sperm: 'sperm',
+  microtubules: 'microtubule',
+  microcapsule: 'microcapsule',
+  neurite: 'neurite_soma',
+} as const satisfies { [K in ProjectTypeKey]: CompatibleModelFor<K> };
+
+/**
+ * The model a project should segment with: its stored choice when that choice
+ * is still valid for its type, otherwise the type's default.
+ *
+ * MIRROR of `resolveProjectModel()` in `backend/src/constants/modelRegistry.ts`
+ * — both sides must agree, or the picker shows one model while the worker runs
+ * another. The fallback is not merely for rows predating the column: changing
+ * a project's type leaves the old model stored until the next write, and a
+ * model can be dropped from the registry, so a stored value can be stale in
+ * two independent ways. Answering with the default keeps the Segment button
+ * working instead of failing a compatibility check one layer deeper.
+ */
+export function resolveProjectModel(
+  projectType: ProjectTypeKey,
+  storedModel: string | null | undefined
+): ModelType {
+  const compatible = MODEL_TYPE_COMPATIBILITY[projectType];
+  if (storedModel && (compatible as string[]).includes(storedModel)) {
+    return storedModel as ModelType;
+  }
+  return DEFAULT_MODEL_BY_PROJECT_TYPE[projectType];
+}

@@ -131,6 +131,9 @@ function makeProjectData(
     projectTitle: 'Test Project',
     projectType: 'spheroid' as const,
     setProjectType: vi.fn(),
+    // null = never chosen, so the resolver answers with the type's default.
+    projectSegmentationModel: null as string | null,
+    setProjectSegmentationModel: vi.fn(),
     get images() {
       return state.images;
     },
@@ -225,10 +228,13 @@ vi.mock('@/contexts/exports', () => ({
   useLanguage: () => ({
     t: (key: string, _params?: Record<string, unknown>) => key,
   }),
+  // The model and threshold are no longer in this context — they come from
+  // the project via useProjectModel, which is NOT mocked here on purpose: the
+  // real resolver is what turns a project type into the model that reaches the
+  // queue, and mocking it would hide exactly the seam these tests cover.
   useModel: () => ({
-    selectedModel: 'hrnet',
-    confidenceThreshold: 0.5,
     detectHoles: false,
+    setDetectHoles: vi.fn(),
   }),
 }));
 
@@ -991,7 +997,9 @@ describe('ProjectDetail page', () => {
         expect(mockAddBatchToQueue).toHaveBeenCalledWith(
           ['img-1'],
           'proj-1',
-          'hrnet',
+          // The spheroid default: most accurate, not fastest. Previously
+          // 'hrnet', which was merely the global setting's initial value.
+          'segformer',
           0.5,
           0,
           false,
@@ -1012,7 +1020,9 @@ describe('ProjectDetail page', () => {
         expect(mockAddBatchToQueue).toHaveBeenCalledWith(
           ['img-1'],
           'proj-1',
-          'hrnet',
+          // The spheroid default: most accurate, not fastest. Previously
+          // 'hrnet', which was merely the global setting's initial value.
+          'segformer',
           0.5,
           0,
           false,
@@ -1159,7 +1169,8 @@ describe('ProjectDetail page', () => {
           expect(mockAddBatchToQueue).toHaveBeenCalledWith(
             ['img-1'],
             'proj-1',
-            'hrnet',
+            // The spheroid default; see the per-project-type suite below.
+            'segformer',
             0.5,
             0,
             false,
@@ -1188,50 +1199,100 @@ describe('ProjectDetail page', () => {
   });
 
   // =========================================================================
-  // Incompatible model dialog
+  // The model that reaches the queue follows the project type
   // =========================================================================
 
-  describe('Incompatible model dialog', () => {
-    it('opens instead of queuing when the model is incompatible with the project type', async () => {
-      // 'hrnet' (from useModel) is not compatible with a 'sperm' project.
+  describe('model dispatched per project type', () => {
+    // This replaces an "Incompatible model dialog" suite. That dialog existed
+    // because the model was a global per-user setting with no relationship to
+    // the project: opening a sperm project while 'hrnet' was selected blocked
+    // at the Segment button. The model is resolved FROM the project type now,
+    // so the mismatch it guarded is unreachable, and the dialog is gone. These
+    // tests assert the replacement guarantee — the right model is dispatched —
+    // which is strictly stronger than asserting the block appeared.
+    it.each([
+      ['sperm', 'sperm'],
+      ['wound', 'wound'],
+      ['microtubules', 'microtubule'],
+      ['microcapsule', 'microcapsule'],
+      ['neurite', 'neurite_soma'],
+      ['spheroid_invasive', 'spheroid_disintegration'],
+      // The only type with a real choice; unset → most accurate, not fastest.
+      ['spheroid', 'segformer'],
+    ])('a %s project queues the %s model', async (projectType, expected) => {
       wireHooks(
         [makeImage({ segmentationStatus: 'no_segmentation' }, 'img-1')],
-        { projectType: 'sperm' }
+        { projectType, projectSegmentationModel: null }
       );
       renderPage();
 
+      await userEvent.click(screen.getByTestId('select-img-1'));
       await userEvent.click(screen.getByTestId('segment-all-btn'));
 
       await waitFor(() =>
-        expect(
-          screen.getByText('segmentation.incompatibleModelTitle')
-        ).toBeInTheDocument()
+        expect(mockAddBatchToQueue).toHaveBeenCalledWith(
+          ['img-1'],
+          'proj-1',
+          expected,
+          expect.any(Number),
+          0,
+          false,
+          false,
+          undefined
+        )
       );
-      expect(mockAddBatchToQueue).not.toHaveBeenCalled();
     });
 
-    it('dismisses the dialog when Close is clicked', async () => {
+    it("queues the project's STORED model over the type default", async () => {
+      // Without this, the whole feature could be a no-op that always returns
+      // the default and every case above would still pass.
       wireHooks(
         [makeImage({ segmentationStatus: 'no_segmentation' }, 'img-1')],
-        { projectType: 'sperm' }
+        { projectType: 'spheroid', projectSegmentationModel: 'mamba_unet' }
       );
       renderPage();
 
+      await userEvent.click(screen.getByTestId('select-img-1'));
       await userEvent.click(screen.getByTestId('segment-all-btn'));
-      await waitFor(() =>
-        expect(
-          screen.getByText('segmentation.incompatibleModelTitle')
-        ).toBeInTheDocument()
-      );
-
-      await userEvent.click(
-        screen.getByRole('button', { name: /common\.close/i })
-      );
 
       await waitFor(() =>
-        expect(
-          screen.queryByText('segmentation.incompatibleModelTitle')
-        ).not.toBeInTheDocument()
+        expect(mockAddBatchToQueue).toHaveBeenCalledWith(
+          ['img-1'],
+          'proj-1',
+          'mamba_unet',
+          expect.any(Number),
+          0,
+          false,
+          false,
+          undefined
+        )
+      );
+    });
+
+    it('ignores a stored model stranded by a later type change', async () => {
+      // A spheroid project switched to wound keeps 'segformer' in the column
+      // until the next write. Dispatching it would be a 400 the user cannot
+      // act on, so the resolver falls back to the new type's default.
+      wireHooks(
+        [makeImage({ segmentationStatus: 'no_segmentation' }, 'img-1')],
+        { projectType: 'wound', projectSegmentationModel: 'segformer' }
+      );
+      renderPage();
+
+      await userEvent.click(screen.getByTestId('select-img-1'));
+      await userEvent.click(screen.getByTestId('segment-all-btn'));
+
+      await waitFor(() =>
+        expect(mockAddBatchToQueue).toHaveBeenCalledWith(
+          ['img-1'],
+          'proj-1',
+          'wound',
+          expect.any(Number),
+          0,
+          false,
+          false,
+          undefined
+        )
       );
     });
   });

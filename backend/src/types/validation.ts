@@ -268,6 +268,20 @@ export const updateProjectSchema = z.object({
     .max(1000, 'Měřítko může být nejvýše 1000 µm/px')
     .optional()
     .nullable(),
+  // The segmentation model this project runs. Validated here only as "a model
+  // id that exists"; whether it is compatible with the project's TYPE is
+  // checked in `ProjectService.updateProject`, which is the only layer that
+  // knows the type — it may be arriving in this same request.
+  //
+  // `null` clears the choice back to "follow the type's default", which is a
+  // meaningful state and not the same as omitting the field (that leaves the
+  // stored value alone).
+  segmentationModel: z
+    .enum(SEGMENTATION_MODELS as unknown as [string, ...string[]], {
+      errorMap: () => ({ message: SEGMENTATION_MODEL_ERROR_MESSAGE }),
+    })
+    .optional()
+    .nullable(),
 });
 
 /**

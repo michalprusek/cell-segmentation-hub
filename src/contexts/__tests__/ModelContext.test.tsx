@@ -86,140 +86,28 @@ describe('ModelContext', () => {
     );
   });
 
-  describe('error boundaries', () => {
-    it('throws when useModel is used outside ModelProvider', () => {
-      // ModelContext uses a default value (not undefined), so useModel does not
-      // throw by default in the current implementation. This test verifies the
-      // hook is accessible and returns context data when wrapped.
-      // The ModelContext has a non-null default, so we verify it works in context.
-      const { result } = renderHook(() => useModel(), { wrapper });
-      expect(result.current).toBeDefined();
-      expect(result.current.selectedModel).toBe('hrnet');
-    });
-  });
+  // This provider used to hold the selected model, its threshold, the model
+  // catalogue and a getModelInfo lookup. All four moved onto the project
+  // (`projects.segmentationModel`, resolved by `useProjectModel`), so the
+  // suites covering them were deleted rather than adapted — there is nothing
+  // left in this context for them to assert against.
 
-  describe('default values', () => {
-    it('has selectedModel="hrnet", confidenceThreshold=0.5, detectHoles=true by default', async () => {
+  describe('surface', () => {
+    it('exposes only detectHoles and its setter', () => {
       const { result } = renderHook(() => useModel(), { wrapper });
 
-      await waitFor(() => {
-        expect(result.current.selectedModel).toBe('hrnet');
-      });
-
-      expect(result.current.confidenceThreshold).toBe(0.5);
-      expect(result.current.detectHoles).toBe(true);
+      expect(Object.keys(result.current).sort()).toEqual([
+        'detectHoles',
+        'setDetectHoles',
+      ]);
     });
 
-    it('exposes the full model catalogue in availableModels', async () => {
+    it('defaults detectHoles to true', async () => {
       const { result } = renderHook(() => useModel(), { wrapper });
 
       await waitFor(() => {
-        expect(result.current.availableModels).toBeDefined();
+        expect(result.current.detectHoles).toBe(true);
       });
-
-      const modelIds = result.current.availableModels.map(m => m.id);
-      expect(modelIds).toContain('hrnet');
-      expect(modelIds).toContain('cbam_resunet');
-      expect(modelIds).toContain('unet_spherohq');
-      expect(modelIds).toContain('spheroid_disintegration');
-      expect(modelIds).toContain('sperm');
-      expect(modelIds).toContain('wound');
-    });
-  });
-
-  describe('setSelectedModel', () => {
-    it('updates selectedModel and saves to guest localStorage key', async () => {
-      const { result } = renderHook(() => useModel(), { wrapper });
-
-      await waitFor(() => {
-        expect(result.current.selectedModel).toBe('hrnet');
-      });
-
-      act(() => {
-        result.current.setSelectedModel('unet_spherohq');
-      });
-
-      expect(result.current.selectedModel).toBe('unet_spherohq');
-      expect(localStorageMock.setItem).toHaveBeenCalledWith(
-        'guest_selectedModel',
-        'unet_spherohq'
-      );
-    });
-
-    it('saves to user-specific localStorage key when authenticated', async () => {
-      const userId = 'user-42';
-      vi.mocked(apiClient.getUserProfile).mockResolvedValue({
-        id: userId,
-        email: 'u@example.com',
-      } as any);
-
-      const authedWrapper = ({ children }: { children: ReactNode }) => (
-        <MemoryRouter>
-          <AuthProvider>
-            <ModelProvider>{children}</ModelProvider>
-          </AuthProvider>
-        </MemoryRouter>
-      );
-
-      const { result } = renderHook(() => useModel(), {
-        wrapper: authedWrapper,
-      });
-
-      // Wait for auth to resolve the user
-      await waitFor(() => {
-        expect(result.current.selectedModel).toBeDefined();
-      });
-
-      act(() => {
-        result.current.setSelectedModel('sperm');
-      });
-
-      expect(localStorageMock.setItem).toHaveBeenCalledWith(
-        expect.stringContaining('selectedModel'),
-        'sperm'
-      );
-    });
-  });
-
-  describe('confidenceThreshold is read-only and derived from selected model', () => {
-    it('returns the selected model defaultThreshold (0.5 for hrnet)', async () => {
-      const { result } = renderHook(() => useModel(), { wrapper });
-
-      await waitFor(() => {
-        expect(result.current.selectedModel).toBe('hrnet');
-      });
-
-      expect(result.current.confidenceThreshold).toBe(0.5);
-    });
-
-    it('updates automatically when the selected model changes', async () => {
-      const { result } = renderHook(() => useModel(), { wrapper });
-
-      await waitFor(() => {
-        expect(result.current.selectedModel).toBe('hrnet');
-      });
-      expect(result.current.confidenceThreshold).toBe(0.5);
-
-      // spheroid_disintegration is calibrated to 0.2; switching the selected
-      // model must propagate to the threshold reported by the context.
-      act(() => {
-        result.current.setSelectedModel('spheroid_disintegration');
-      });
-
-      expect(result.current.confidenceThreshold).toBe(0.2);
-    });
-
-    it('no longer exposes setConfidenceThreshold', async () => {
-      const { result } = renderHook(() => useModel(), { wrapper });
-
-      await waitFor(() => {
-        expect(result.current.selectedModel).toBe('hrnet');
-      });
-
-      expect(
-        (result.current as { setConfidenceThreshold?: unknown })
-          .setConfidenceThreshold
-      ).toBeUndefined();
     });
   });
 
@@ -251,85 +139,90 @@ describe('ModelContext', () => {
         'true'
       );
     });
+
+    it('saves to the user-specific key when authenticated', async () => {
+      const userId = 'user-42';
+      // AuthProvider only verifies a session when the `authenticated=` cookie
+      // hint is present (AuthContext.tsx:30) — without it the profile is never
+      // fetched, `user` stays null, and this would silently exercise the GUEST
+      // key. The suite this replaced asserted
+      // `expect.stringContaining('selectedModel')`, which matches
+      // `guest_selectedModel` too, so it passed while proving nothing.
+      document.cookie = 'authenticated=1';
+      vi.mocked(apiClient.getUserProfile).mockResolvedValue({
+        id: userId,
+        email: 'u@example.com',
+        username: 'u',
+      } as any);
+
+      const { result } = renderHook(() => useModel(), { wrapper });
+
+      // Wait for AUTH, not for the default value: `detectHoles` is already
+      // true before the profile resolves, so asserting on it would let the
+      // toggle below run against the guest key and write `guest_detectHoles`.
+      // The provider re-reads storage under the user key once the id lands —
+      // that read is the observable signal that it has.
+      await waitFor(() => {
+        expect(localStorageMock.getItem).toHaveBeenCalledWith(
+          `user_${userId}_detectHoles`
+        );
+      });
+
+      act(() => {
+        result.current.setDetectHoles(false);
+      });
+
+      expect(localStorageMock.setItem).toHaveBeenCalledWith(
+        `user_${userId}_detectHoles`,
+        'false'
+      );
+    });
   });
 
-  describe('getModelInfo', () => {
-    it('returns correct info for a known model id', async () => {
+  describe('localStorage hydration', () => {
+    it('reads a saved detectHoles under the guest key when no user', async () => {
+      localStorageMock = createStoreMock({ guest_detectHoles: 'false' });
+      Object.defineProperty(window, 'localStorage', {
+        value: localStorageMock,
+        writable: true,
+        configurable: true,
+      });
+
       const { result } = renderHook(() => useModel(), { wrapper });
 
       await waitFor(() => {
-        expect(result.current.selectedModel).toBe('hrnet');
+        expect(result.current.detectHoles).toBe(false);
       });
-
-      const info = result.current.getModelInfo('cbam_resunet');
-      expect(info.id).toBe('cbam_resunet');
-      expect(info.name).toBeDefined();
     });
 
-    it('falls back to the first available model for an unknown id', async () => {
-      const { result } = renderHook(() => useModel(), { wrapper });
+    it('does not read a stale selectedModel left by an older build', async () => {
+      // Deliberate: there is nowhere to migrate it TO. One global model cannot
+      // describe projects of different types, which is the whole reason the
+      // setting moved. Reading it here would be worse than ignoring it — it
+      // would resurrect a value the user can no longer see or change.
+      localStorageMock = createStoreMock({
+        guest_selectedModel: 'mamba_unet',
+        guest_confidenceThreshold: '0.9',
+      });
+      Object.defineProperty(window, 'localStorage', {
+        value: localStorageMock,
+        writable: true,
+        configurable: true,
+      });
+
+      renderHook(() => useModel(), { wrapper });
 
       await waitFor(() => {
-        expect(result.current.selectedModel).toBe('hrnet');
+        expect(localStorageMock.getItem).toHaveBeenCalledWith(
+          'guest_detectHoles'
+        );
       });
-
-      // Cast to bypass TypeScript type check for the unknown id test
-      const info = result.current.getModelInfo('unknown_model' as any);
-      expect(info).toBeDefined();
-      expect(info.id).toBe('hrnet');
-    });
-  });
-
-  describe('settings reload when user changes', () => {
-    it('reads saved settings from localStorage using guest key when no user', async () => {
-      localStorageMock.getItem.mockImplementation((key: string) => {
-        if (key === 'guest_selectedModel') return 'sperm';
-        if (key === 'guest_detectHoles') return 'false';
-        return null;
-      });
-
-      const { result } = renderHook(() => useModel(), { wrapper });
-
-      await waitFor(() => {
-        expect(result.current.selectedModel).toBe('sperm');
-      });
-
-      // sperm has defaultThreshold 0.5 — threshold is no longer read
-      // from localStorage, only the model id is.
-      expect(result.current.confidenceThreshold).toBe(0.5);
-      expect(result.current.detectHoles).toBe(false);
-    });
-
-    it('ignores any guest_confidenceThreshold left over from older builds', async () => {
-      // Older builds persisted a per-user threshold; the new context
-      // ignores those entries (they are stale and the per-model default
-      // takes precedence). Verifies the migration path doesn't leak.
-      localStorageMock.getItem.mockImplementation((key: string) => {
-        if (key === 'guest_confidenceThreshold') return '0.8';
-        return null;
-      });
-
-      const { result } = renderHook(() => useModel(), { wrapper });
-
-      await waitFor(() => {
-        expect(result.current.selectedModel).toBe('hrnet');
-      });
-      // hrnet defaultThreshold is 0.5, not the stale 0.8
-      expect(result.current.confidenceThreshold).toBe(0.5);
-    });
-
-    it('ignores invalid model ids from localStorage and keeps default', async () => {
-      localStorageMock.getItem.mockImplementation((key: string) => {
-        if (key === 'guest_selectedModel') return 'invalid_model_xyz';
-        return null;
-      });
-
-      const { result } = renderHook(() => useModel(), { wrapper });
-
-      await waitFor(() => {
-        // Invalid model is not in AVAILABLE_MODELS, so default 'hrnet' is kept
-        expect(result.current.selectedModel).toBe('hrnet');
-      });
+      expect(localStorageMock.getItem).not.toHaveBeenCalledWith(
+        'guest_selectedModel'
+      );
+      expect(localStorageMock.getItem).not.toHaveBeenCalledWith(
+        'guest_confidenceThreshold'
+      );
     });
   });
 });
