@@ -674,6 +674,48 @@ describe('field mapping', () => {
     // codebase (mapProjectFields is a hand-built object literal) — an
     // annotator-set "all annotations reviewed and passed" flag must survive
     // the FE mapper, not just the backend response.
+    // Same enumerative-mapper hazard as `verified` below: the column exists,
+    // the API sends it, and without a line in the mapper the picker silently
+    // shows the type default forever while the user's saved choice is dropped
+    // on the way in. A mutation that replaces this mapping with a bare `null`
+    // survives every other suite in the repo, because they all mock
+    // `useProjectData` and never reach the mapper.
+    it('preserves a stored segmentationModel', async () => {
+      mockAxiosInstance.get.mockResolvedValue(
+        wrap({ ...baseProject, segmentationModel: 'mamba_unet' })
+      );
+      const result = await apiClient.getProject('proj-1');
+      expect(result.segmentationModel).toBe('mamba_unet');
+    });
+
+    it('maps an absent segmentationModel to null, not undefined', async () => {
+      // null is the meaningful state "never chosen, follow the type default",
+      // which `resolveProjectModel` acts on; collapsing it to undefined would
+      // work by accident today and break the moment a caller distinguishes
+      // them.
+      mockAxiosInstance.get.mockResolvedValue(wrap({ ...baseProject }));
+      const result = await apiClient.getProject('proj-1');
+      expect(
+        Object.prototype.hasOwnProperty.call(result, 'segmentationModel')
+      ).toBe(true);
+      expect(result.segmentationModel).toBeNull();
+    });
+
+    it('sends segmentationModel through updateProject', async () => {
+      // The write half of the same seam: a payload field the client drops
+      // would make every pick a silent no-op.
+      mockAxiosInstance.put.mockResolvedValue(
+        wrap({ ...baseProject, segmentationModel: 'cbam_resunet' })
+      );
+      await apiClient.updateProject('proj-1', {
+        segmentationModel: 'cbam_resunet',
+      });
+      expect(mockAxiosInstance.put).toHaveBeenCalledWith(
+        '/projects/proj-1',
+        expect.objectContaining({ segmentationModel: 'cbam_resunet' })
+      );
+    });
+
     it('preserves verified=true', async () => {
       mockAxiosInstance.get.mockResolvedValue(
         wrap({ ...baseProject, verified: true })

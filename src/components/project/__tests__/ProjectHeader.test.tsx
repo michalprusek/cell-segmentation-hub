@@ -236,3 +236,134 @@ describe('ProjectHeader — renaming', () => {
     );
   });
 });
+
+// ─── the model picker's seam ────────────────────────────────────────────────
+//
+// The picker has its own suite (ProjectModelSelector.test.tsx) that renders it
+// directly. That leaves the WIRING untested: dropping `storedModel=` or
+// `projectType=` here turns the feature into a picker that always shows the
+// default, and every one of those tests still passes. These assert the props
+// actually arrive — the same class of gap CLAUDE.md records for
+// `SegmentationEditorLayout`'s `projectType`.
+describe('ProjectHeader → ProjectModelSelector wiring', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('renders no model pill before the project type is known', () => {
+    render(<ProjectHeader projectTitle="P" imagesCount={0} loading={false} />);
+    expect(
+      screen.queryByTestId('project-model-trigger')
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId('project-model-readonly')
+    ).not.toBeInTheDocument();
+  });
+
+  it('hands the project type down, so the pill shows that type’s default', () => {
+    render(
+      <ProjectHeader
+        projectTitle="P"
+        imagesCount={0}
+        loading={false}
+        projectType="wound"
+        onTypeChange={vi.fn()}
+        onModelChange={vi.fn()}
+        detectHoles
+        onDetectHolesChange={vi.fn()}
+      />
+    );
+    // Real copy, not a key: this suite renders through the real
+    // LanguageProvider, which makes the assertion also prove the model's
+    // translation key resolves.
+    expect(screen.getByTestId('project-model-trigger')).toHaveTextContent(
+      'Wound Healing'
+    );
+  });
+
+  it('hands the STORED model down, not just the type', () => {
+    render(
+      <ProjectHeader
+        projectTitle="P"
+        imagesCount={0}
+        loading={false}
+        projectType="spheroid"
+        onTypeChange={vi.fn()}
+        segmentationModel="cbam_resunet"
+        onModelChange={vi.fn()}
+        detectHoles
+        onDetectHolesChange={vi.fn()}
+      />
+    );
+    // Not the spheroid default (segformer) — so a dropped `storedModel=` prop
+    // fails here rather than passing by resolving to the default.
+    expect(screen.getByTestId('project-model-trigger')).toHaveTextContent(
+      'CBAM-ResUNet'
+    );
+  });
+
+  it('places the model pill immediately after the project-type control', () => {
+    // The requested layout: type on the left, model to its right. A DOM-order
+    // assertion, because the two must stay in one flex row — split apart they
+    // can wrap independently and stop reading as one decision.
+    render(
+      <ProjectHeader
+        projectTitle="P"
+        imagesCount={0}
+        loading={false}
+        projectType="spheroid"
+        onTypeChange={vi.fn()}
+        onModelChange={vi.fn()}
+        detectHoles
+        onDetectHolesChange={vi.fn()}
+      />
+    );
+    const typePill = screen.getByLabelText('Change project type');
+    const modelPill = screen.getByTestId('project-model-trigger');
+
+    expect(typePill.parentElement).toBe(modelPill.parentElement);
+    expect(
+      typePill.compareDocumentPosition(modelPill) &
+        Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+  });
+
+  it('degrades to a static pill when the viewer may not change the model', () => {
+    render(
+      <ProjectHeader
+        projectTitle="P"
+        imagesCount={0}
+        loading={false}
+        projectType="spheroid"
+        detectHoles
+        onDetectHolesChange={vi.fn()}
+      />
+    );
+    expect(screen.getByTestId('project-model-readonly')).toBeInTheDocument();
+    expect(
+      screen.queryByTestId('project-model-trigger')
+    ).not.toBeInTheDocument();
+  });
+
+  it('forwards the detect-holes toggle to its handler', async () => {
+    const onDetectHolesChange = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <ProjectHeader
+        projectTitle="P"
+        imagesCount={0}
+        loading={false}
+        projectType="spheroid"
+        onTypeChange={vi.fn()}
+        onModelChange={vi.fn()}
+        detectHoles
+        onDetectHolesChange={onDetectHolesChange}
+      />
+    );
+
+    await user.click(screen.getByTestId('project-model-trigger'));
+    await user.click(screen.getByTestId('project-model-detect-holes'));
+
+    expect(onDetectHolesChange).toHaveBeenCalledWith(false);
+  });
+});

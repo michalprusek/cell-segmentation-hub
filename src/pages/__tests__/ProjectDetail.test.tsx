@@ -321,12 +321,16 @@ vi.mock('@/components/project/ProjectHeader', () => ({
   default: ({
     projectTitle,
     onTypeChange,
+    segmentationModel,
+    onModelChange,
   }: {
     projectTitle: string;
     loading?: boolean;
     projectType?: string;
     imagesCount?: number;
     onTypeChange?: (t: string) => void;
+    segmentationModel?: string | null;
+    onModelChange?: (m: string) => void | Promise<void>;
   }) => (
     <header data-testid="project-header">
       <h1>{projectTitle}</h1>
@@ -336,6 +340,18 @@ vi.mock('@/components/project/ProjectHeader', () => ({
           onClick={() => onTypeChange('wound')}
         >
           Change Type
+        </button>
+      )}
+      {/* The picker itself has its own suites; this stub only needs to prove
+          the page's half of the contract — that the stored model reaches the
+          header and that a pick is persisted. */}
+      <span data-testid="header-stored-model">{String(segmentationModel)}</span>
+      {onModelChange && (
+        <button
+          data-testid="change-model-btn"
+          onClick={() => void onModelChange('cbam_resunet')}
+        >
+          Change Model
         </button>
       )}
     </header>
@@ -1199,6 +1215,60 @@ describe('ProjectDetail page', () => {
   });
 
   // =========================================================================
+  // Model change
+  // =========================================================================
+
+  describe('Project model change', () => {
+    it('hands the stored model to the header', () => {
+      wireHooks([], { projectSegmentationModel: 'mamba_unet' });
+      renderPage();
+
+      expect(screen.getByTestId('header-stored-model')).toHaveTextContent(
+        'mamba_unet'
+      );
+    });
+
+    it('persists the pick and shows a success toast', async () => {
+      const projectData = wireHooks([], { projectSegmentationModel: null });
+      renderPage();
+
+      await userEvent.click(screen.getByTestId('change-model-btn'));
+
+      await waitFor(() => {
+        expect(mockUpdateProject).toHaveBeenCalledWith('proj-1', {
+          segmentationModel: 'cbam_resunet',
+        });
+      });
+      // Optimistic: painted before the round-trip, or the pill reads as if the
+      // click were ignored for its duration.
+      expect(projectData.setProjectSegmentationModel).toHaveBeenCalledWith(
+        'cbam_resunet'
+      );
+      expect(vi.mocked(toast.success)).toHaveBeenCalledWith(
+        'project.modelUpdated'
+      );
+    });
+
+    it('rolls back and reports when the server refuses the model', async () => {
+      // The backend's 400 names the models the type allows, so it is shown
+      // verbatim rather than replaced with a generic failure string.
+      mockUpdateProject.mockRejectedValue(new Error('Server error'));
+      const projectData = wireHooks([], {
+        projectSegmentationModel: 'mamba_unet',
+      });
+      renderPage();
+
+      await userEvent.click(screen.getByTestId('change-model-btn'));
+
+      await waitFor(() => expect(vi.mocked(toast.error)).toHaveBeenCalled());
+      expect(projectData.setProjectSegmentationModel).toHaveBeenLastCalledWith(
+        'mamba_unet'
+      );
+      expect(vi.mocked(toast.success)).not.toHaveBeenCalled();
+    });
+  });
+
+  // =========================================================================
   // The model that reaches the queue follows the project type
   // =========================================================================
 
@@ -1370,6 +1440,28 @@ describe('ProjectDetail page', () => {
       });
     });
 
+    it('mirrors the backend clearing the stored model', async () => {
+      // The backend sets `segmentationModel` to NULL on a type change, because
+      // the stored model belongs to the old type's list. The page must mirror
+      // that or its copy diverges from the row: the resolver would still pick
+      // the right model to SEGMENT with (it rejects an incompatible stored
+      // value), but a subsequent failed model change would roll back to the
+      // stale string, writing a value the database no longer has.
+      const projectData = wireHooks(
+        [makeImage({ segmentationStatus: 'no_segmentation' })],
+        { projectSegmentationModel: 'mamba_unet' }
+      );
+      renderPage();
+
+      await userEvent.click(screen.getByTestId('change-type-btn'));
+
+      await waitFor(() =>
+        expect(projectData.setProjectSegmentationModel).toHaveBeenCalledWith(
+          null
+        )
+      );
+    });
+
     it('shows toast.error (and no success) when updateProject throws', async () => {
       mockUpdateProject.mockRejectedValue(new Error('Server error'));
       wireHooks([]);
@@ -1379,6 +1471,22 @@ describe('ProjectDetail page', () => {
 
       await waitFor(() => expect(vi.mocked(toast.error)).toHaveBeenCalled());
       expect(vi.mocked(toast.success)).not.toHaveBeenCalled();
+    });
+
+    it('restores the previous model when the type change is refused', async () => {
+      mockUpdateProject.mockRejectedValue(new Error('Server error'));
+      const projectData = wireHooks([], {
+        projectSegmentationModel: 'mamba_unet',
+      });
+      renderPage();
+
+      await userEvent.click(screen.getByTestId('change-type-btn'));
+
+      await waitFor(() => expect(vi.mocked(toast.error)).toHaveBeenCalled());
+      // Not left on the optimistic null: the row still holds 'mamba_unet'.
+      expect(projectData.setProjectSegmentationModel).toHaveBeenLastCalledWith(
+        'mamba_unet'
+      );
     });
 
     it('warns when completed segmentations exist on the project', async () => {
