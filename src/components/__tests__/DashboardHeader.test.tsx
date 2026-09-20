@@ -71,10 +71,6 @@ vi.mock('@/contexts/useLanguage', () => ({
   })),
 }));
 
-vi.mock('@/hooks/useLocalizedModels', () => ({
-  useLocalizedModels: vi.fn(),
-}));
-
 vi.mock('@/hooks/useSegmentationQueue', () => ({
   useSegmentationQueue: vi.fn(),
 }));
@@ -113,19 +109,6 @@ describe('DashboardHeader', () => {
   const mockUseLocation = vi.mocked(router.useLocation);
   const mockUseNavigate = vi.mocked(router.useNavigate);
 
-  const mockModelContext = {
-    selectedModel: 'hrnet' as const,
-    getSelectedModelInfo: () => ({
-      id: 'hrnet',
-      name: 'HRNet',
-      displayName: 'HRNet v2',
-      description: 'High-Resolution Network',
-      accuracy: 95,
-      speed: 'medium',
-      inferenceTime: 3.1,
-    }),
-  };
-
   const mockQueueContext = {
     isConnected: true,
     queueStats: { processing: 0, waiting: 0 },
@@ -148,7 +131,6 @@ describe('DashboardHeader', () => {
     // Mock the hooks
     const { useAuth } = await import('@/contexts/AuthContext');
     const { useAuth: useAuthHook } = await import('@/contexts/useAuth');
-    const { useLocalizedModels } = await import('@/hooks/useLocalizedModels');
     const { useSegmentationQueue } =
       await import('@/hooks/useSegmentationQueue');
     const { fetchWithRetry } = await import('@/lib/httpUtils');
@@ -165,7 +147,6 @@ describe('DashboardHeader', () => {
     vi.mocked(useAuth).mockReturnValue(mockUserValue);
     vi.mocked(useAuthHook).mockReturnValue(mockUserValue);
 
-    vi.mocked(useLocalizedModels).mockReturnValue(mockModelContext);
     vi.mocked(useSegmentationQueue).mockReturnValue(mockQueueContext);
 
     mockFetchWithRetry.mockResolvedValue({
@@ -221,31 +202,28 @@ describe('DashboardHeader', () => {
     });
   });
 
-  it('displays model badge with status indicator', () => {
+  it('keeps the ML status indicator after the model badge was removed', () => {
     render(<DashboardHeader />);
 
-    const modelBadge = screen.getByText('HRNet v2');
-    expect(modelBadge).toBeInTheDocument();
-
-    const statusDot = modelBadge.parentElement?.querySelector('.w-2.h-2');
+    // The dot used to live inside the model badge. Removing the badge must not
+    // take it with it — it reports whether the ML service is reachable and
+    // whether anything is processing, which has no other surface in the app.
+    const indicator = screen.getByTestId('ml-status-indicator');
+    const statusDot = indicator.querySelector('.w-2.h-2');
     expect(statusDot).toBeInTheDocument();
     expect(statusDot).toHaveClass('bg-green-500'); // idle status
   });
 
-  it('navigates to settings when model badge is clicked', async () => {
-    const user = userEvent.setup();
+  it('no longer names a model in the header', () => {
     render(<DashboardHeader />);
 
-    // Badge has no [role] attribute; clicking the text element or any
-    // ancestor with onClick fires the event via bubbling.
-    const modelText = screen.getByText('HRNet v2');
-    // Walk up to find the clickable Badge element (has cursor-pointer class)
-    const modelBadge =
-      modelText.closest('.cursor-pointer') || modelText.parentElement;
-    if (modelBadge) {
-      await user.click(modelBadge as HTMLElement);
-      expect(mockNavigate).toHaveBeenCalledWith('/settings?tab=models');
-    }
+    // The model is a property of the PROJECT now, chosen beside its type on
+    // the project page. A header naming one global model contradicted that,
+    // and the Settings tab it linked to no longer exists. Unconditional
+    // assertions: the old click test was wrapped in `if (modelBadge)` and
+    // would have passed silently once the badge was gone.
+    expect(screen.queryByText('HRNet v2')).not.toBeInTheDocument();
+    expect(mockNavigate).not.toHaveBeenCalledWith('/settings?tab=models');
   });
 
   it('shows mobile menu button on mobile', () => {

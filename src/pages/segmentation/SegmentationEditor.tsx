@@ -10,6 +10,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth, useLanguage, useModel } from '@/contexts/exports';
 import { useProjectData } from '@/hooks/useProjectData';
+import { useProjectModel } from '@/hooks/useProjectModel';
 import { sortImagesBySettings } from '@/hooks/useImageFilter';
 import { useEnhancedSegmentationEditor } from './hooks/useEnhancedSegmentationEditor';
 import { useSegmentationReload } from './hooks/useSegmentationReload';
@@ -63,7 +64,11 @@ const SegmentationEditor = () => {
   }>();
   const { user } = useAuth();
   const { t } = useLanguage();
-  const { selectedModel, confidenceThreshold, detectHoles } = useModel();
+  // Only hole detection is still a per-user global. The model and its
+  // calibrated threshold belong to the project and are resolved below, AFTER
+  // `useProjectData` has supplied the type — a hook that reads `projectType`
+  // must sit after it (CLAUDE.md production failure #11).
+  const { detectHoles } = useModel();
   const navigate = useNavigate();
   // Shared cache between the editor's primary load and the
   // sliding-window prefetch hook. Both write/read under the
@@ -96,7 +101,16 @@ const SegmentationEditor = () => {
     // useProjectData always fetches metadata only (lod: 'low') and loads
     // segmentation geometry on demand — there is no fetch-all path to disable,
     // so no options arg is passed. Adjacent-frame prefetch is handled separately.
+    projectSegmentationModel,
   } = useProjectData(projectId, user?.id);
+
+  // The resegment path used to take the global `selectedModel` and correct it
+  // in `useResegment` whenever the project type had exactly one compatible
+  // model. That correction is gone: the model is resolved from the project, so
+  // it is right for every type, including the spheroid one the old fallback
+  // could not fix.
+  const { model: selectedModel, threshold: confidenceThreshold } =
+    useProjectModel(projectType, projectSegmentationModel);
 
   // WebSocket connection for segmentation status updates
   const {
@@ -1104,7 +1118,6 @@ const SegmentationEditor = () => {
   } = useResegment({
     projectId,
     imageId,
-    projectType,
     selectedModel,
     confidenceThreshold,
     detectHoles,

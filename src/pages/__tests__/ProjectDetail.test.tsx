@@ -131,6 +131,9 @@ function makeProjectData(
     projectTitle: 'Test Project',
     projectType: 'spheroid' as const,
     setProjectType: vi.fn(),
+    // null = never chosen, so the resolver answers with the type's default.
+    projectSegmentationModel: null as string | null,
+    setProjectSegmentationModel: vi.fn(),
     get images() {
       return state.images;
     },
@@ -225,10 +228,13 @@ vi.mock('@/contexts/exports', () => ({
   useLanguage: () => ({
     t: (key: string, _params?: Record<string, unknown>) => key,
   }),
+  // The model and threshold are no longer in this context — they come from
+  // the project via useProjectModel, which is NOT mocked here on purpose: the
+  // real resolver is what turns a project type into the model that reaches the
+  // queue, and mocking it would hide exactly the seam these tests cover.
   useModel: () => ({
-    selectedModel: 'hrnet',
-    confidenceThreshold: 0.5,
     detectHoles: false,
+    setDetectHoles: vi.fn(),
   }),
 }));
 
@@ -315,12 +321,16 @@ vi.mock('@/components/project/ProjectHeader', () => ({
   default: ({
     projectTitle,
     onTypeChange,
+    segmentationModel,
+    onModelChange,
   }: {
     projectTitle: string;
     loading?: boolean;
     projectType?: string;
     imagesCount?: number;
     onTypeChange?: (t: string) => void;
+    segmentationModel?: string | null;
+    onModelChange?: (m: string) => void | Promise<void>;
   }) => (
     <header data-testid="project-header">
       <h1>{projectTitle}</h1>
@@ -330,6 +340,18 @@ vi.mock('@/components/project/ProjectHeader', () => ({
           onClick={() => onTypeChange('wound')}
         >
           Change Type
+        </button>
+      )}
+      {/* The picker itself has its own suites; this stub only needs to prove
+          the page's half of the contract — that the stored model reaches the
+          header and that a pick is persisted. */}
+      <span data-testid="header-stored-model">{String(segmentationModel)}</span>
+      {onModelChange && (
+        <button
+          data-testid="change-model-btn"
+          onClick={() => void onModelChange('cbam_resunet')}
+        >
+          Change Model
         </button>
       )}
     </header>
@@ -511,16 +533,6 @@ vi.mock('@/components/project/SegmentChannelDialog', () => ({
     return Array.from(channels);
   },
 }));
-
-vi.mock('@/types', async () => {
-  const actual = await vi.importActual<typeof import('@/types')>('@/types');
-  return {
-    ...actual,
-    isModelCompatibleWithType: vi.fn((model: string, type: string) =>
-      actual.isModelCompatibleWithType(model as never, type as never)
-    ),
-  };
-});
 
 // ---------------------------------------------------------------------------
 // Render helper + hook wiring
@@ -991,7 +1003,9 @@ describe('ProjectDetail page', () => {
         expect(mockAddBatchToQueue).toHaveBeenCalledWith(
           ['img-1'],
           'proj-1',
-          'hrnet',
+          // The spheroid default: most accurate, not fastest. Previously
+          // 'hrnet', which was merely the global setting's initial value.
+          'segformer',
           0.5,
           0,
           false,
@@ -1012,7 +1026,9 @@ describe('ProjectDetail page', () => {
         expect(mockAddBatchToQueue).toHaveBeenCalledWith(
           ['img-1'],
           'proj-1',
-          'hrnet',
+          // The spheroid default: most accurate, not fastest. Previously
+          // 'hrnet', which was merely the global setting's initial value.
+          'segformer',
           0.5,
           0,
           false,
@@ -1159,7 +1175,8 @@ describe('ProjectDetail page', () => {
           expect(mockAddBatchToQueue).toHaveBeenCalledWith(
             ['img-1'],
             'proj-1',
-            'hrnet',
+            // The spheroid default; see the per-project-type suite below.
+            'segformer',
             0.5,
             0,
             false,
@@ -1188,50 +1205,173 @@ describe('ProjectDetail page', () => {
   });
 
   // =========================================================================
-  // Incompatible model dialog
+  // Model change
   // =========================================================================
 
-  describe('Incompatible model dialog', () => {
-    it('opens instead of queuing when the model is incompatible with the project type', async () => {
-      // 'hrnet' (from useModel) is not compatible with a 'sperm' project.
-      wireHooks(
-        [makeImage({ segmentationStatus: 'no_segmentation' }, 'img-1')],
-        { projectType: 'sperm' }
-      );
+  describe('Project model change', () => {
+    it('hands the stored model to the header', () => {
+      wireHooks([], { projectSegmentationModel: 'mamba_unet' });
       renderPage();
 
-      await userEvent.click(screen.getByTestId('segment-all-btn'));
-
-      await waitFor(() =>
-        expect(
-          screen.getByText('segmentation.incompatibleModelTitle')
-        ).toBeInTheDocument()
+      expect(screen.getByTestId('header-stored-model')).toHaveTextContent(
+        'mamba_unet'
       );
-      expect(mockAddBatchToQueue).not.toHaveBeenCalled();
     });
 
-    it('dismisses the dialog when Close is clicked', async () => {
+    it('persists the pick and shows a success toast', async () => {
+      const projectData = wireHooks([], { projectSegmentationModel: null });
+      renderPage();
+
+      await userEvent.click(screen.getByTestId('change-model-btn'));
+
+      await waitFor(() => {
+        expect(mockUpdateProject).toHaveBeenCalledWith('proj-1', {
+          segmentationModel: 'cbam_resunet',
+        });
+      });
+      // Optimistic: painted before the round-trip, or the pill reads as if the
+      // click were ignored for its duration.
+      expect(projectData.setProjectSegmentationModel).toHaveBeenCalledWith(
+        'cbam_resunet'
+      );
+      expect(vi.mocked(toast.success)).toHaveBeenCalledWith(
+        'project.modelUpdated'
+      );
+    });
+
+    it('rolls back and reports when the server refuses the model', async () => {
+      // The backend's 400 names the models the type allows, so it is shown
+      // verbatim rather than replaced with a generic failure string.
+      mockUpdateProject.mockRejectedValue(new Error('Server error'));
+      const projectData = wireHooks([], {
+        projectSegmentationModel: 'mamba_unet',
+      });
+      renderPage();
+
+      await userEvent.click(screen.getByTestId('change-model-btn'));
+
+      await waitFor(() => expect(vi.mocked(toast.error)).toHaveBeenCalled());
+      expect(projectData.setProjectSegmentationModel).toHaveBeenLastCalledWith(
+        'mamba_unet'
+      );
+      expect(vi.mocked(toast.success)).not.toHaveBeenCalled();
+    });
+  });
+
+  // =========================================================================
+  // The model that reaches the queue follows the project type
+  // =========================================================================
+
+  describe('model dispatched per project type', () => {
+    // This replaces an "Incompatible model dialog" suite. That dialog existed
+    // because the model was a global per-user setting with no relationship to
+    // the project: opening a sperm project while 'hrnet' was selected blocked
+    // at the Segment button. The model is resolved FROM the project type now,
+    // so the mismatch it guarded is unreachable, and the dialog is gone. These
+    // tests assert the replacement guarantee — the right model is dispatched —
+    // which is strictly stronger than asserting the block appeared.
+    it.each([
+      ['sperm', 'sperm'],
+      ['wound', 'wound'],
+      ['microtubules', 'microtubule'],
+      ['microcapsule', 'microcapsule'],
+      ['neurite', 'neurite_soma'],
+      ['spheroid_invasive', 'spheroid_disintegration'],
+      // The only type with a real choice; unset → most accurate, not fastest.
+      ['spheroid', 'segformer'],
+    ])('a %s project queues the %s model', async (projectType, expected) => {
       wireHooks(
         [makeImage({ segmentationStatus: 'no_segmentation' }, 'img-1')],
-        { projectType: 'sperm' }
+        { projectType, projectSegmentationModel: null }
       );
       renderPage();
 
+      await userEvent.click(screen.getByTestId('select-img-1'));
       await userEvent.click(screen.getByTestId('segment-all-btn'));
-      await waitFor(() =>
-        expect(
-          screen.getByText('segmentation.incompatibleModelTitle')
-        ).toBeInTheDocument()
-      );
-
-      await userEvent.click(
-        screen.getByRole('button', { name: /common\.close/i })
-      );
 
       await waitFor(() =>
-        expect(
-          screen.queryByText('segmentation.incompatibleModelTitle')
-        ).not.toBeInTheDocument()
+        expect(mockAddBatchToQueue).toHaveBeenCalledWith(
+          ['img-1'],
+          'proj-1',
+          expected,
+          expect.any(Number),
+          0,
+          false,
+          false,
+          undefined
+        )
+      );
+    });
+
+    it('queues nothing while the project type is still loading', async () => {
+      // `useProjectModel` returns `{model: undefined}` until the type lands.
+      // Dispatching then posts no model at all and the queue applies its own
+      // fallback to a batch that may be of any type — the failure this whole
+      // change exists to remove. The two sibling dispatch sites grew this
+      // guard explicitly; this one used to rely on the deleted compatibility
+      // pre-flight for it.
+      wireHooks(
+        [makeImage({ segmentationStatus: 'no_segmentation' }, 'img-1')],
+        { projectType: undefined }
+      );
+      renderPage();
+
+      await userEvent.click(screen.getByTestId('select-img-1'));
+      await userEvent.click(screen.getByTestId('segment-all-btn'));
+
+      await waitFor(() => expect(mockAddBatchToQueue).not.toHaveBeenCalled());
+    });
+
+    it("queues the project's STORED model over the type default", async () => {
+      // Without this, the whole feature could be a no-op that always returns
+      // the default and every case above would still pass.
+      wireHooks(
+        [makeImage({ segmentationStatus: 'no_segmentation' }, 'img-1')],
+        { projectType: 'spheroid', projectSegmentationModel: 'mamba_unet' }
+      );
+      renderPage();
+
+      await userEvent.click(screen.getByTestId('select-img-1'));
+      await userEvent.click(screen.getByTestId('segment-all-btn'));
+
+      await waitFor(() =>
+        expect(mockAddBatchToQueue).toHaveBeenCalledWith(
+          ['img-1'],
+          'proj-1',
+          'mamba_unet',
+          expect.any(Number),
+          0,
+          false,
+          false,
+          undefined
+        )
+      );
+    });
+
+    it('ignores a stored model stranded by a later type change', async () => {
+      // A spheroid project switched to wound keeps 'segformer' in the column
+      // until the next write. Dispatching it would be a 400 the user cannot
+      // act on, so the resolver falls back to the new type's default.
+      wireHooks(
+        [makeImage({ segmentationStatus: 'no_segmentation' }, 'img-1')],
+        { projectType: 'wound', projectSegmentationModel: 'segformer' }
+      );
+      renderPage();
+
+      await userEvent.click(screen.getByTestId('select-img-1'));
+      await userEvent.click(screen.getByTestId('segment-all-btn'));
+
+      await waitFor(() =>
+        expect(mockAddBatchToQueue).toHaveBeenCalledWith(
+          ['img-1'],
+          'proj-1',
+          'wound',
+          expect.any(Number),
+          0,
+          false,
+          false,
+          undefined
+        )
       );
     });
   });
@@ -1309,6 +1449,28 @@ describe('ProjectDetail page', () => {
       });
     });
 
+    it('mirrors the backend clearing the stored model', async () => {
+      // The backend sets `segmentationModel` to NULL on a type change, because
+      // the stored model belongs to the old type's list. The page must mirror
+      // that or its copy diverges from the row: the resolver would still pick
+      // the right model to SEGMENT with (it rejects an incompatible stored
+      // value), but a subsequent failed model change would roll back to the
+      // stale string, writing a value the database no longer has.
+      const projectData = wireHooks(
+        [makeImage({ segmentationStatus: 'no_segmentation' })],
+        { projectSegmentationModel: 'mamba_unet' }
+      );
+      renderPage();
+
+      await userEvent.click(screen.getByTestId('change-type-btn'));
+
+      await waitFor(() =>
+        expect(projectData.setProjectSegmentationModel).toHaveBeenCalledWith(
+          null
+        )
+      );
+    });
+
     it('shows toast.error (and no success) when updateProject throws', async () => {
       mockUpdateProject.mockRejectedValue(new Error('Server error'));
       wireHooks([]);
@@ -1318,6 +1480,22 @@ describe('ProjectDetail page', () => {
 
       await waitFor(() => expect(vi.mocked(toast.error)).toHaveBeenCalled());
       expect(vi.mocked(toast.success)).not.toHaveBeenCalled();
+    });
+
+    it('restores the previous model when the type change is refused', async () => {
+      mockUpdateProject.mockRejectedValue(new Error('Server error'));
+      const projectData = wireHooks([], {
+        projectSegmentationModel: 'mamba_unet',
+      });
+      renderPage();
+
+      await userEvent.click(screen.getByTestId('change-type-btn'));
+
+      await waitFor(() => expect(vi.mocked(toast.error)).toHaveBeenCalled());
+      // Not left on the optimistic null: the row still holds 'mamba_unet'.
+      expect(projectData.setProjectSegmentationModel).toHaveBeenLastCalledWith(
+        'mamba_unet'
+      );
     });
 
     it('warns when completed segmentations exist on the project', async () => {

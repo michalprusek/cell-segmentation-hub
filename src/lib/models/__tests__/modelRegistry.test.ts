@@ -8,7 +8,6 @@ import {
   type ModelInfo,
   type ModelType,
 } from '@/lib/models/modelRegistry';
-import { getAllLocalizedModels } from '@/lib/modelUtils';
 
 /**
  * SSOT contract tests for the frontend model registry. These assert the
@@ -47,12 +46,6 @@ describe('model registry SSOT', () => {
     expect(Object.keys(MODEL_REGISTRY)).toEqual(CANONICAL_IDS);
     expect(ALL_MODEL_IDS).toEqual(CANONICAL_IDS);
     expect(ALL_MODEL_IDS).toHaveLength(11);
-  });
-
-  it('getAllLocalizedModels() returns the 11 models in display order', () => {
-    // Passthrough t returns the key itself; we only assert id ordering here.
-    const models = getAllLocalizedModels((k: string) => k);
-    expect(models.map(m => m.id)).toEqual(CANONICAL_IDS);
   });
 
   it('MODEL_TYPE_COMPATIBILITY deep-equals the verified matrix (incl. order)', () => {

@@ -367,7 +367,23 @@ export const keyMap = (() => {
 /**
  * Project-type → compatible model ids, INVERTED from the registry. Order
  * within each list follows registry declaration order. Mirrors the backend
- * `MODEL_TYPE_COMPATIBILITY`.
+ * `MODEL_TYPE_COMPATIBILITY`. Cross-type segmentation is blocked at both the
+ * frontend (the picker offers only this list) and the backend (400 on submit).
+ *
+ * The policy the per-model `compatibleProjectTypes` fields add up to:
+ *
+ * - `spheroid_invasive` is locked to `spheroid_disintegration` because core
+ *   detection is tied to that model's postprocessing path.
+ * - `wound`, `sperm`, `microcapsule`, `neurite` and `microtubules` use their
+ *   dedicated specialised models only. `microtubules` ships with the SPARSE35
+ *   ep040 nnU-Net ResEnc-M network plus a curvature-bounded instancer,
+ *   producing per-instance polyline centerlines.
+ * - Standard `spheroid` projects can use any of the general spheroid models,
+ *   with `spheroid_disintegration` excluded so users wanting core detection
+ *   are nudged toward marking the project disintegrated.
+ *
+ * (This text lived on a re-export in `@/types` until that re-export lost its
+ * last consumer; it belongs beside the data it describes.)
  */
 export const MODEL_TYPE_COMPATIBILITY = (() => {
   const out: Record<string, ModelType[]> = {};
@@ -378,3 +394,85 @@ export const MODEL_TYPE_COMPATIBILITY = (() => {
   }
   return out as Record<ProjectTypeKey, ModelType[]>;
 })();
+
+/**
+ * Type-level set of the models compatible with a given project type, derived
+ * by filtering the registry. Used only to CONSTRAIN
+ * `DEFAULT_MODEL_BY_PROJECT_TYPE` below, so picking a default that the
+ * compatibility map would reject is a compile error rather than a runtime 400
+ * the user meets at the Segment button.
+ */
+type CompatibleModelFor<PT extends ProjectTypeKey> = {
+  [
+    M in ModelType
+  ]: PT extends (typeof MODEL_REGISTRY)[M]['compatibleProjectTypes'][number]
+    ? M
+    : never;
+}[ModelType];
+
+/**
+ * The model a project of each type starts on — the most ACCURATE compatible
+ * model, deliberately NOT the fastest.
+ *
+ * Six of the seven types have exactly one compatible model, so their entry is
+ * forced. `spheroid` is the only real choice, and it resolves to `segformer`
+ * on the only accuracy figure any of the five candidates actually carries:
+ * 93 % IoU on bright-field spheroids (see its `description`). `cbam_resunet`
+ * claims "most precise" in prose but publishes no number, and `mamba_unet`'s
+ * strength is out-of-distribution robustness rather than in-distribution
+ * accuracy.
+ *
+ * A `SPHEROID_PRESETS` map in `modelUtils.ts` used to file `segformer` under a
+ * `'fast'` tier and `cbam_resunet` under `'accurate'`, which reads as a
+ * contradiction of this default. It was not a claim about accuracy — it was a
+ * view-layer framing of three recommendation slots, and a model that is both
+ * the fastest and the most accurate can only occupy one of them. It was
+ * deleted along with the Settings → Models section it existed for. Do not
+ * reintroduce that framing as a reason to move this default: it would trade
+ * 93 % IoU for a slogan.
+ *
+ * The `satisfies` clause is load-bearing twice over: `Record<ProjectTypeKey,…>`
+ * makes a newly-added project type a compile error until it declares a
+ * default, and `CompatibleModelFor<K>` makes an incompatible default a compile
+ * error. Mirrored in `backend/src/constants/modelRegistry.ts`.
+ */
+export const DEFAULT_MODEL_BY_PROJECT_TYPE = {
+  spheroid: 'segformer',
+  spheroid_invasive: 'spheroid_disintegration',
+  wound: 'wound',
+  sperm: 'sperm',
+  microtubules: 'microtubule',
+  microcapsule: 'microcapsule',
+  neurite: 'neurite_soma',
+} as const satisfies { [K in ProjectTypeKey]: CompatibleModelFor<K> };
+
+/**
+ * The model a project should segment with: its stored choice when that choice
+ * is still valid for its type, otherwise the type's default.
+ *
+ * MIRROR of `resolveProjectModel()` in `backend/src/constants/modelRegistry.ts`
+ * — both sides must agree, or the picker shows one model while the worker runs
+ * another. The fallback is not merely for rows predating the column: changing
+ * a project's type leaves the old model stored until the next write, and a
+ * model can be dropped from the registry, so a stored value can be stale in
+ * two independent ways. Answering with the default keeps the Segment button
+ * working instead of failing a compatibility check one layer deeper.
+ */
+export function resolveProjectModel(
+  projectType: ProjectTypeKey | string,
+  storedModel: string | null | undefined
+): ModelType {
+  // Total over its input, mirroring the backend copy. `mapProjectFields`
+  // coerces `type` before it reaches here today, so this is belt-and-braces on
+  // the frontend — but the two implementations must stay interchangeable, and
+  // the backend genuinely is called with the raw `projects.type` column.
+  const type = (
+    projectType in DEFAULT_MODEL_BY_PROJECT_TYPE ? projectType : 'spheroid'
+  ) as ProjectTypeKey;
+
+  const compatible = MODEL_TYPE_COMPATIBILITY[type];
+  if (storedModel && (compatible as string[]).includes(storedModel)) {
+    return storedModel as ModelType;
+  }
+  return DEFAULT_MODEL_BY_PROJECT_TYPE[type];
+}

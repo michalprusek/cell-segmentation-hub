@@ -1,46 +1,29 @@
-import { useState, useRef, useEffect, startTransition } from 'react';
+import { useRef, useEffect, startTransition } from 'react';
 import { useNavigate } from 'react-router-dom';
 import apiClient from '@/lib/api';
 import { toast } from 'sonner';
-import { updateImageProcessingStatus } from '@/lib/imageProcessingService';
-import {
-  isModelCompatibleWithType,
-  MODEL_TYPE_COMPATIBILITY,
-  type ProjectImage,
-  type ProjectType,
-  type SegmentationData,
-} from '@/types';
+import { type ProjectImage } from '@/types';
 import { getLocalizedErrorMessage } from '@/lib/errorUtils';
 import { useLanguage } from '@/contexts/useLanguage';
-import { useModel } from '@/contexts/useModel';
 import { logger } from '@/lib/logger';
 
 interface UseProjectImageActionsProps {
   projectId?: string;
-  projectType?: ProjectType;
   onImagesChange: (images: ProjectImage[]) => void;
   images: ProjectImage[];
-  /** Called when an action is blocked because the selected model is not
-   * compatible with the project type. Lets the parent component open a
-   * blocking modal instead of relying on a toast. */
-  onIncompatibleModel?: () => void;
 }
 
 export const useProjectImageActions = ({
   projectId,
-  projectType,
   onImagesChange,
   images,
-  onIncompatibleModel,
 }: UseProjectImageActionsProps) => {
   const navigate = useNavigate();
-  const [processingImages, setProcessingImages] = useState<string[]>([]);
   const { t } = useLanguage();
-  const { selectedModel, confidenceThreshold, detectHoles } = useModel();
 
-  // Create refs to avoid stale closure issues
+  // Ref rather than the prop directly: `handleDeleteImage` is called from an
+  // event handler and would otherwise close over a stale `images`.
   const imagesRef = useRef<ProjectImage[]>(images);
-  const processingImagesRef = useRef<Set<string>>(new Set());
 
   // Keep refs in sync with state
   useEffect(() => {
@@ -86,96 +69,6 @@ export const useProjectImageActions = ({
     }
   };
 
-  // Process an image segmentation and return a Promise that resolves when completed
-  const handleProcessImage = async (imageId: string): Promise<boolean> => {
-    // Pre-flight: ensure the globally selected model is compatible with this
-    // project's type. Backend enforces the same rule (defense in depth), but
-    // we abort here so the user gets immediate feedback. Prefer opening the
-    // parent's modal so the user sees a blocking explanation rather than a
-    // fading toast; fall back to toast if no modal handler is wired.
-    if (projectType && !isModelCompatibleWithType(selectedModel, projectType)) {
-      if (onIncompatibleModel) {
-        onIncompatibleModel();
-      } else {
-        const allowed = MODEL_TYPE_COMPATIBILITY[projectType].join(', ');
-        toast.error(
-          t('segmentation.modelNotCompatible', {
-            model: selectedModel,
-            type: projectType,
-            allowed,
-          })
-        );
-      }
-      return false;
-    }
-
-    // Use ref-based synchronous check to prevent race conditions
-    if (processingImagesRef.current.has(imageId)) {
-      toast.info(t('imageAlreadyProcessing'));
-      return false;
-    }
-
-    const image = imagesRef.current.find(img => img.id === imageId);
-    if (!image) return false;
-
-    // Add to in-flight set synchronously
-    processingImagesRef.current.add(imageId);
-    setProcessingImages(prev => [...prev, imageId]);
-
-    return new Promise(resolve => {
-      // Update local state to show processing immediately - use current ref
-      const updatedImages = imagesRef.current.map(img =>
-        img.id === imageId
-          ? { ...img, segmentationStatus: 'processing' as const }
-          : img
-      );
-      onImagesChange(updatedImages);
-
-      // Process the image
-      updateImageProcessingStatus({
-        projectId: projectId!,
-        imageId: imageId,
-        imageUrl: image.url,
-        model: selectedModel,
-        threshold: confidenceThreshold,
-        detectHoles: detectHoles,
-        onComplete: (result: SegmentationData) => {
-          // Update the local state with the result - use current ref
-          const updatedImages = imagesRef.current.map(img =>
-            img.id === imageId
-              ? {
-                  ...img,
-                  segmentationStatus: 'completed' as const,
-                  segmentationResult: result,
-                  updatedAt: new Date(),
-                }
-              : img
-          );
-          onImagesChange(updatedImages);
-
-          // Remove from in-flight tracking
-          processingImagesRef.current.delete(imageId);
-          setProcessingImages(prev => prev.filter(id => id !== imageId));
-          resolve(true);
-        },
-      }).catch((error: unknown) => {
-        logger.error('Error processing image:', error);
-        const errorMessage = getLocalizedErrorMessage(
-          error,
-          t,
-          'errors.operations.processImage'
-        );
-        toast.error(errorMessage);
-
-        // Remove from in-flight tracking
-        processingImagesRef.current.delete(imageId);
-        setProcessingImages(prev => prev.filter(id => id !== imageId));
-        resolve(false);
-      });
-    });
-  };
-
-  // Open the segmentation editor for an image
   const handleOpenSegmentationEditor = async (imageId: string) => {
     if (!projectId) return;
 
@@ -193,8 +86,6 @@ export const useProjectImageActions = ({
 
   return {
     handleDeleteImage,
-    handleProcessImage,
     handleOpenSegmentationEditor,
-    processingImages,
   };
 };

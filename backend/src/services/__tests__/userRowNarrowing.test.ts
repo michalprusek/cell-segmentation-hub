@@ -87,13 +87,31 @@ describe('user lookups on hot paths are column-narrowed', () => {
       path.join(SRC, 'api/controllers/queueController.ts'),
       'utf8'
     );
-    // Three handlers verify "does this project exist and may I see it?" and
-    // use the result only as a boolean. Each must ask for `id` alone.
+    // Three handlers verify "does this project exist and may I see it?".
+    //
+    // Two use the result only as a boolean and must ask for `id` alone. The
+    // batch-enqueue one ALSO resolves the project's segmentation model, so it
+    // additionally selects `type` and `segmentationModel` — deliberately, to
+    // avoid a second round trip for two scalar columns on a path that can
+    // carry 10 000 images.
+    //
+    // What this guard is actually for is unchanged and still asserted below:
+    // no probe may drag the whole row, and in particular not `mtTypeLabels`,
+    // a JSON column that can hold a full per-project label palette.
     const probes = callsTo(source, 'prisma.project.findFirst(');
     expect(probes).toHaveLength(3);
+
+    const idOnly = probes.filter(p => p.includes('select: { id: true }'));
+    const withModel = probes.filter(p =>
+      p.includes('select: { id: true, type: true, segmentationModel: true }')
+    );
+    expect(idOnly).toHaveLength(2);
+    expect(withModel).toHaveLength(1);
+
     for (const probe of probes) {
-      expect(probe).toContain('select: { id: true }');
+      expect(probe).toContain('select:');
       expect(probe).not.toContain('mtTypeLabels');
+      expect(probe).not.toContain('description');
     }
   });
 });

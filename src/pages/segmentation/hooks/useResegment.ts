@@ -1,6 +1,5 @@
-import { useState, useCallback, useRef, useMemo } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import type { QueryClient } from '@tanstack/react-query';
-import { MODEL_TYPE_COMPATIBILITY, isProjectType } from '@/types';
 import apiClient, { type SegmentationPolygon } from '@/lib/api';
 import { logger } from '@/lib/logger';
 import { handleCancelledError } from '@/lib/errorUtils';
@@ -10,9 +9,12 @@ import { setCachedSegmentationPolygons } from './segmentationPolygonCache';
 interface UseResegmentParams {
   projectId: string | undefined;
   imageId: string | undefined;
-  projectType: string | undefined;
-  selectedModel: string;
-  confidenceThreshold: number;
+  /** The project's resolved model and its calibrated threshold. `undefined`
+   *  only while the project is still loading — the resolver never returns a
+   *  model incompatible with the project, so absence is a race, not a
+   *  misconfiguration. */
+  selectedModel: string | undefined;
+  confidenceThreshold: number | undefined;
   detectHoles: boolean;
   /**
    * Channels from `video.container?.channels` (or null for standalone images).
@@ -37,7 +39,6 @@ interface UseResegmentResult {
   isResegmenting: boolean;
   showResegmentChannelDialog: boolean;
   setShowResegmentChannelDialog: React.Dispatch<React.SetStateAction<boolean>>;
-  effectiveResegmentModel: string;
   runResegment: (channel?: string) => Promise<void>;
   handleResegmentCurrentFrame: () => void;
 }
@@ -46,7 +47,6 @@ interface UseResegmentResult {
  * Owns the resegment + completion-poll cluster:
  *   - isResegmenting + showResegmentChannelDialog state
  *   - resegPollSeqRef (invalidation token)
- *   - effectiveResegmentModel (project-type gating)
  *   - startResegmentPoll (background HTTP poll — fires success toast + reloadNonce bump)
  *   - runResegment (batch endpoint call + poll kickoff)
  *   - handleResegmentCurrentFrame (top-toolbar entry point, opens channel picker or delegates)
@@ -59,7 +59,6 @@ interface UseResegmentResult {
 export function useResegment({
   projectId: _projectId,
   imageId,
-  projectType,
   selectedModel,
   confidenceThreshold,
   detectHoles,
@@ -80,18 +79,13 @@ export function useResegment({
   // resegment (or image switch) invalidates a still-running poll.
   const resegPollSeqRef = useRef(0);
 
-  // The backend enforces a per-project-type model whitelist
-  // (MODEL_TYPE_COMPATIBILITY). The user-chosen `selectedModel` is meaningful
-  // only where a type has >1 compatible model (the generic spheroid project);
-  // every other type has exactly one whitelisted model and must use it or the
-  // request is rejected. Read the SSOT registry directly rather than duplicating
-  // the type→model map, so it can never drift when a model is added/renamed.
-  const effectiveResegmentModel = useMemo(() => {
-    const compat = isProjectType(projectType)
-      ? MODEL_TYPE_COMPATIBILITY[projectType]
-      : undefined;
-    return compat && compat.length === 1 ? compat[0] : selectedModel;
-  }, [projectType, selectedModel]);
+  // `selectedModel` arrives already resolved against this project's type
+  // (`useProjectModel` in the editor), so there is nothing left to correct
+  // here. This used to hold an `effectiveResegmentModel` memo that forced the
+  // whitelisted model whenever a type had exactly one — a patch for the global
+  // model setting, which could not help the spheroid type where the choice was
+  // real. The resolver is right for every type, so the patch is gone rather
+  // than merely unused.
 
   // Background poll that refreshes the editor when a resegment completes.
   // The WebSocket completion event is not a dependable trigger, so we poll
@@ -162,7 +156,17 @@ export function useResegment({
   // and the dialog's onConfirm callback.
   const runResegment = useCallback(
     async (channel?: string) => {
-      if (!imageId || isResegmenting) return;
+      // `selectedModel` is absent only in the window before the project has
+      // loaded. Bail rather than dispatching a request with no model, which
+      // the backend would reject with a 400 the user cannot act on.
+      if (
+        !imageId ||
+        isResegmenting ||
+        !selectedModel ||
+        confidenceThreshold === undefined
+      ) {
+        return;
+      }
       setIsResegmenting(true);
       try {
         // Snapshot the current result timestamp so the completion poll can
@@ -172,7 +176,7 @@ export function useResegment({
             ?.updatedAt ?? null;
         const result = await apiClient.requestBatchSegmentation(
           [imageId],
-          effectiveResegmentModel,
+          selectedModel,
           confidenceThreshold,
           detectHoles,
           channel
@@ -218,7 +222,7 @@ export function useResegment({
     [
       imageId,
       isResegmenting,
-      effectiveResegmentModel,
+      selectedModel,
       confidenceThreshold,
       detectHoles,
       startResegmentPoll,
@@ -243,7 +247,6 @@ export function useResegment({
     isResegmenting,
     showResegmentChannelDialog,
     setShowResegmentChannelDialog,
-    effectiveResegmentModel,
     runResegment,
     handleResegmentCurrentFrame,
   };

@@ -45,12 +45,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import {
-  isModelCompatibleWithType,
-  MODEL_TYPE_COMPATIBILITY,
-  getErrorMessage,
-  isMicrotubuleProject,
-} from '@/types';
+import { getErrorMessage, isMicrotubuleProject } from '@/types';
+import { useProjectModel } from '@/hooks/useProjectModel';
+import type { ModelType } from '@/lib/models/modelRegistry';
 
 /**
  * Fraction of add-channel frames whose alignment was rejected above which the
@@ -66,13 +63,15 @@ const ProjectDetail = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { t } = useLanguage();
-  const { selectedModel, confidenceThreshold, detectHoles } = useModel();
+  // `useModel` is down to hole detection: the model and its threshold are
+  // properties of the PROJECT now (resolved below, after `useProjectData` has
+  // supplied the type — a hook reading `projectType` must sit after it or the
+  // minified bundle throws "cannot access before initialization", CLAUDE.md #11).
+  const { detectHoles, setDetectHoles } = useModel();
   const [showUploader, setShowUploader] = useState<boolean>(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [batchSubmitted, setBatchSubmitted] = useState<boolean>(false);
   const [isCancelling, setIsCancelling] = useState<boolean>(false);
-  const [incompatibleModelOpen, setIncompatibleModelOpen] =
-    useState<boolean>(false);
   const [selectedImageIds, setSelectedImageIds] = useState<Set<string>>(
     new Set()
   );
@@ -119,7 +118,20 @@ const ProjectDetail = () => {
     loading,
     updateImages,
     refreshImageSegmentation,
+    projectSegmentationModel,
+    setProjectSegmentationModel,
   } = useProjectData(id, user?.id);
+
+  // MUST stay after `useProjectData` — it reads `projectType` from it, and a
+  // hook placed before the const it captures throws at runtime in the minified
+  // bundle while type-checking fine (CLAUDE.md production failure #11).
+  //
+  // `selectedModel` can no longer be incompatible with the project: the
+  // resolver only ever returns a model from this type's own list. That is why
+  // the pre-flight compatibility guard and its blocking dialog are gone rather
+  // than merely unused — they guarded a state that is now unreachable.
+  const { model: selectedModel, threshold: confidenceThreshold } =
+    useProjectModel(projectType, projectSegmentationModel);
 
   const handleProjectTitleChange = useCallback(
     async (nextTitle: string) => {
@@ -150,7 +162,13 @@ const ProjectDetail = () => {
       // ran *after* the await, so the picker sat showing the old value for the
       // whole round-trip and read as if the click had been ignored.
       const previousType = projectType;
+      // The backend clears `segmentationModel` on a type change, because the
+      // stored model belongs to the OLD type's list. Mirror that locally or
+      // the pill keeps showing the previous model until a reload, and the
+      // Segment button would dispatch it.
+      const previousModel = projectSegmentationModel;
       setProjectType(newType);
+      setProjectSegmentationModel(null);
       try {
         await apiClient.updateProject(id, { type: newType });
         toast.success(t('projects.projectTypeUpdated'));
@@ -172,13 +190,48 @@ const ProjectDetail = () => {
         }
       } catch (err) {
         if (previousType) setProjectType(previousType);
+        setProjectSegmentationModel(previousModel);
         logger.error('Failed to update project type', err);
         toast.error(
           getErrorMessage(err, t) || t('projects.failedToUpdateProject')
         );
       }
     },
-    [id, projectType, setProjectType, t, images]
+    [
+      id,
+      projectType,
+      setProjectType,
+      projectSegmentationModel,
+      setProjectSegmentationModel,
+      t,
+      images,
+    ]
+  );
+
+  const handleModelChange = useCallback(
+    async (newModel: ModelType) => {
+      if (!id) return;
+      // Optimistic for the same reason the type change is: the pill is the
+      // thing the user just clicked, so it must not sit showing the old model
+      // for the round-trip and read as if the click were ignored.
+      const previousModel = projectSegmentationModel;
+      setProjectSegmentationModel(newModel);
+      try {
+        await apiClient.updateProject(id, { segmentationModel: newModel });
+        toast.success(String(t('project.modelUpdated')));
+      } catch (err) {
+        setProjectSegmentationModel(previousModel);
+        logger.error('Failed to update project model', err);
+        // The backend's 400 names the allowed models for the type, so it is
+        // worth surfacing verbatim rather than replacing with a generic
+        // failure string.
+        toast.error(
+          getErrorMessage(err, k => String(t(k))) ||
+            String(t('project.modelUpdateFailed'))
+        );
+      }
+    },
+    [id, projectSegmentationModel, setProjectSegmentationModel, t]
   );
 
   const handleVerifiedChange = useCallback(
@@ -509,10 +562,8 @@ const ProjectDetail = () => {
   const { handleDeleteImage, handleOpenSegmentationEditor } =
     useProjectImageActions({
       projectId: id,
-      projectType,
       onImagesChange: updateImages,
       images,
-      onIncompatibleModel: () => setIncompatibleModelOpen(true),
     });
 
   // Status reconciliation for keeping UI in sync with backend
@@ -1551,12 +1602,13 @@ const ProjectDetail = () => {
       return;
     }
 
-    // Block segmentation when the globally selected model isn't compatible
-    // with this project's type. Open the modal instead of a toast — the user
-    // tried an action that fundamentally can't proceed and needs a clear
-    // explanation, not a quickly-fading notification.
-    if (projectType && !isModelCompatibleWithType(selectedModel, projectType)) {
-      setIncompatibleModelOpen(true);
+    // The project's model is `undefined` only in the window before its type
+    // has loaded. Dispatching then would post no model at all, and the queue
+    // would apply its own fallback to a batch that may be of any type — which
+    // is the failure this whole change removes. Both sibling dispatch sites
+    // (`useResegment`, and the removed `handleProcessImage`) grew the same
+    // guard; this one relied on the deleted compatibility pre-flight for it.
+    if (!selectedModel || confidenceThreshold === undefined) {
       return;
     }
 
@@ -1789,6 +1841,10 @@ const ProjectDetail = () => {
         loading={loading}
         projectType={projectType}
         onTypeChange={handleProjectTypeChange}
+        segmentationModel={projectSegmentationModel}
+        onModelChange={handleModelChange}
+        detectHoles={detectHoles}
+        onDetectHolesChange={setDetectHoles}
         verified={projectVerified}
         onVerifiedChange={handleVerifiedChange}
       />
@@ -2020,36 +2076,6 @@ const ProjectDetail = () => {
               {isDeletingAnnotations
                 ? t('common.deleting')
                 : t('common.delete')}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* Incompatible model dialog — blocks the user from running a model
-          that doesn't fit the current project type, with a clear list of
-          allowed models for that type. */}
-      <AlertDialog
-        open={incompatibleModelOpen}
-        onOpenChange={setIncompatibleModelOpen}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              {t('segmentation.incompatibleModelTitle')}
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              {t('segmentation.incompatibleModelDesc', {
-                model: selectedModel,
-                type: projectType ? t(`projects.types.${projectType}`) : '',
-                allowed: projectType
-                  ? MODEL_TYPE_COMPATIBILITY[projectType].join(', ')
-                  : '',
-              })}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogAction onClick={() => setIncompatibleModelOpen(false)}>
-              {t('common.close')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

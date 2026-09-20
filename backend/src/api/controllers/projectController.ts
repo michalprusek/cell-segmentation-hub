@@ -9,6 +9,7 @@ import {
   ProjectQueryParams,
 } from '../../types/validation';
 import { logger } from '../../utils/logger';
+import { ApiError } from '../../middleware/error';
 
 /**
  * Create a new project
@@ -361,6 +362,29 @@ export const updateProject = asyncHandler(
 
       ResponseHelper.success(res, project, 'Projekt byl úspěšně aktualizován');
     } catch (error) {
+      // A rejected model/type combination is the caller's mistake, not ours.
+      // Without this branch it fell into the 500 below and the picker showed
+      // "server error" for what is a plain validation failure — and the
+      // message naming the allowed models never reached the user.
+      //
+      // The error's OWN status and code are forwarded rather than forced to
+      // 400/BAD_REQUEST: `ApiError` also defines 401/403/404/409, and the next
+      // one thrown from this service (a share-permission 403, say) must not
+      // reach the browser as "bad request" and be retried instead of
+      // prompting a re-auth. `ResponseHelper.badRequest` hard-codes
+      // `code: 'BAD_REQUEST'`, which would have dropped the
+      // `MODEL_TYPE_INCOMPATIBLE` code the service deliberately attaches.
+      if (error instanceof ApiError && error.statusCode < 500) {
+        ResponseHelper.error(
+          res,
+          { code: error.code, message: error.message },
+          error.statusCode,
+          undefined,
+          'ProjectController'
+        );
+        return;
+      }
+
       logger.error(
         'Failed to update project:',
         error as Error,

@@ -43,6 +43,7 @@ vi.mock('../../../utils/logger', () => ({
 
 import * as projectService from '../../../services/projectService';
 import { authenticate } from '../../../middleware/auth';
+import { ApiError } from '../../../middleware/error';
 import {
   createProject,
   getProjects,
@@ -328,6 +329,65 @@ describe('projectController — uncovered branches', () => {
         .expect(401);
       expect(res.body.success).toBe(false);
       expect(MockProjectService.updateProject).not.toHaveBeenCalled();
+    });
+
+    it('passes a rejected model/type combination through as 400, not 500', async () => {
+      // The service throws ApiError(400) when the model does not fit the type
+      // the project will have. Without the ApiError branch in the controller
+      // this lands in the generic catch and the picker shows "server error"
+      // for what is a plain validation failure — and the message naming the
+      // allowed models never reaches the user.
+      MockProjectService.updateProject.mockRejectedValueOnce(
+        ApiError.validationError(
+          'Model wound není kompatibilní s typem projektu spheroid. Povolené modely: hrnet, cbam_resunet, unet_spherohq, segformer, mamba_unet',
+          'MODEL_TYPE_INCOMPATIBLE'
+        )
+      );
+
+      const res = await request(app)
+        .put('/projects/proj-1')
+        .send({ segmentationModel: 'wound' })
+        .expect(400);
+
+      expect(res.body.success).toBe(false);
+      expect(JSON.stringify(res.body)).toContain('segformer');
+      // The service attaches MODEL_TYPE_INCOMPATIBLE deliberately.
+      // `ResponseHelper.badRequest` hard-codes `code: 'BAD_REQUEST'`, so
+      // routing through it would drop the code the client is meant to branch
+      // on.
+      expect(res.body.code).toBe('MODEL_TYPE_INCOMPATIBLE');
+    });
+
+    it('forwards a non-400 ApiError with its own status', async () => {
+      // The branch is written as a general 4xx handler, and `ApiError` also
+      // defines 401/403/404/409. Collapsing them all to 400 would surface a
+      // share-permission failure as "bad request", which a client retries
+      // instead of prompting a re-auth.
+      MockProjectService.updateProject.mockRejectedValueOnce(
+        ApiError.forbidden('Nedostatečná oprávnění')
+      );
+
+      const res = await request(app)
+        .put('/projects/proj-1')
+        .send({ title: 'X' })
+        .expect(403);
+
+      expect(res.body.code).toBe('FORBIDDEN');
+    });
+
+    it('still returns 500 for a genuine server fault', async () => {
+      // The other half: the branch must narrow to client errors, not swallow
+      // everything into a 400.
+      MockProjectService.updateProject.mockRejectedValueOnce(
+        new Error('connection reset')
+      );
+
+      const res = await request(app)
+        .put('/projects/proj-1')
+        .send({ title: 'X' })
+        .expect(500);
+
+      expect(res.body.success).toBe(false);
     });
   });
 

@@ -75,3 +75,74 @@ export const MODEL_TYPE_COMPATIBILITY: Record<
   }
   return out as Record<ProjectTypeKey, readonly KnownModelId[]>;
 })();
+
+/**
+ * Type-level set of the models compatible with a given project type, derived
+ * by filtering the registry. Constrains `DEFAULT_MODEL_BY_PROJECT_TYPE` below
+ * so an incompatible default is a compile error, not a runtime 400.
+ */
+type CompatibleModelFor<PT extends ProjectTypeKey> = {
+  [M in KnownModelId]: PT extends (typeof MODEL_REGISTRY)[M]['compatibleProjectTypes'][number]
+    ? M
+    : never;
+}[KnownModelId];
+
+/**
+ * The model a project of each type starts on when it has never had one chosen
+ * — the most ACCURATE compatible model, deliberately not the fastest.
+ *
+ * MIRROR of `src/lib/models/modelRegistry.ts`; the rationale for `spheroid`
+ * resolving to `segformer` (93 % IoU, the only published figure among the five
+ * spheroid candidates) lives there in full.
+ *
+ * Parity between the two copies is enforced by `scripts/verify-shared-types.cjs`
+ * (`SHARED_CONSTS`), which runs in pre-commit and in CI. It is NOT covered by
+ * either side's `modelRegistry.test.ts` — those check each side against itself
+ * only. Unlike `MODEL_TYPE_COMPATIBILITY`, which both sides DERIVE by
+ * inverting their registry and so cannot drift, this map is a literal choice
+ * written out twice.
+ *
+ * Read on the backend by `resolveProjectModel()` via
+ * `ProjectService.getProjectModel()`, which `queueController` calls whenever a
+ * request does not name a model. Without that call the column would be
+ * authoritative only in the browser.
+ */
+export const DEFAULT_MODEL_BY_PROJECT_TYPE = {
+  spheroid: 'segformer',
+  spheroid_invasive: 'spheroid_disintegration',
+  wound: 'wound',
+  sperm: 'sperm',
+  microtubules: 'microtubule',
+  microcapsule: 'microcapsule',
+  neurite: 'neurite_soma',
+} as const satisfies { [K in ProjectTypeKey]: CompatibleModelFor<K> };
+
+/**
+ * The model a project should segment with: its stored choice when that choice
+ * is still valid for its type, otherwise the type's default.
+ *
+ * The fallback is not merely for NULL rows. A project whose `type` is changed
+ * keeps its old `segmentationModel` until the next write, and a model can be
+ * removed from the registry entirely — both leave a stored value that is no
+ * longer compatible. Answering with the default rather than the stale value
+ * keeps the Segment button working instead of failing the compatibility check
+ * one layer deeper.
+ */
+export function resolveProjectModel(
+  projectType: ProjectTypeKey | string,
+  storedModel: string | null | undefined
+): KnownModelId {
+  // Total over its input, like `coerceProjectType` and every sibling helper
+  // here. `projects.type` is a plain String column and this function is called
+  // with it, so an unrecognised legacy value must yield a default rather than
+  // index `undefined` and throw on `.includes`.
+  const type = (
+    projectType in DEFAULT_MODEL_BY_PROJECT_TYPE ? projectType : 'spheroid'
+  ) as ProjectTypeKey;
+
+  const compatible = MODEL_TYPE_COMPATIBILITY[type];
+  if (storedModel && (compatible as readonly string[]).includes(storedModel)) {
+    return storedModel as KnownModelId;
+  }
+  return DEFAULT_MODEL_BY_PROJECT_TYPE[type];
+}

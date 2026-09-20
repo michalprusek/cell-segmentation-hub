@@ -61,7 +61,12 @@ export const thresholdSchema = z
  * Schema for adding single image to queue
  */
 export const addImageToQueueSchema = z.object({
-  model: segmentationModelSchema.optional().default('hrnet'),
+  // NO `.default('hrnet')`. That literal is compatible with exactly one of the
+  // seven project types, so on the other six it queued a job the worker then
+  // rejected, failing every image in the batch. An omitted model now stays
+  // `undefined` so the controller can resolve it from the project's own
+  // `segmentationModel` column (ProjectService.getProjectModel).
+  model: segmentationModelSchema.optional(),
   threshold: thresholdSchema.optional().default(0.5),
   priority: queuePrioritySchema.optional().default(0),
   detectHoles: z.boolean().optional().default(true),
@@ -76,7 +81,12 @@ export const batchQueueSchema = z.object({
     .min(1, 'Musíte zadat alespoň jeden obrázek')
     .max(10000, 'Můžete zpracovat maximálně 10000 obrázků najednou'),
   projectId: uuidSchema,
-  model: segmentationModelSchema.optional().default('hrnet'),
+  // NO `.default('hrnet')`. That literal is compatible with exactly one of the
+  // seven project types, so on the other six it queued a job the worker then
+  // rejected, failing every image in the batch. An omitted model now stays
+  // `undefined` so the controller can resolve it from the project's own
+  // `segmentationModel` column (ProjectService.getProjectModel).
+  model: segmentationModelSchema.optional(),
   threshold: thresholdSchema.optional().default(0.5),
   priority: queuePrioritySchema.optional().default(0),
   forceResegment: z.boolean().optional().default(false),
@@ -266,6 +276,20 @@ export const updateProjectSchema = z.object({
     .number()
     .min(0.001, 'Měřítko musí být alespoň 0.001 µm/px')
     .max(1000, 'Měřítko může být nejvýše 1000 µm/px')
+    .optional()
+    .nullable(),
+  // The segmentation model this project runs. Validated here only as "a model
+  // id that exists"; whether it is compatible with the project's TYPE is
+  // checked in `ProjectService.updateProject`, which is the only layer that
+  // knows the type — it may be arriving in this same request.
+  //
+  // `null` clears the choice back to "follow the type's default", which is a
+  // meaningful state and not the same as omitting the field (that leaves the
+  // stored value alone).
+  segmentationModel: z
+    .enum(SEGMENTATION_MODELS as unknown as [string, ...string[]], {
+      errorMap: () => ({ message: SEGMENTATION_MODEL_ERROR_MESSAGE }),
+    })
     .optional()
     .nullable(),
 });

@@ -509,29 +509,6 @@ export default {
     newPassword: '新密码',
     confirmNewPassword: '确认新密码',
     modelSelection: {
-      title: '模型选择',
-      description: '选择用于细胞分割的AI模型',
-      sections: {
-        spheroid: '球体模型',
-        spheroid_invasive: '分解球体模型',
-        sperm: '精子模型',
-        wound: '伤口愈合模型',
-        microtubule: '微管模型',
-        microcapsule: '微胶囊模型',
-        neurite: '神经突/胞体模型',
-      },
-      presets: {
-        fast: '快速',
-        accurate: '精确',
-        robust: '稳健',
-        showMore: '显示更多模型',
-        showLess: '隐藏更多模型',
-      },
-      presetDescriptions: {
-        fast: '实时预览、大批量、弱 GPU',
-        accurate: '具有 HQ 图像的实验室，时间不紧张时',
-        robust: '外部实验室、未知光学、药物处理、异常形态',
-      },
       models: {
         hrnet: {
           name: 'HRNet',
@@ -679,7 +656,6 @@ export default {
     pageTitle: '设置',
     profile: '个人资料',
     account: '账户',
-    models: '模型',
   },
   auth: {
     signIn: '登录',
@@ -861,11 +837,6 @@ export default {
       deleteFrameFailed: '从当前帧删除该微管失败',
       deleteScopeUnavailable: '视频仍在加载中——请稍后再删除该微管',
     },
-    modelNotCompatible:
-      '模型 "{{model}}" 与项目类型 "{{type}}" 不兼容。允许的: {{allowed}}。',
-    incompatibleModelTitle: '无法使用此模型进行分割',
-    incompatibleModelDesc:
-      '当前选择的模型 "{{model}}" 与此项目类型 ({{type}}) 不兼容。允许的模型: {{allowed}}。请在设置中更改模型或更改项目类型。',
     channelPicker: {
       title: '选择要分割的通道',
       description: '该项目包含具有多个通道的视频帧。选择要分割的通道。',
@@ -1264,6 +1235,12 @@ export default {
     },
   },
   project: {
+    // Segmentation-model picker, beside the project-type pill.
+    changeSegmentationModel: '更改分割模型',
+    modelChoiceForType: '此项目类型可用的模型',
+    modelOnlyOptionForType: '此项目类型的唯一模型',
+    modelUpdated: '分割模型已更新',
+    modelUpdateFailed: '无法更改分割模型',
     selected: '已选择{{count}}张图片',
     selected_other: '已选择{{count}}张图片',
     deleteSelected: '删除选中项',
@@ -2676,6 +2653,7 @@ export default {
   },
   feedback: {
     buttonTitle: '发送反馈',
+    buttonLabel: '报告错误或想法',
     buttonAriaLabel: '打开反馈表单',
     title: '发送反馈',
     subtitle: '发现错误或有想法？告诉我们——我们会阅读每一份反馈。',

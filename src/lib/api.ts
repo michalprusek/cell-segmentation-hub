@@ -74,6 +74,11 @@ export interface Project {
   // proliferation recorded in CLAUDE.md; not unified here because that touches
   // every consumer.
   pixelSizeUm?: number | null;
+  // The segmentation model this project runs, or null for "never chosen"
+  // (resolve with `resolveProjectModel`, which answers with the most accurate
+  // model compatible with the project's type). Declared in BOTH `Project`
+  // interfaces for the reason above.
+  segmentationModel?: string | null;
   // Per-user folder placement: a folder id, or null for the caller's root.
   // Declared here as well as in `@/types` for exactly the reason above —
   // `mapProjectFields` fills it, and `useProjectData` reads it off THIS
@@ -728,6 +733,15 @@ class ApiClient {
       // must not collapse to undefined, which reads as "not sent".
       pixelSizeUm:
         typeof project.pixelSizeUm === 'number' ? project.pixelSizeUm : null,
+      // Same enumerative-mapper hazard as `pixelSizeUm` above: unlisted here,
+      // the column exists, the API sends it, and the picker still shows the
+      // default forever. `null` is preserved rather than collapsed to
+      // undefined — it means "never chosen, follow the type's default", which
+      // the resolver acts on.
+      segmentationModel:
+        typeof project.segmentationModel === 'string'
+          ? project.segmentationModel
+          : null,
     };
 
     // Add optional fields only if they exist
@@ -966,6 +980,10 @@ class ApiClient {
       type?: import('@/types').ProjectType;
       /** µm per pixel for the whole project; `null` clears the calibration. */
       pixelSizeUm?: number | null;
+      /** Segmentation model id; `null` clears the choice back to "follow the
+       *  project type's default". Rejected with 400 by the backend when it is
+       *  not compatible with the type the project will have after this call. */
+      segmentationModel?: string | null;
     }
   ): Promise<Project> {
     // Convert 'name' to 'title' if provided

@@ -48,6 +48,20 @@ const SHARED_CONSTS = [
     frontend: path.join(ROOT, 'src', 'types', 'index.ts'),
     backend: path.join(ROOT, 'backend', 'src', 'types', 'validation.ts'),
   },
+  {
+    // Which model a project of each type starts on. UNLIKE
+    // MODEL_TYPE_COMPATIBILITY above, this is NOT derived — it is a literal
+    // choice written out on both sides, so it is exactly the kind of pair that
+    // drifts. Each side's `CompatibleModelFor<K>` constraint proves its own
+    // entries are compatible with their type, but nothing except this check
+    // proves the two sides picked the SAME compatible model. A drift means the
+    // picker shows one model and the worker runs another, silently, on a
+    // project that has never had a model chosen — which is every project that
+    // predates the column.
+    name: 'DEFAULT_MODEL_BY_PROJECT_TYPE',
+    frontend: path.join(ROOT, 'src', 'lib', 'models', 'modelRegistry.ts'),
+    backend: path.join(ROOT, 'backend', 'src', 'constants', 'modelRegistry.ts'),
+  },
 ];
 
 /**

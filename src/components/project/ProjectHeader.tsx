@@ -12,7 +12,9 @@ import {
 } from '@/components/ui/select';
 import { useLanguage } from '@/contexts/useLanguage';
 import DashboardHeader from '@/components/DashboardHeader';
+import ProjectModelSelector from '@/components/project/ProjectModelSelector';
 import { PROJECT_TYPES, type ProjectType } from '@/types';
+import type { ModelType } from '@/lib/models/modelRegistry';
 import { cn } from '@/lib/utils';
 
 /** Color-code each project type so disintegrated spheroids visually stand
@@ -44,6 +46,17 @@ interface ProjectHeaderProps {
   loading: boolean;
   projectType?: ProjectType;
   onTypeChange?: (type: ProjectType) => void;
+  /** The project's RAW stored model (`null` = never chosen, follow the type's
+   *  default). Rendered by the picker immediately right of the type pill —
+   *  the two are one decision, since the type is what filters the models. */
+  segmentationModel?: string | null;
+  /** Omitted for a viewer who may not change it, which renders a static pill
+   *  instead of a menu (same convention as `onTypeChange`). */
+  onModelChange?: (model: ModelType) => void | Promise<void>;
+  /** Hole detection, carried here only because the model menu hosts its
+   *  checkbox — it is a per-user setting, not a project property. */
+  detectHoles?: boolean;
+  onDetectHolesChange?: (detectHoles: boolean) => void;
   // "All annotations in the project have been reviewed and passed." Owner OR
   // an accepted-share annotator may toggle it — the handler is passed
   // unconditionally by ProjectDetail (same shape as onTypeChange); the
@@ -68,6 +81,10 @@ const ProjectHeader = ({
   loading,
   projectType,
   onTypeChange,
+  segmentationModel,
+  onModelChange,
+  detectHoles = true,
+  onDetectHolesChange,
   verified,
   onVerifiedChange,
   folderId,
@@ -205,7 +222,13 @@ const ProjectHeader = ({
               </p>
             </div>
             {projectType && (
-              <div className="flex min-w-0 items-center gap-2">
+              // `flex-wrap`: this row now carries TWO ~9rem pills plus the
+              // label, and between 640px (where the label appears) and ~768px
+              // that can exceed what is left after the title's `flex-1`.
+              // Wrapping keeps them adjacent when there is room and stacked
+              // when there is not, rather than pushing the header off-screen —
+              // the failure the type pill's own `min-w` comment records.
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
                 <span className="hidden text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap sm:inline">
                   {t('projects.projectType')}:
                 </span>
@@ -252,6 +275,22 @@ const ProjectHeader = ({
                     {t(`projects.types.${projectType}`)}
                   </Badge>
                 )}
+                {/* Immediately right of the type pill, in the same flex
+                    row, so the type shifts left by exactly the picker's width.
+                    They are one decision: the type is what filters the model
+                    list, and six of the seven types leave a single candidate.
+                    The row DOES wrap (see its `flex-wrap` above) — between
+                    640px and ~768px the pair stacks rather than pushing the
+                    header off-screen. Sharing a row is what makes that wrap
+                    land between them instead of splitting them from the
+                    title. */}
+                <ProjectModelSelector
+                  projectType={projectType}
+                  storedModel={segmentationModel}
+                  onModelChange={onModelChange}
+                  detectHoles={detectHoles}
+                  onDetectHolesChange={onDetectHolesChange ?? (() => {})}
+                />
               </div>
             )}
             {(onVerifiedChange || verified) && (

@@ -1,105 +1,15 @@
 import { describe, it, expect } from 'vitest';
 import {
-  SPHEROID_PRESETS,
-  getSpheroidPreset,
-  SPHEROID_PRESET_META,
   BASIC_MODEL_INFO,
   getLocalizedModelInfo,
-  getAllLocalizedModels,
   type ModelType,
-  type SpheroidPresetTier,
 } from '../modelUtils';
 
-// ---------------------------------------------------------------------------
-// SPHEROID_PRESETS constant
-// ---------------------------------------------------------------------------
-
-describe('SPHEROID_PRESETS', () => {
-  it('maps segformer → fast', () => {
-    expect(SPHEROID_PRESETS.segformer).toBe('fast');
-  });
-
-  it('maps cbam_resunet → accurate', () => {
-    expect(SPHEROID_PRESETS.cbam_resunet).toBe('accurate');
-  });
-
-  it('maps mamba_unet → robust', () => {
-    expect(SPHEROID_PRESETS.mamba_unet).toBe('robust');
-  });
-
-  it('maps hrnet → additional', () => {
-    expect(SPHEROID_PRESETS.hrnet).toBe('additional');
-  });
-
-  it('maps unet_spherohq → additional', () => {
-    expect(SPHEROID_PRESETS.unet_spherohq).toBe('additional');
-  });
-});
-
-// ---------------------------------------------------------------------------
-// getSpheroidPreset
-// ---------------------------------------------------------------------------
-
-describe('getSpheroidPreset', () => {
-  const cases: Array<[ModelType, SpheroidPresetTier]> = [
-    ['segformer', 'fast'],
-    ['cbam_resunet', 'accurate'],
-    ['mamba_unet', 'robust'],
-    ['hrnet', 'additional'],
-    ['unet_spherohq', 'additional'],
-  ];
-
-  for (const [id, tier] of cases) {
-    it(`returns '${tier}' for '${id}'`, () => {
-      expect(getSpheroidPreset(id)).toBe(tier);
-    });
-  }
-
-  // Non-spheroid models fall back to 'additional'
-  const nonSpheroidModels: ModelType[] = [
-    'sperm',
-    'wound',
-    'microtubule',
-    'microcapsule',
-    'neurite_soma',
-    'spheroid_disintegration',
-  ];
-  for (const id of nonSpheroidModels) {
-    it(`falls back to 'additional' for non-preset model '${id}'`, () => {
-      expect(getSpheroidPreset(id)).toBe('additional');
-    });
-  }
-});
-
-// ---------------------------------------------------------------------------
-// SPHEROID_PRESET_META icons
-// ---------------------------------------------------------------------------
-
-describe('SPHEROID_PRESET_META', () => {
-  it('fast tier has an icon string', () => {
-    expect(typeof SPHEROID_PRESET_META.fast.icon).toBe('string');
-    expect(SPHEROID_PRESET_META.fast.icon.length).toBeGreaterThan(0);
-  });
-
-  it('accurate tier has an icon string', () => {
-    expect(typeof SPHEROID_PRESET_META.accurate.icon).toBe('string');
-    expect(SPHEROID_PRESET_META.accurate.icon.length).toBeGreaterThan(0);
-  });
-
-  it('robust tier has an icon string', () => {
-    expect(typeof SPHEROID_PRESET_META.robust.icon).toBe('string');
-    expect(SPHEROID_PRESET_META.robust.icon.length).toBeGreaterThan(0);
-  });
-
-  it('all three tiers have distinct icons', () => {
-    const icons = [
-      SPHEROID_PRESET_META.fast.icon,
-      SPHEROID_PRESET_META.accurate.icon,
-      SPHEROID_PRESET_META.robust.icon,
-    ];
-    expect(new Set(icons).size).toBe(3);
-  });
-});
+// The SPHEROID_PRESETS / getSpheroidPreset / SPHEROID_PRESET_META suites that
+// used to head this file were deleted with the constants themselves: their
+// only consumer was the Settings → Models section, which is gone now that the
+// model is chosen per project. Same for getAllLocalizedModels, whose only
+// caller was the deleted useLocalizedModels hook.
 
 // ---------------------------------------------------------------------------
 // BASIC_MODEL_INFO
@@ -292,45 +202,5 @@ describe('getLocalizedModelInfo', () => {
       key === 'settings.modelSelection.models.hrnet.name' ? 'HRNet Real' : key;
     const info = getLocalizedModelInfo('hrnet', fakeT);
     expect(info.name).toBe('HRNet Real');
-  });
-});
-
-// ---------------------------------------------------------------------------
-// getAllLocalizedModels
-// ---------------------------------------------------------------------------
-
-describe('getAllLocalizedModels', () => {
-  const passthroughT = (key: string) => key;
-
-  it('returns 11 models', () => {
-    expect(getAllLocalizedModels(passthroughT)).toHaveLength(11);
-  });
-
-  it('contains all model ids exactly once', () => {
-    const ids = getAllLocalizedModels(passthroughT).map(m => m.id);
-    const expectedIds: ModelType[] = [
-      'hrnet',
-      'cbam_resunet',
-      'unet_spherohq',
-      'spheroid_disintegration',
-      'segformer',
-      'mamba_unet',
-      'sperm',
-      'wound',
-      'microtubule',
-      'microcapsule',
-      'neurite_soma',
-    ];
-    for (const id of expectedIds) {
-      expect(ids).toContain(id);
-    }
-    // No duplicates
-    expect(new Set(ids).size).toBe(11);
-  });
-
-  it('preserves order: hrnet first, neurite_soma last', () => {
-    const models = getAllLocalizedModels(passthroughT);
-    expect(models[0].id).toBe('hrnet');
-    expect(models[models.length - 1].id).toBe('neurite_soma');
   });
 });

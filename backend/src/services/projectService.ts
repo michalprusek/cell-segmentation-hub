@@ -6,6 +6,13 @@ import {
 } from '../types/validation';
 import { calculatePagination } from '../utils/response';
 import { logger } from '../utils/logger';
+import { coerceProjectType } from '../types/validation';
+import {
+  MODEL_TYPE_COMPATIBILITY,
+  resolveProjectModel,
+  type KnownModelId,
+} from '../constants/modelRegistry';
+import { ApiError } from '../middleware/error';
 import * as SharingService from './sharingService';
 import type { Project, Prisma, User } from '@prisma/client';
 
@@ -427,6 +434,39 @@ export async function updateProject(
       return null; // Project not found or user is not the owner
     }
 
+    // The model must be compatible with the type the project will HAVE once
+    // this request lands — not necessarily the type it has now, since a single
+    // PUT may carry both. Checking against the stored type would let
+    // `{ type: 'wound', segmentationModel: 'segformer' }` through.
+    const effectiveType = coerceProjectType(data.type ?? existingProject.type);
+
+    if (data.segmentationModel != null) {
+      const compatible = MODEL_TYPE_COMPATIBILITY[effectiveType];
+      if (
+        !(compatible as readonly string[]).includes(data.segmentationModel)
+      ) {
+        throw ApiError.validationError(
+          `Model ${data.segmentationModel} není kompatibilní s typem projektu ${effectiveType}. Povolené modely: ${compatible.join(', ')}`,
+          'MODEL_TYPE_INCOMPATIBLE'
+        );
+      }
+    }
+
+    // Changing the type strands whatever model was stored for the old one, so
+    // it is cleared unless this same request names a replacement. Cleared to
+    // NULL rather than to the new type's default literal: NULL means "follow
+    // the default", so the row keeps tracking the registry, whereas writing
+    // the literal would freeze today's default into it — the same reason the
+    // migration deliberately backfills nothing.
+    const typeChanged =
+      data.type !== undefined && data.type !== existingProject.type;
+    const segmentationModelUpdate =
+      data.segmentationModel !== undefined
+        ? { segmentationModel: data.segmentationModel }
+        : typeChanged
+          ? { segmentationModel: null }
+          : {};
+
     // Update the project
     const updatedProject = await prisma.project.update({
       where: {
@@ -442,6 +482,7 @@ export async function updateProject(
         ...(data.pixelSizeUm !== undefined && {
           pixelSizeUm: data.pixelSizeUm,
         }),
+        ...segmentationModelUpdate,
         updatedAt: new Date(),
       },
       include: {
@@ -734,4 +775,40 @@ export async function getProjectStats(
     );
     throw error;
   }
+}
+
+/**
+ * The model a project should segment with, resolved server-side.
+ *
+ * The queue endpoints accept a `model` in the request body and the browser
+ * always sends one, but a request that omits it must NOT fall back to a
+ * hard-coded `'hrnet'` — that literal is compatible with exactly one of the
+ * seven project types, so on the other six the worker rejects the job and
+ * every image in the batch is marked failed. It is also the reason this
+ * column exists: it is authoritative, and a server that ignores it makes it
+ * authoritative only in the browser.
+ *
+ * Returns `null` when the project does not exist, so the caller can keep
+ * whatever not-found handling it already has rather than inventing a model
+ * for a project it could not read.
+ */
+export async function getProjectModel(
+  projectId: string
+): Promise<KnownModelId | null> {
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { type: true, segmentationModel: true },
+  });
+
+  if (!project) {
+    return null;
+  }
+
+  // `resolveProjectModel` is total over the raw column, so the legacy-row case
+  // lands on a default rather than throwing; `coerceProjectType` is applied
+  // anyway to keep the narrowing visible at the boundary.
+  return resolveProjectModel(
+    coerceProjectType(project.type),
+    project.segmentationModel
+  );
 }

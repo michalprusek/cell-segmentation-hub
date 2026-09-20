@@ -9,13 +9,11 @@
  *   User, Profile, ApiError, AuthResponse, Project, ProjectFolder,
  *   NewProject, Image, UpdateProfile, SegmentationStatus, ExportJobStatus,
  *   PolygonData, SegmentationData, SegmentationResult, ProjectImage,
- *   VideoChannel, SpheroidMetric, ProjectType, KnownModelId
+ *   VideoChannel, SpheroidMetric, ProjectType
  *
  * TESTED (runtime values with real behaviour):
  *   PROJECT_TYPES const array membership
  *   isProjectType() type-guard — true/false paths + edge cases
- *   MODEL_TYPE_COMPATIBILITY map correctness per project type
- *   isModelCompatibleWithType() — compatible + incompatible + unknown
  *   getErrorMessage() — all major branches:
  *     plain Error, plain string, ApiError with statusCode, login 401,
  *     register 409, resource-code strings, camelCase normalisation,
@@ -23,13 +21,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import {
-  PROJECT_TYPES,
-  isProjectType,
-  MODEL_TYPE_COMPATIBILITY,
-  isModelCompatibleWithType,
-  getErrorMessage,
-} from '../index';
+import { PROJECT_TYPES, isProjectType, getErrorMessage } from '../index';
 
 // ---------------------------------------------------------------------------
 // PROJECT_TYPES
@@ -89,79 +81,6 @@ describe('isProjectType()', () => {
   it('is case-sensitive (uppercase fails)', () => {
     expect(isProjectType('Spheroid')).toBe(false);
     expect(isProjectType('SPERM')).toBe(false);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// MODEL_TYPE_COMPATIBILITY
-// ---------------------------------------------------------------------------
-
-describe('MODEL_TYPE_COMPATIBILITY', () => {
-  it('spheroid accepts the 5 general models and excludes spheroid_disintegration', () => {
-    const models = MODEL_TYPE_COMPATIBILITY.spheroid;
-    expect(models).toContain('hrnet');
-    expect(models).toContain('cbam_resunet');
-    expect(models).toContain('unet_spherohq');
-    expect(models).toContain('segformer');
-    expect(models).toContain('mamba_unet');
-    expect(models).not.toContain('spheroid_disintegration');
-  });
-
-  it('spheroid_invasive is locked to spheroid_disintegration only', () => {
-    const models = MODEL_TYPE_COMPATIBILITY.spheroid_invasive;
-    expect([...models]).toEqual(['spheroid_disintegration']);
-  });
-
-  it('wound uses only the wound model', () => {
-    expect([...MODEL_TYPE_COMPATIBILITY.wound]).toEqual(['wound']);
-  });
-
-  it('sperm uses only the sperm model', () => {
-    expect([...MODEL_TYPE_COMPATIBILITY.sperm]).toEqual(['sperm']);
-  });
-
-  it('microtubules uses only the microtubule model', () => {
-    expect([...MODEL_TYPE_COMPATIBILITY.microtubules]).toEqual(['microtubule']);
-  });
-
-  it('has an entry for every known project type', () => {
-    for (const type of PROJECT_TYPES) {
-      expect(MODEL_TYPE_COMPATIBILITY).toHaveProperty(type);
-    }
-  });
-});
-
-// ---------------------------------------------------------------------------
-// isModelCompatibleWithType
-// ---------------------------------------------------------------------------
-
-describe('isModelCompatibleWithType()', () => {
-  it('returns true when model is in the compatibility list', () => {
-    expect(isModelCompatibleWithType('hrnet', 'spheroid')).toBe(true);
-    expect(isModelCompatibleWithType('wound', 'wound')).toBe(true);
-    expect(isModelCompatibleWithType('sperm', 'sperm')).toBe(true);
-    expect(isModelCompatibleWithType('microtubule', 'microtubules')).toBe(true);
-    expect(
-      isModelCompatibleWithType('spheroid_disintegration', 'spheroid_invasive')
-    ).toBe(true);
-  });
-
-  it('returns false for cross-type mismatches', () => {
-    expect(isModelCompatibleWithType('sperm', 'spheroid')).toBe(false);
-    expect(isModelCompatibleWithType('wound', 'sperm')).toBe(false);
-    expect(isModelCompatibleWithType('hrnet', 'wound')).toBe(false);
-    expect(
-      isModelCompatibleWithType('spheroid_disintegration', 'spheroid')
-    ).toBe(false);
-    expect(isModelCompatibleWithType('microtubule', 'spheroid')).toBe(false);
-  });
-
-  it('returns false for completely unknown model string', () => {
-    expect(isModelCompatibleWithType('ghost_model', 'spheroid')).toBe(false);
-  });
-
-  it('is case-sensitive', () => {
-    expect(isModelCompatibleWithType('HRNet', 'spheroid')).toBe(false);
   });
 });
 
