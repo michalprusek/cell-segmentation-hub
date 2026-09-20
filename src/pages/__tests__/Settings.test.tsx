@@ -144,15 +144,22 @@ vi.mock('@/components/ui/tabs', () => {
         </button>
       );
     },
-    // TabsContent renders unconditionally — allows asserting section components
-    // are present regardless of active tab.
+    // Honours the active tab, like the real Radix component. It used to render
+    // every panel unconditionally, which made any "X is visible on tab Y"
+    // assertion vacuous — it would have held for every Y — and the comment at
+    // the profile test claiming "value must equal activeValue" was describing
+    // behaviour the stub did not have.
     TabsContent: ({
       children,
       value,
     }: {
       children: React.ReactNode;
       value: string;
-    }) => <div data-testid={`tab-content-${value}`}>{children}</div>,
+    }) => {
+      const ctx = React.useContext(TabsCtx);
+      if (ctx.value !== value) return null;
+      return <div data-testid={`tab-content-${value}`}>{children}</div>;
+    },
   };
 });
 
@@ -366,6 +373,10 @@ describe('Default tab selection', () => {
     expect(screen.getByTestId('tabs').getAttribute('data-value')).toBe(
       'profile'
     );
+    // And the panel actually renders — now a meaningful assertion, since the
+    // TabsContent stub honours the active tab. Landing on a page with three
+    // triggers and nothing below them is the regression being guarded.
+    expect(screen.getByTestId('tab-content-profile')).toBeInTheDocument();
   });
 
   it('falls back to profile for any unknown tab value', async () => {
@@ -379,6 +390,7 @@ describe('Default tab selection', () => {
     expect(screen.getByTestId('tabs').getAttribute('data-value')).toBe(
       'profile'
     );
+    expect(screen.getByTestId('tab-content-profile')).toBeInTheDocument();
   });
 });
 
@@ -413,8 +425,8 @@ describe('UserProfileSection conditional render', () => {
       expect(screen.queryByText('common.loading')).not.toBeInTheDocument();
     });
 
-    // Due to how TabsContent works in our stub (value must equal activeValue),
-    // the profile content is shown when activeValue='profile'
+    // The stub honours the active tab, so this really is the profile panel
+    // rather than every panel rendered at once.
     const section = screen.getByTestId('user-profile-section');
     expect(section).toBeInTheDocument();
     expect(section.getAttribute('data-userid')).toBe('u1');
