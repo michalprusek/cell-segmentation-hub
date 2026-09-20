@@ -413,6 +413,53 @@ Each of these shipped to production at least once in 2026 despite green pre-comm
 
 ---
 
+## Documentation is part of the change, not a follow-up
+
+**Every application change updates the documentation that describes it, in the
+same PR, and the update is VERIFIED the same way the code is.** Docs that
+describe a UI which no longer exists are worse than no docs: a reader follows
+them, cannot find the control, and concludes the feature is broken.
+
+This is not a style preference. Documentation here lives in four places that
+drift independently, and a change usually touches more than one:
+
+1. **`docs/**.md`** — architecture, reference, API, testing guide.
+2. **The in-app Documentation page** (`src/pages/documentation/`) — what USERS
+   read. It is rendered from the `docs:` block in
+   `src/translations/{en,cs,es,de,fr,zh}.ts`, so a change here is a change in
+   SIX files. Note there are TWO blocks named `modelSelection` in those
+   files — one under `settings:`, one under `docs:` — and editing the wrong one
+   is easy.
+3. **`CLAUDE.md`** (this file) — every "X lives at Y" claim it makes.
+4. **Code comments carrying measured numbers** — see the rule about not
+   "simplifying" `rasterize_band`, `vicinity_mask` and `focus_qc/metrics.py`.
+
+### The check, before you call a change done
+
+- `grep` the docs for the names of everything you deleted, moved or renamed —
+  components, routes, URL query params, settings tabs, env vars, endpoints.
+  A deleted `ModelSettingsSection` or a removed `?tab=models` leaves prose
+  pointing at it.
+- If the change is user-visible, **open the in-app Documentation page in the
+  browser** and read the section that covers it, exactly as a user would. The
+  i18n validator cannot tell you a sentence became false — it only checks that
+  keys exist in all six files.
+- If a doc states a NUMBER (a default, a threshold, a count, a duration),
+  re-measure it rather than copying it forward. This repo's own comments have
+  been wrong by seven minor versions.
+- State in the PR description which docs you checked, including the ones you
+  concluded needed no change. "I did not look" and "I looked and it was fine"
+  are different answers.
+
+### When docs and code disagree
+
+Fix the docs to match the code only after confirming the CODE is right. The
+`_arc_length_resample_polyline` case is the precedent: the docstring cited the
+wrong ImageJ method for years, and the code was correct — "fixing" the code to
+match the comment would have been the bug.
+
+---
+
 ## Do NOT hand back unverified fixes
 
 **Test comprehensively yourself BEFORE telling the user to try it.** Repeatedly shipping "should work" fixes that the user has to bounce back is the worst failure mode — it wastes their time and erodes trust. For any user-facing change, reproduce the user's exact flow end-to-end and observe the fixed behavior with your own tools (Playwright MCP + service logs + DB) before handoff.
@@ -506,15 +553,15 @@ There are no longer `scripts/deploy-production.sh` / `rollback-deployment.sh` / 
 
 ## Tech Stack
 
-| Layer      | Technology                                                                                        |
-| ---------- | ------------------------------------------------------------------------------------------------- |
-| Frontend   | React 18 + TypeScript + Vite + shadcn/ui (Radix + Tailwind)                                       |
-| Backend    | Node.js + Express + TypeScript + Prisma                                                           |
-| ML Service | Python + FastAPI + PyTorch (HRNet, CBAM-ResUNet, U-Net, Sperm, Wound, Microtubule SPARSE35 ep040) |
-| Database   | PostgreSQL (dev + prod via Docker compose)                                                        |
-| Real-time  | Socket.io with auto-reconnect + exponential backoff                                               |
-| Auth       | JWT access + refresh tokens                                                                       |
-| i18n       | 6 languages (EN, CS, ES, DE, FR, ZH) via a hand-rolled `LanguageContext` — **not i18next**        |
+| Layer      | Technology                                                                                                                                                                    |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Frontend   | React 18 + TypeScript + Vite + shadcn/ui (Radix + Tailwind)                                                                                                                   |
+| Backend    | Node.js + Express + TypeScript + Prisma                                                                                                                                       |
+| ML Service | Python + FastAPI + PyTorch (SegFormer, HRNet, CBAM-ResUNet, U-Net, Mamba-UNet, Spheroid Disintegration, Sperm, Wound, Microcapsule, Neurite/Soma, Microtubule SPARSE35 ep040) |
+| Database   | PostgreSQL (dev + prod via Docker compose)                                                                                                                                    |
+| Real-time  | Socket.io with auto-reconnect + exponential backoff                                                                                                                           |
+| Auth       | JWT access + refresh tokens                                                                                                                                                   |
+| i18n       | 6 languages (EN, CS, ES, DE, FR, ZH) via a hand-rolled `LanguageContext` — **not i18next**                                                                                    |
 
 ---
 
@@ -523,8 +570,39 @@ There are no longer `scripts/deploy-production.sh` / `rollback-deployment.sh` / 
 ### Frontend state
 
 - **Server state**: React Query (TanStack) with optimistic updates + query invalidation.
-- **Client state**: React Contexts — Auth, Theme, Language, WebSocket, Upload, Export, Model, ImageDisplayContext.
+- **Client state**: React Contexts — Auth, Theme, Language, WebSocket, Upload, Export, Model, ImageDisplayContext. `ModelContext` is down to `detectHoles` alone (see below).
 - **Real-time**: Socket.io events (`segmentationStatus`, `segmentationCompleted/Failed`, `queueStats`).
+
+### The segmentation model belongs to the PROJECT (since 2026-09-20, PRs #553/#554)
+
+It used to be one per-user value in `localStorage`, chosen in Settings → Models
+and shown as a badge in the header. Both of those are **gone**: there is no
+models tab (`?tab=models` falls back to the profile tab), and the header shows
+only a bare ML-status dot.
+
+- **`projects.segmentationModel`**, nullable. `NULL` means "follow the type's
+  default" and is **never backfilled** — a backfill would freeze today's
+  default into every row. Resolve it with `resolveProjectModel()`, which also
+  falls back when the stored value is stale (a type change strands it, and a
+  model can leave the registry).
+- **`DEFAULT_MODEL_BY_PROJECT_TYPE`** in BOTH registry SSOTs picks the most
+  ACCURATE compatible model, not the fastest: `spheroid` → `segformer` on
+  93 % IoU. Parity between the two copies is enforced by
+  `scripts/verify-shared-types.cjs`, NOT by either side's own unit test.
+- **Only `spheroid` has a real choice** (5 models); the other six project types
+  have exactly one each, so their picker is a single disabled row.
+- **The server must read the column too.** It shipped once with
+  `resolveProjectModel` having zero backend call sites and a docstring claiming
+  otherwise, while the queue defaulted to `'hrnet'` — a model compatible with
+  exactly one of the seven types. Both enqueue paths now resolve from the
+  project, and a `model` in the request body is honoured **only for the owner**.
+- **Hole detection is offered on `spheroid` and `wound` only**
+  (`PROJECT_TYPES_WITH_HOLE_DETECTION`). Elsewhere the request carries the
+  default `true`, normalised on both sides by `resolveDetectHoles` — a
+  parameter the user cannot see must not be one they are silently subject to.
+- **Rename / type / model are owner-only**; `verified` is not. `getProjectById`
+  reports `isOwned`, and `mapProjectFields` must list it — the enumerative
+  mapper stripped it on the first attempt, as it does every new field.
 
 ### Segmentation editor (`/src/pages/segmentation/`)
 
@@ -557,7 +635,7 @@ Controllers → Services → Prisma ORM → Storage (local FS / S3)
 ### ML service (`/backend/segmentation/`)
 
 - FastAPI + PyTorch, CUDA with CPU fallback
-- Models: HRNet (~200 ms), CBAM-ResUNet (~400 ms), U-Net (~200 ms), Sperm, Microtubule SPARSE35 ep040 (nnU-Net ResEnc-M + curvature-bounded instancer, NATIVE-scale inference since 2026-09-19, ~0.6 s per 1024x1024 frame on the A5000; `backend/segmentation/models/microtubule/MODEL_CARD.md` is the reference for the model, its numbers and its rollback)
+- Models: SegFormer (~200 ms — **the spheroid default** since 2026-09-20), HRNet (~200 ms), CBAM-ResUNet (~400 ms), U-Net (~200 ms), Mamba-UNet (~240 ms), Spheroid Disintegration, Sperm, Wound, Microcapsule, Neurite/Soma, Microtubule SPARSE35 ep040 (nnU-Net ResEnc-M + curvature-bounded instancer, NATIVE-scale inference since 2026-09-19, ~0.6 s per 1024x1024 frame on the A5000; `backend/segmentation/models/microtubule/MODEL_CARD.md` is the reference for the model, its numbers and its rollback)
 - Weights from Google Drive; `make check-weights`. Microtubule: `scripts/download-microtubule-weights.sh` stages `weights/microtubule_sparse35_ep040.pth` and refuses any file whose sha256 is not the pinned one (a wrong checkpoint of the right shape loads without an error). `microtubule_v5h.pth` + `params_v5h.json` stay on disk/in git as the rollback. **No `HF_TOKEN`** — the checkpoint is a complete `state_dict` with no frozen backbone, so MT segmentation needs no network at run time. (`HF_TOKEN` and the `.hf-cache` mount stay for SegFormer and sperm, which still call `from_pretrained`.)
 - **The microtubule model is IRM-only, and its threshold is NOT a user setting.** The `/segment` route deliberately passes no threshold for `microtubule`; the model applies `prob_thr` from `params_sparse35.json` (0.98 — SPARSE35's own optimum on the roi303 validation block; v5H used 0.97). Do not "fix" a low detection count by lowering it. **Verify a model swap with `docker exec spheroseg-ml python scripts/verify_microtubule_model.py`**: it runs the committed fixture through the container's own forward pass and compares the map and the polylines with what the research harness measured (identity on the harness's own torch 2.5.1 + A5000; a different torch or GPU may move a few probabilities by thousandths, which `reference_check.CUDA_TOL` absorbs). The evidence below was measured on v5H at 0.97 and is kept as the record of WHY the cut is not a setting; re-measure before moving it. Measured 2026-08-17 by sampling background-flattened image contrast along every detected centerline against the same curve translated elsewhere (a real MT in IRM is darker than its surround): on a pure IRM frame, 0.97 gives 128 MTs at **−1.73 SD** separation, and dropping to 0.35 gives 155 at only −1.44 SD — more detections, worse evidence. On a **TIRF** frame separation is ~**−0.02 SD at every threshold**, i.e. the output does not track image content at all, so lowering the threshold there manufactures hundreds of false positives. Symptom of feeding it TIRF: plenty of confident-looking polylines with no contrast under them. Check the project's `channels` JSON. IRM detection now requires POSITIVE evidence — a label-free name (IRM/BF/DIC/TL) or an explicitly **zero** emission wavelength; the old "unknown wavelength ⇒ irm" fallback was removed because multi-page TIFFs carry no wavelength at all and so had every channel typed `irm` (the 3-frame `DNA_origami` fixture is exactly that). The failure mode is now the opposite one: a stack whose channels cannot be identified gets **no** segmentation source, and must be set by hand.
 - Cross-frame routes: `/api/v1/track` (Hungarian matching on **geometry** — symmetric curve distance + overlap gate, with common-mode stage drift removed via normal-flow least squares; see `api/mt_geometry_cost.py`) + `/api/v1/kymograph` (line-profile + viridis) in `api/tracker_kymograph.py`. `/api/v1/kymograph/batch` takes N of those bodies in one call and decodes each frame ONCE for all of them — the MT export builds one kymograph per (microtubule x channel) over the same frames, and the sampled-row cache never hits for it because every job has a different polyline. Same bodies, byte-identical per-item results; **deploy ml before the backend that calls it**, the route 404s on an older container.

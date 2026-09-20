@@ -53,9 +53,14 @@ model stay on disk but cannot be re-run.
 ## Thresholds are not a setting
 
 The threshold row above lists a **per-model constant**, not something you can
-dial. `ModelContext` derives it read-only from the model registry, and no screen
-renders a control for it — Settings offers the model and hole detection only. To
-change a threshold you change the model, or the registry.
+dial. It is derived read-only from the model registry by `useProjectModel`, and
+no screen renders a control for it. To change a threshold you change the model,
+or the registry.
+
+The **model** itself is a property of the project (see below), and **hole
+detection** is offered only on standard spheroid and wound-healing projects —
+the two types where an internal hole is structure rather than noise. Everywhere
+else it is fixed at its default.
 
 ---
 

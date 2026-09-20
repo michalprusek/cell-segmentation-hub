@@ -50,16 +50,24 @@ server-side. Details: [Authentication](../api/authentication.md).
 
 ## The segmentation queue
 
-`SegmentationQueue` rows carry the image, the project, the user, the chosen
+`SegmentationQueue` rows carry the image, the project, the user, the resolved
 model and threshold, hole detection, an optional channel override, a priority
-and a status.
+and a status. "Resolved", not "chosen": the model comes from
+`projects.segmentationModel` unless the project's **owner** overrode it in the
+request, the threshold is the model's registry constant, and hole detection is
+forced to `true` outside `spheroid`/`wound`.
 
 The worker:
 
 1. selects a batch, **deprioritising users who were recently served** so one
    200-frame video cannot monopolise the GPU;
-2. **enforces model/project-type compatibility here**, not at enqueue — so a
-   `202` is not a promise that the item will run;
+2. **enforces model/project-type compatibility here**, not at enqueue. The
+   enqueue endpoints answer `200` as soon as the row exists, which confirms
+   queueing and nothing more: the worker can still fail the item, retry it or
+   reject it. Since 2026-09-20 the interface cannot produce a mismatch — the
+   model is resolved FROM the project's type — so this particular rejection is
+   defence in depth for direct API callers rather than a failure mode users
+   meet;
 3. rewrites the frame's path when a channel override is set;
 4. POSTs to the ML service and stores the result;
 5. emits WebSocket events.

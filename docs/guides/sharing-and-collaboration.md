@@ -45,18 +45,19 @@ folders.
 
 ## What a collaborator can do
 
-| Action                                        | Owner | Accepted collaborator |
-| --------------------------------------------- | :---: | :-------------------: |
-| View the project and its images               |  ✅   |          ✅           |
-| Open the segmentation editor                  |  ✅   |          ✅           |
-| **Edit and save annotations**                 |  ✅   |          ✅           |
-| Run segmentation, resegment                   |  ✅   |          ✅           |
-| Export                                        |  ✅   |          ✅           |
-| Mark the project **verified**                 |  ✅   |          ✅           |
-| File it in their own folders                  |  ✅   |          ✅           |
-| Change title, description or **project type** |  ✅   |          ❌           |
-| Share it with others, or revoke a share       |  ✅   |          ❌           |
-| Delete the project                            |  ✅   |          ❌           |
+| Action                                                                | Owner | Accepted collaborator |
+| --------------------------------------------------------------------- | :---: | :-------------------: |
+| View the project and its images                                       |  ✅   |          ✅           |
+| Open the segmentation editor                                          |  ✅   |          ✅           |
+| **Edit and save annotations**                                         |  ✅   |          ✅           |
+| Run segmentation, resegment                                           |  ✅   |          ✅           |
+| Export                                                                |  ✅   |          ✅           |
+| Mark the project **verified**                                         |  ✅   |          ✅           |
+| File it in their own folders                                          |  ✅   |          ✅           |
+| Change title, description, **project type** or **segmentation model** |  ✅   |          ❌           |
+| See which model the project uses                                      |  ✅   |  ✅ (read-only pill)  |
+| Share it with others, or revoke a share                               |  ✅   |          ❌           |
+| Delete the project                                                    |  ✅   |          ❌           |
 
 > **Sharing is collaborative, not read-only.** An accepted collaborator can
 > change annotations, and on a video their edits carry the same cross-frame

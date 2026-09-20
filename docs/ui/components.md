@@ -237,12 +237,22 @@ Used in authenticated dashboard areas.
 
 ### Auto-save Implementation
 
-Used in Settings/Models section:
+Used by the project page's model picker. (This example used to show a
+confidence-threshold slider in Settings → Models; that screen and that control
+are both gone — the threshold is a per-model constant, and the model is now a
+property of the project.)
 
 ```tsx
-const handleThresholdChange = (value: number[]) => {
-  setConfidenceThreshold(value[0] / 100);
-  toast.success(t('settings.modelSettingsSaved'));
+const handleModelChange = async (newModel: ModelType) => {
+  const previous = projectSegmentationModel;
+  setProjectSegmentationModel(newModel); // optimistic
+  try {
+    await apiClient.updateProject(id, { segmentationModel: newModel });
+    toast.success(t('project.modelUpdated'));
+  } catch (err) {
+    setProjectSegmentationModel(previous);
+    toast.error(getErrorMessage(err, t));
+  }
 };
 ```
 

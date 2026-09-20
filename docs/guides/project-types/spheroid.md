@@ -15,15 +15,26 @@ Five, all producing closed polygons with optional internal holes:
 
 | Model                      | Pick it when                                                                                                                                                     |
 | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **HRNet (Balanced)**       | You want one model and no thinking. The platform default.                                                                                                        |
+| **HRNet (Balanced)**       | A balanced starting point when boundaries and speed both matter.                                                                                                 |
 | **CBAM-ResUNet (Precise)** | Publication figures, difficult boundaries, small batches. Roughly 2× HRNet's cost.                                                                               |
 | **UNet (Fastest)**         | Large batches where turnaround matters more than the last percent of boundary accuracy.                                                                          |
-| **SegFormer**              | Highest reported accuracy on bright-field spheroids (93 % IoU), and very fast.                                                                                   |
+| **SegFormer**              | Highest reported accuracy on bright-field spheroids (93 % IoU), and very fast. **The default for this project type.**                                            |
 | **Mamba-UNet**             | Images unlike the training data — an external lab, unknown optics, drug-treated or unusual morphologies. Chosen specifically for out-of-distribution robustness. |
 
-Set your default in **Settings → Model**, and override per run in the
-segmentation dialog. The confidence threshold (default **0.5**) and hole
-detection are settable.
+The model is a property of the **project**: it sits at the top of the project
+page, immediately right of the project type, and the picker offers only models
+this type can run. A new project starts on SegFormer — the most accurate of the
+five, not the fastest. Only the project's **owner** may change it; a shared
+annotator sees it as a read-only label.
+
+There is no Settings page for this and no per-run dialog: both were removed on
+2026-09-20 (PRs #553/#554), because a single global model had no relationship
+to the project being segmented.
+
+The confidence threshold is **not** settable — each model applies the cut it
+was validated with. Hole detection is settable here, since standard spheroids
+are one of the two project types where an internal hole is structure rather
+than noise (the other is wound healing).
 
 `spheroid_disintegration` is deliberately **not** offered here. If you need a
 Disintegration Index, create the project as

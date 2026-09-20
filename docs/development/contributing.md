@@ -149,6 +149,16 @@ the weights download script, and the model's name and description in all six
 locales. `scripts/check-model-parity.cjs` and `scripts/check-i18n.cjs` will tell
 you what you missed.
 
+If the model should be what a project type **starts on**, it also needs an entry
+in `DEFAULT_MODEL_BY_PROJECT_TYPE` — in BOTH registries. Omitting it on one side
+compiles fine on that side; the two copies are kept in step by
+`scripts/verify-shared-types.cjs`, not by either side's unit tests. Within one
+registry a default incompatible with its project type is a compile error.
+
+And document it: the model's card in the in-app Documentation page lives under
+`docs.modelSelection.models.<key>` in all six locales — a different block from
+the `settings.modelSelection.models.<key>` name/description keys above.
+
 ## Related
 
 - [Getting started](getting-started.md)

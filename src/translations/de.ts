@@ -1643,7 +1643,8 @@ export default {
         step1: 'Öffnen Sie die Registrierungsseite',
         step2: 'Geben Sie Ihre E-Mail-Adresse ein und wählen Sie ein Passwort',
         step3: 'Vervollständigen Sie Ihr Profil mit Name und Einrichtung',
-        step4: 'Legen Sie in den Einstellungen Modell, Sprache und Design fest',
+        step4:
+          'Legen Sie in den Einstellungen Sprache und Design fest — das Segmentierungsmodell wird je Projekt gewählt',
       },
       firstProject: 'Ihr erstes Projekt',
       projectDescription:
@@ -1812,7 +1813,7 @@ export default {
           name: 'HRNet (ausgewogen)',
           inferenceTime: 'Etwa 0,20 s pro Bild',
           bestFor:
-            'Am besten für: ein Modell, kein Nachdenken. Die Standardwahl der Plattform.',
+            'Am besten für: ein ausgewogener Ausgangspunkt, wenn Ränder und Tempo beide zählen.',
           description:
             'Behält im gesamten Netz einen hochauflösenden Zweig bei, statt erst zu kodieren und dann zu dekodieren, und bewahrt so Randdetails.',
         },
@@ -1897,15 +1898,17 @@ export default {
       howToSelect: 'Ein Modell wählen',
       selectionSteps: {
         step1:
-          'Legen Sie das Standardmodell in den Einstellungen fest — es gilt überall dort, wo der Projekttyp eine Wahl zulässt',
+          'Öffnen Sie ein Projekt — das Modell steht oben, direkt rechts neben dem Projekttyp',
         step2:
-          'Öffnen Sie ein Projekt und wählen Sie die zu verarbeitenden Bilder',
+          'Die Auswahl zeigt nur Modelle, die dieser Projekttyp ausführen kann, und beginnt beim genauesten',
         step3:
-          'Klicken Sie auf Segmentieren; der Dialog bietet nur kompatible Modelle an',
+          'Wählen Sie die Bilder und klicken Sie auf Segmentieren; das Modell des Projekts wird verwendet',
         step4:
           'Jedes Modell bringt seinen eigenen Erkennungsschwellwert mit, festgelegt bei der Validierung — pro Lauf gibt es nichts einzustellen',
         step5:
           'Wählen Sie bei einem Mehrkanalvideo, welchen Kanal das Modell lesen soll',
+        step6:
+          'Nur die Projektinhaberin oder der Projektinhaber kann das Modell ändern; Mitarbeitende segmentieren mit dieser Wahl',
       },
       thresholdNote: 'Erkennungsschwellwerte sind je Modell fest.',
       thresholdNoteText:
@@ -1936,7 +1939,8 @@ export default {
         step1: 'Laden Sie Bilder oder Videos in ein Projekt',
         step2:
           'Wählen Sie die zu verarbeitenden Bilder, oder keines, um alle zu verarbeiten',
-        step3: 'Wählen Sie das Modell',
+        step3:
+          'Klicken Sie auf Segmentieren — das Modell des Projekts wird verwendet, es gibt nichts zu wählen',
         step4:
           'Wählen Sie bei einem Mehrkanalvideo den Kanal, den das Modell lesen soll',
         step5: 'Verfolgen Sie den Fortschritt über die Statusanzeigen',
@@ -2208,7 +2212,7 @@ export default {
       sharingFeatures: 'Was die Freigabe erlaubt',
       features: {
         collaborative:
-          'Gemeinsamer Zugriff: Mitarbeitende können ansehen, Annotationen bearbeiten, segmentieren, exportieren und das Projekt als geprüft markieren',
+          'Gemeinsamer Zugriff: Mitarbeitende können ansehen, Annotationen bearbeiten, segmentieren, exportieren und das Projekt als geprüft markieren — aber nicht umbenennen und weder Typ noch Segmentierungsmodell ändern; das bleibt bei der Eigentümerin oder dem Eigentümer',
         emailInvite:
           'E-Mail-Einladungen: Die Freigabe wirkt unabhängig davon, ob die E-Mail ankommt — die Zustellung kann einige Minuten dauern',
         linkShare:
@@ -2255,7 +2259,7 @@ export default {
         noDetections: {
           symptom: 'Das Modell findet sehr wenig',
           cause:
-            'Prüfen Sie zuerst Kontrast und Projekttyp. Senken Sie den Konfidenzschwellwert nur dort, wo er einstellbar ist — das Mikrotubuli-Modell ignoriert ihn absichtlich.',
+            'Prüfen Sie zuerst Kontrast und Projekttyp — der Schwellwert lässt sich nirgends einstellen, jedes Modell verwendet den Wert, mit dem es validiert wurde. Erlaubt der Projekttyp eine Modellwahl, kann ein genaueres Modell helfen; folgen die Erkennungen nichts im Bild, wird der falsche Kanal segmentiert.',
         },
         wrongChannel: {
           symptom: 'Viele Formen, aber sie folgen nichts im Bild',

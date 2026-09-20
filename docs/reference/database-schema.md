@@ -23,14 +23,14 @@ report history survives a GDPR deletion.
 One per user. Display fields (username, avatar, bio, organisation, location,
 title, `publicProfile`) plus the settings that drive the app:
 
-| Column                                                                                | Default | Meaning                                                   |
-| ------------------------------------------------------------------------------------- | ------- | --------------------------------------------------------- |
-| `preferredModel`                                                                      | `hrnet` | Pre-selected model where the project type allows a choice |
-| `modelThreshold`                                                                      | `0.5`   | Default confidence threshold                              |
-| `preferredLang`                                                                       | `cs`    | One of the six locales                                    |
-| `preferredTheme`                                                                      | `light` |                                                           |
-| `emailNotifications`                                                                  | `true`  |                                                           |
-| `consentToMLTraining`, `consentToAlgorithmImprovement`, `consentToFeatureDevelopment` | `true`  | Data-use consents, with `consentUpdatedAt`                |
+| Column                                                                                | Default | Meaning                                                                                                                                                        |
+| ------------------------------------------------------------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `preferredModel`                                                                      | `hrnet` | **Vestigial — nothing reads it.** The model is `projects.segmentationModel`. 52 of 53 production rows hold the placeholder `'model1'`, which is not a model id |
+| `modelThreshold`                                                                      | `0.5`   | **Vestigial — nothing reads it.** The threshold is a per-model constant from the registry, with no UI control anywhere                                         |
+| `preferredLang`                                                                       | `cs`    | One of the six locales                                                                                                                                         |
+| `preferredTheme`                                                                      | `light` |                                                                                                                                                                |
+| `emailNotifications`                                                                  | `true`  |                                                                                                                                                                |
+| `consentToMLTraining`, `consentToAlgorithmImprovement`, `consentToFeatureDevelopment` | `true`  | Data-use consents, with `consentUpdatedAt`                                                                                                                     |
 
 Avatars are files on disk; the row stores the path, MIME type and size.
 
@@ -45,12 +45,13 @@ the user agent, IP, `rememberMe` and an expiry.
 
 ### `Project` → `projects`
 
-| Column                     | Notes                                                                                                                                                                                                                                                                                                                                   |
-| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `type`                     | `spheroid` \| `spheroid_invasive` \| `wound` \| `sperm` \| `microtubules` \| `microcapsule` \| `neurite`. Drives model compatibility, editor mode and export format. **The inline comment in the schema lists only four types and is out of date — the seven above are authoritative** (`src/types/index.ts` and both model registries) |
-| `mtTypeLabels`             | The project's microtubule type-label palette: `[{ id, name, color }]`. Microtubule projects only                                                                                                                                                                                                                                        |
-| `verified`                 | "All annotations reviewed and passed." Settable by the owner **or** an accepted collaborator, unlike title/description/type                                                                                                                                                                                                             |
-| `verifiedAt`, `verifiedBy` | Stamped for auditability; not surfaced in the UI. `verifiedBy` is a bare user id with no foreign key                                                                                                                                                                                                                                    |
+| Column                     | Notes                                                                                                                                                                                                                                                                                                                                                                           |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `type`                     | `spheroid` \| `spheroid_invasive` \| `wound` \| `sperm` \| `microtubules` \| `microcapsule` \| `neurite`. Drives model compatibility, editor mode and export format. **The inline comment in the schema lists only four types and is out of date — the seven above are authoritative** (`src/types/index.ts` and both model registries)                                         |
+| `mtTypeLabels`             | The project's microtubule type-label palette: `[{ id, name, color }]`. Microtubule projects only                                                                                                                                                                                                                                                                                |
+| `segmentationModel`        | The model this project segments with, as a registry id. **Nullable, and deliberately never backfilled**: `NULL` means "follow the type's default", so every row keeps tracking `DEFAULT_MODEL_BY_PROJECT_TYPE` rather than freezing today's answer. Resolved by `resolveProjectModel()`, which also falls back when a type change strands the stored value. Owner-only to write |
+| `verified`                 | "All annotations reviewed and passed." Settable by the owner **or** an accepted collaborator — unlike title, description, `type` and `segmentationModel`, which are owner-only                                                                                                                                                                                                  |
+| `verifiedAt`, `verifiedBy` | Stamped for auditability; not surfaced in the UI. `verifiedBy` is a bare user id with no foreign key                                                                                                                                                                                                                                                                            |
 
 ### `ProjectFolder` → `project_folders`
 
@@ -112,12 +113,12 @@ written whole. Also records the `model`, `threshold`, optional `confidence`,
 
 ### `SegmentationQueue` → `segmentation_queue`
 
-| Column                                        | Notes                                                                                                                                                                        |
-| --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `model`, `threshold`, `detectHoles`           | The choices made at submission                                                                                                                                               |
-| `channel`                                     | Per-item channel override for multi-channel video frames. When set, the worker rewrites the channel segment of the frame's path so the user's Segment-All choice is honoured |
-| `priority`, `status`, `retryCount`, `batchId` | Scheduling                                                                                                                                                                   |
-| `startedAt`, `completedAt`                    | Timing                                                                                                                                                                       |
+| Column                                        | Notes                                                                                                                                                                                                                                      |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `model`, `threshold`, `detectHoles`           | The values the controller RESOLVED, not raw request input: `model` comes from the project unless the **owner** overrode it, `threshold` is the model's registry constant, and `detectHoles` is forced to `true` outside `spheroid`/`wound` |
+| `channel`                                     | Per-item channel override for multi-channel video frames. When set, the worker rewrites the channel segment of the frame's path so the user's Segment-All choice is honoured                                                               |
+| `priority`, `status`, `retryCount`, `batchId` | Scheduling                                                                                                                                                                                                                                 |
+| `startedAt`, `completedAt`                    | Timing                                                                                                                                                                                                                                     |
 
 ---
 

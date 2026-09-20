@@ -78,29 +78,36 @@ the handler reads, not just the one being checked.
 
 A second surface over the same data, used by the settings pages.
 
-| Method | Path                         | Purpose                                                   |
-| ------ | ---------------------------- | --------------------------------------------------------- |
-| GET    | `/api/users/profile`         | Profile                                                   |
-| PUT    | `/api/users/profile`         | Update profile                                            |
-| POST   | `/api/users/change-password` | Change password                                           |
-| GET    | `/api/users/settings`        | Preferences (model, threshold, language, theme, consents) |
-| GET    | `/api/users/storage-stats`   | Storage usage                                             |
-| GET    | `/api/users/activity`        | Recent activity, `limit` + `offset`                       |
-| DELETE | `/api/users/account`         | **Delete the account and all its data**                   |
+| Method | Path                         | Purpose                                 |
+| ------ | ---------------------------- | --------------------------------------- |
+| GET    | `/api/users/profile`         | Profile                                 |
+| PUT    | `/api/users/profile`         | Update profile                          |
+| POST   | `/api/users/change-password` | Change password                         |
+| GET    | `/api/users/settings`        | Preferences (language, theme, consents) |
+| GET    | `/api/users/storage-stats`   | Storage usage                           |
+| GET    | `/api/users/activity`        | Recent activity, `limit` + `offset`     |
+| DELETE | `/api/users/account`         | **Delete the account and all its data** |
+
+> `Profile.preferredModel` and `Profile.modelThreshold` are still on the wire
+> but **nothing reads them**. The segmentation model became a property of the
+> project on 2026-09-20 (`projects.segmentationModel`), and the threshold is a
+> per-model constant. They were already vestigial before that: measured
+> 2026-09-20, 52 of 53 production profiles hold the placeholder `'model1'`,
+> which is not a model id. Do not wire anything new to them.
 
 ---
 
 ## Projects
 
-| Method | Path                         | Purpose                                                             |
-| ------ | ---------------------------- | ------------------------------------------------------------------- |
-| POST   | `/api/projects`              | Create a project (`title`, `description?`, `type`)                  |
-| GET    | `/api/projects`              | List the caller's projects; cached per user                         |
-| GET    | `/api/projects/:id`          | One project; accessible to the owner **and** accepted collaborators |
-| PUT    | `/api/projects/:id`          | Update title / description / type — **owner only**                  |
-| DELETE | `/api/projects/:id`          | Delete the project and everything in it — owner only                |
-| PATCH  | `/api/projects/:id/verified` | Set the "reviewed" flag — owner **or** accepted collaborator        |
-| GET    | `/api/projects/:id/stats`    | Image and segmentation counts                                       |
+| Method | Path                         | Purpose                                                                                                                                                                                             |
+| ------ | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| POST   | `/api/projects`              | Create a project (`title`, `description?`, `type`)                                                                                                                                                  |
+| GET    | `/api/projects`              | List the caller's projects; cached per user                                                                                                                                                         |
+| GET    | `/api/projects/:id`          | One project; accessible to the owner **and** accepted collaborators                                                                                                                                 |
+| PUT    | `/api/projects/:id`          | Update title / description / `type` / `segmentationModel` — **owner only**. A `type` change clears `segmentationModel` to NULL; an incompatible model is refused with 400 `MODEL_TYPE_INCOMPATIBLE` |
+| DELETE | `/api/projects/:id`          | Delete the project and everything in it — owner only                                                                                                                                                |
+| PATCH  | `/api/projects/:id/verified` | Set the "reviewed" flag — owner **or** accepted collaborator                                                                                                                                        |
+| GET    | `/api/projects/:id/stats`    | Image and segmentation counts                                                                                                                                                                       |
 
 `type` must be one of `spheroid`, `spheroid_invasive`, `wound`, `sperm`,
 `microtubules`, `microcapsule`, `neurite`. See
@@ -180,22 +187,28 @@ router; see [Microtubule projects](../guides/project-types/microtubules.md).
 
 ## Queue
 
-| Method | Path                                   | Purpose                                                             |
-| ------ | -------------------------------------- | ------------------------------------------------------------------- |
-| POST   | `/api/queue/images/:imageId`           | Enqueue one image (`model`, `threshold`, `detectHoles`, `channel?`) |
-| POST   | `/api/queue/batch`                     | Enqueue a batch                                                     |
-| GET    | `/api/queue/projects/:projectId/stats` | Queue stats for a project                                           |
-| GET    | `/api/queue/projects/:projectId/items` | Queued items for a project                                          |
-| DELETE | `/api/queue/items/:queueId`            | Remove one item                                                     |
-| POST   | `/api/queue/cancel-all-user`           | Cancel everything this user has queued                              |
-| GET    | `/api/queue/stats`                     | Global queue stats                                                  |
-| GET    | `/api/queue/health`                    | Queue health                                                        |
-| POST   | `/api/queue/reset-stuck`               | Requeue items stuck longer than N minutes                           |
-| POST   | `/api/queue/cleanup`                   | Prune finished items older than N days                              |
+| Method | Path                                   | Purpose                                                                                                                                                                                                                                                    |
+| ------ | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| POST   | `/api/queue/images/:imageId`           | Enqueue one image. `model` is OPTIONAL and honoured **only for the project owner**; omitted (or sent by a shared annotator) it is resolved from `projects.segmentationModel`. `detectHoles` is forced to `true` outside `spheroid`/`wound`                 |
+| POST   | `/api/queue/batch`                     | Enqueue a batch. Same model contract as the single-image route above: `model` is optional, honoured **only for the project owner**, and otherwise resolved from `projects.segmentationModel`; `detectHoles` is forced to `true` outside `spheroid`/`wound` |
+| GET    | `/api/queue/projects/:projectId/stats` | Queue stats for a project                                                                                                                                                                                                                                  |
+| GET    | `/api/queue/projects/:projectId/items` | Queued items for a project                                                                                                                                                                                                                                 |
+| DELETE | `/api/queue/items/:queueId`            | Remove one item                                                                                                                                                                                                                                            |
+| POST   | `/api/queue/cancel-all-user`           | Cancel everything this user has queued                                                                                                                                                                                                                     |
+| GET    | `/api/queue/stats`                     | Global queue stats                                                                                                                                                                                                                                         |
+| GET    | `/api/queue/health`                    | Queue health                                                                                                                                                                                                                                               |
+| POST   | `/api/queue/reset-stuck`               | Requeue items stuck longer than N minutes                                                                                                                                                                                                                  |
+| POST   | `/api/queue/cleanup`                   | Prune finished items older than N days                                                                                                                                                                                                                     |
 
-> **Enqueuing is not a guarantee.** Model/project-type compatibility is checked
-> by the **worker** at dispatch, not at enqueue, so an accepted item can still
-> be rejected.
+> **Enqueuing is not execution.** These endpoints answer `200` once the queue
+> row exists; they do not wait for the segmentation. The worker picks the row
+> up later and can still fail it, retry it, or reject it — compatibility is
+> checked there, not at enqueue. Watch the WebSocket events or poll the queue
+> for the outcome.
+>
+> Since 2026-09-20 the interface can no longer produce an incompatible
+> model/type pair (the model is resolved FROM the project's type), so that
+> particular rejection is now defence in depth for direct API callers.
 
 ---
 
