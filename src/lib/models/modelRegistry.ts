@@ -367,7 +367,23 @@ export const keyMap = (() => {
 /**
  * Project-type → compatible model ids, INVERTED from the registry. Order
  * within each list follows registry declaration order. Mirrors the backend
- * `MODEL_TYPE_COMPATIBILITY`.
+ * `MODEL_TYPE_COMPATIBILITY`. Cross-type segmentation is blocked at both the
+ * frontend (the picker offers only this list) and the backend (400 on submit).
+ *
+ * The policy the per-model `compatibleProjectTypes` fields add up to:
+ *
+ * - `spheroid_invasive` is locked to `spheroid_disintegration` because core
+ *   detection is tied to that model's postprocessing path.
+ * - `wound`, `sperm`, `microcapsule`, `neurite` and `microtubules` use their
+ *   dedicated specialised models only. `microtubules` ships with the SPARSE35
+ *   ep040 nnU-Net ResEnc-M network plus a curvature-bounded instancer,
+ *   producing per-instance polyline centerlines.
+ * - Standard `spheroid` projects can use any of the general spheroid models,
+ *   with `spheroid_disintegration` excluded so users wanting core detection
+ *   are nudged toward marking the project disintegrated.
+ *
+ * (This text lived on a re-export in `@/types` until that re-export lost its
+ * last consumer; it belongs beside the data it describes.)
  */
 export const MODEL_TYPE_COMPATIBILITY = (() => {
   const out: Record<string, ModelType[]> = {};

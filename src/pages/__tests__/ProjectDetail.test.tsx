@@ -534,16 +534,6 @@ vi.mock('@/components/project/SegmentChannelDialog', () => ({
   },
 }));
 
-vi.mock('@/types', async () => {
-  const actual = await vi.importActual<typeof import('@/types')>('@/types');
-  return {
-    ...actual,
-    isModelCompatibleWithType: vi.fn((model: string, type: string) =>
-      actual.isModelCompatibleWithType(model as never, type as never)
-    ),
-  };
-});
-
 // ---------------------------------------------------------------------------
 // Render helper + hook wiring
 // ---------------------------------------------------------------------------

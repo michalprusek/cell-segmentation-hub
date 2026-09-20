@@ -1,10 +1,9 @@
-// Model identity + compatibility are derived from the frontend model registry
-// SSOT (`@/lib/models/modelRegistry`), which mirrors the backend SSOT. They
-// are re-exported below so existing `@/types` consumers stay untouched.
-import {
-  type ModelType as RegistryModelType,
-  MODEL_TYPE_COMPATIBILITY as REGISTRY_MODEL_TYPE_COMPATIBILITY,
-} from '@/lib/models/modelRegistry';
+// Model identity and project-type compatibility used to be re-exported from
+// here. Import them from the registry SSOT directly — `@/lib/models/
+// modelRegistry` — which is what the one remaining consumer (`useProjectModel`)
+// does. The aliases went when the model moved onto the project: the only thing
+// that had needed them was an `isModelCompatibleWithType` pre-flight, and a
+// model resolved FROM the project's type cannot disagree with it.
 
 // Auth types
 export interface User {
@@ -438,37 +437,6 @@ export const isProjectType = (v: unknown): v is ProjectType =>
  *  already shipped a bug (silently hiding the MT export section). */
 export const isMicrotubuleProject = (t: string | undefined | null): boolean =>
   t === 'microtubules';
-
-/** All known model identifiers, derived from the frontend model registry
- *  SSOT (`@/lib/models/modelRegistry`), which mirrors the backend SSOT.
- *  Re-exported as `KnownModelId` so existing `@/types` consumers are
- *  untouched and a removed model becomes a compile error everywhere. */
-type KnownModelId = RegistryModelType;
-
-/** Models compatible with each project type, derived (by inversion) from the
- * model registry SSOT. Cross-type segmentation is blocked at both frontend
- * (dropdown filter) and backend (400 on submit).
- *
- * - `spheroid_invasive` is locked to `spheroid_disintegration` because core
- *   detection is tied to that model's postprocessing path.
- * - `wound`, `sperm` and `microtubules` use their dedicated specialised
- *   models only. `microtubules` ships with the SPARSE35 ep040 nnU-Net ResEnc-M network
- *   plus a curvature-bounded instancer, producing per-instance polyline
- *   centerlines.
- * - Standard `spheroid` projects can use any of the general spheroid
- *   models, with `spheroid_disintegration` excluded so users wanting core
- *   detection are nudged toward marking the project disintegrated.
- */
-export const MODEL_TYPE_COMPATIBILITY: Record<
-  ProjectType,
-  readonly KnownModelId[]
-> = REGISTRY_MODEL_TYPE_COMPATIBILITY;
-
-export const isModelCompatibleWithType = (
-  model: string,
-  projectType: ProjectType
-): boolean =>
-  (MODEL_TYPE_COMPATIBILITY[projectType] as readonly string[]).includes(model);
 
 export interface Project {
   id: string;
