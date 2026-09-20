@@ -222,7 +222,13 @@ const ProjectHeader = ({
               </p>
             </div>
             {projectType && (
-              <div className="flex min-w-0 items-center gap-2">
+              // `flex-wrap`: this row now carries TWO ~9rem pills plus the
+              // label, and between 640px (where the label appears) and ~768px
+              // that can exceed what is left after the title's `flex-1`.
+              // Wrapping keeps them adjacent when there is room and stacked
+              // when there is not, rather than pushing the header off-screen —
+              // the failure the type pill's own `min-w` comment records.
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
                 <span className="hidden text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap sm:inline">
                   {t('projects.projectType')}:
                 </span>
