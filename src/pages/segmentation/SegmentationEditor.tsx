@@ -109,8 +109,15 @@ const SegmentationEditor = () => {
   // model. That correction is gone: the model is resolved from the project, so
   // it is right for every type, including the spheroid one the old fallback
   // could not fix.
-  const { model: selectedModel, threshold: confidenceThreshold } =
-    useProjectModel(projectType, projectSegmentationModel);
+  const {
+    model: selectedModel,
+    threshold: confidenceThreshold,
+    offersDetectHoles,
+  } = useProjectModel(projectType, projectSegmentationModel);
+
+  // Same normalisation as ProjectDetail: a type that does not offer the
+  // hole-detection toggle sends the default, never the invisible global.
+  const effectiveDetectHoles = offersDetectHoles ? detectHoles : true;
 
   // WebSocket connection for segmentation status updates
   const {
@@ -1120,7 +1127,7 @@ const SegmentationEditor = () => {
     imageId,
     selectedModel,
     confidenceThreshold,
-    detectHoles,
+    detectHoles: effectiveDetectHoles,
     videoChannels: video.container?.channels ?? null,
     queryClient,
     t,

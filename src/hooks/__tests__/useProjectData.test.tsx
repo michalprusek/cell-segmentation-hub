@@ -895,4 +895,100 @@ describe('useProjectData', () => {
       expect(result.current.projectFolderId).toBeUndefined();
     });
   });
+
+  // `/project/:id` is not a keyed route, so React Router keeps ProjectDetail
+  // mounted when only the param changes and every piece of hook state survives
+  // the switch. For OWNERSHIP that is sharper than for the folder: carried
+  // across, an owned → shared navigation briefly offers rename/type/model that
+  // the backend will answer with a 404, and shared → owned briefly locks the
+  // real owner out of their own project.
+  describe('projectIsOwned', () => {
+    const ownedProject = (id: string, isOwned: boolean | undefined) => ({
+      id,
+      name: id,
+      description: '',
+      created_at: '2023-01-01T00:00:00.000Z',
+      updated_at: '2023-01-01T00:00:00.000Z',
+      user_id: 'user-1',
+      ...(isOwned === undefined ? {} : { isOwned }),
+    });
+    const noImages = { images: [], total: 0, page: 1, totalPages: 0 };
+
+    const wireProject = (id: string, isOwned: boolean | undefined) => {
+      vi.mocked(apiClient.getProject).mockResolvedValue(
+        ownedProject(id, isOwned) as never
+      );
+      vi.mocked(apiClient.getProjectImagesWithThumbnails).mockResolvedValue(
+        noImages as never
+      );
+    };
+
+    it('reports ownership for the loaded project', async () => {
+      wireProject('project-1', true);
+
+      const { result } = renderHook(
+        () => useProjectData('project-1', 'user-1'),
+        {
+          wrapper,
+        }
+      );
+
+      await waitFor(() => expect(result.current.projectIsOwned).toBe(true));
+    });
+
+    it('is undefined before the project has loaded', () => {
+      wireProject('project-1', false);
+
+      const { result } = renderHook(
+        () => useProjectData('project-1', 'user-1'),
+        {
+          wrapper,
+        }
+      );
+
+      // "Not known yet", which the page reads as owned — briefly offering a
+      // control the backend would refuse beats flashing a read-only header at
+      // the real owner on every page load.
+      expect(result.current.projectIsOwned).toBeUndefined();
+    });
+
+    it('forgets the previous project’s ownership on a switch', async () => {
+      wireProject('project-1', true);
+
+      const { result, rerender } = renderHook(
+        ({ id }) => useProjectData(id, 'user-1'),
+        { wrapper, initialProps: { id: 'project-1' } }
+      );
+      await waitFor(() => expect(result.current.projectIsOwned).toBe(true));
+
+      // The next project is shared. Its fetch has not resolved yet, and the
+      // value must already be gone rather than still reading `true`.
+      wireProject('project-2', false);
+      rerender({ id: 'project-2' });
+
+      expect(result.current.projectIsOwned).toBeUndefined();
+      await waitFor(() => expect(result.current.projectIsOwned).toBe(false));
+    });
+
+    it('keeps ownership across a same-project refresh', async () => {
+      // Same reasoning as `projectFolderId` above: a refresh nonce re-runs this
+      // effect, and nothing about who owns the project has changed. Blanking it
+      // there would make the header flicker read-only on every refresh.
+      wireProject('project-1', true);
+
+      const { result } = renderHook(
+        () => useProjectData('project-1', 'user-1'),
+        {
+          wrapper,
+        }
+      );
+      await waitFor(() => expect(result.current.projectIsOwned).toBe(true));
+
+      act(() => {
+        result.current.refreshProjectData();
+      });
+
+      expect(result.current.projectIsOwned).toBe(true);
+    });
+  });
 });

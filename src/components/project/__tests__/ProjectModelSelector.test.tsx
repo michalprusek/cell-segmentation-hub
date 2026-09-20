@@ -141,17 +141,44 @@ describe('ProjectModelSelector', () => {
     ).toBeInTheDocument();
   });
 
-  it('keeps detect-holes reachable on a single-model project type', async () => {
-    // The regression this guards: disabling the whole trigger when a type has
-    // one model would strand `detectHoles`, whose only other control was the
-    // deleted Settings section — on six of the seven project types.
+  it.each(['spheroid', 'wound'])(
+    'offers the detect-holes toggle on a %s project',
+    async projectType => {
+      const user = userEvent.setup();
+      renderSelector({ projectType });
+
+      await user.click(screen.getByTestId('project-model-trigger'));
+      await user.click(screen.getByTestId('project-model-detect-holes'));
+
+      expect(onDetectHolesChange).toHaveBeenCalledWith(false);
+    }
+  );
+
+  it.each([
+    'microtubules',
+    'sperm',
+    'microcapsule',
+    'neurite',
+    'spheroid_invasive',
+  ])('hides the detect-holes toggle on a %s project', async projectType => {
+    // `microtubules` produces polylines and never polygonises, so the flag
+    // could not apply. The other four DO honour it in the ML service, but an
+    // interior hole there is noise rather than structure — so the parameter is
+    // pinned to its default and a control for it would misrepresent what the
+    // user can influence.
     const user = userEvent.setup();
-    renderSelector({ projectType: 'microtubules' });
+    renderSelector({ projectType });
 
     await user.click(screen.getByTestId('project-model-trigger'));
-    await user.click(screen.getByTestId('project-model-detect-holes'));
 
-    expect(onDetectHolesChange).toHaveBeenCalledWith(false);
+    expect(
+      screen.queryByTestId('project-model-detect-holes')
+    ).not.toBeInTheDocument();
+    // …and the model list is still there, so this is a hidden TOGGLE, not a
+    // broken menu.
+    expect(
+      screen.getAllByTestId(/^project-model-option-/).length
+    ).toBeGreaterThan(0);
   });
 
   it('renders a static pill with no menu for a read-only viewer', async () => {

@@ -49,6 +49,16 @@ const SHARED_CONSTS = [
     backend: path.join(ROOT, 'backend', 'src', 'types', 'validation.ts'),
   },
   {
+    // Which project types offer the hole-detection toggle. Written out on both
+    // sides, like the default map below, and load-bearing in the same way: the
+    // frontend decides whether to RENDER the control and the backend decides
+    // whether to HONOUR it, so a drift means a toggle the user can see and set
+    // that the server then overrides — or worse, the reverse.
+    name: 'PROJECT_TYPES_WITH_HOLE_DETECTION',
+    frontend: path.join(ROOT, 'src', 'lib', 'models', 'modelRegistry.ts'),
+    backend: path.join(ROOT, 'backend', 'src', 'constants', 'modelRegistry.ts'),
+  },
+  {
     // Which model a project of each type starts on. UNLIKE
     // MODEL_TYPE_COMPATIBILITY above, this is NOT derived — it is a literal
     // choice written out on both sides, so it is exactly the kind of pair that

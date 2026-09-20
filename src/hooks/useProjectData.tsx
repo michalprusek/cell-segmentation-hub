@@ -35,6 +35,13 @@ export const useProjectData = (
   const [projectSegmentationModel, setProjectSegmentationModel] = useState<
     string | null
   >(null);
+  // Whether THIS viewer owns the project. `undefined` until it loads, and the
+  // header treats undefined as "assume owner": flashing a read-only header at
+  // the actual owner for the length of a fetch is worse than briefly offering
+  // a control the backend would refuse.
+  const [projectIsOwned, setProjectIsOwned] = useState<boolean | undefined>(
+    undefined
+  );
   // Where THIS viewer filed the project: a folder id, or null for the
   // dashboard root. `undefined` until the project has loaded — the three
   // states are distinct on purpose, because "not loaded yet" must not be
@@ -97,6 +104,14 @@ export const useProjectData = (
     if (lastFetchedProjectRef.current !== projectId) {
       lastFetchedProjectRef.current = projectId;
       setProjectFolderId(undefined);
+      // Ownership has the same requirement, and a sharper failure mode:
+      // carried across a switch, navigating from an owned project to a shared
+      // one briefly offers rename/type/model that the backend will 404, and
+      // the other direction briefly locks the real owner out. `undefined`
+      // means "not known yet", which reads as owned — the same benign state
+      // as a first load. Reset only on a SWITCH, for the reason above: a
+      // `reloadNonce` refresh of the same project has not changed who owns it.
+      setProjectIsOwned(undefined);
     }
 
     const fetchData = async () => {
@@ -120,6 +135,7 @@ export const useProjectData = (
         setProjectVerified(project.verified ?? false);
         setProjectPixelSizeUm(project.pixelSizeUm ?? null);
         setProjectSegmentationModel(project.segmentationModel ?? null);
+        setProjectIsOwned(project.isOwned);
         // `?? null` collapses only the ABSENT case; an older backend that does
         // not send the field lands on "root", which is the pre-existing
         // behaviour rather than a broken link.
@@ -445,6 +461,7 @@ export const useProjectData = (
     projectPixelSizeUm,
     projectSegmentationModel,
     setProjectSegmentationModel,
+    projectIsOwned,
     projectFolderId,
     setProjectVerified,
     images,

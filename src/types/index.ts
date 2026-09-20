@@ -469,6 +469,11 @@ export interface Project {
   // this raw when you need a model to run — a stored value can be stranded by
   // a later type change.
   segmentationModel?: string | null;
+  // Whether the CALLER owns this project rather than having it shared with
+  // them. Owner-only writes: title, description, type, model. A shared
+  // annotator may still segment, annotate and set `verified`. `undefined`
+  // means the response surface did not say — distinct from `false`.
+  isOwned?: boolean;
 }
 
 export interface ProjectFolder {

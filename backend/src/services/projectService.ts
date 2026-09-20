@@ -328,7 +328,15 @@ export async function getProjectById(
   projectId: string,
   userId: string
 ): Promise<
-  | (Project & { _count: { images: number }; folderId: string | null })
+  | (Project & {
+      _count: { images: number };
+      folderId: string | null;
+      // Part of the shape `getUserProjects` returns; declared here so the
+      // single-project read answers it too. Without it the project page
+      // cannot tell an owner from an accepted-share annotator.
+      isOwned: boolean;
+      isShared: boolean;
+    })
   | null
 > {
   try {
@@ -398,8 +406,16 @@ export async function getProjectById(
 
     // Flattened to the same shape `getUserProjects` returns, so both reads
     // answer `folderId` and the frontend mapper needs no second case.
+    //
+    // `isOwned`/`isShared` are part of that shape and were missing here, which
+    // is why the project page could not tell an owner from an accepted-share
+    // annotator: it offered both of them the rename, type and model controls,
+    // and `updateProject` (owner-only, `findFirst({ id, userId })`) answered
+    // the annotator with a 404 after the click.
     return {
       ...project,
+      isOwned: project.userId === userId,
+      isShared: project.userId !== userId,
       folderId: project.folderItems[0]?.folderId ?? null,
     };
   } catch (error) {
@@ -778,26 +794,35 @@ export async function getProjectStats(
 }
 
 /**
- * The model a project should segment with, resolved server-side.
+ * Everything the queue needs to know about a project before enqueuing it: the
+ * model it should segment with, and its type (which decides whether the
+ * hole-detection flag is honoured).
+ *
+ * Both in one lookup because the single-image enqueue path has no project row
+ * in hand and would otherwise query twice for two scalar columns.
  *
  * The queue endpoints accept a `model` in the request body and the browser
  * always sends one, but a request that omits it must NOT fall back to a
  * hard-coded `'hrnet'` — that literal is compatible with exactly one of the
  * seven project types, so on the other six the worker rejects the job and
- * every image in the batch is marked failed. It is also the reason this
- * column exists: it is authoritative, and a server that ignores it makes it
+ * every image in the batch is marked failed. It is also the reason the column
+ * exists: it is authoritative, and a server that ignores it makes it
  * authoritative only in the browser.
  *
+ * `isOwned` is reported so the caller can decide whether to honour a `model`
+ * supplied in the request body: only the owner may override.
+ *
  * Returns `null` when the project does not exist, so the caller can keep
- * whatever not-found handling it already has rather than inventing a model
- * for a project it could not read.
+ * whatever not-found handling it already has rather than inventing a model for
+ * a project it could not read.
  */
-export async function getProjectModel(
-  projectId: string
-): Promise<KnownModelId | null> {
+export async function getProjectSegmentationContext(
+  projectId: string,
+  userId: string
+): Promise<{ model: KnownModelId; type: string; isOwned: boolean } | null> {
   const project = await prisma.project.findUnique({
     where: { id: projectId },
-    select: { type: true, segmentationModel: true },
+    select: { type: true, segmentationModel: true, userId: true },
   });
 
   if (!project) {
@@ -807,8 +832,16 @@ export async function getProjectModel(
   // `resolveProjectModel` is total over the raw column, so the legacy-row case
   // lands on a default rather than throwing; `coerceProjectType` is applied
   // anyway to keep the narrowing visible at the boundary.
-  return resolveProjectModel(
-    coerceProjectType(project.type),
-    project.segmentationModel
-  );
+  return {
+    model: resolveProjectModel(
+      coerceProjectType(project.type),
+      project.segmentationModel
+    ),
+    type: project.type,
+    // The model is an OWNER-controlled property of the project. A shared
+    // annotator may segment it, but must not pick the model it is segmented
+    // with — otherwise the column the owner set is merely advisory for
+    // everyone else, which is the opposite of the point of moving it there.
+    isOwned: project.userId === userId,
+  };
 }

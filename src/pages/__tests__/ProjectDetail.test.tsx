@@ -320,6 +320,7 @@ vi.mock('framer-motion', () => ({
 vi.mock('@/components/project/ProjectHeader', () => ({
   default: ({
     projectTitle,
+    onTitleChange,
     onTypeChange,
     segmentationModel,
     onModelChange,
@@ -328,6 +329,7 @@ vi.mock('@/components/project/ProjectHeader', () => ({
     loading?: boolean;
     projectType?: string;
     imagesCount?: number;
+    onTitleChange?: (t: string) => void | Promise<void>;
     onTypeChange?: (t: string) => void;
     segmentationModel?: string | null;
     onModelChange?: (m: string) => void | Promise<void>;
@@ -342,6 +344,7 @@ vi.mock('@/components/project/ProjectHeader', () => ({
           Change Type
         </button>
       )}
+      {onTitleChange && <span data-testid="header-can-rename" />}
       {/* The picker itself has its own suites; this stub only needs to prove
           the page's half of the contract — that the stored model reaches the
           header and that a pick is persisted. */}
@@ -1205,6 +1208,44 @@ describe('ProjectDetail page', () => {
   });
 
   // =========================================================================
+  // Owner-only controls
+  // =========================================================================
+
+  describe('owner-only controls', () => {
+    // `ProjectService.updateProject` narrows with `findFirst({ id, userId })`,
+    // so rename / type / model are owner-only and answered a shared annotator
+    // with a 404 — AFTER the optimistic update had painted the new value.
+    it('offers rename, type and model to the owner', () => {
+      wireHooks([], { projectIsOwned: true });
+      renderPage();
+
+      expect(screen.getByTestId('header-can-rename')).toBeInTheDocument();
+      expect(screen.getByTestId('change-type-btn')).toBeInTheDocument();
+      expect(screen.getByTestId('change-model-btn')).toBeInTheDocument();
+    });
+
+    it('withholds all three from a shared annotator', () => {
+      wireHooks([], { projectIsOwned: false });
+      renderPage();
+
+      expect(screen.queryByTestId('header-can-rename')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('change-type-btn')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('change-model-btn')).not.toBeInTheDocument();
+    });
+
+    it('assumes owner while ownership is still loading', () => {
+      // `undefined` is "the response has not said yet". Treating it as
+      // not-owned would flash a read-only header at the real owner for the
+      // length of a fetch, on every single page load.
+      wireHooks([], { projectIsOwned: undefined });
+      renderPage();
+
+      expect(screen.getByTestId('change-type-btn')).toBeInTheDocument();
+      expect(screen.getByTestId('change-model-btn')).toBeInTheDocument();
+    });
+  });
+
+  // =========================================================================
   // Model change
   // =========================================================================
 
@@ -1270,38 +1311,46 @@ describe('ProjectDetail page', () => {
     // so the mismatch it guarded is unreachable, and the dialog is gone. These
     // tests assert the replacement guarantee — the right model is dispatched —
     // which is strictly stronger than asserting the block appeared.
+    // The mocked `useModel` returns the per-user global `detectHoles: false`.
+    // The third column is what should actually reach the queue: that global
+    // only where the project type OFFERS the toggle, and the default `true`
+    // everywhere else — a parameter the user cannot see must not be one they
+    // are silently subject to.
     it.each([
-      ['sperm', 'sperm'],
-      ['wound', 'wound'],
-      ['microtubules', 'microtubule'],
-      ['microcapsule', 'microcapsule'],
-      ['neurite', 'neurite_soma'],
-      ['spheroid_invasive', 'spheroid_disintegration'],
+      ['sperm', 'sperm', true],
+      ['wound', 'wound', false],
+      ['microtubules', 'microtubule', true],
+      ['microcapsule', 'microcapsule', true],
+      ['neurite', 'neurite_soma', true],
+      ['spheroid_invasive', 'spheroid_disintegration', true],
       // The only type with a real choice; unset → most accurate, not fastest.
-      ['spheroid', 'segformer'],
-    ])('a %s project queues the %s model', async (projectType, expected) => {
-      wireHooks(
-        [makeImage({ segmentationStatus: 'no_segmentation' }, 'img-1')],
-        { projectType, projectSegmentationModel: null }
-      );
-      renderPage();
+      ['spheroid', 'segformer', false],
+    ])(
+      'a %s project queues the %s model with detectHoles=%s',
+      async (projectType, expected, expectedDetectHoles) => {
+        wireHooks(
+          [makeImage({ segmentationStatus: 'no_segmentation' }, 'img-1')],
+          { projectType, projectSegmentationModel: null }
+        );
+        renderPage();
 
-      await userEvent.click(screen.getByTestId('select-img-1'));
-      await userEvent.click(screen.getByTestId('segment-all-btn'));
+        await userEvent.click(screen.getByTestId('select-img-1'));
+        await userEvent.click(screen.getByTestId('segment-all-btn'));
 
-      await waitFor(() =>
-        expect(mockAddBatchToQueue).toHaveBeenCalledWith(
-          ['img-1'],
-          'proj-1',
-          expected,
-          expect.any(Number),
-          0,
-          false,
-          false,
-          undefined
-        )
-      );
-    });
+        await waitFor(() =>
+          expect(mockAddBatchToQueue).toHaveBeenCalledWith(
+            ['img-1'],
+            'proj-1',
+            expected,
+            expect.any(Number),
+            0,
+            false,
+            expectedDetectHoles,
+            undefined
+          )
+        );
+      }
+    );
 
     it('queues nothing while the project type is still loading', async () => {
       // `useProjectModel` returns `{model: undefined}` until the type lands.

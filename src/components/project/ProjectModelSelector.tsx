@@ -53,10 +53,8 @@ const ProjectModelSelector = ({
   onDetectHolesChange,
 }: ProjectModelSelectorProps) => {
   const { t } = useLanguage();
-  const { model, modelInfo, compatibleModels, isLocked } = useProjectModel(
-    projectType,
-    storedModel
-  );
+  const { model, modelInfo, compatibleModels, isLocked, offersDetectHoles } =
+    useProjectModel(projectType, storedModel);
 
   // Nothing to show until the project type is known — rendering a picker for a
   // guessed type would offer the wrong five models, and the user can click
@@ -153,24 +151,32 @@ const ProjectModelSelector = ({
             </SpecimenHoverCard>
           ))}
         </DropdownMenuRadioGroup>
-        <DropdownMenuSeparator />
-        {/* `onSelect={e => e.preventDefault()}` keeps the menu open: this is a
-            toggle the user may want to flip while reading the model list, and
-            Radix closes the menu on select by default. */}
-        <DropdownMenuCheckboxItem
-          checked={detectHoles}
-          onCheckedChange={onDetectHolesChange}
-          onSelect={e => e.preventDefault()}
-          className="text-xs"
-          data-testid="project-model-detect-holes"
-        >
-          <div className="flex flex-col gap-0.5">
-            <span className="font-medium">{t('settings.detectHoles')}</span>
-            <span className="text-[11px] leading-snug text-gray-500 dark:text-gray-400">
-              {t('settings.detectHolesDescription')}
-            </span>
-          </div>
-        </DropdownMenuCheckboxItem>
+        {/* Only where the toggle means something — `spheroid` and `wound`. A
+            microtubule project produces polylines and never polygonises, and
+            on the other types an interior hole is noise, so the parameter is
+            pinned to its default and a control for it would be a lie. */}
+        {offersDetectHoles && (
+          <>
+            <DropdownMenuSeparator />
+            {/* `onSelect={e => e.preventDefault()}` keeps the menu open: this
+                is a toggle the user may want to flip while reading the model
+                list, and Radix closes the menu on select by default. */}
+            <DropdownMenuCheckboxItem
+              checked={detectHoles}
+              onCheckedChange={onDetectHolesChange}
+              onSelect={e => e.preventDefault()}
+              className="text-xs"
+              data-testid="project-model-detect-holes"
+            >
+              <div className="flex flex-col gap-0.5">
+                <span className="font-medium">{t('settings.detectHoles')}</span>
+                <span className="text-[11px] leading-snug text-gray-500 dark:text-gray-400">
+                  {t('settings.detectHolesDescription')}
+                </span>
+              </div>
+            </DropdownMenuCheckboxItem>
+          </>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );

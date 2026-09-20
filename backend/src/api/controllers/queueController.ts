@@ -7,7 +7,10 @@ import { logger } from '../../utils/logger';
 import { ResponseHelper } from '../../utils/response';
 import { prisma } from '../../db';
 import * as ProjectService from '../../services/projectService';
-import { resolveProjectModel } from '../../constants/modelRegistry';
+import {
+  resolveDetectHoles,
+  resolveProjectModel,
+} from '../../constants/modelRegistry';
 
 // Import queue-specific types (some types for future use)
 import {
@@ -122,12 +125,28 @@ class QueueController {
       // hard-coded one. `'hrnet'` used to stand here and is compatible with
       // exactly one of the seven project types, so on the other six it queued
       // a job the worker immediately rejected.
-      const resolvedModel =
-        model ?? (await ProjectService.getProjectModel(image.projectId));
-      if (!resolvedModel) {
+      const ctx = await ProjectService.getProjectSegmentationContext(
+        image.projectId,
+        userId
+      );
+      if (!ctx) {
         ResponseHelper.notFound(res, 'Projekt nenalezen');
         return;
       }
+
+      // A `model` in the body is honoured ONLY for the owner. The model is an
+      // owner-controlled property of the project now, and a shared annotator
+      // who may segment it still must not choose what it is segmented with —
+      // otherwise the column is merely advisory for everyone but its owner.
+      const resolvedModel = (ctx.isOwned && model) || ctx.model;
+      // Hole detection is honoured only on the project types whose UI offers
+      // it. Normalising in the browser alone would leave the rule cosmetic —
+      // a stale tab, or any other client, could still send `false` for a type
+      // that does not expose the control, and the ML service would obey it.
+      const resolvedDetectHoles = resolveDetectHoles(
+        ctx.type,
+        detectHoles !== undefined ? detectHoles : true
+      );
 
       const queueEntry = await this.queueService.addToQueue(
         imageId,
@@ -136,7 +155,7 @@ class QueueController {
         resolvedModel,
         threshold || 0.5,
         priority || 0,
-        detectHoles !== undefined ? detectHoles : true
+        resolvedDetectHoles
       );
 
       // Emit WebSocket update with proper typing
@@ -263,7 +282,13 @@ class QueueController {
         // `type` + `segmentationModel` ride along on the ownership lookup that
         // already happens here, so resolving the project's model costs no
         // extra round trip.
-        select: { id: true, type: true, segmentationModel: true },
+        select: {
+          id: true,
+          type: true,
+          segmentationModel: true,
+          // Ownership: only the owner may override the model from the body.
+          userId: true,
+        },
       });
 
       if (!project) {
@@ -275,8 +300,19 @@ class QueueController {
       // to be defaulted here and in the zod schema; it is compatible with
       // exactly one of the seven project types, so on the other six it queued
       // a batch the worker rejected, failing every image in it.
+      // Same rule as the single-image path: this query admits shared
+      // annotators (see its `OR` above), and they may segment but not pick
+      // the model.
+      const projectModel = resolveProjectModel(
+        project.type,
+        project.segmentationModel
+      );
       const resolvedModel =
-        model ?? resolveProjectModel(project.type, project.segmentationModel);
+        (project.userId === userId && model) || projectModel;
+
+      // Same normalisation as the single-image path; the project row is
+      // already loaded here, so it costs nothing.
+      const resolvedDetectHoles = resolveDetectHoles(project.type, detectHoles);
 
       const queueEntries = await this.queueService.addBatchToQueue(
         imageIds,
@@ -286,7 +322,7 @@ class QueueController {
         threshold,
         priority,
         forceResegment,
-        detectHoles,
+        resolvedDetectHoles,
         channel
       );
 

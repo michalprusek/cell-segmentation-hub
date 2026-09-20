@@ -206,7 +206,68 @@ function extractUsedKeys() {
 /**
  * Main validation function
  */
+/**
+ * Refuse to validate a translation file that does not PARSE.
+ *
+ * Everything below matches keys with regular expressions, so it happily
+ * reports "Complete (2102 keys)" for a file with unbalanced braces — measured
+ * 2026-09-20, when a scripted edit left all six files unparseable and only
+ * `tsc` noticed. `ts.createSourceFile` does not throw on a syntax error; it
+ * collects them on `parseDiagnostics`, which nothing was reading.
+ *
+ * `parseDiagnostics` is internal to the TypeScript API, hence the guard: if a
+ * future version stops exposing it, this must fail loudly rather than go
+ * quietly back to accepting broken files.
+ */
+function assertTranslationsParse() {
+  let checked = 0;
+
+  for (const lang of LANGUAGES) {
+    const file = path.join(TRANSLATIONS_DIR, `${lang}.ts`);
+    const source = fs.readFileSync(file, 'utf8');
+    const sourceFile = ts.createSourceFile(
+      file,
+      source,
+      ts.ScriptTarget.Latest,
+      /* setParentNodes */ false,
+      ts.ScriptKind.TS
+    );
+
+    const diagnostics = sourceFile.parseDiagnostics;
+    if (!Array.isArray(diagnostics)) {
+      console.error(
+        `\n❌ Cannot read parse diagnostics for ${file} — the TypeScript API changed.`
+      );
+      console.error(
+        '   Fix this gate rather than removing it: without it, a syntactically'
+      );
+      console.error('   broken translation file validates as "Complete".');
+      process.exit(1);
+    }
+
+    if (diagnostics.length > 0) {
+      const first = diagnostics[0];
+      const { line, character } = sourceFile.getLineAndCharacterOfPosition(
+        first.start ?? 0
+      );
+      console.error(`\n❌ ${file} does not parse.`);
+      console.error(
+        `   ${line + 1}:${character + 1} ${ts.flattenDiagnosticMessageText(first.messageText, ' ')}`
+      );
+      console.error(
+        '   Key validation is regex-based and would report this file as complete.'
+      );
+      process.exit(1);
+    }
+    checked++;
+  }
+
+  console.log(`✅ ${checked} translation files parse.`);
+}
+
 function validateTranslations() {
+  assertTranslationsParse();
+
   console.log('🔍 Validating translation keys...\n');
 
   // Load all translations

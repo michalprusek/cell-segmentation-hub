@@ -79,6 +79,13 @@ export interface Project {
   // model compatible with the project's type). Declared in BOTH `Project`
   // interfaces for the reason above.
   segmentationModel?: string | null;
+  /** Whether the CALLER owns this project, as opposed to having it shared with
+   *  them. Owner-only writes are title, description, type and model; a shared
+   *  annotator may still segment, annotate and set `verified`. Absent on
+   *  response surfaces that do not carry it — treat absent as "unknown", not
+   *  as "not owned", or a slow first render would flash a read-only header at
+   *  the owner. */
+  isOwned?: boolean;
   // Per-user folder placement: a folder id, or null for the caller's root.
   // Declared here as well as in `@/types` for exactly the reason above —
   // `mapProjectFields` fills it, and `useProjectData` reads it off THIS
@@ -743,6 +750,13 @@ class ApiClient {
           ? project.segmentationModel
           : null,
     };
+
+    // Tri-state, like `folderId` and `verified` above: copied when present
+    // (including an explicit `false`), left absent otherwise so a caller can
+    // tell "not owned" from "this response surface does not say".
+    if (project.isOwned !== undefined) {
+      result.isOwned = project.isOwned as boolean;
+    }
 
     // Add optional fields only if they exist
     const imageCount =

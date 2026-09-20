@@ -120,7 +120,17 @@ const ProjectDetail = () => {
     refreshImageSegmentation,
     projectSegmentationModel,
     setProjectSegmentationModel,
+    projectIsOwned,
   } = useProjectData(id, user?.id);
+
+  // Owner-only writes. `ProjectService.updateProject` narrows with
+  // `findFirst({ id, userId })`, so a shared annotator's rename / type / model
+  // change came back as a 404 AFTER the optimistic update had already painted.
+  // `undefined` (not loaded) counts as owned: briefly offering a control the
+  // backend would refuse beats flashing a read-only header at the real owner
+  // for the length of a fetch. `verified` stays ungated — the backend lets an
+  // accepted-share annotator set it, unlike title/type/model.
+  const canEditProject = projectIsOwned !== false;
 
   // MUST stay after `useProjectData` — it reads `projectType` from it, and a
   // hook placed before the const it captures throws at runtime in the minified
@@ -130,8 +140,16 @@ const ProjectDetail = () => {
   // resolver only ever returns a model from this type's own list. That is why
   // the pre-flight compatibility guard and its blocking dialog are gone rather
   // than merely unused — they guarded a state that is now unreachable.
-  const { model: selectedModel, threshold: confidenceThreshold } =
-    useProjectModel(projectType, projectSegmentationModel);
+  const {
+    model: selectedModel,
+    threshold: confidenceThreshold,
+    offersDetectHoles,
+  } = useProjectModel(projectType, projectSegmentationModel);
+
+  // A project type that does not OFFER the hole-detection toggle must not be
+  // silently subject to it: the user cannot see or change the value there, so
+  // the request carries the documented default instead of the per-user global.
+  const effectiveDetectHoles = offersDetectHoles ? detectHoles : true;
 
   const handleProjectTitleChange = useCallback(
     async (nextTitle: string) => {
@@ -1750,7 +1768,7 @@ const ProjectDetail = () => {
             confidenceThreshold,
             0, // priority
             forceResegment,
-            detectHoles,
+            effectiveDetectHoles,
             channelOverride
           );
           processedCount += response.queuedCount;
@@ -1836,13 +1854,13 @@ const ProjectDetail = () => {
       <ProjectHeader
         folderId={projectFolderId}
         projectTitle={projectTitle}
-        onTitleChange={handleProjectTitleChange}
+        onTitleChange={canEditProject ? handleProjectTitleChange : undefined}
         imagesCount={filteredImages.length}
         loading={loading}
         projectType={projectType}
-        onTypeChange={handleProjectTypeChange}
+        onTypeChange={canEditProject ? handleProjectTypeChange : undefined}
         segmentationModel={projectSegmentationModel}
-        onModelChange={handleModelChange}
+        onModelChange={canEditProject ? handleModelChange : undefined}
         detectHoles={detectHoles}
         onDetectHolesChange={setDetectHoles}
         verified={projectVerified}

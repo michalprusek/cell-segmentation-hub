@@ -4,6 +4,9 @@ import { useProjectModel } from '@/hooks/useProjectModel';
 import {
   DEFAULT_MODEL_BY_PROJECT_TYPE,
   MODEL_TYPE_COMPATIBILITY,
+  PROJECT_TYPES_WITH_HOLE_DETECTION,
+  projectTypeOffersHoleDetection,
+  resolveDetectHoles,
   resolveProjectModel,
   type ProjectTypeKey,
 } from '@/lib/models/modelRegistry';
@@ -149,5 +152,76 @@ describe('useProjectModel', () => {
       renderHook(() => useProjectModel('spheroid', null)).result.current
         .threshold
     ).toBe(0.5);
+  });
+});
+
+describe('hole detection is offered only where it means something', () => {
+  it.each(['spheroid', 'wound'])('offers it on %s', type => {
+    expect(
+      renderHook(() => useProjectModel(type as ProjectType, null)).result
+        .current.offersDetectHoles
+    ).toBe(true);
+  });
+
+  it.each([
+    'microtubules',
+    'sperm',
+    'microcapsule',
+    'neurite',
+    'spheroid_invasive',
+  ])('does not offer it on %s', type => {
+    expect(
+      renderHook(() => useProjectModel(type as ProjectType, null)).result
+        .current.offersDetectHoles
+    ).toBe(false);
+  });
+
+  it('offers nothing before the project type is known', () => {
+    expect(
+      renderHook(() => useProjectModel(undefined, null)).result.current
+        .offersDetectHoles
+    ).toBe(false);
+  });
+
+  it('covers every project type exactly once, one way or the other', () => {
+    // Guards the guard: a NEW project type must be classified deliberately
+    // rather than silently falling into "not offered".
+    const offered = new Set(
+      PROJECT_TYPES_WITH_HOLE_DETECTION as readonly string[]
+    );
+    for (const type of ALL_TYPES) {
+      expect(projectTypeOffersHoleDetection(type)).toBe(offered.has(type));
+    }
+    expect(offered.size).toBe(2);
+  });
+});
+
+describe('resolveDetectHoles', () => {
+  it("passes the user's preference through where the toggle is offered", () => {
+    for (const type of ['spheroid', 'wound'] as const) {
+      expect(resolveDetectHoles(type, false)).toBe(false);
+      expect(resolveDetectHoles(type, true)).toBe(true);
+    }
+  });
+
+  it('forces the default where the toggle is hidden', () => {
+    // A parameter the user cannot see must not be one they are silently
+    // subject to: a global `false` set on a spheroid project must not follow
+    // them into a neurite one, where there is no control to turn it back on.
+    for (const type of [
+      'microtubules',
+      'sperm',
+      'microcapsule',
+      'neurite',
+      'spheroid_invasive',
+    ] as const) {
+      expect(resolveDetectHoles(type, false)).toBe(true);
+      expect(resolveDetectHoles(type, true)).toBe(true);
+    }
+  });
+
+  it('is total over an unrecognised or absent type', () => {
+    expect(resolveDetectHoles(undefined, false)).toBe(true);
+    expect(resolveDetectHoles('some_retired_type', false)).toBe(true);
   });
 });

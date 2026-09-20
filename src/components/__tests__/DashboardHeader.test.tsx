@@ -214,6 +214,22 @@ describe('DashboardHeader', () => {
     expect(statusDot).toHaveClass('bg-green-500'); // idle status
   });
 
+  it('shows the status as a bare dot, with no text beside it', () => {
+    render(<DashboardHeader />);
+
+    const indicator = screen.getByTestId('ml-status-indicator');
+    // The words were asked to go; the tooltip and aria-label keep them for
+    // anyone who needs them, so this stays announced without being rendered.
+    expect(indicator.textContent).toBe('');
+    // `expect.stringContaining('')` matches every string, so the first draft
+    // of this line asserted nothing at all. Pin the actual value: the tooltip
+    // and the accessible name must both carry the status, and must agree.
+    const title = indicator.getAttribute('title');
+    expect(title).toBe('Ready');
+    expect(indicator.getAttribute('aria-label')).toBe(title);
+    expect(indicator).toHaveAttribute('role', 'status');
+  });
+
   it('no longer names a model in the header', () => {
     render(<DashboardHeader />);
 
