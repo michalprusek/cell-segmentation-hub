@@ -86,9 +86,13 @@ ML health endpoint probes `/dev/nvidiactl` for exactly this reason; recreate the
 container to recover.
 
 **The HuggingFace cache bind mount must exist with the right ownership** before
-the ML container starts. It is still load-bearing for SegFormer and sperm, which
-call `from_pretrained`. The **microtubule model does not need it** — its
-checkpoint carries every weight and nothing is downloaded at run time.
+the ML container starts — but as of 2026-09-20 (PR #556) **no model fetches at
+load time**, so it may no longer be load-bearing at all. SegFormer's config is
+vendored (`models/segformer_config.json`); the sperm model never fetched on the
+shipped path, which takes the ConvNeXt backbone rather than the DINOv2 one; and
+every checkpoint carries its own weights. The cache still holds SAM 3 and
+DINOv3 entries whose reachability has not been traced, so removing the mount
+and `HF_TOKEN` needs its own verification rather than a guess.
 
 **Upload limits are coupled across three layers** — a frontend constant, the
 multer config and nginx's `client_max_body_size`. The smallest wins. Images
