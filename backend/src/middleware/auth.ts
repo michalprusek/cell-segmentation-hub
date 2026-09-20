@@ -32,8 +32,6 @@ declare module 'express-serve-static-core' {
         location?: string | null;
         title?: string | null;
         publicProfile: boolean;
-        preferredModel: string;
-        modelThreshold: number;
         preferredLang: string;
         preferredTheme: string;
         emailNotifications: boolean;

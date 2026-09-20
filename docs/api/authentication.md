@@ -108,8 +108,6 @@ _Note: If `REQUIRE_EMAIL_VERIFICATION=true` environment variable is set, users m
       "profile": {
         "id": "profile_456",
         "username": "scientist_user",
-        "preferredModel": "hrnet",
-        "modelThreshold": 0.5,
         "preferredLang": "cs",
         "preferredTheme": "light"
       }
@@ -235,8 +233,6 @@ Retrieve current authenticated user's information.
         "username": "scientist_user",
         "avatarUrl": "/uploads/avatars/avatar_456.jpg",
         "bio": "Cell biology researcher",
-        "preferredModel": "hrnet",
-        "modelThreshold": 0.5,
         "preferredLang": "cs",
         "preferredTheme": "light",
         "emailNotifications": true,
@@ -261,8 +257,6 @@ Update user profile information.
 {
   "username": "new_username",
   "bio": "Updated bio text",
-  "preferredModel": "hrnet",
-  "modelThreshold": 0.7,
   "preferredLang": "en",
   "preferredTheme": "dark",
   "emailNotifications": false
@@ -273,11 +267,9 @@ Update user profile information.
 
 - `username`: 3-30 characters, alphanumeric and underscores only, unique
 - `bio`: Maximum 500 characters
-- `preferredModel`, `modelThreshold`: **accepted and ignored.** The model is a
+- `preferredModel`, `modelThreshold`: **removed** on 2026-09-20. The model is a
   property of the project (`projects.segmentationModel`) and the threshold is a
-  per-model registry constant; nothing reads either field. The example values
-  `resunet_advanced` / `resunet_small` were never valid model ids even when the
-  field was live
+  per-model registry constant. Sending them is simply ignored
 - `preferredLang`: Must be one of: `cs`, `en`
 - `preferredTheme`: Must be one of: `light`, `dark`
 
@@ -292,8 +284,6 @@ Update user profile information.
       "id": "profile_456",
       "username": "new_username",
       "bio": "Updated bio text",
-      "preferredModel": "hrnet",
-      "modelThreshold": 0.7,
       "preferredLang": "en",
       "preferredTheme": "dark",
       "emailNotifications": false,

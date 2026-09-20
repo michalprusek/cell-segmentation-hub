@@ -23,14 +23,12 @@ report history survives a GDPR deletion.
 One per user. Display fields (username, avatar, bio, organisation, location,
 title, `publicProfile`) plus the settings that drive the app:
 
-| Column                                                                                | Default | Meaning                                                                                                                                                        |
-| ------------------------------------------------------------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `preferredModel`                                                                      | `hrnet` | **Vestigial — nothing reads it.** The model is `projects.segmentationModel`. 52 of 53 production rows hold the placeholder `'model1'`, which is not a model id |
-| `modelThreshold`                                                                      | `0.5`   | **Vestigial — nothing reads it.** The threshold is a per-model constant from the registry, with no UI control anywhere                                         |
-| `preferredLang`                                                                       | `cs`    | One of the six locales                                                                                                                                         |
-| `preferredTheme`                                                                      | `light` |                                                                                                                                                                |
-| `emailNotifications`                                                                  | `true`  |                                                                                                                                                                |
-| `consentToMLTraining`, `consentToAlgorithmImprovement`, `consentToFeatureDevelopment` | `true`  | Data-use consents, with `consentUpdatedAt`                                                                                                                     |
+| Column                                                                                | Default | Meaning                                    |
+| ------------------------------------------------------------------------------------- | ------- | ------------------------------------------ |
+| `preferredLang`                                                                       | `cs`    | One of the six locales                     |
+| `preferredTheme`                                                                      | `light` |                                            |
+| `emailNotifications`                                                                  | `true`  |                                            |
+| `consentToMLTraining`, `consentToAlgorithmImprovement`, `consentToFeatureDevelopment` | `true`  | Data-use consents, with `consentUpdatedAt` |
 
 Avatars are files on disk; the row stores the path, MIME type and size.
 

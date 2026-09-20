@@ -32,8 +32,6 @@ export interface MockProfile {
   location: string | null;
   title: string | null;
   publicProfile: boolean;
-  preferredModel: string;
-  modelThreshold: number;
   preferredLang: string;
   preferredTheme: string;
   emailNotifications: boolean;
@@ -155,8 +153,6 @@ export function createMockUser(overrides: Partial<MockUser> = {}): MockUser {
     location: null,
     title: null,
     publicProfile: false,
-    preferredModel: 'hrnet',
-    modelThreshold: 0.5,
     preferredLang: 'cs',
     preferredTheme: 'light',
     emailNotifications: true,

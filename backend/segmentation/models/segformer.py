@@ -20,6 +20,7 @@ contour/hole/polygon extraction work without a dedicated ``predict_segformer``.
 from __future__ import annotations
 
 import logging
+import json
 import os
 from pathlib import Path
 from typing import Union
@@ -43,7 +44,15 @@ class SegFormerModel(torch.nn.Module):
     """SegFormer-B0 fine-tuned on SpheroMix, exposed as a single-channel
     ``nn.Module`` so the shared spheroid inference path can drive it."""
 
+    # The architecture this checkpoint was trained as. Kept for provenance and
+    # for regenerating CONFIG_PATH; NOT fetched at run time — see __init__.
     HF_BASE = "nvidia/segformer-b0-finetuned-ade-512-512"
+
+    # The same config, vendored. Regenerate with:
+    #   SegformerConfig.from_pretrained(HF_BASE, num_labels=2).to_dict()
+    # minus `_name_or_path` and `transformers_version` (provenance noise that
+    # would pin the file to whichever transformers wrote it).
+    CONFIG_PATH = Path(__file__).with_name("segformer_config.json")
 
     def __init__(self) -> None:
         super().__init__()
@@ -53,11 +62,25 @@ class SegFormerModel(torch.nn.Module):
                 f"Install it via requirements.txt. Original error: "
                 f"{_segformer_import_error}"
             )
-        # Build the architecture from config only: this fetches the tiny
-        # config.json (cached in .hf-cache) but NOT the ADE pretrained weights,
-        # which we would immediately overwrite with our own checkpoint. The
-        # decode-head classifier gets 2 output channels because num_labels=2.
-        cfg = SegformerConfig.from_pretrained(self.HF_BASE, num_labels=2)
+        # Build the architecture from a VENDORED config. Only the tiny
+        # config.json was ever needed here — never the ADE pretrained weights,
+        # which our own checkpoint overwrites wholesale — so there is no reason
+        # for this to touch the network or `.hf-cache` at all.
+        #
+        # It used to call `SegformerConfig.from_pretrained(HF_BASE, ...)`, which
+        # made the spheroid default (SegFormer since 2026-09-20) depend on the
+        # `.hf-cache` bind mount existing and warm, and on the pinned
+        # transformers being able to reach the Hub. A cold cache or a bad
+        # `transformers` bump broke the most common project type's default path
+        # rather than only the users who had opted into this model.
+        #
+        # `num_labels=2` is already baked into the file as a 2-entry
+        # id2label/label2id, so it is not passed again — passing it alongside a
+        # 150-entry ADE map is what produced the "incompatible to the id2label
+        # map" warning on every load.
+        cfg = SegformerConfig.from_dict(
+            json.loads(self.CONFIG_PATH.read_text(encoding="utf-8"))
+        )
         self.seg = SegformerForSemanticSegmentation(cfg)
         self.seg.eval()
         self.device: torch.device = torch.device("cpu")

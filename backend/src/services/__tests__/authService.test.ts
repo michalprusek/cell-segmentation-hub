@@ -992,7 +992,6 @@ describe('AuthService', () => {
       const profileData = {
         username: 'newusername',
         bio: 'New bio',
-        preferredModel: 'hrnet',
         consentToMLTraining: true,
       };
       const mockUser = {
@@ -1011,7 +1010,6 @@ describe('AuthService', () => {
         userId,
         username: 'newusername',
         bio: 'New bio',
-        preferredModel: 'hrnet',
         consentToMLTraining: true,
         consentUpdatedAt: new Date(),
       };
