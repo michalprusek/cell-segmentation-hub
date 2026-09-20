@@ -2259,7 +2259,7 @@ export default {
         noDetections: {
           symptom: 'Das Modell findet sehr wenig',
           cause:
-            'Prüfen Sie zuerst Kontrast und Projekttyp. Senken Sie den Konfidenzschwellwert nur dort, wo er einstellbar ist — das Mikrotubuli-Modell ignoriert ihn absichtlich.',
+            'Prüfen Sie zuerst Kontrast und Projekttyp — der Schwellwert lässt sich nirgends einstellen, jedes Modell verwendet den Wert, mit dem es validiert wurde. Erlaubt der Projekttyp eine Modellwahl, kann ein genaueres Modell helfen; folgen die Erkennungen nichts im Bild, wird der falsche Kanal segmentiert.',
         },
         wrongChannel: {
           symptom: 'Viele Formen, aber sie folgen nichts im Bild',

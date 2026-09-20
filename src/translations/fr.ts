@@ -2251,7 +2251,7 @@ export default {
         noDetections: {
           symptom: 'Le modèle ne trouve presque rien',
           cause:
-            'Vérifiez d’abord le contraste et le type de projet. N’abaissez le seuil de confiance que là où il est réglable : le modèle des microtubules l’ignore volontairement.',
+            'Vérifiez d’abord le contraste et le type de projet — le seuil n’est réglable nulle part, chaque modèle applique la valeur avec laquelle il a été validé. Si le type de projet permet un choix de modèle, un modèle plus précis peut aider ; si les détections ne suivent rien dans l’image, c’est le mauvais canal qui est segmenté.',
         },
         wrongChannel: {
           symptom:

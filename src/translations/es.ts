@@ -2238,7 +2238,7 @@ export default {
         noDetections: {
           symptom: 'El modelo encuentra muy poco',
           cause:
-            'Revise primero el contraste y el tipo de proyecto. Baje el umbral de confianza solo donde sea ajustable: el modelo de microtúbulos lo ignora por diseño.',
+            'Compruebe primero el contraste y el tipo de proyecto: el umbral no se puede ajustar en ningún sitio, cada modelo aplica el corte con el que fue validado. Si el tipo de proyecto permite elegir modelo, uno más preciso puede ayudar; si las detecciones no siguen nada de la imagen, se está segmentando el canal equivocado.',
         },
         wrongChannel: {
           symptom: 'Hay muchas formas, pero no siguen nada de la imagen',

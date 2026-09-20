@@ -2240,7 +2240,7 @@ export default {
         noDetections: {
           symptom: 'The model finds very little',
           cause:
-            'Check contrast and the project type first. Lower the confidence threshold only where it is adjustable — the microtubule model ignores it by design.',
+            'Check contrast and the project type first — the threshold is not adjustable anywhere, each model applies the cut it was validated with. If the project type offers a choice of model, a more accurate one may help; if detections follow nothing in the image, the wrong channel is being segmented.',
         },
         wrongChannel: {
           symptom:

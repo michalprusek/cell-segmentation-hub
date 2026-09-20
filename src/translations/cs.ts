@@ -2211,7 +2211,7 @@ export default {
         noDetections: {
           symptom: 'Model najde jen velmi málo',
           cause:
-            'Nejdřív zkontrolujte kontrast a typ projektu. Práh spolehlivosti snižujte jen tam, kde jde nastavit — model mikrotubulů jej záměrně ignoruje.',
+            'Zkontrolujte nejdřív kontrast a typ projektu — práh nikde nastavit nelze, každý model používá hodnotu, se kterou byl validován. Pokud typ projektu nabízí volbu modelu, může pomoci přesnější; pokud detekce nesledují nic v obraze, segmentuje se špatný kanál.',
         },
         wrongChannel: {
           symptom: 'Tvarů je dost, ale nesledují nic v obraze',
