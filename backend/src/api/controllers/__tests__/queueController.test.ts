@@ -81,7 +81,13 @@ describe('Queue Controller Type Safety', () => {
         const result = addImageToQueueSchema.safeParse(minimalData);
         expect(result.success).toBe(true);
         if (result.success) {
-          expect(result.data.model).toBe('hrnet');
+          // `model` deliberately has NO default. It used to default to
+          // 'hrnet', which is compatible with exactly one of the seven
+          // project types — so an omitted model queued a job the worker
+          // rejected on the other six, failing every image. It now stays
+          // undefined so the controller can resolve it from the project's own
+          // `segmentationModel` column.
+          expect(result.data.model).toBeUndefined();
           expect(result.data.threshold).toBe(0.5);
           expect(result.data.priority).toBe(0);
           expect(result.data.detectHoles).toBe(true);

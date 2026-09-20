@@ -97,6 +97,34 @@ describe('ProjectModelSelector', () => {
     expect(onModelChange).toHaveBeenCalledWith('cbam_resunet');
   });
 
+  it('does not persist a click on the already-selected model', async () => {
+    // Radix's MenuRadioItem fires `onValueChange` UNCONDITIONALLY on select —
+    // unlike `Select`, it has no equality guard. Without our own check, a user
+    // clicking the checked row to confirm it writes the RESOLVED DEFAULT into
+    // a column that was NULL, freezing the project on today's default. That is
+    // precisely the backfill the migration refuses to perform.
+    const user = userEvent.setup();
+    renderSelector({ projectType: 'spheroid', storedModel: null });
+
+    await user.click(screen.getByTestId('project-model-trigger'));
+    await user.click(screen.getByTestId('project-model-option-segformer'));
+
+    expect(onModelChange).not.toHaveBeenCalled();
+  });
+
+  it('persists a click on a model that is merely equal to the default', async () => {
+    // The other half: with the model EXPLICITLY stored, re-picking it is still
+    // a no-op, but picking a different one must go through — the guard must
+    // compare against the resolved model, not suppress everything.
+    const user = userEvent.setup();
+    renderSelector({ projectType: 'spheroid', storedModel: 'segformer' });
+
+    await user.click(screen.getByTestId('project-model-trigger'));
+    await user.click(screen.getByTestId('project-model-option-hrnet'));
+
+    expect(onModelChange).toHaveBeenCalledWith('hrnet');
+  });
+
   it('shows a single-model type its one model, disabled', async () => {
     const user = userEvent.setup();
     renderSelector({ projectType: 'wound' });

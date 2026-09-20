@@ -564,8 +564,6 @@ const ProjectDetail = () => {
       projectId: id,
       onImagesChange: updateImages,
       images,
-      selectedModel,
-      confidenceThreshold,
     });
 
   // Status reconciliation for keeping UI in sync with backend
@@ -1601,6 +1599,16 @@ const ProjectDetail = () => {
   const handleSegmentAll = async (channelOverride?: string) => {
     if (!id || !user?.id) {
       toast.error(t('errors.noProjectOrUser'));
+      return;
+    }
+
+    // The project's model is `undefined` only in the window before its type
+    // has loaded. Dispatching then would post no model at all, and the queue
+    // would apply its own fallback to a batch that may be of any type — which
+    // is the failure this whole change removes. Both sibling dispatch sites
+    // (`useResegment`, and the removed `handleProcessImage`) grew the same
+    // guard; this one relied on the deleted compatibility pre-flight for it.
+    if (!selectedModel || confidenceThreshold === undefined) {
       return;
     }
 

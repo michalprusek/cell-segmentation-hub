@@ -6,6 +6,8 @@ import { WebSocketService } from '../../services/websocketService';
 import { logger } from '../../utils/logger';
 import { ResponseHelper } from '../../utils/response';
 import { prisma } from '../../db';
+import * as ProjectService from '../../services/projectService';
+import { resolveProjectModel } from '../../constants/modelRegistry';
 
 // Import queue-specific types (some types for future use)
 import {
@@ -116,11 +118,22 @@ class QueueController {
         return;
       }
 
+      // A request that names no model gets the PROJECT's model, not a
+      // hard-coded one. `'hrnet'` used to stand here and is compatible with
+      // exactly one of the seven project types, so on the other six it queued
+      // a job the worker immediately rejected.
+      const resolvedModel =
+        model ?? (await ProjectService.getProjectModel(image.projectId));
+      if (!resolvedModel) {
+        ResponseHelper.notFound(res, 'Projekt nenalezen');
+        return;
+      }
+
       const queueEntry = await this.queueService.addToQueue(
         imageId,
         image.projectId,
         userId,
-        model || 'hrnet',
+        resolvedModel,
         threshold || 0.5,
         priority || 0,
         detectHoles !== undefined ? detectHoles : true
@@ -183,7 +196,7 @@ class QueueController {
       const {
         imageIds,
         projectId,
-        model = 'hrnet',
+        model,
         threshold = 0.5,
         priority = 0,
         forceResegment = false,
@@ -247,7 +260,10 @@ class QueueController {
             },
           ],
         },
-        select: { id: true },
+        // `type` + `segmentationModel` ride along on the ownership lookup that
+        // already happens here, so resolving the project's model costs no
+        // extra round trip.
+        select: { id: true, type: true, segmentationModel: true },
       });
 
       if (!project) {
@@ -255,11 +271,18 @@ class QueueController {
         return;
       }
 
+      // A request that names no model gets the PROJECT's model. `'hrnet'` used
+      // to be defaulted here and in the zod schema; it is compatible with
+      // exactly one of the seven project types, so on the other six it queued
+      // a batch the worker rejected, failing every image in it.
+      const resolvedModel =
+        model ?? resolveProjectModel(project.type, project.segmentationModel);
+
       const queueEntries = await this.queueService.addBatchToQueue(
         imageIds,
         projectId,
         userId,
-        model,
+        resolvedModel,
         threshold,
         priority,
         forceResegment,

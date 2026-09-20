@@ -93,13 +93,19 @@ type CompatibleModelFor<PT extends ProjectTypeKey> = {
  *
  * MIRROR of `src/lib/models/modelRegistry.ts`; the rationale for `spheroid`
  * resolving to `segformer` (93 % IoU, the only published figure among the five
- * spheroid candidates) lives there in full, as does the warning not to
- * re-derive this from the view-layer `SPHEROID_PRESETS` tiers. Parity between
- * the two copies is asserted by `modelRegistry.test.ts` on each side.
+ * spheroid candidates) lives there in full.
  *
- * Read on the backend by `resolveProjectModel()` so that a project row with a
- * NULL `segmentationModel` (every row predating the column) answers with the
- * right model instead of forcing a backfill.
+ * Parity between the two copies is enforced by `scripts/verify-shared-types.cjs`
+ * (`SHARED_CONSTS`), which runs in pre-commit and in CI. It is NOT covered by
+ * either side's `modelRegistry.test.ts` — those check each side against itself
+ * only. Unlike `MODEL_TYPE_COMPATIBILITY`, which both sides DERIVE by
+ * inverting their registry and so cannot drift, this map is a literal choice
+ * written out twice.
+ *
+ * Read on the backend by `resolveProjectModel()` via
+ * `ProjectService.getProjectModel()`, which `queueController` calls whenever a
+ * request does not name a model. Without that call the column would be
+ * authoritative only in the browser.
  */
 export const DEFAULT_MODEL_BY_PROJECT_TYPE = {
   spheroid: 'segformer',
@@ -123,15 +129,20 @@ export const DEFAULT_MODEL_BY_PROJECT_TYPE = {
  * one layer deeper.
  */
 export function resolveProjectModel(
-  projectType: ProjectTypeKey,
+  projectType: ProjectTypeKey | string,
   storedModel: string | null | undefined
 ): KnownModelId {
-  const compatible = MODEL_TYPE_COMPATIBILITY[projectType];
-  if (
-    storedModel &&
-    (compatible as readonly string[]).includes(storedModel)
-  ) {
+  // Total over its input, like `coerceProjectType` and every sibling helper
+  // here. `projects.type` is a plain String column and this function is called
+  // with it, so an unrecognised legacy value must yield a default rather than
+  // index `undefined` and throw on `.includes`.
+  const type = (
+    projectType in DEFAULT_MODEL_BY_PROJECT_TYPE ? projectType : 'spheroid'
+  ) as ProjectTypeKey;
+
+  const compatible = MODEL_TYPE_COMPATIBILITY[type];
+  if (storedModel && (compatible as readonly string[]).includes(storedModel)) {
     return storedModel as KnownModelId;
   }
-  return DEFAULT_MODEL_BY_PROJECT_TYPE[projectType];
+  return DEFAULT_MODEL_BY_PROJECT_TYPE[type];
 }

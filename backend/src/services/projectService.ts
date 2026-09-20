@@ -7,7 +7,11 @@ import {
 import { calculatePagination } from '../utils/response';
 import { logger } from '../utils/logger';
 import { coerceProjectType } from '../types/validation';
-import { MODEL_TYPE_COMPATIBILITY } from '../constants/modelRegistry';
+import {
+  MODEL_TYPE_COMPATIBILITY,
+  resolveProjectModel,
+  type KnownModelId,
+} from '../constants/modelRegistry';
 import { ApiError } from '../middleware/error';
 import * as SharingService from './sharingService';
 import type { Project, Prisma, User } from '@prisma/client';
@@ -771,4 +775,40 @@ export async function getProjectStats(
     );
     throw error;
   }
+}
+
+/**
+ * The model a project should segment with, resolved server-side.
+ *
+ * The queue endpoints accept a `model` in the request body and the browser
+ * always sends one, but a request that omits it must NOT fall back to a
+ * hard-coded `'hrnet'` — that literal is compatible with exactly one of the
+ * seven project types, so on the other six the worker rejects the job and
+ * every image in the batch is marked failed. It is also the reason this
+ * column exists: it is authoritative, and a server that ignores it makes it
+ * authoritative only in the browser.
+ *
+ * Returns `null` when the project does not exist, so the caller can keep
+ * whatever not-found handling it already has rather than inventing a model
+ * for a project it could not read.
+ */
+export async function getProjectModel(
+  projectId: string
+): Promise<KnownModelId | null> {
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { type: true, segmentationModel: true },
+  });
+
+  if (!project) {
+    return null;
+  }
+
+  // `resolveProjectModel` is total over the raw column, so the legacy-row case
+  // lands on a default rather than throwing; `coerceProjectType` is applied
+  // anyway to keep the narrowing visible at the boundary.
+  return resolveProjectModel(
+    coerceProjectType(project.type),
+    project.segmentationModel
+  );
 }

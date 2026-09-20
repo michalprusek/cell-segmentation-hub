@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import React, { ReactNode } from 'react';
@@ -84,6 +84,17 @@ describe('ModelContext', () => {
     vi.mocked(apiClient.getUserProfile).mockRejectedValue(
       new Error('Not authenticated')
     );
+  });
+
+  afterEach(() => {
+    // The authenticated test below sets `authenticated=1`, and jsdom keeps a
+    // cookie for the rest of the module. Left behind, the guest-key tests that
+    // follow would exercise `user_<id>_detectHoles` while still asserting on
+    // `guest_detectHoles` — passing only because `beforeEach` re-mocks the
+    // profile fetch to reject. That is the same silently-wrong shape this
+    // file's own comment celebrates catching.
+    document.cookie =
+      'authenticated=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/';
   });
 
   // This provider used to hold the selected model, its threshold, the model

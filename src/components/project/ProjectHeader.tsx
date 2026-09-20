@@ -275,11 +275,15 @@ const ProjectHeader = ({
                     {t(`projects.types.${projectType}`)}
                   </Badge>
                 )}
-                {/* Immediately right of the type pill, inside the SAME flex
-                    row, so the pair cannot be split by a wrap and the type
-                    shifts left by exactly the picker's width. They are one
-                    decision: the type is what filters the model list, and six
-                    of the seven types leave a single candidate. */}
+                {/* Immediately right of the type pill, in the same flex
+                    row, so the type shifts left by exactly the picker's width.
+                    They are one decision: the type is what filters the model
+                    list, and six of the seven types leave a single candidate.
+                    The row DOES wrap (see its `flex-wrap` above) — between
+                    640px and ~768px the pair stacks rather than pushing the
+                    header off-screen. Sharing a row is what makes that wrap
+                    land between them instead of splitting them from the
+                    title. */}
                 <ProjectModelSelector
                   projectType={projectType}
                   storedModel={segmentationModel}

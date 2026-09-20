@@ -23,7 +23,16 @@ const Settings = () => {
   const [loading, setLoading] = useState(true);
 
   // Get tab from URL parameter, default to 'profile'
-  const activeTab = searchParams.get('tab') || 'profile';
+  // Whitelisted, not just defaulted-on-absent. `?tab=models` was a REAL route
+  // until the model moved onto the project page — the header's model badge
+  // linked to it — so bookmarks and history entries for it exist. Radix
+  // renders no content for a value with no trigger, which would leave those
+  // users on a Settings page with three tabs, none active and nothing below
+  // them. An unknown value falls back to the same place an absent one does.
+  const SETTINGS_TABS = ['profile', 'account', 'appearance'];
+  const tabParam = searchParams.get('tab');
+  const activeTab =
+    tabParam && SETTINGS_TABS.includes(tabParam) ? tabParam : 'profile';
 
   // Handle tab change
   const handleTabChange = (value: string) => {

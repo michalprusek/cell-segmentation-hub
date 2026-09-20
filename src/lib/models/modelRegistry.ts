@@ -459,12 +459,20 @@ export const DEFAULT_MODEL_BY_PROJECT_TYPE = {
  * working instead of failing a compatibility check one layer deeper.
  */
 export function resolveProjectModel(
-  projectType: ProjectTypeKey,
+  projectType: ProjectTypeKey | string,
   storedModel: string | null | undefined
 ): ModelType {
-  const compatible = MODEL_TYPE_COMPATIBILITY[projectType];
+  // Total over its input, mirroring the backend copy. `mapProjectFields`
+  // coerces `type` before it reaches here today, so this is belt-and-braces on
+  // the frontend — but the two implementations must stay interchangeable, and
+  // the backend genuinely is called with the raw `projects.type` column.
+  const type = (
+    projectType in DEFAULT_MODEL_BY_PROJECT_TYPE ? projectType : 'spheroid'
+  ) as ProjectTypeKey;
+
+  const compatible = MODEL_TYPE_COMPATIBILITY[type];
   if (storedModel && (compatible as string[]).includes(storedModel)) {
     return storedModel as ModelType;
   }
-  return DEFAULT_MODEL_BY_PROJECT_TYPE[projectType];
+  return DEFAULT_MODEL_BY_PROJECT_TYPE[type];
 }

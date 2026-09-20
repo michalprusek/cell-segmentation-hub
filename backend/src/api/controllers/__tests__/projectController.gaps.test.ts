@@ -351,6 +351,28 @@ describe('projectController — uncovered branches', () => {
 
       expect(res.body.success).toBe(false);
       expect(JSON.stringify(res.body)).toContain('segformer');
+      // The service attaches MODEL_TYPE_INCOMPATIBLE deliberately.
+      // `ResponseHelper.badRequest` hard-codes `code: 'BAD_REQUEST'`, so
+      // routing through it would drop the code the client is meant to branch
+      // on.
+      expect(res.body.code).toBe('MODEL_TYPE_INCOMPATIBLE');
+    });
+
+    it('forwards a non-400 ApiError with its own status', async () => {
+      // The branch is written as a general 4xx handler, and `ApiError` also
+      // defines 401/403/404/409. Collapsing them all to 400 would surface a
+      // share-permission failure as "bad request", which a client retries
+      // instead of prompting a re-auth.
+      MockProjectService.updateProject.mockRejectedValueOnce(
+        ApiError.forbidden('Nedostatečná oprávnění')
+      );
+
+      const res = await request(app)
+        .put('/projects/proj-1')
+        .send({ title: 'X' })
+        .expect(403);
+
+      expect(res.body.code).toBe('FORBIDDEN');
     });
 
     it('still returns 500 for a genuine server fault', async () => {

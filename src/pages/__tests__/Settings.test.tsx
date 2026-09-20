@@ -358,6 +358,27 @@ describe('Default tab selection', () => {
     expect(
       screen.queryByTestId('model-settings-section')
     ).not.toBeInTheDocument();
+    // It must not simply render NOTHING: `?tab=models` was a real route that
+    // the old header badge linked to, so bookmarks and history entries exist.
+    // Radix shows no content for a value with no trigger, which would leave
+    // those users on a page with three tabs, none active and nothing below.
+    // An unknown value falls back to where an absent one does.
+    expect(screen.getByTestId('tabs').getAttribute('data-value')).toBe(
+      'profile'
+    );
+  });
+
+  it('falls back to profile for any unknown tab value', async () => {
+    mockSearchParamsGet.mockReturnValue('not-a-tab');
+
+    renderSettings();
+    await waitFor(() => {
+      expect(screen.queryByText('common.loading')).not.toBeInTheDocument();
+    });
+
+    expect(screen.getByTestId('tabs').getAttribute('data-value')).toBe(
+      'profile'
+    );
   });
 });
 

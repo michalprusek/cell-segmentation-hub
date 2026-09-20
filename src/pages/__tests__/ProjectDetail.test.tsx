@@ -1303,6 +1303,25 @@ describe('ProjectDetail page', () => {
       );
     });
 
+    it('queues nothing while the project type is still loading', async () => {
+      // `useProjectModel` returns `{model: undefined}` until the type lands.
+      // Dispatching then posts no model at all and the queue applies its own
+      // fallback to a batch that may be of any type — the failure this whole
+      // change exists to remove. The two sibling dispatch sites grew this
+      // guard explicitly; this one used to rely on the deleted compatibility
+      // pre-flight for it.
+      wireHooks(
+        [makeImage({ segmentationStatus: 'no_segmentation' }, 'img-1')],
+        { projectType: undefined }
+      );
+      renderPage();
+
+      await userEvent.click(screen.getByTestId('select-img-1'));
+      await userEvent.click(screen.getByTestId('segment-all-btn'));
+
+      await waitFor(() => expect(mockAddBatchToQueue).not.toHaveBeenCalled());
+    });
+
     it("queues the project's STORED model over the type default", async () => {
       // Without this, the whole feature could be a no-op that always returns
       // the default and every case above would still pass.

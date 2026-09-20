@@ -56,13 +56,8 @@ vi.mock('sonner', () => ({
   },
 }));
 
-vi.mock('@/lib/imageProcessingService', () => ({
-  updateImageProcessingStatus: vi.fn(),
-}));
-
 import apiClient from '@/lib/api';
 import { toast } from 'sonner';
-import { updateImageProcessingStatus } from '@/lib/imageProcessingService';
 import type { ProjectImage } from '@/types';
 
 const makeImage = (
@@ -107,8 +102,6 @@ describe('useProjectImageActions', () => {
             projectId: 'proj-1',
             images,
             onImagesChange,
-            selectedModel: 'hrnet',
-            confidenceThreshold: 0.5,
           }),
         { wrapper }
       );
@@ -137,8 +130,6 @@ describe('useProjectImageActions', () => {
             projectId: 'proj-1',
             images,
             onImagesChange,
-            selectedModel: 'hrnet',
-            confidenceThreshold: 0.5,
           }),
         { wrapper }
       );
@@ -161,8 +152,6 @@ describe('useProjectImageActions', () => {
             projectId: undefined,
             images,
             onImagesChange,
-            selectedModel: 'hrnet',
-            confidenceThreshold: 0.5,
           }),
         { wrapper }
       );
@@ -188,8 +177,6 @@ describe('useProjectImageActions', () => {
             projectId: 'proj-1',
             images,
             onImagesChange,
-            selectedModel: 'hrnet',
-            confidenceThreshold: 0.5,
           }),
         { wrapper }
       );
@@ -207,228 +194,6 @@ describe('useProjectImageActions', () => {
     });
   });
 
-  describe('handleProcessImage', () => {
-    it('calls updateImageProcessingStatus and returns true on success', async () => {
-      const images = [makeImage('img-1')];
-      const onImagesChange = vi.fn();
-      const mockSegResult = { polygons: [], imageWidth: 100, imageHeight: 100 };
-
-      vi.mocked(updateImageProcessingStatus).mockImplementation(
-        async ({ onComplete }) => {
-          onComplete?.(mockSegResult as any);
-          return { cancel: vi.fn() };
-        }
-      );
-
-      const { result } = renderHook(
-        () =>
-          useProjectImageActions({
-            projectId: 'proj-1',
-            images,
-            onImagesChange,
-            selectedModel: 'hrnet',
-            confidenceThreshold: 0.5,
-          }),
-        { wrapper }
-      );
-
-      let returnValue: boolean | undefined;
-      await act(async () => {
-        returnValue = await result.current.handleProcessImage('img-1');
-      });
-
-      expect(returnValue).toBe(true);
-      expect(vi.mocked(updateImageProcessingStatus)).toHaveBeenCalledTimes(1);
-    });
-
-    it('prevents duplicate processing of same image', async () => {
-      const images = [makeImage('img-1')];
-      const onImagesChange = vi.fn();
-
-      // Never resolves so the image stays in-flight
-      vi.mocked(updateImageProcessingStatus).mockImplementation(
-        () => new Promise(() => {})
-      );
-
-      const { result } = renderHook(
-        () =>
-          useProjectImageActions({
-            projectId: 'proj-1',
-            images,
-            onImagesChange,
-            selectedModel: 'hrnet',
-            confidenceThreshold: 0.5,
-          }),
-        { wrapper }
-      );
-
-      // First call — fire and don't await
-      act(() => {
-        result.current.handleProcessImage('img-1');
-      });
-
-      // Second call immediately
-      await act(async () => {
-        const secondResult = await result.current.handleProcessImage('img-1');
-        expect(secondResult).toBe(false);
-      });
-
-      expect(vi.mocked(toast.info)).toHaveBeenCalledTimes(1);
-      expect(vi.mocked(updateImageProcessingStatus)).toHaveBeenCalledTimes(1);
-    });
-
-    it('returns false and shows error when updateImageProcessingStatus rejects', async () => {
-      const images = [makeImage('img-1')];
-      const onImagesChange = vi.fn();
-
-      vi.mocked(updateImageProcessingStatus).mockRejectedValue(
-        new Error('Processing failed')
-      );
-
-      const { result } = renderHook(
-        () =>
-          useProjectImageActions({
-            projectId: 'proj-1',
-            images,
-            onImagesChange,
-            selectedModel: 'hrnet',
-            confidenceThreshold: 0.5,
-          }),
-        { wrapper }
-      );
-
-      let returnValue: boolean | undefined;
-      await act(async () => {
-        returnValue = await result.current.handleProcessImage('img-1');
-      });
-
-      expect(returnValue).toBe(false);
-      expect(vi.mocked(toast.error)).toHaveBeenCalledTimes(1);
-    });
-
-    it('returns false when image is not found in images list', async () => {
-      const images: ProjectImage[] = [];
-      const onImagesChange = vi.fn();
-
-      const { result } = renderHook(
-        () =>
-          useProjectImageActions({
-            projectId: 'proj-1',
-            images,
-            onImagesChange,
-            selectedModel: 'hrnet',
-            confidenceThreshold: 0.5,
-          }),
-        { wrapper }
-      );
-
-      let returnValue: boolean | undefined;
-      await act(async () => {
-        returnValue = await result.current.handleProcessImage('nonexistent');
-      });
-
-      expect(returnValue).toBe(false);
-      expect(vi.mocked(updateImageProcessingStatus)).not.toHaveBeenCalled();
-    });
-
-    it('sets image segmentationStatus to processing immediately', async () => {
-      const images = [makeImage('img-1', { segmentationStatus: 'pending' })];
-      const onImagesChange = vi.fn();
-
-      // Hang indefinitely so we can observe the immediate update
-      vi.mocked(updateImageProcessingStatus).mockImplementation(
-        () => new Promise(() => {})
-      );
-
-      const { result } = renderHook(
-        () =>
-          useProjectImageActions({
-            projectId: 'proj-1',
-            images,
-            onImagesChange,
-            selectedModel: 'hrnet',
-            confidenceThreshold: 0.5,
-          }),
-        { wrapper }
-      );
-
-      act(() => {
-        result.current.handleProcessImage('img-1');
-      });
-
-      await waitFor(() => {
-        expect(onImagesChange).toHaveBeenCalledWith(
-          expect.arrayContaining([
-            expect.objectContaining({
-              id: 'img-1',
-              segmentationStatus: 'processing',
-            }),
-          ])
-        );
-      });
-    });
-
-    it('tracks processingImages IDs during in-flight operations', async () => {
-      const images = [makeImage('img-1')];
-      const onImagesChange = vi.fn();
-
-      vi.mocked(updateImageProcessingStatus).mockImplementation(
-        () => new Promise(() => {})
-      );
-
-      const { result } = renderHook(
-        () =>
-          useProjectImageActions({
-            projectId: 'proj-1',
-            images,
-            onImagesChange,
-            selectedModel: 'hrnet',
-            confidenceThreshold: 0.5,
-          }),
-        { wrapper }
-      );
-
-      act(() => {
-        result.current.handleProcessImage('img-1');
-      });
-
-      await waitFor(() => {
-        expect(result.current.processingImages).toContain('img-1');
-      });
-    });
-
-    it('removes imageId from processingImages after completion', async () => {
-      const images = [makeImage('img-1')];
-      const onImagesChange = vi.fn();
-      const mockSegResult = { polygons: [], imageWidth: 100, imageHeight: 100 };
-
-      vi.mocked(updateImageProcessingStatus).mockImplementation(
-        async ({ onComplete }) => {
-          onComplete?.(mockSegResult as any);
-          return { cancel: vi.fn() };
-        }
-      );
-
-      const { result } = renderHook(
-        () =>
-          useProjectImageActions({
-            projectId: 'proj-1',
-            images,
-            onImagesChange,
-            selectedModel: 'hrnet',
-            confidenceThreshold: 0.5,
-          }),
-        { wrapper }
-      );
-
-      await act(async () => {
-        await result.current.handleProcessImage('img-1');
-      });
-
-      expect(result.current.processingImages).not.toContain('img-1');
-    });
-  });
-
   describe('handleOpenSegmentationEditor', () => {
     it('navigates to segmentation editor route', async () => {
       const images = [makeImage('img-1')];
@@ -440,8 +205,6 @@ describe('useProjectImageActions', () => {
             projectId: 'proj-1',
             images,
             onImagesChange,
-            selectedModel: 'hrnet',
-            confidenceThreshold: 0.5,
           }),
         { wrapper }
       );
@@ -465,8 +228,6 @@ describe('useProjectImageActions', () => {
             projectId: undefined,
             images,
             onImagesChange,
-            selectedModel: 'hrnet',
-            confidenceThreshold: 0.5,
           }),
         { wrapper }
       );
@@ -488,8 +249,6 @@ describe('useProjectImageActions', () => {
             projectId: 'proj-1',
             images,
             onImagesChange,
-            selectedModel: 'hrnet',
-            confidenceThreshold: 0.5,
           }),
         { wrapper }
       );

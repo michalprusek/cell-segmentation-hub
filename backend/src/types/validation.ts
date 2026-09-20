@@ -61,7 +61,12 @@ export const thresholdSchema = z
  * Schema for adding single image to queue
  */
 export const addImageToQueueSchema = z.object({
-  model: segmentationModelSchema.optional().default('hrnet'),
+  // NO `.default('hrnet')`. That literal is compatible with exactly one of the
+  // seven project types, so on the other six it queued a job the worker then
+  // rejected, failing every image in the batch. An omitted model now stays
+  // `undefined` so the controller can resolve it from the project's own
+  // `segmentationModel` column (ProjectService.getProjectModel).
+  model: segmentationModelSchema.optional(),
   threshold: thresholdSchema.optional().default(0.5),
   priority: queuePrioritySchema.optional().default(0),
   detectHoles: z.boolean().optional().default(true),
@@ -76,7 +81,12 @@ export const batchQueueSchema = z.object({
     .min(1, 'Musíte zadat alespoň jeden obrázek')
     .max(10000, 'Můžete zpracovat maximálně 10000 obrázků najednou'),
   projectId: uuidSchema,
-  model: segmentationModelSchema.optional().default('hrnet'),
+  // NO `.default('hrnet')`. That literal is compatible with exactly one of the
+  // seven project types, so on the other six it queued a job the worker then
+  // rejected, failing every image in the batch. An omitted model now stays
+  // `undefined` so the controller can resolve it from the project's own
+  // `segmentationModel` column (ProjectService.getProjectModel).
+  model: segmentationModelSchema.optional(),
   threshold: thresholdSchema.optional().default(0.5),
   priority: queuePrioritySchema.optional().default(0),
   forceResegment: z.boolean().optional().default(false),

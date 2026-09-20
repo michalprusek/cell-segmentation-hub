@@ -113,7 +113,18 @@ const ProjectModelSelector = ({
         </DropdownMenuLabel>
         <DropdownMenuRadioGroup
           value={model}
-          onValueChange={v => void onModelChange(v as ModelType)}
+          // Radix's MenuRadioItem calls `onValueChange` UNCONDITIONALLY on
+          // select — unlike `Select`, it has no equality guard (see
+          // `@radix-ui/react-menu` MenuRadioItem.handleSelect). Without this
+          // check, clicking the already-checked row writes the RESOLVED
+          // default into a column that was NULL, which is exactly the backfill
+          // the migration refuses to do: the row stops tracking the registry
+          // and freezes on today's answer. It would also toast "model
+          // updated" for a no-op.
+          onValueChange={v => {
+            if (v === model) return;
+            void onModelChange(v as ModelType);
+          }}
         >
           {compatibleModels.map(m => (
             <SpecimenHoverCard
