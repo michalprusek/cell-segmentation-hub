@@ -73,7 +73,7 @@
 # fix could plausibly have introduced.
 fastapi==0.141.1
 starlette==1.6.0
-uvicorn==0.52.4
+uvicorn==0.53.0
 pydantic==2.13.5
 # requests 2.33.0 fixes CVE-2024-47081 (.netrc credential leak),
 # CVE-2026-25645 (insecure temp file reuse in extract_zipped_paths), and the
@@ -308,7 +308,7 @@ einops>=0.8.2  # floor records reality; the image already ships 0.8.2
 onnx==1.22.0
 ml_dtypes==0.5.4
 onnx2torch==1.5.15
-protobuf==7.36.1
+protobuf==7.36.2
 
 # Prometheus metrics
 prometheus-fastapi-instrumentator==8.1.0
