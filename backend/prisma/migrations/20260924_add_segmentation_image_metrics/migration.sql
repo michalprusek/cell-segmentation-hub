@@ -1,0 +1,26 @@
+-- The spheroid-disintegration read-out, computed from the model's raster mask.
+--
+-- WHY A COLUMN. Until now the Disintegration Index was computed at EXPORT time
+-- from the stored polygons, re-rasterised: those polygons have passed a 50 px
+-- minimum-area filter and keep only each region's outer contour, so the far,
+-- faint corona cells that define the index's reach were gone before it was
+-- computed. On the 29 deposited LOBO prediction masks of the paper this moved
+-- DI by a median of -0.004 and by up to -0.039 (review finding G13). The ML
+-- service now computes the paper's read-out from the raster argmax mask at
+-- inference time and returns it as `image_metrics`; the backend stores it here
+-- as JSON text, next to the polygons it was produced with.
+--
+-- Stale-proofing needs no trigger: the JSON carries `polygons_sha256`, the hash
+-- of the `polygons` string written in the same upsert. Any later rewrite of the
+-- polygons changes the hash and the export falls back to scoring the polygons.
+--
+-- Hand-written rather than taken from `prisma migrate diff`, for the reason
+-- spelled out in `20260902_add_export_log/migration.sql`: the production schema
+-- has drifted from the migration history since 2026-06, and a diff against it
+-- proposes dropping real tables. Only the statement below is intended here.
+--
+-- Idempotent, so re-running it against a database that already has the column
+-- is a no-op rather than a failed deploy. Nullable with no default: NULL means
+-- "no raster read-out" (every other model, and every row segmented before this
+-- change), which the export must keep distinguishing from a value.
+ALTER TABLE "segmentations" ADD COLUMN IF NOT EXISTS "imageMetrics" TEXT;

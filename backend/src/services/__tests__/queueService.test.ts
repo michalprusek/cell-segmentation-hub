@@ -1292,6 +1292,27 @@ describe("processBatch — nothing may stall in 'processing'", () => {
     expect(statusesFor('img-2')).toContain('segmented');
   });
 
+  it('passes the raster read-out through the second save (spheroid_disintegration)', async () => {
+    // requestSegmentation already stored image_metrics; the worker then saves
+    // again. Dropping it here overwrote the stored read-out with null.
+    stubBatchPlumbing();
+    const imageMetrics = { reference: 'core', DI: 0.61, index_B: 0.64 };
+    segmentationServiceMock.requestBatchSegmentation.mockResolvedValueOnce([
+      { ...polygonResult(), image_metrics: imageMetrics },
+      polygonResult(),
+    ]);
+
+    await service.processBatch([item1(), item2()]);
+
+    const calls = (
+      segmentationServiceMock.saveSegmentationResults as ReturnType<typeof vi.fn>
+    ).mock.calls;
+    const forImg1 = calls.find(c => c[0] === 'img-1');
+    const forImg2 = calls.find(c => c[0] === 'img-2');
+    expect(forImg1?.[10]).toEqual(imageMetrics);
+    expect(forImg2?.[10]).toBeNull();
+  });
+
   it('accepts a genuinely empty result and clears it out of the queue', async () => {
     stubBatchPlumbing();
     segmentationServiceMock.requestBatchSegmentation.mockResolvedValueOnce([
@@ -1320,7 +1341,8 @@ describe("processBatch — nothing may stall in 'processing'", () => {
       100,
       100,
       'user-id',
-      expect.anything()
+      expect.anything(),
+      null
     );
     expect(prismaMock.segmentationQueue.delete).toHaveBeenCalledWith({
       where: { id: 'qe-1' },

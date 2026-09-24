@@ -200,6 +200,15 @@ model Segmentation {
   updatedAt      DateTime @updatedAt
   imageHeight    Int?
   imageWidth     Int?
+  // Per-image read-out computed by the ML service from the model's RASTER
+  // mask at inference time (spheroid_disintegration only: DI, Index B, reach,
+  // fragments, core diagnostics, regime flags, input-scale warnings), as JSON.
+  // Carries `polygons_sha256`, the SHA-256 of the `polygons` string written in
+  // the same upsert: once any path rewrites the polygons (an edit, a track
+  // assignment), the hash no longer matches and the export falls back to
+  // scoring the polygons. Null for every other model and for rows segmented
+  // before 2026-09-24.
+  imageMetrics   String?
   image          Image    @relation(fields: [imageId], references: [id], onDelete: Cascade)
 
   @@map("segmentations")

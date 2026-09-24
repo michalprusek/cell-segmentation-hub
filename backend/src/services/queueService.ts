@@ -1118,7 +1118,8 @@ export class QueueService {
               imageWidth,
               imageHeight,
               item.userId,
-              isLastBatch
+              isLastBatch,
+              result.image_metrics ?? null
             );
 
             // Update image status to segmented
@@ -1253,7 +1254,8 @@ export class QueueService {
               imageWidth,
               imageHeight,
               item.userId,
-              isLastBatch
+              isLastBatch,
+              result?.image_metrics ?? null
             );
 
             // Update image status to no_segmentation (not segmented) since no polygons were detected

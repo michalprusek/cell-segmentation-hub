@@ -671,201 +671,115 @@ ${scaleInfo}
 function buildSpheroidInvasiveGuide({ areaUnit, scaleInfo }: UnitContext): string {
   return `# Disintegration Analysis Metrics Guide
 ${scaleInfo}
-This export is one row per image with four numeric metrics —
-**Total Spheroid Area**, **Core Area**, **Invasion Area** (all in ${areaUnit})
-and **Disintegration Index** (dimensionless). The metrics target spheroid
-disintegration analysis (Lim, Kang, Lee 2020 — Sci. Rep. PMC6971071) but
-apply equally to compact (t=0) and disintegrated (t>0) spheroids.
+This export is one row per image: the three areas (${areaUnit}), the
+**Disintegration Index (DI)** and **Index B** (Lim, Kang, Lee 2020 — Sci. Rep.
+PMC6971071) as co-primary read-outs, and the panel of companion metrics and
+quality flags defined by the paper's released scoring script
+(\`spheroid_seg/compute_di.py\` of the spheroid-disintegration paper; code DOI
+10.5281/zenodo.22295119). Every definition below is that script's, ported
+verbatim to \`backend/segmentation/api/disintegration_metrics.py\`.
 
-## Pipeline Overview
-
-\`\`\`
-3-class segmentation (bg / corona / core)  →  core = class-2 polygons
-                                     ↓
-                            partClass="core" polygons attached
-                                     ↓
-     ┌──────────────┬─────────────────┬──────────────────┐
-     ↓              ↓                 ↓                  ↓
- Total Spheroid    Core Area     Invasion Area    Disintegration
- Area (Σ ext.    (largest       (Total − Core,    Index = tanh(W₁)
- non-core)        core CC)       clamped ≥ 0)     where W₁ compares
-                                                  the empirical CDF of
-                                                  distances of every
-                                                  mask pixel against
-                                                  every core pixel,
-                                                  normalised by R_core
-\`\`\`
-
-## Core Detection
-
-The spheroid-disintegration model (UNet++ / EfficientNet-B5, model key
-\`spheroid_disintegration\`) segments each image into three classes directly —
-**0 = background, 1 = corona (dispersing cells), 2 = dense core** — so the core is
-a *predicted class*, not an intensity heuristic. It is read straight from the
-segmentation in \`predict_disintegration\`
-(\`backend/segmentation/ml/model_loader.py\`):
-
-1. **Foreground** = classes 1 ∪ 2 → the outer spheroid polygons
- (\`type="external"\`): the total cell-covered area.
-
-2. **Core** = class 2 → polygons tagged \`partClass="core"\`.
-
-Predicting the core directly (rather than by thresholding an earlier binary
-segmentation) keeps the DI anchor correct on intact (t=0) spheroids too, where
-the whole spheroid is core.
-
-## Total Spheroid Area (${areaUnit})
+## Where the numbers come from
 
 \`\`\`
-TotalSpheroidArea = Σ area(external polygon)   for partClass ≠ "core"
+image ─► 3-class model (bg 0 / corona 1 / core 2) ─► RASTER argmax mask
+                                                      │
+              ┌───────────────────────────────────────┴──────────────┐
+              ▼                                                      ▼
+   read-out computed on the raster                     polygons for display
+   at inference time, stored with the                  and editing (regions
+   segmentation  ──► "DI Source" = raster              < 50 px dropped, outer
+                                                       contour only)
+                                                                     │
+   polygons edited since, or segmented                               ▼
+   before 2026-09-24  ──► the polygons are re-rasterised and scored by the
+                          same algorithm ──► "DI Source" = polygons
 \`\`\`
 
-- **Sum of geometric areas** of every external polygon **excluding** the core.
-The core sits *inside* the parent spheroid; including it would double-count
-the same physical pixels.
-- **Algorithm**: Shoelace (Gauss's area) formula on polygon vertices —
-\`A = ½ |Σᵢ (xᵢ·yᵢ₊₁ − xᵢ₊₁·yᵢ)|\`. Vertices wrap (i+1 mod n).
-- **Unit conversion**: when a μm/px scale is configured at the project level,
-\`A_μm² = A_px² × scale²\`. Otherwise pixel units are reported.
-- **Multi-spheroid images**: smaller spheroids (those without a detected core)
-are still summed in. So \`TotalSpheroidArea\` represents *all cell-covered
-area* in the image, not just the largest.
+The **raster** read-out is the paper's number. The **polygons** fallback is
+close but not identical: the polygons have lost every region under 50 px and
+every hole, which are exactly the far, faint corona cells that set the reach.
+Re-segment an image to get a raster read-out back; the Note column says why a
+row was scored from polygons.
 
-## Core Area (${areaUnit})
+## Total Spheroid Area / Core Area / Invasion Area (${areaUnit})
 
-\`\`\`
-CoreArea = area(polygon with partClass="core")
-\`\`\`
-
-- Geometric area of the core polygon(s) — the region(s) the model predicts as
-class 2 (dense core).
-- Same Shoelace formula and same scale conversion as Total Spheroid Area.
-- For a compact spheroid: \`CoreArea ≈ TotalSpheroidArea\` (the model labels the
-whole spheroid as core).
-- For a fully invasive spheroid: \`CoreArea\` is the dense central agglomerate
-while the rest of \`TotalSpheroidArea\` is the diffuse invasion zone.
-- **Reference**: Lim 2020 \`A_core\` (paper notation) corresponds directly.
-
-## Invasion Area (${areaUnit})
-
-\`\`\`
-InvasionArea = max(0, TotalSpheroidArea − CoreArea)
-\`\`\`
-
-- Cell-covered area **outside** the dense core. Direct numeric proxy for the
-invasion zone size: how much of the cell mass has migrated beyond the dense
-central agglomerate.
-- For a **compact** (t=0) spheroid: InvasionArea ≈ 0.
-- For a **strongly invasive** spheroid: InvasionArea ≈ 0.5–0.8 × TotalSpheroidArea.
-- Same Shoelace areas + same scale conversion. Clamped at zero to handle
-edge cases where Core slightly exceeds Total due to numerical artefacts.
-- Corresponds to Lim 2020 \`(A_all − A_core)\` numerator of the invasion index B.
+- **Raster source**: pixel counts of the model's mask — foreground (classes
+1 ∪ 2), core (class 2) and corona (class 1, = Total − Core).
+- **Polygons source**: Shoelace areas of the external non-core polygons, the
+\`partClass="core"\` polygons, and their clamped difference.
+- **Unit conversion**: with a μm/px scale, \`A_μm² = A_px² × scale²\`.
 
 ## Disintegration Index (DI)
 
-The DI is a scalar in \`[0, 1)\` that quantifies *how far the spheroid's radial
-mass distribution has dispersed beyond its dense core*, in a size-invariant
-way. It is **core-anchored** and **requires a core** — there is no
-equivalent-disk fallback. Reported in the Excel column **Disintegration Index**
-(4 decimal places, dimensionless); rendered as **N/A** when no core is present.
+A scalar in \`[0, 1)\`: how far the foreground's radial distribution departs
+from a filled disk the size of the core. Core-anchored; **undefined without a
+usable core**.
 
-Algorithm (implemented in
-\`backend/segmentation/api/metrics_endpoint.py\` — POST \`/api/disintegration-index\`):
+1. \`R_C = √(N_C / π)\` — effective radius of the core (\`N_C\` core pixels),
+anchored at the core centroid \`c_C\`.
+2. \`d̃ᵢ = |pᵢ − c_C| / R_C\` for every foreground pixel \`pᵢ\` (corona ∪ core).
+3. \`W₁ = mean_u |d̃₍ᵤ₎ − √u|\`, \`u = (i + 0.5)/M\` — the 1-Wasserstein distance
+to a filled disk (inverse CDF \`√u\`), over the ascending \`d̃\`.
+4. \`DI = tanh(W₁)\`.
 
-1. **Rasterise the union of every external polygon** (the whole disintegration segmentation
- mask, excluding cores) into a single binary canvas via repeated
- \`cv2.fillPoly\`. Collect the \`(x, y)\` of all \`M\` foreground pixels.
+DI is **N/A** (never a computed 0) when there is no foreground, no core, or a
+core smaller than **16 048 px** — the smallest expert core of the paper's
+released dataset (Reference Mode \`core_too_small\`). Below that size the
+normalising radius shrinks towards zero and pushes DI towards 1 whatever the
+corona does.
 
-2. **Core (required)**. Rasterise the union of the \`partClass="core"\` polygon(s)
- into \`N_C\` pixels with centroid \`c = (mean(xᵢ_core), mean(yᵢ_core))\` and
- effective radius \`R_C = √(N_C / π)\`. If no core rasterises to ≥ 1 pixel the
- DI is **undefined**: the endpoint returns \`reference="no_core"\` and the Excel
- cell shows \`N/A\` (never a computed 0).
+## Index B and the panel
 
-3. **Core-anchored, core-normalised distances**. For each foreground pixel take
- the Euclidean distance to the **core centroid** \`c\`,
- \`rᵢ = √((xᵢ − cx)² + (yᵢ − cy)²)\`, and normalise by the core radius:
- \`d̃ᵢ = rᵢ / R_C\`. Anchoring on the core (not the mask centroid, which drifts
- toward the invasion zone) makes the metric measure how far mass spread *from
- the dense core*.
+| Column | Definition | Reads as |
+| --- | --- | --- |
+| **Index B** | \`(N_FG − N_C) / N_FG\` | fraction of the cell mass outside the dense core (co-primary with DI) |
+| **W1** | \`W₁\` above | DI before the \`tanh\` |
+| **Reach p90** | 90th percentile of \`d̃\` | how far, in core radii, the outer tenth of the mass has travelled |
+| **Corona Fragments** | 4-connected components of the corona, no closing, no size floor | how many pieces the dispersed mass is in |
+| **Largest-Fragment Fraction** | largest corona component ÷ corona | \`1\` = one sheet, \`→0\` = scattered |
+| **Solidity** | \`N_FG\` ÷ pixels of the foreground's convex hull | \`1\` = compact, \`→0\` = dispersed |
+| **Core Components** | 8-connected components of the core | \`1\` for a sound anchor |
+| **Largest Core Component Fraction** | largest core component ÷ core | |
+| **Core Centroid Shift** | shift of the core centroid caused by the minor core pieces, in \`R_C\` | |
 
-4. **Reference distribution — analytical uniform disk**. The reference is a
- filled disk of the core's size, \`F_ref(d̃) = min(d̃², 1)\`, whose inverse
- (quantile) is \`F_ref⁻¹(u) = √u\`. This is an *idealised* disk of radius
- \`R_C\`, independent of the core's actual shape.
+## Quality flags (0/1)
 
-5. **1-Wasserstein distance** in inverse-cumulative (quantile) form, estimated
- bin-free from the sorted normalised distances:
- \`W₁ = ∫₀¹ |d̃(u) − √u| du ≈ (1/M) · Σᵢ |d̃₍ᵢ₎ − √((i + 0.5) / M)|\`,
- where \`d̃₍ᵢ₎\` are the ascending \`d̃\` values. This is the paper's eq. (1).
+- **Core Fragmented** — the largest core piece holds < 99 % of the core, or the
+minor pieces move the centroid by > 0.1 \`R_C\`. DI then rests on a broken
+anchor; inspect the image. The flag does not change DI.
+- **Unvalidated Regime** — Index B in \`[0.15, 0.30)\`, a range absent from the
+paper's dataset; the value is computed the same way but is less well supported.
+- **Below Validated Floor** — DI < 0.6. Below it the pipeline does not separate
+an intact spheroid from a mildly dispersed one: read it as "not grossly
+disintegrated", a screen rather than a graded value.
 
-6. **Saturation**: \`DI = tanh(W₁)\`. Maps \`W₁ ∈ [0, ∞) → [0, 1)\`. An intact
- spheroid (foreground ≈ core) gives \`d̃ ≤ 1\` distributed as a filled disk and
- \`DI ≈ 0\`; as mass disperses to \`d̃ ≫ 1\`, \`DI → 1\`.
+## Input-scale warning
 
-**Properties**: dimensionless, scale-invariant (distances normalised by
-\`R_C\`), rotation-invariant, translation-invariant (core-relative). Depends only
-on the core's *size* (\`R_C\`), not its shape — the reference is an ideal disk.
+The model and the index were validated only on **2048 × 2048 px brightfield
+frames at ~1.28 μm/px** (5× objective). A frame of another size, or a μm/px
+scale entered at export that differs from 1.28 by more than 10 %, adds a
+warning to the row. The numbers are still returned; they were never tested
+there.
 
-**Calibrated thresholds** (user 12bprusek, April 2026):
-- *time_0h* (compact): DI median ≈ 0.001
-- *time_48h* (rozprsknuté): DI median ≈ 0.48
-- 320× separation between groups
+## The model
 
-## Disintegration Metric Panel
-
-Alongside DI the export reports a panel of companion metrics spanning the
-*independent* ways a spheroid disintegrates, so redundancy with DI is explicit.
-All are computed in the **same endpoint** from the same rasterised masks
-(\`FG = C ∪ K\`, i.e. the foreground mask unioned with the core), and all are
-**\`N/A\` unless a core anchored the computation** (\`reference="core"\`). Notation:
-\`N_C\`/\`N_K\`/\`N_FG\` = pixel counts of core / corona / foreground; \`R_C\` = core
-radius; \`d̃ = |p − c| / R_C\`.
-
-| Metric (Excel column) | Axis | Formula | Reads as |
-| --- | --- | --- | --- |
-| **Radial Reach q95** | A — radial dispersal | 95th percentile of \`{d̃}\` | how far (in core radii) the leading 5 % of mass has travelled |
-| **Dispersed-Mass Fraction** | B — mass partition | \`N_K / N_FG\` ∈ [0,1] | fraction of mass now outside the dense core |
-| **Fragment Count** | C — fragmentation | connected components of FG after closing (\`r=2 px\`) with components \`< 30 px\` dropped | into how many pieces the spheroid has broken |
-| **Largest-Fragment Fraction** | C — fragmentation | largest component ÷ de-speckled mass ∈ (0,1] | \`1\` = one mass, \`→0\` = fully fragmented |
-| **Solidity** | D — porosity | \`N_FG / N_hull\` ∈ [0,1] | \`1\` = compact, \`→0\` = porous/dispersed |
-| **Hole Count** | D — porosity | enclosed holes in FG (Betti-1, holes \`≥ 30 px\`) | internal porosity |
-| **Core/Whole Equiv. Diameter** | E — absolute size | \`2·√(N/π)\` ×(µm/px) | absolute size context (not size-invariant) |
-
-The **speckle guard** (closing radius \`2 px\`, min component/hole \`30 px\`) is fixed
-and echoed by the endpoint (\`closing_radius_px\`, \`min_fragment_px\`) so results are
-reproducible. Axis-A **Radius of gyration** and other second-moment descriptors
-are deliberately *omitted* — their rank correlation with DI is ≈ 0.95 (same axis).
-
-## Edge Cases & Caveats
-
-- **No disintegration segmentation** (HRNet, CBAM-ResUNet, plain U-Net, sperm, wound):
-no core polygon is generated. \`Core Area = 0\`, \`Total Spheroid Area\` still
-reports the sum of all external polygons, but the **Disintegration Index is
-\`N/A\`** (\`reference="no_core"\`) — DI is core-anchored and undefined without a
-core. Area columns remain compatibility-safe for any model.
-- **Image with no polygons or no externals**: both metrics report \`0\`.
-- **Cropped spheroid touching image edge**: the centroid is biased, the
-rasterised area is truncated. Detected via bbox of mask = canvas edge —
-not auto-flagged in the export but visible by inspection.
-- **Multiple spheroids**: each spheroid whose dense centre the model labels as
-core (class 2) gets its own core polygon; a spheroid with no predicted core
-contributes to \`Total Spheroid Area\` only.
-- **Hollow / necrotic core**: a lighter necrotic centre may be under- or
-over-segmented by the model (class 2 vs corona), which is biologically
-ambiguous; manual inspection is recommended for spheroids known to have
-necrotic centres.
+The spheroid-disintegration model (UNet++ / EfficientNet-B5, model key
+\`spheroid_disintegration\`) assigns each pixel the class of highest score
+(argmax), so **no threshold applies** — the value stored with the segmentation
+is echoed, never used. The deployed checkpoint is one of the paper's five
+deposited production replicates (\`prod_s42\`); the paper's own numbers are
+five-replicate means unless a replicate is named.
 
 ## Source Files
 
-- **Core detection**: \`backend/segmentation/ml/model_loader.py\` (\`predict_disintegration\`)
-- **DI computation**: \`backend/segmentation/api/metrics_endpoint.py\`
-- **Per-image area orchestration**: \`backend/src/services/metrics/metricsCalculator.ts\`
-(\`calculateAllImageMetrics\`)
-- **Excel writer**: same file (\`exportToExcel\` — emits Image Name, Total
-Spheroid Area, Core Area, Invasion Area, Disintegration Index, and the metric
-panel: Radial Reach q95, Dispersed-Mass Fraction, Fragment Count,
-Largest-Fragment Fraction, Solidity, Hole Count, Core/Whole Equiv. Diameter)
+- **Inference + raster read-out**: \`backend/segmentation/ml/model_loader.py\`
+(\`predict_disintegration\`) and \`backend/segmentation/api/disintegration_metrics.py\`
+- **Polygons fallback**: \`backend/segmentation/api/metrics_endpoint.py\`
+(POST \`/api/disintegration-index\`)
+- **Per-image orchestration + Excel writer**:
+\`backend/src/services/metrics/metricsCalculator.ts\`
+(\`calculateAllImageMetrics\`, \`exportToExcel\`)
 `;
 }
 
