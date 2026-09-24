@@ -16,9 +16,13 @@ public model key was renamed from ``unet_attention_aspp`` to
 
 Weights load from a local ``spheroid_disintegration_unetpp_effb5_3class.pth``
 checkpoint (dict with ``model`` state + ``arch``/``encoder``/``num_classes``
-metadata); no network, no HuggingFace token.
+metadata); no network, no HuggingFace token. The file served is the paper's
+deposited production replicate ``prod_s42`` (SHA-256 d47d28ad…ea15, Zenodo
+10.5281/zenodo.22295117) under the unchanged filename — ONE replicate, whereas
+the paper reports five-replicate means; see ``scripts/download_weights.py``.
 """
 
+import contextlib
 import logging
 
 import cv2
@@ -76,12 +80,19 @@ class DisintegrationModel:
         )
 
     def _preprocess(self, rgb: np.ndarray) -> torch.Tensor:
-        """Replicate the training preprocessing exactly: CLAHE then ImageNet norm.
+        """CLAHE then ImageNet norm, as the paper's released ``predict.py``.
 
-        ``albumentations.CLAHE(clip_limit=3.0, tile_grid_size=(8, 8))`` on a
-        3-channel image converts to LAB, equalises the L channel with
-        ``cv2.createCLAHE`` and converts back — reproduced here with cv2 so no
-        albumentations dependency is needed. ``rgb`` is uint8 H×W×3.
+        ``albumentations.CLAHE`` on a 3-channel image converts to LAB,
+        equalises the L channel with ``cv2.createCLAHE`` and converts back —
+        reproduced here with cv2 so no albumentations dependency is needed.
+        ``rgb`` is uint8 H×W×3.
+
+        The clip limit is PINNED to 3.0. The released script passes
+        ``clip_limit=3.0``, which albumentations reads as the range (1, 3) and
+        re-samples for every image, so it is not deterministic; at 3.0 this
+        function matches it to 5e-7 (spheroid_rozpad
+        analysis/review_fixes/hub_clahe_stochastic_check.json). Do not "fix"
+        this into a random draw: one image must map to one mask here.
         """
         lab = cv2.cvtColor(rgb, cv2.COLOR_RGB2LAB)
         clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
@@ -109,8 +120,22 @@ class DisintegrationModel:
             # width — reflect requires pad < dim and would raise on tiny images.
             x = torch.nn.functional.pad(x, (0, pad_w, 0, pad_h), mode="replicate")
         x = x.to(self._device)
-        with torch.no_grad():
-            logits = self._model(x)
+        # The paper's released predict.py runs the forward pass under bfloat16
+        # autocast on CUDA (and plain fp32 on CPU), and every reported number
+        # came from that path; mirror it so the app's mask is the paper's mask.
+        # Guarded for pre-Ampere cards, which have no bf16.
+        use_bf16 = (
+            self._device == "cuda"
+            and torch.cuda.is_available()
+            and torch.cuda.is_bf16_supported()
+        )
+        amp = (
+            torch.autocast("cuda", dtype=torch.bfloat16)
+            if use_bf16
+            else contextlib.nullcontext()
+        )
+        with torch.no_grad(), amp:
+            logits = self._model(x).float()
         mask = logits.argmax(dim=1)[0].to("cpu").numpy().astype(np.uint8)
         return mask[:h, :w]
 

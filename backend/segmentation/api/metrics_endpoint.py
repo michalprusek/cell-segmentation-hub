@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
 import cv2
 import numpy as np
@@ -9,6 +9,7 @@ from pydantic import BaseModel
 # Import characteristic_functions from utils package
 from utils.characteristic_functions import calculate_all
 from api._errors import internal_error
+from api import disintegration_metrics as dm
 
 logger = logging.getLogger(__name__)
 
@@ -16,17 +17,26 @@ router = APIRouter(prefix="/api", tags=["metrics"])
 
 
 class DisintegrationRequest(BaseModel):
-    """Request body for DI computation.
+    """Request body for DI computation from STORED POLYGONS.
+
+    This is the fallback path. The authoritative read-out is computed from the
+    model's raster argmax mask at inference time (``predict_disintegration`` ->
+    ``image_metrics``) and persisted with the segmentation; this endpoint is used
+    only when that raster read-out is absent (segmented before it existed) or no
+    longer describes the polygons (the user edited them).
 
     `mask_polygons` (plural, preferred) is the list of every external polygon
     forming the total cell-covered area; they are rasterised into a single
     binary mask via union (cv2.fillPoly applied per polygon to the same
-    canvas). DI is then computed from that union.
-    `mask_polygon` (singular) is kept for backward compatibility — same as
-    passing a one-element list.
-    `core_polygons` is the list of dense core fragments; their combined
-    rasterised area defines R_core. `core_polygon` (singular) is the legacy
-    single-polygon variant.
+    canvas). `mask_polygon` (singular) is kept for backward compatibility —
+    same as passing a one-element list. `core_polygons` is the list of dense
+    core fragments; `core_polygon` (singular) is the legacy variant. The two
+    are composed into a 3-class mask (1 = foreground, 2 = core, core wins) and
+    scored by exactly the paper's algorithm (``api.disintegration_metrics``).
+    Holes are not represented: the disintegration model's polygons keep only
+    the outer contour of each region, which is one of the reasons this path
+    differs from the raster read-out.
+    `pixel_size_um` (optional) only feeds the input-scale warning.
     """
     mask_polygon: Optional[List[List[float]]] = None
     mask_polygons: Optional[List[List[List[float]]]] = None
@@ -34,43 +44,46 @@ class DisintegrationRequest(BaseModel):
     core_polygons: Optional[List[List[List[float]]]] = None
     image_width: int
     image_height: int
-
-
-# Speckle guard for the fragmentation/porosity panel metrics. Exposed in the
-# response so results are reproducible; keep in sync with the metrics guide.
-_DI_CLOSING_RADIUS_PX = 2
-_DI_MIN_FRAGMENT_PX = 30
-_DI_MIN_HOLE_PX = 30
+    pixel_size_um: Optional[float] = None
 
 
 class DisintegrationResponse(BaseModel):
+    """The paper's per-image read-out (compute_di.py field names), plus context.
+
+    ``di``/``w1`` are 0.0 N/A sentinels whenever ``reference != 'core'``;
+    callers must render them as N/A. Every other metric is None then.
+    """
     di: float
     w1: float
-    reference: str  # 'core' | 'no_core' | 'none'
-    n_pixels: int
-
-    # --- disintegration metric panel (populated only when reference == 'core';
-    # every field stays None for no_core / none so callers render N/A) ---
-    # Axis A (radial dispersal): 95th percentile of core-normalised distances.
-    radial_reach_q95: Optional[float] = None
-    # Axis B (mass partition): fraction of FG mass outside the core.
-    dispersed_mass_fraction: Optional[float] = None
-    # Axis C (fragmentation): connected components of FG after a speckle guard.
-    fragment_count: Optional[int] = None
-    largest_fragment_fraction: Optional[float] = None
-    # Axis D (porosity): FG solidity + enclosed-hole count (Betti-1).
+    # 'core' | 'no_core' | 'core_too_small' | 'none'
+    reference: str
+    n_pixels: int  # foreground pixels (corona + core) of the rasterised mask
+    source: str = "polygons"
+    algorithm: str = dm.ALGORITHM_SOURCE
+    algorithm_sha256: str = dm.ALGORITHM_SOURCE_SHA256
+    note: str = ""
+    # Index B (Lim et al.): outside-core fraction of the foreground. Co-primary with DI.
+    index_b: Optional[float] = None
+    # 90th percentile of core-normalised foreground distances (in core radii).
+    reach_p90: Optional[float] = None
+    # Raw 4-connected corona components (no closing, no size floor).
+    n_fragments: Optional[int] = None
+    largest_fragment_frac: Optional[float] = None
+    # Foreground pixels / convex-hull pixels (skimage.convex_hull_image).
     solidity: Optional[float] = None
-    hole_count: Optional[int] = None
-    # Rasterised region sizes (px) — FG = C ∪ K, so n_fg_px = n_core_px + n_corona_px.
-    n_core_px: Optional[int] = None
-    n_corona_px: Optional[int] = None
-    n_fg_px: Optional[int] = None
-    # Axis E (absolute size): equivalent diameters 2*sqrt(N/pi) in pixels.
-    core_equiv_diameter_px: Optional[float] = None
-    whole_equiv_diameter_px: Optional[float] = None
-    # Echoed speckle-guard settings for reproducibility.
-    closing_radius_px: Optional[int] = None
-    min_fragment_px: Optional[int] = None
+    area_core_px: Optional[int] = None
+    area_corona_px: Optional[int] = None
+    area_total_px: Optional[int] = None
+    # Core-anchor diagnostics (8-connected core components).
+    n_core_components: Optional[int] = None
+    largest_core_component_frac: Optional[float] = None
+    core_centroid_shift: Optional[float] = None
+    core_fragmented: Optional[int] = None
+    # Regime flags, as compute_di.py writes them (0/1).
+    unvalidated_regime: Optional[int] = None
+    below_validated_regime: Optional[int] = None
+    warnings: List[str] = []
+
 
 class Point(BaseModel):
     x: float
@@ -212,27 +225,29 @@ def batch_calculate_metrics(polygons: List[MetricsRequest]) -> List[MetricsRespo
 
 @router.post("/disintegration-index", response_model=DisintegrationResponse)
 def disintegration_index(request: DisintegrationRequest):
-    """Compute the per-image core-anchored Disintegration Index (DI).
+    """Core-anchored Disintegration Index (DI) + panel from stored polygons.
 
-    Implements the paper's core-anchored DI. Radial distances of every
-    foreground pixel are measured from the **core centroid** and normalised by
-    the core's effective radius ``R_C = sqrt(N_core / pi)`` to give
-    ``d̃ = d / R_C``. The empirical CDF of ``{d̃}`` is compared, via the
-    1-Wasserstein distance in inverse-cumulative (quantile) form, to the
-    analytical CDF of a uniform filled disk ``F_ref(d̃) = min(d̃², 1)`` whose
-    inverse is ``F_ref⁻¹(u) = sqrt(u)``::
+    The polygons are composed into a 3-class mask — every external polygon
+    filled with 1, every core polygon filled with 2 on top — and scored by
+    ``api.disintegration_metrics.disintegration_index``, a verbatim port of the
+    paper's ``compute_di.py``::
 
-        W1 = ∫₀¹ |d̃(u) − sqrt(u)| du ≈ (1/N) Σ_i |d̃₍ᵢ₎ − sqrt((i + 0.5) / N)|
-        DI = tanh(W1)  ∈ [0, 1)
+        R_C = sqrt(N_C / pi);  d~ = |p - c_C| / R_C  (every foreground pixel)
+        W1  = mean_u |d~_(u) - sqrt(u)|,  u = (i + 0.5) / N
+        DI  = tanh(W1)  in [0, 1)
 
-    An intact spheroid (foreground ≈ core) gives ``d̃ ≤ 1`` distributed as a
-    filled disk and ``DI ≈ 0``; as mass disperses to ``d̃ ≫ 1``, ``DI → 1``.
+    with Index B, reach_p90, raw corona fragments, solidity, the core-anchor
+    diagnostics and both regime flags defined exactly as the paper defines them.
 
-    A valid core is **required** — the DI is undefined without one. When no
-    usable core polygon is supplied (or it rasterises to zero pixels) the
-    endpoint returns ``reference='no_core'`` with ``di=0.0`` as an N/A
-    sentinel; callers must render it as N/A, never as a computed zero. There
-    is deliberately no equivalent-disk (``r_eff``) fallback.
+    DI is undefined without a usable core: no core polygon (or one that
+    rasterises to nothing) gives ``reference='no_core'``; a core below
+    ``MIN_CORE_PX`` gives ``reference='core_too_small'``; no foreground gives
+    ``'none'``. In each case ``di``/``w1`` are 0.0 N/A sentinels and every other
+    metric is None — callers must render N/A, never a computed zero.
+
+    This is the FALLBACK path: polygons have passed a minimum-area filter and
+    lost their holes, so for an unedited segmentation the raster read-out stored
+    at inference time is the authoritative one (``source`` says which was used).
     """
     try:
         H = int(request.image_height)
@@ -242,10 +257,6 @@ def disintegration_index(request: DisintegrationRequest):
                 status_code=400, detail="image_width/image_height must be positive"
             )
 
-        # Build a UNION mask from every supplied external polygon.
-        # `mask_polygons` (plural) is the preferred input — represents the full
-        # disintegration segmentation (all spheroids in one canvas). `mask_polygon`
-        # (singular) is a legacy alias for a single-element list.
         mask_polys: List[List[List[float]]] = []
         if request.mask_polygons:
             mask_polys = request.mask_polygons
@@ -257,88 +268,53 @@ def disintegration_index(request: DisintegrationRequest):
                 detail="At least one of mask_polygons / mask_polygon is required",
             )
 
-        mask = np.zeros((H, W), dtype=np.uint8)
-        valid_masks = 0
-        for poly in mask_polys:
-            pts = np.asarray(poly, dtype=np.float32)
-            if pts.ndim == 2 and pts.shape[1] == 2 and pts.shape[0] >= 3:
-                cv2.fillPoly(mask, [pts.astype(np.int32)], 1)
-                valid_masks += 1
-        if valid_masks == 0:
-            return DisintegrationResponse(
-                di=0.0, w1=0.0, reference="none", n_pixels=0
-            )
-        ys, xs = np.nonzero(mask)
-        n = int(xs.size)
-        if n == 0:
-            return DisintegrationResponse(
-                di=0.0, w1=0.0, reference="none", n_pixels=0
-            )
-
-        # Step 1: rasterise the REQUIRED core polygon(s). The core defines both
-        # the anchor (its centroid) and the normalising radius R_C; without a
-        # valid core the metric is undefined.
         candidate_cores: List[List[List[float]]] = []
         if request.core_polygons:
             candidate_cores = request.core_polygons
         elif request.core_polygon is not None:
             candidate_cores = [request.core_polygon]
 
-        core_mask = np.zeros((H, W), dtype=np.uint8)
-        valid_count = 0
-        for poly in candidate_cores:
-            core_pts_arr = np.asarray(poly, dtype=np.float32)
-            if (
-                core_pts_arr.ndim == 2
-                and core_pts_arr.shape[1] == 2
-                and core_pts_arr.shape[0] >= 3
-            ):
-                cv2.fillPoly(core_mask, [core_pts_arr.astype(np.int32)], 1)
-                valid_count += 1
-        n_core = int(core_mask.sum())
-        if valid_count == 0 or n_core == 0:
-            # DI requires a core. A malformed/off-canvas/collinear core (or no
-            # core at all) yields an explicit N/A instead of a fabricated value.
-            logger.warning(
-                "DI requires a valid core polygon; none usable "
-                "(provided=%d valid_shape=%d rasterised_pixels=%d image=%dx%d) "
-                "-> reference='no_core'",
-                len(candidate_cores), valid_count, n_core, W, H,
-            )
+        mask3 = np.zeros((H, W), dtype=np.uint8)
+        _fill_valid(mask3, mask_polys, 1)
+        n_core_valid = _fill_valid(mask3, candidate_cores, 2)
+
+        r = dm.raster_metrics(mask3, W, H, request.pixel_size_um)
+        n_fg = int(r["area_total_px"] or 0)
+        if r["reference"] != "core":
+            if r["reference"] == "no_core":
+                # DI requires a core. A malformed/off-canvas/collinear core (or
+                # no core at all) yields an explicit N/A, not a fabricated value.
+                logger.warning(
+                    "DI requires a valid core polygon; none usable "
+                    "(provided=%d valid_shape=%d image=%dx%d) -> reference='no_core'",
+                    len(candidate_cores), n_core_valid, W, H,
+                )
             return DisintegrationResponse(
-                di=0.0, w1=0.0, reference="no_core", n_pixels=n
+                di=0.0, w1=0.0, reference=r["reference"], n_pixels=n_fg,
+                note=r["note"], warnings=r["warnings"],
+                area_core_px=r["area_core_px"] if n_fg else None,
+                area_corona_px=r["area_corona_px"] if n_fg else None,
+                area_total_px=r["area_total_px"] if n_fg else None,
+                n_core_components=r["n_core_components"] if n_fg else None,
+                largest_core_component_frac=r["largest_core_component_frac"],
+                core_centroid_shift=r["core_centroid_shift"],
             )
-
-        r_ref = float(np.sqrt(n_core / np.pi))  # R_C
-        if r_ref <= 0:
-            return DisintegrationResponse(
-                di=0.0, w1=0.0, reference="no_core", n_pixels=n
-            )
-
-        # Step 2: anchor radial distances on the CORE centroid — the metric
-        # measures how far mass spread from where the dense core sits, not the
-        # smeared mask centroid that drifts toward the invasion zone.
-        ys_c, xs_c = np.nonzero(core_mask)
-        cx = float(xs_c.mean())
-        cy = float(ys_c.mean())
-        d_mask = np.hypot(xs - cx, ys - cy)
-
-        # Step 3: 1-Wasserstein distance between the core-normalised foreground
-        # distances and the analytical uniform-disk reference F_ref(d̃)=min(d̃²,1)
-        # (inverse sqrt(u)), in inverse-cumulative form. This is exactly eq. (1).
-        d_tilde = np.sort(d_mask / r_ref)
-        u = (np.arange(n, dtype=np.float64) + 0.5) / n
-        w1 = float(np.mean(np.abs(d_tilde - np.sqrt(u))))
-        di = float(np.tanh(w1))
-
-        # Step 4: companion panel metrics spanning the other disintegration axes,
-        # all derived from the same rasterised masks. FG = C ∪ K (union of the
-        # foreground mask and the core) so the core is always inside FG even if
-        # its polygon slightly overhangs the mask.
-        panel = _compute_panel_metrics(mask | core_mask, cx, cy, r_ref, n_core)
 
         return DisintegrationResponse(
-            di=di, w1=w1, reference="core", n_pixels=n, **panel
+            di=r["DI"], w1=r["W1"], reference="core", n_pixels=n_fg,
+            note=r["note"], warnings=r["warnings"],
+            index_b=r["index_B"], reach_p90=r["reach_p90"],
+            n_fragments=r["n_fragments"],
+            largest_fragment_frac=r["largest_fragment_frac"],
+            solidity=r["solidity"],
+            area_core_px=r["area_core_px"], area_corona_px=r["area_corona_px"],
+            area_total_px=r["area_total_px"],
+            n_core_components=r["n_core_components"],
+            largest_core_component_frac=r["largest_core_component_frac"],
+            core_centroid_shift=r["core_centroid_shift"],
+            core_fragmented=r["core_fragmented"],
+            unvalidated_regime=r["unvalidated_regime"],
+            below_validated_regime=r["below_validated_regime"],
         )
     except HTTPException:
         raise
@@ -356,87 +332,20 @@ def disintegration_index(request: DisintegrationRequest):
         ) from exc
 
 
-def _compute_panel_metrics(
-    fg_mask: np.ndarray, cx: float, cy: float, r_ref: float, n_core: int
-) -> Dict[str, Any]:
-    """Companion disintegration metrics from the rasterised foreground mask.
+def _fill_valid(canvas: np.ndarray, polys: List[List[List[float]]], value: int) -> int:
+    """fillPoly every well-formed polygon (>= 3 [x, y] vertices) with ``value``.
 
-    Spans the axes DI does not: radial reach (A), fragmentation (C) and porosity
-    (D), plus rasterised region sizes (E). All are size/resolution comparable or
-    reported with their pixel context. ``fg_mask`` is the binary FG = C ∪ K.
+    Returns how many polygons were well-formed. Vertices are truncated to int,
+    as the previous endpoint did, so a polygon a caller already sent keeps
+    covering the same pixels.
     """
-    ys_fg, xs_fg = np.nonzero(fg_mask)
-    n_fg = int(xs_fg.size)
-    n_corona = max(0, n_fg - int(n_core))
-
-    # Axis A companion — 95th percentile of core-normalised FG distances (reach
-    # of the leading edge, in core radii).
-    d_fg = np.hypot(xs_fg - cx, ys_fg - cy) / r_ref
-    radial_reach_q95 = float(np.percentile(d_fg, 95)) if n_fg > 0 else 0.0
-
-    # Axis C — fragmentation. Close small gaps, drop speckle, count components.
-    ksz = 2 * _DI_CLOSING_RADIUS_PX + 1
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (ksz, ksz))
-    closed = cv2.morphologyEx(fg_mask, cv2.MORPH_CLOSE, kernel)
-    num_labels, _labels, stats, _cent = cv2.connectedComponentsWithStats(
-        closed, connectivity=8
-    )
-    if num_labels > 1:
-        areas = stats[1:, cv2.CC_STAT_AREA]  # skip background label 0
-        kept = areas[areas >= _DI_MIN_FRAGMENT_PX]
-    else:
-        kept = np.empty(0, dtype=np.int64)
-    fragment_count = int(kept.size)
-    # Fraction of the de-speckled mass in the single largest piece. Denominator
-    # is the kept-component total (not raw n_fg) so closing can't push it past 1.
-    kept_total = int(kept.sum())
-    largest_fragment_fraction = (
-        float(int(kept.max()) / kept_total) if kept_total > 0 else 0.0
-    )
-
-    # Axis D — porosity. Solidity = FG area / convex-hull area; hole count is the
-    # number of enclosed background regions (Betti-1) above the speckle floor.
-    solidity = 0.0
-    if n_fg >= 3:
-        hull = cv2.convexHull(np.column_stack([xs_fg, ys_fg]).astype(np.int32))
-        hull_area = float(cv2.contourArea(hull))
-        if hull_area > 0:
-            # Clamp to 1.0: pixel-count / hull-polygon-area can drift slightly
-            # above 1 for convex shapes due to rasterisation.
-            solidity = min(1.0, float(n_fg / hull_area))
-
-    hole_count = 0
-    contours, hierarchy = cv2.findContours(
-        (fg_mask > 0).astype(np.uint8), cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE
-    )
-    if hierarchy is not None:
-        for idx, node in enumerate(hierarchy[0]):
-            # node = [next, prev, first_child, parent]; a parent means this is a
-            # hole contour nested inside a foreground component.
-            if node[3] != -1 and cv2.contourArea(contours[idx]) >= _DI_MIN_HOLE_PX:
-                hole_count += 1
-
-    # Axis B — dispersed-mass fraction f_disp = N_K / N_FG (share of mass outside
-    # the dense core). Axis E — equivalent diameters 2*sqrt(N/pi) in pixels.
-    dispersed_mass_fraction = float(n_corona / n_fg) if n_fg > 0 else 0.0
-    core_equiv_diameter_px = float(2.0 * np.sqrt(int(n_core) / np.pi))
-    whole_equiv_diameter_px = float(2.0 * np.sqrt(n_fg / np.pi)) if n_fg > 0 else 0.0
-
-    return {
-        "radial_reach_q95": radial_reach_q95,
-        "dispersed_mass_fraction": dispersed_mass_fraction,
-        "fragment_count": fragment_count,
-        "largest_fragment_fraction": largest_fragment_fraction,
-        "solidity": solidity,
-        "hole_count": hole_count,
-        "n_core_px": int(n_core),
-        "n_corona_px": n_corona,
-        "n_fg_px": n_fg,
-        "core_equiv_diameter_px": core_equiv_diameter_px,
-        "whole_equiv_diameter_px": whole_equiv_diameter_px,
-        "closing_radius_px": _DI_CLOSING_RADIUS_PX,
-        "min_fragment_px": _DI_MIN_FRAGMENT_PX,
-    }
+    n = 0
+    for poly in polys:
+        pts = np.asarray(poly, dtype=np.float32)
+        if pts.ndim == 2 and pts.shape[1] == 2 and pts.shape[0] >= 3:
+            cv2.fillPoly(canvas, [pts.astype(np.int32)], int(value))
+            n += 1
+    return n
 
 
 @router.get("/metrics-info")
