@@ -54,11 +54,27 @@ WEIGHTS_CONFIG = {
         "size": 429175255,  # 410 MB
         "sha256": None,
     },
+    # The spheroid-disintegration paper's deposited production replicate
+    # prod_s42 (UNet++/EfficientNet-B5, 3 classes), served under the unchanged
+    # filename. It is ONE of the paper's five production replicates; the
+    # paper's numbers are five-replicate means unless a replicate is named.
+    # Not on Google Drive: its home is the paper's weights deposit on Zenodo,
+    # which stays a DRAFT (reserved DOI, not downloadable) until the paper is
+    # published, so until then it is staged by hand and this entry only
+    # VERIFIES it. The sha256 is mandatory here: the checkpoint served before
+    # this entry existed (sha256 8b74ae88...) has exactly the same size, so a
+    # size check alone cannot tell the two apart.
     "spheroid_disintegration": {
-        "gdrive_id": "TODO",  # Fill after uploading the .pth to Google Drive
+        "gdrive_id": None,
         "filename": "spheroid_disintegration_unetpp_effb5_3class.pth",
-        "size": 123609986,  # ~118 MB (UNet++/EffB5 3-class)
-        "sha256": None,
+        "size": 123609986,  # bytes of the deposited prod_s42.pth (~118 MB)
+        "sha256": "d47d28ad338de2e7424969e8da1dc39df2663bcf1777e681647caffa1f49ea15",
+        "source": (
+            "Zenodo record 10.5281/zenodo.22295117 (spheroid-disintegration "
+            "paper, deposited weights, file prod_s42.pth) -- a draft until "
+            "publication, so copy prod_s42.pth by hand to this filename and "
+            "re-run with --verify-only"
+        ),
     },
 }
 
@@ -239,7 +255,23 @@ def download_all_weights(weights_dir: Path, force: bool = False, verify_only: bo
                     continue
 
         # Check if Google Drive ID is configured
-        gdrive_id = config.get("gdrive_id", "")
+        gdrive_id = config.get("gdrive_id") or ""
+        if config.get("source") and not gdrive_id:
+            # Not hosted on Google Drive (e.g. a paper's deposit that is still
+            # a draft): the file is staged by hand and only verified here.
+            print(f"\n{model_name}: no automatic download.")
+            print(f"   Source: {config['source']}")
+            if dest_path.exists() and dest_path.stat().st_size == config["size"]:
+                if verify_checksum(dest_path, config["sha256"]):
+                    print(f"   ✓ Staged file verified: {dest_path}")
+                    continue
+                print(f"   ✗ {dest_path} has the right size but the WRONG checksum "
+                      f"-- it is not the pinned checkpoint")
+            else:
+                print(f"   ✗ {dest_path} missing or of the wrong size "
+                      f"(expected {config['size']} bytes)")
+            success = False
+            continue
         if not gdrive_id or "YOUR_FILE_ID_HERE" in gdrive_id or "REPLACE" in gdrive_id:
             print(f"\n❌ ERROR: {model_name} Google Drive ID not configured!")
             print(f"")
