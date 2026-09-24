@@ -6,10 +6,11 @@ paper repository (GigaScience submission, released code DOI
 ``core_components``, ``disintegration_index`` and ``_convex_hull_area`` and the
 constants above them are copied VERBATIM from that file (the CLI ``main`` is
 not). ``ALGORITHM_SOURCE_SHA256`` is the SHA-256 of the exact file they were
-copied from; ``tests/unit/test_disintegration_parity.py`` checks this port
-against values that file computed on three synthetic masks, to 1e-9. When the
-paper's file changes, re-copy the four functions, update the hash and
-regenerate the fixtures (``tests/fixtures/di_parity/README.md`` says how) —
+copied from; ``backend/segmentation_cpu_tests/test_disintegration_parity.py``
+checks this port against values that file computed on five synthetic masks
+(three with a defined DI), to 1e-9. When the paper's file changes, re-copy the
+four functions, update the hash and regenerate the fixtures
+(``backend/segmentation_cpu_tests/fixtures/di_parity/README.md`` says how) —
 never edit the copied bodies here on their own, or the web app and the paper
 stop computing the same number.
 
