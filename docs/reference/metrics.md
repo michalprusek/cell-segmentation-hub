@@ -70,8 +70,14 @@ DI = tanh(W1)   ∈ [0, 1)
 An intact spheroid (foreground ≈ core) is distributed like a filled disk and
 gives **DI ≈ 0**; as mass disperses to `d̃ ≫ 1`, **DI → 1**.
 
-Foreground is the **union of every external polygon**, with the core included so
-`FG = corona ∪ core`.
+Foreground is `FG = corona ∪ core`. It is read from the **model's raster mask**
+at segmentation time (`DI Source` = `raster`); only for a segmentation whose
+polygons were edited afterwards (or that predates 2026-09-24) is it the union of
+the stored external polygons with the cores drawn on top (`DI Source` =
+`polygons`). Both paths run the same port of the paper's `compute_di.py`
+(`backend/segmentation/api/disintegration_metrics.py`). A core below
+**16 048 px** (the smallest expert core of the paper's dataset) leaves DI
+undefined, like a missing one.
 
 > **A core is required. There is deliberately no fallback.** Without a usable
 > core polygon the index is undefined and every DI-derived column is reported as
@@ -81,15 +87,21 @@ Foreground is the **union of every external polygon**, with the core included so
 
 ### The panel metrics beside it
 
-| Metric                         | Definition                                                                                           |
-| ------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| `Radial Reach q95 (R_core)`    | 95th percentile of `d/R_C` over the foreground                                                       |
-| `Dispersed-Mass Fraction`      | corona pixels / foreground pixels                                                                    |
-| `Fragment Count`               | 8-connected components after an elliptical morphological close, dropping specks below a minimum size |
-| `Largest-Fragment Fraction`    | largest kept component / all kept components                                                         |
-| `Solidity`                     | `min(1, foreground pixels / convex hull area)`                                                       |
-| `Hole Count`                   | enclosed background contours above a minimum size                                                    |
-| `Core / Whole Equiv. Diameter` | `2√(N/π)` for the core and for the whole foreground                                                  |
+| Column                              | Definition (compute_di.py)                                                      |
+| ----------------------------------- | ------------------------------------------------------------------------------- |
+| `Index B (outside-core fraction)`   | corona pixels / foreground pixels — Lim's Index B, co-primary with DI           |
+| `W1`                                | the 1-Wasserstein distance before `tanh`                                         |
+| `Reach p90 (R_core)`                | 90th percentile of `d/R_C` over the foreground                                   |
+| `Corona Fragments`                  | 4-connected components of the corona — no closing, no size floor                 |
+| `Largest-Fragment Fraction`         | largest corona component / corona                                                |
+| `Solidity`                          | foreground pixels / pixels of its convex hull                                    |
+| `Core Components`                   | 8-connected components of the core                                               |
+| `Largest Core Component Fraction`   | largest core component / core                                                    |
+| `Core Centroid Shift (R_core)`      | shift of the core centroid caused by the minor core pieces                       |
+| `Core Fragmented (0/1)`             | largest core piece < 99 % of the core, or centroid shift > 0.1 `R_C` — inspect   |
+| `Unvalidated Regime (0/1)`          | Index B in `[0.15, 0.30)`, a range absent from the validation data               |
+| `Below Validated Floor (0/1)`       | DI < 0.6: a screen ("not grossly disintegrated"), not a graded value             |
+| `Input-Scale Warning`               | frame ≠ 2048 × 2048 px, or an entered scale ≠ 1.28 µm/px by more than 10 %       |
 
 If the index calculation fails outright the areas are still computed locally and
 reported; only the DI columns drop out.

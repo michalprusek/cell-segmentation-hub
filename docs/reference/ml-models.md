@@ -25,7 +25,7 @@ incompatible pair with a 400 even if you post it directly.
 | `unet_spherohq`           | UNet (Fastest)                     | `spheroid`          | Closed polygons | 0.5               | ~0.18 s (p95 0.29 s) | small       |
 | `segformer`               | SegFormer                          | `spheroid`          | Closed polygons | 0.5               | ~0.20 s              | small       |
 | `mamba_unet`              | Mamba-UNet                         | `spheroid`          | Closed polygons | 0.5               | ~0.24 s              | large       |
-| `spheroid_disintegration` | Spheroid Disintegration            | `spheroid_invasive` | Core + corona   | 0.2               | ~0.70 s              | medium      |
+| `spheroid_disintegration` | Spheroid Disintegration            | `spheroid_invasive` | Core + corona   | none (argmax)     | ~0.70 s              | medium      |
 | `wound`                   | Wound Healing (Scratch Assay)      | `wound`             | Closed polygons | 0.5               | ~0.03 s              | medium      |
 | `sperm`                   | Sperm Morphology                   | `sperm`             | Part polylines  | 0.5               | ~0.30 s              | medium      |
 | `microtubule`             | Microtubule (ResEnc-M + instancer) | `microtubules`      | **Polylines**   | 0.98 (fixed)      | ~0.6 s (p95 ~2 s)    | large       |
@@ -134,8 +134,33 @@ matrix, where the quantity of interest is how much has left the dense core.
 - Architecture: **UNet++ with an EfficientNet-B5 encoder, 3 classes** —
   `0 = background`, `1 = corona (dispersing cells)`, `2 = dense core`. The
   per-pixel class is `argmax` over the three logits.
-- Checkpoint: `weights/spheroid_disintegration_unetpp_effb5_3class.pth`
-- Default threshold **0.2**, not 0.5 — the corona is faint by construction.
+- Checkpoint: `weights/spheroid_disintegration_unetpp_effb5_3class.pth` — the
+  spheroid-disintegration paper's deposited production replicate **`prod_s42`**,
+  SHA-256 `d47d28ad338de2e7424969e8da1dc39df2663bcf1777e681647caffa1f49ea15`,
+  123 609 986 bytes (Zenodo 10.5281/zenodo.22295117, a draft until the paper is
+  published, so it is staged by hand; `scripts/download_weights.py --verify-only`
+  refuses any other file — the checkpoint served before 2026-09-24 has the same
+  size and a different hash). It is ONE of the paper's five replicates; the
+  paper's numbers are five-replicate means unless a replicate is named.
+- **No threshold.** The decision is an argmax; the registry carries a neutral
+  `0.5`, the API echoes whatever is sent and reports `threshold_applies: false`.
+  (The 0.2 this page used to list was never a tuned value.)
+- Inference follows the paper's released `predict.py`: grey level replicated to
+  three channels, CLAHE (8 × 8 tiles) + ImageNet normalisation, one full-frame
+  pass, bfloat16 autocast on a CUDA card with bf16 (fp32 otherwise), no TTA, no
+  sliding window. **One deliberate difference:** `predict.py` builds
+  `A.CLAHE(clip_limit=3.0)`, which albumentations reads as the range (1, 3) and
+  samples anew for every image, so the released script is not deterministic.
+  The app pins the clip limit to 3.0. At 3.0 the app's preprocessed tensor
+  equals the released one to 5e-7 and its mask is identical (checked on one 0 h
+  and one 48 h image with `prod_s42`, CPU fp32); across clip limits 1–3 the
+  48 h image's DI moved from 0.733 to 0.783. Source:
+  `spheroid_rozpad/analysis/review_fixes/hub_clahe_stochastic_check.json`.
+- The per-image read-out (DI, Index B, reach, fragments, core diagnostics,
+  regime flags) is computed from the **raster** argmax mask at inference time by
+  `api/disintegration_metrics.py`, a verbatim port of the paper's
+  `compute_di.py`, and returned as `image_metrics`; `warnings` carries the
+  input-scale check (validated: 2048 × 2048 px at ~1.28 µm/px).
 - The core is **predicted directly**, not derived by thresholding intensity
   inside the outer boundary. That matters: the previous binary model inferred
   the core heuristically and mis-scaled it at 0 h, which biased every

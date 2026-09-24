@@ -15,8 +15,16 @@ One model, forced: **Spheroid Disintegration** — UNet++ with an EfficientNet-B
 encoder, three classes: `background`, `corona` (dispersing cells) and `dense
 core`.
 
-The default threshold is **0.2**, not 0.5, because the corona is faint by
-construction.
+**There is no threshold.** Each pixel takes the class of highest score
+(argmax), so the value the interface sends is echoed and never applied — the
+response says `threshold_applies: false`. (Until 2026-09 this page claimed a
+tuned default of 0.2; no such tuning exists.)
+
+The served checkpoint is `prod_s42`, one of the five production replicates
+deposited with the spheroid-disintegration paper (SHA-256
+`d47d28ad338de2e7424969e8da1dc39df2663bcf1777e681647caffa1f49ea15`, Zenodo
+10.5281/zenodo.22295117). The paper's numbers are five-replicate means unless a
+replicate is named, so a single image scored here is one replicate's read-out.
 
 The **core is predicted directly**, not derived by thresholding intensity inside
 the outer boundary. That matters more than it sounds: the previous binary model
@@ -32,6 +40,13 @@ See [ML models](../../reference/ml-models.md#spheroid_disintegration--spheroid-d
 Bright-field or phase-contrast images of spheroids at successive time points,
 typically a 0 h control against later time points. Both the core and the
 dispersing corona need to be visible.
+
+> **Validated regime: 2048 × 2048 px frames at ~1.28 µm/px (5× objective).**
+> Nothing else was tested. A frame of another size, or a µm/px scale entered at
+> export that differs from 1.28 by more than 10 %, is still scored, but the row
+> carries an `Input-Scale Warning`. Cores smaller than 16 048 px — the smallest
+> expert core in the paper's dataset — leave DI undefined, so a down-sampled
+> frame will often read `N/A`.
 
 ---
 
@@ -52,8 +67,18 @@ type-specific behaviour in the editor.
 
 ## The Disintegration Index
 
-**It is computed at export time, not in the editor.** There is no DI panel on
-the canvas.
+**It is computed from the model's raster mask at segmentation time** and
+stored with the segmentation; the export reads it. There is no DI panel on the
+canvas. The polygons you see are for display and editing: they drop every
+region under 50 px and every hole, which are exactly the far corona cells that
+set the index's reach. **Once you edit a segmentation's polygons**, its stored
+read-out no longer describes them, and the export scores the edited polygons
+instead with the same algorithm — the `DI Source` column says `polygons` and
+the `Note` column says why. Re-segment to get the raster read-out back.
+
+The algorithm is a verbatim port of the paper's released `compute_di.py`, and a
+test (`backend/segmentation_cpu_tests/test_disintegration_parity.py`) holds it
+to that file's output to 1e-9.
 
 Every foreground pixel's distance from the **core centroid** is normalised by the
 core's effective radius, and the resulting distribution is compared against the
@@ -64,7 +89,7 @@ the index is `tanh` of that distance.
 - As mass disperses, **DI → 1**.
 
 > **A core is required, and there is deliberately no fallback.** Without a valid
-> core polygon the index is undefined, and every DI-derived column is written as
+> core — or with a core below 16 048 px — the index is undefined, and every DI-derived column is written as
 > the literal string **`N/A`** — never as a computed zero. An earlier
 > equivalent-disk fallback was removed because it produced plausible-looking
 > numbers out of nothing.
@@ -80,9 +105,16 @@ The metrics workbook has a single sheet, **`Image Metrics`**, with **one row per
 image** — not per polygon, because the index is a whole-image property:
 
 `Image Name`, `Total Spheroid Area`, `Core Area`, `Invasion Area`,
-`Disintegration Index`, `Radial Reach q95 (R_core)`, `Dispersed-Mass Fraction`,
-`Fragment Count`, `Largest-Fragment Fraction`, `Solidity`, `Hole Count`,
-`Core Equiv. Diameter`, `Whole Equiv. Diameter`.
+`Disintegration Index`, `Index B (outside-core fraction)`, `W1`,
+`Reach p90 (R_core)`, `Corona Fragments`, `Largest-Fragment Fraction`,
+`Solidity`, `Core Components`, `Largest Core Component Fraction`,
+`Core Centroid Shift (R_core)`, `Core Fragmented (0/1)`,
+`Unvalidated Regime: Index B 0.15-0.30 (0/1)`,
+`Below Validated Floor: DI < 0.6 (0/1)`, `DI Source`, `Note`,
+`Input-Scale Warning`.
+
+Index B (Lim's outside-core fraction) is reported beside DI as a co-primary
+read-out.
 
 Areas are still reported even when the index calculation fails; only the
 index columns drop out in that case.
