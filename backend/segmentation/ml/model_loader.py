@@ -34,6 +34,8 @@ from models.unet import UNet
 
 # Optional sperm model import
 _sperm_import_error = None
+# Sperm pipeline models and how many parts each predicts.
+SPERM_MODELS = {'sperm': 3, 'sperm_2part': 2}
 try:
     from models.sperm import SpermModel
 except ImportError as e:
@@ -261,6 +263,14 @@ class ModelLoader:
             'finetuned_path': 'sperm_final/best_model.pth',
             'config_path': None
         },
+        # Two-part sperm (head + tail only): v8 fine-tuned on the 'Dva segmenty'
+        # dataset. Same architecture and pipeline as 'sperm', different part chain.
+        'sperm_2part': {
+            'class': SpermModel,
+            'pretrained_path': 'weights/sperm_2part.pth',
+            'finetuned_path': 'weights/sperm_2part.pth',
+            'config_path': None
+        },
         'wound': {
             'class': WoundModel,  # Will be None if segmentation_models_pytorch not installed
             'pretrained_path': 'weights/wound_mitb5.ckpt',
@@ -436,13 +446,13 @@ class ModelLoader:
                 self.loaded_models[model_name] = model
                 logger.info(f"Successfully loaded SegFormer model from: {weights_full_path}")
                 return model
-            elif model_name == 'sperm':
+            elif model_name in SPERM_MODELS:
                 # Sperm segmentation model — uses its own pipeline (Mask2Former + graph assembly)
                 if SpermModel is None:
                     raise ImportError(
                         f"Sperm model architecture not available: {_sperm_import_error}"
                     )
-                model = SpermModel()
+                model = SpermModel(num_parts=SPERM_MODELS[model_name])
                 model.load_weights(str(weights_full_path), self.device)
                 self.loaded_models[model_name] = model
                 logger.info(f"Successfully loaded sperm pipeline model from: {weights_full_path}")
@@ -979,7 +989,8 @@ class ModelLoader:
             self.release_model(model_name)
 
     def predict_sperm(self, image: Image.Image, threshold: float = 0.3,
-                      score_threshold: float = 0.95, timeout: Optional[float] = None) -> Dict[str, Any]:
+                      score_threshold: float = 0.95, timeout: Optional[float] = None,
+                      model_name: str = 'sperm') -> Dict[str, Any]:
         """Run the sperm-specific pipeline (Mask2Former + graph assembly + polyline extraction).
 
         Unlike predict() which uses a standard segmentation pipeline, this method
@@ -993,16 +1004,18 @@ class ModelLoader:
         """
         import time as _time
 
+        if model_name not in SPERM_MODELS:
+            raise ValueError(f"Not a sperm model: {model_name}")
         # Ensure sperm model is loaded (with LRU eviction if needed)
-        self.get_model('sperm')
-        if 'sperm' not in self.loaded_models:
-            raise ValueError("Sperm model not loaded. Load it first with load_model('sperm')")
+        self.get_model(model_name)
+        if model_name not in self.loaded_models:
+            raise ValueError(f"Sperm model not loaded. Load it first with load_model('{model_name}')")
 
-        sperm_model = self.loaded_models['sperm']
+        sperm_model = self.loaded_models[model_name]
         original_size = image.size  # (width, height)
 
         self.is_processing = True
-        self.current_model = 'sperm'
+        self.current_model = model_name
         start_time = _time.time()
 
         try:
@@ -1054,7 +1067,7 @@ class ModelLoader:
             logger.info(f"Sperm pipeline: {len(sperm_list)} sperm, {len(polylines)} polylines in {processing_time:.2f}s")
 
             return {
-                "model_used": "sperm",
+                "model_used": model_name,
                 "threshold_used": threshold,
                 "image_size": {"width": original_size[0], "height": original_size[1]},
                 "polygons": [],
@@ -1079,7 +1092,7 @@ class ModelLoader:
         finally:
             self.is_processing = False
             self.current_model = None
-            self.release_model('sperm')
+            self.release_model(model_name)
 
     def predict_wound(self, image: Image.Image, threshold: float = 0.5,
                       detect_holes: bool = True,

@@ -80,7 +80,13 @@ describe('ProjectModelSelector', () => {
         screen.getByTestId(`project-model-option-${id}`)
       ).toBeInTheDocument();
     }
-    for (const id of ['wound', 'sperm', 'microtubule', 'neurite_soma']) {
+    for (const id of [
+      'wound',
+      'sperm',
+      'sperm_2part',
+      'microtubule',
+      'neurite_soma',
+    ]) {
       expect(
         screen.queryByTestId(`project-model-option-${id}`)
       ).not.toBeInTheDocument();

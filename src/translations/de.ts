@@ -594,6 +594,11 @@ export default {
           description:
             'Spermien-Morphologiemodell mit Skelettextraktion zur Messung von Kopf, Mittelstück und Schwanz',
         },
+        sperm_2part: {
+          name: 'Spermienmorphologie (Kopf + Schwanz)',
+          description:
+            'Zweiteiliges Spermienmodell: misst Kopf und Schwanz, ohne separates Mittelstück',
+        },
         wound: {
           name: 'Wundheilung (Scratch-Assay)',
           description:
@@ -641,6 +646,8 @@ export default {
         'U-Net mit bidirektionalem Mamba (State-Space)-Bottleneck (90,75M Parameter). Beste Out-of-Distribution-Generalisierung der Plattform (HTS-Seg IoU 0,587) – für externe Labore, unbekannte Optik, behandelte Proben und ungewöhnliche Sphäroid-Morphologien.',
       sperm:
         'Spermienmorphologie-Modell mit Skelettextraktion zur Messung von Kopf, Mittelstück und Schwanz',
+      sperm_2part:
+        'Zweiteiliges Spermienmodell (Kopf + Schwanz, ohne Mittelstück). Gleiche Architektur wie Spermienmorphologie, feinabgestimmt auf Spermien, die nur als Kopf und Schwanz annotiert sind.',
       wound:
         'U-Net + MiT-B5 (SegFormer-Encoder) Modell für die Wundsegmentierung in Scratch-Assay-Mikroskopie. Eine binäre Wundregion pro Bild; ideal für Heilungsverlauf-Timelapses.',
       microtubule:

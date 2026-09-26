@@ -198,6 +198,23 @@ export const MODEL_REGISTRY = {
     i18nKey: 'sperm',
     compatibleProjectTypes: ['sperm'],
   },
+  sperm_2part: {
+    size: 'medium',
+    defaultThreshold: 0.5,
+    category: 'sperm',
+    performance: {
+      avgTimePerImage: 0.3,
+      throughput: 3.3,
+      p95Latency: 0.45,
+      batchSize: 1,
+    },
+    name: 'Sperm Morphology (head + tail)',
+    displayName: 'Sperm Morphology (head + tail)',
+    description:
+      'Two-part sperm model: measures the head and the tail, without a separate midpiece',
+    i18nKey: 'sperm_2part',
+    compatibleProjectTypes: ['sperm'],
+  },
   wound: {
     size: 'medium',
     defaultThreshold: 0.5,

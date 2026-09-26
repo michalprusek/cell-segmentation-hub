@@ -350,6 +350,27 @@ def _orient_polyline_toward(
     return polyline
 
 
+def _join_head_tail(h_poly, t_poly):
+    """Orient head→tail by their closest endpoints and weld the junction.
+
+    Returns (head, tail) with head[-1] == tail[0] == midpoint of the two
+    endpoints that were closest to each other.
+    """
+    best = None
+    for h_rev in (False, True):
+        h = list(reversed(h_poly)) if h_rev else list(h_poly)
+        for t_rev in (False, True):
+            t = list(reversed(t_poly)) if t_rev else list(t_poly)
+            d = float(np.linalg.norm(np.array(h[-1]) - np.array(t[0])))
+            if best is None or d < best[0]:
+                best = (d, h, t)
+    _, h, t = best
+    junction = tuple(((np.array(h[-1]) + np.array(t[0])) / 2.0).tolist())
+    h[-1] = junction
+    t[0] = junction
+    return h, t
+
+
 def connect_sperm_polylines(
     sperm: dict,
     mask_threshold: float = 0.3,
@@ -398,6 +419,12 @@ def connect_sperm_polylines(
     h_poly = polylines["head"]
     m_poly = polylines["midpiece"]
     t_poly = polylines["tail"]
+
+    # Two-part sperm (no midpiece): head and tail meet directly. Both are
+    # elongated, so orient by the closest endpoint pair, not by centroids.
+    if not m_poly and len(h_poly) >= 2 and len(t_poly) >= 2:
+        h_poly, t_poly = _join_head_tail(h_poly, t_poly)
+        return {"head": h_poly, "midpiece": m_poly, "tail": t_poly}
 
     # Orient midpiece: start near head, end near tail
     if len(m_poly) >= 2:

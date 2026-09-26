@@ -19,6 +19,7 @@ const CANONICAL_IDS = [
   'segformer',
   'mamba_unet',
   'sperm',
+  'sperm_2part',
   'wound',
   'microtubule',
   'microcapsule',
@@ -26,7 +27,7 @@ const CANONICAL_IDS = [
 ] as const;
 
 describe('backend model registry SSOT', () => {
-  it('registry keys are exactly the canonical 11 models', () => {
+  it('registry keys are exactly the canonical 12 models', () => {
     expect(Object.keys(MODEL_REGISTRY).sort()).toEqual(
       [...CANONICAL_IDS].sort()
     );
@@ -49,7 +50,7 @@ describe('backend model registry SSOT', () => {
       ],
       spheroid_invasive: ['spheroid_disintegration'],
       wound: ['wound'],
-      sperm: ['sperm'],
+      sperm: ['sperm', 'sperm_2part'],
       microtubules: ['microtubule'],
       microcapsule: ['microcapsule'],
       neurite: ['neurite_soma'],

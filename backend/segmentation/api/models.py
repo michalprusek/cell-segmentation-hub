@@ -12,6 +12,7 @@ class ModelType(str, Enum):
     SEGFORMER = "segformer"
     MAMBA_UNET = "mamba_unet"
     SPERM = "sperm"
+    SPERM_2PART = "sperm_2part"
     WOUND = "wound"
     MICROCAPSULE = "microcapsule"
     MICROTUBULE = "microtubule"

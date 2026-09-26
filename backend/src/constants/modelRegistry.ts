@@ -45,6 +45,7 @@ export const MODEL_REGISTRY = {
   segformer: { compatibleProjectTypes: ['spheroid'] },
   mamba_unet: { compatibleProjectTypes: ['spheroid'] },
   sperm: { compatibleProjectTypes: ['sperm'] },
+  sperm_2part: { compatibleProjectTypes: ['sperm'] },
   wound: { compatibleProjectTypes: ['wound'] },
   microtubule: { compatibleProjectTypes: ['microtubules'] },
   microcapsule: { compatibleProjectTypes: ['microcapsule'] },
