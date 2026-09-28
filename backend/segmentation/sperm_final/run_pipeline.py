@@ -27,7 +27,7 @@ from sperm_final.config import ModelConfig, GraphAssemblyConfig
 from sperm_final.data.dataset import IMAGENET_MEAN, IMAGENET_STD
 from sperm_final.models.mask2former import Mask2FormerModel
 from sperm_final.inference.predict import predict_full_image_for_graph
-from sperm_final.inference.graph_assembly import assemble_sperm_graph
+from sperm_final.inference.graph_assembly import THREE_PART, PartScheme, assemble_sperm_graph
 from sperm_final.inference.postprocess import connect_sperm_polylines
 
 
@@ -132,8 +132,12 @@ def process_image(
     device: torch.device,
     mask_threshold: float = 0.3,
     score_threshold: float = 0.95,
+    scheme: PartScheme = THREE_PART,
 ) -> tuple:
     """Run full pipeline on one image.
+
+    `scheme` selects the part chain: THREE_PART (head/midpiece/tail) or
+    TWO_PART (head/tail, the 'Dva segmenty' model).
 
     Returns:
         (sperm_list, connected_polylines_list)
@@ -154,7 +158,7 @@ def process_image(
 
     # Step 2: Graph assembly (H+M+T grouping)
     config = GraphAssemblyConfig()
-    sperm_list = assemble_sperm_graph(instances, mask_threshold, config)
+    sperm_list = assemble_sperm_graph(instances, mask_threshold, config, scheme)
 
     # Step 3: Connected polylines
     polylines_list = []

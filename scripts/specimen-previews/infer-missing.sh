@@ -50,7 +50,10 @@ while IFS=$'\t' read -r id model ptype image_id w h source origin; do
   python3 - "$response" "$STAGE/polys/$image_id.json" "$id" <<'PY'
 import json, sys
 response, out, row_id = sys.argv[1], sys.argv[2], sys.argv[3]
-polygons = json.load(open(response))['polygons']
+result = json.load(open(response))
+# Polyline models (sperm, microtubule) return their output under `polylines`;
+# the DB stores both kinds in one list, and generate.py draws either.
+polygons = result['polygons'] + result.get('polylines', [])
 if not polygons:
     raise SystemExit('%s: the model returned no polygons for this frame' % row_id)
 json.dump(polygons, open(out, 'w'))

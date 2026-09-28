@@ -1,8 +1,9 @@
 """Min-cost max-flow graph optimization for sperm part assembly.
 
-Graph enforces complete sperm only (Head→Midpiece→Tail):
-- Only Heads can start a flow path (S → Head_in)
-- Only Tails can end a flow path (Tail_out → T)
+Graph enforces complete sperm only, along a part chain (PartScheme):
+three-part Head→Midpiece→Tail, or two-part Head→Tail.
+- Only the first class of the chain can start a flow path (S → Head_in)
+- Only the last class can end a flow path (Tail_out → T)
 - Incomplete paths are impossible by construction
 
 Handles containment via effective area discounting, crossing detection
@@ -11,7 +12,8 @@ via skeleton junction analysis, and same-class fragment merging.
 
 import logging
 from collections import deque
-from typing import Dict, List, Optional, Tuple
+from dataclasses import dataclass
+from typing import Dict, FrozenSet, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +23,30 @@ import networkx as nx
 from skimage.morphology import skeletonize
 
 from sperm_final.config import GraphAssemblyConfig
+
+
+@dataclass(frozen=True)
+class PartScheme:
+    """Which sperm parts a model predicts and how they chain.
+
+    chain: class ids in anatomical order; consecutive classes get connection
+        edges, the first enters from S, the last exits to T, and a sperm is
+        complete only when every class of the chain is on its path.
+    blob_classes: classes treated as compact blobs (centroid distance, no
+        skeleton, no orientation/crossing guards). The three-part head is a
+        short blob; the two-part head is the whole elongated helix.
+    """
+    chain: Tuple[int, ...]
+    blob_classes: FrozenSet[int]
+
+    @property
+    def classes(self) -> FrozenSet[int]:
+        return frozenset(self.chain)
+
+
+THREE_PART = PartScheme(chain=(1, 2, 3), blob_classes=frozenset({1}))
+TWO_PART = PartScheme(chain=(1, 3), blob_classes=frozenset())
+CLASS_KEYS = {1: "head", 2: "midpiece", 3: "tail"}
 
 
 def _skeleton_endpoints_and_tangents(
@@ -98,6 +124,7 @@ def compute_instance_features(
     inst: Dict,
     mask_threshold: float,
     tangent_n_pts: int = 8,
+    scheme: PartScheme = THREE_PART,
 ) -> Dict:
     """Compute geometric features for a single instance.
 
@@ -129,9 +156,9 @@ def compute_instance_features(
     else:
         bbox = (0, 0, 0, 0)
 
-    # Skeleton endpoints and tangents (skip for Head — blob-like)
+    # Skeleton endpoints and tangents (skipped for blob-like classes)
     ep_tangents = []
-    if inst["cls"] != 1 and area >= 10:
+    if inst["cls"] not in scheme.blob_classes and area >= 10:
         ep_tangents = _skeleton_endpoints_and_tangents(binary, tangent_n_pts)
 
     return {
@@ -240,6 +267,7 @@ def connection_cost(
     feat_a: Dict,
     feat_b: Dict,
     config: GraphAssemblyConfig,
+    scheme: PartScheme = THREE_PART,
 ) -> Optional[int]:
     """Compute cost of connecting two cross-class instances.
 
@@ -252,8 +280,8 @@ def connection_cost(
     """
     cls_a, cls_b = feat_a["cls"], feat_b["cls"]
 
-    # Head uses centroid-based distance
-    if cls_a == 1:  # Head -> Midpiece
+    # Blob-like source (three-part head) uses centroid-based distance
+    if cls_a in scheme.blob_classes:  # Head -> Midpiece
         dist = _endpoint_distance_head(feat_a, feat_b)
         if dist > config.max_connection_dist:
             return None
@@ -274,7 +302,7 @@ def connection_cost(
             angle_penalty = best_angle
         return max(1, round(config.w_dist * dist + config.w_angle * angle_penalty))
 
-    # Midpiece -> Tail (both have skeleton endpoints)
+    # Elongated -> elongated (Midpiece -> Tail, two-part Head -> Tail)
     if not feat_a["ep_tangents"] or not feat_b["ep_tangents"]:
         # Fallback: centroid distance
         dist = np.linalg.norm(
@@ -324,6 +352,7 @@ def merge_cost(
     feat_a: Dict,
     feat_b: Dict,
     config: GraphAssemblyConfig,
+    scheme: PartScheme = THREE_PART,
 ) -> Optional[int]:
     """Compute cost of merging two same-class instances.
 
@@ -333,8 +362,8 @@ def merge_cost(
     bin_a = feat_a["binary"]
     bin_b = feat_b["binary"]
 
-    # Orientation guard for non-Head classes
-    if feat_a["cls"] != 1:
+    # Orientation guard for elongated classes
+    if feat_a["cls"] not in scheme.blob_classes:
         angle_a = feat_a["orientation"]
         angle_b = feat_b["orientation"]
         diff = abs(angle_a - angle_b) % 180
@@ -358,7 +387,7 @@ def merge_cost(
                     return None
 
     # Crossing detection: if union skeleton has junctions, these are crossing instances
-    if feat_a["cls"] != 1 and _skeletons_cross(bin_a, bin_b):
+    if feat_a["cls"] not in scheme.blob_classes and _skeletons_cross(bin_a, bin_b):
         return None
 
     # Check overlap
@@ -410,6 +439,7 @@ def build_assembly_graph(
     instances: List[Dict],
     mask_threshold: float,
     config: GraphAssemblyConfig = None,
+    scheme: PartScheme = THREE_PART,
 ) -> nx.DiGraph:
     """Build min-cost flow graph for sperm part assembly.
 
@@ -435,7 +465,7 @@ def build_assembly_graph(
     # Step 1: compute features
     features = []
     for inst in instances:
-        feat = compute_instance_features(inst, mask_threshold, config.tangent_n_pts)
+        feat = compute_instance_features(inst, mask_threshold, config.tangent_n_pts, scheme)
         features.append(feat)
 
     # Step 2: compute effective areas (handles containment)
@@ -450,7 +480,8 @@ def build_assembly_graph(
     # Bypass edge: absorbs unused supply
     G.add_edge("S", "T", capacity=supply, weight=0)
 
-    # Step 4: per-instance edges — only Heads enter from S, only Tails exit to T
+    # Step 4: per-instance edges — only the chain's first class enters from S,
+    # only its last class exits to T
     for i, feat in enumerate(features):
         i_in = f"{i}_in"
         i_out = f"{i}_out"
@@ -463,36 +494,26 @@ def build_assembly_graph(
 
         cls = feat["cls"]
 
-        # Entry: only Heads can start a path
-        if cls == 1:  # Head
+        # Entry: only the first part of the chain (Head) can start a path
+        if cls == scheme.chain[0]:
             G.add_edge("S", i_in, capacity=1, weight=0)
 
-        # Exit: only Tails can end a path
-        if cls == 3:  # Tail
+        # Exit: only the last part of the chain (Tail) can end a path
+        if cls == scheme.chain[-1]:
             G.add_edge(i_out, "T", capacity=1, weight=0)
 
-    # Step 5: cross-class connection edges with bbox pruning
-    heads = [(i, f) for i, f in enumerate(features) if f["cls"] == 1]
-    midpieces = [(i, f) for i, f in enumerate(features) if f["cls"] == 2]
-    tails = [(i, f) for i, f in enumerate(features) if f["cls"] == 3]
-
-    # Head → Midpiece
-    for hi, hf in heads:
-        for mi, mf in midpieces:
-            if not _bbox_close(hf["bbox"], mf["bbox"], config.bbox_prune_gap):
-                continue
-            cost = connection_cost(hf, mf, config)
-            if cost is not None:
-                G.add_edge(f"{hi}_out", f"{mi}_in", capacity=1, weight=cost)
-
-    # Midpiece → Tail
-    for mi, mf in midpieces:
-        for ti, tf in tails:
-            if not _bbox_close(mf["bbox"], tf["bbox"], config.bbox_prune_gap):
-                continue
-            cost = connection_cost(mf, tf, config)
-            if cost is not None:
-                G.add_edge(f"{mi}_out", f"{ti}_in", capacity=1, weight=cost)
+    # Step 5: cross-class connection edges between consecutive chain classes
+    # (Head → Midpiece → Tail, or Head → Tail), with bbox pruning
+    for cls_a, cls_b in zip(scheme.chain, scheme.chain[1:]):
+        src = [(i, f) for i, f in enumerate(features) if f["cls"] == cls_a]
+        dst = [(i, f) for i, f in enumerate(features) if f["cls"] == cls_b]
+        for ai, af in src:
+            for bi, bf in dst:
+                if not _bbox_close(af["bbox"], bf["bbox"], config.bbox_prune_gap):
+                    continue
+                cost = connection_cost(af, bf, config, scheme)
+                if cost is not None:
+                    G.add_edge(f"{ai}_out", f"{bi}_in", capacity=1, weight=cost)
 
     # Step 6: same-class merge edges (i_out → j_in, i < j) with bbox pruning
     by_class = {}
@@ -507,7 +528,7 @@ def build_assembly_graph(
                 if not _bbox_close(features[i]["bbox"], features[j]["bbox"],
                                    config.bbox_prune_gap):
                     continue
-                cost = merge_cost(features[i], features[j], config)
+                cost = merge_cost(features[i], features[j], config, scheme)
                 if cost is not None:
                     G.add_edge(f"{i}_out", f"{j}_in", capacity=1, weight=cost)
 
@@ -586,14 +607,16 @@ def paths_to_sperm(
     instances: List[Dict],
     features: List[Dict],
     mask_threshold: float,
+    scheme: PartScheme = THREE_PART,
 ) -> List[Dict]:
-    """Convert flow paths to sperm dicts, keeping only complete sperm (H+M+T).
+    """Convert flow paths to sperm dicts, keeping only complete sperm.
 
     Each path groups instances by class and merges same-class masks.
-    Incomplete paths (missing any of Head, Midpiece, Tail) are discarded.
+    Paths missing any class of the scheme's chain are discarded.
 
     Returns:
-        List of {"head": inst, "midpiece": inst, "tail": inst} — all 3 always present.
+        List of {"head": inst, "midpiece": inst, "tail": inst} (three-part) or
+        {"head": inst, "tail": inst} (two-part) — every chain part present.
     """
     sperm_list = []
 
@@ -604,15 +627,14 @@ def paths_to_sperm(
             cls = features[idx]["cls"]
             by_class.setdefault(cls, []).append(idx)
 
-        # Check completeness: must have all 3 classes
-        if not {1, 2, 3}.issubset(by_class.keys()):
+        # Check completeness: must have every class of the chain
+        if not scheme.classes.issubset(by_class.keys()):
             continue  # incomplete — discard
 
         sperm = {}
-        cls_to_key = {1: "head", 2: "midpiece", 3: "tail"}
 
         for cls, indices in by_class.items():
-            key = cls_to_key.get(cls)
+            key = CLASS_KEYS.get(cls) if cls in scheme.classes else None
             if key is None:
                 continue
 
@@ -636,6 +658,7 @@ def assemble_sperm_graph(
     instances: List[Dict],
     mask_threshold: float,
     config: GraphAssemblyConfig = None,
+    scheme: PartScheme = THREE_PART,
 ) -> List[Dict]:
     """Top-level: build graph -> solve -> extract -> filter complete only.
 
@@ -655,18 +678,22 @@ def assemble_sperm_graph(
     if not instances:
         return []
 
+    # Classes outside the scheme (a stray midpiece from the two-part model) need
+    # no filtering: they get no chain edges, effective areas only discount the
+    # same class, and the cap below keeps chain classes only.
+
     # Cap instances to prevent combinatorial explosion in graph solver.
     # Use balanced selection: equal per class so the solver can form complete sperm.
     MAX_PER_CLASS = 15
     total = len(instances)
-    if total > MAX_PER_CLASS * 3:
-        by_cls = {1: [], 2: [], 3: []}
+    if total > MAX_PER_CLASS * len(scheme.chain):
+        by_cls = {c: [] for c in scheme.chain}
         for inst in instances:
             if inst['cls'] in by_cls:
                 by_cls[inst['cls']].append(inst)
         # Keep top MAX_PER_CLASS per class, sorted by score
         capped = []
-        for cls_id in (1, 2, 3):
+        for cls_id in scheme.chain:
             sorted_cls = sorted(by_cls.get(cls_id, []), key=lambda x: -x['score'])
             capped.extend(sorted_cls[:MAX_PER_CLASS])
         instances = capped
@@ -679,14 +706,14 @@ def assemble_sperm_graph(
     logger.info(f"Graph assembly input: {len(instances)} instances, parts: {cls_counts}")
 
     graph, features, effective_areas = build_assembly_graph(
-        instances, mask_threshold, config
+        instances, mask_threshold, config, scheme
     )
     cost, flow_dict = solve_assembly(graph)
     paths = extract_flow_paths(flow_dict, len(instances))
 
     logger.info(f"Graph assembly: {len(paths)} paths found, cost={cost:.1f}")
 
-    sperm_list = paths_to_sperm(paths, instances, features, mask_threshold)
+    sperm_list = paths_to_sperm(paths, instances, features, mask_threshold, scheme)
 
     logger.info(f"Graph assembly result: {len(sperm_list)} complete sperm from {len(paths)} paths")
 

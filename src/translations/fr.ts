@@ -585,6 +585,11 @@ export default {
           description:
             'Modèle de morphologie spermatique avec extraction de squelette pour mesurer la tête, la pièce intermédiaire et la queue',
         },
+        sperm_2part: {
+          name: 'Morphologie des spermatozoïdes (tête + queue)',
+          description:
+            'Modèle de spermatozoïdes en deux parties : mesure la tête et la queue, sans pièce intermédiaire distincte',
+        },
         wound: {
           name: 'Cicatrisation des plaies (scratch assay)',
           description:
@@ -632,6 +637,8 @@ export default {
         'U-Net avec goulot Mamba (state-space) bidirectionnel (90,75M paramètres). Meilleure généralisation hors distribution de la plateforme (HTS-Seg IoU 0,587) : pour laboratoires externes, optique inconnue, échantillons traités et morphologies de sphéroïdes inhabituelles.',
       sperm:
         'Modèle de morphologie spermatique avec extraction de squelette pour la mesure de la tête, de la pièce intermédiaire et de la queue',
+      sperm_2part:
+        'Modèle de spermatozoïdes en deux parties (tête + queue, sans pièce intermédiaire). Même architecture que Morphologie des spermatozoïdes, affiné sur des spermatozoïdes annotés uniquement en tête et queue.',
       wound:
         'Modèle U-Net + MiT-B5 (encodeur SegFormer) pour la segmentation des plaies en microscopie de scratch-assay. Une seule région de plaie binaire par image ; idéal pour les time-lapses de cicatrisation.',
       microtubule:

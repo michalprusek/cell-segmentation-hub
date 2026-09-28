@@ -570,6 +570,11 @@ export default {
           description:
             'Modelo de morfología espermática con extracción de esqueleto para medir cabeza, pieza media y cola',
         },
+        sperm_2part: {
+          name: 'Morfología espermática (cabeza + cola)',
+          description:
+            'Modelo de espermatozoides en dos partes: mide la cabeza y la cola, sin pieza intermedia separada',
+        },
         wound: {
           name: 'Cicatrización de heridas (scratch assay)',
           description:
@@ -617,6 +622,8 @@ export default {
         'U-Net con cuello de botella Mamba (state-space) bidireccional (90,75M parámetros). La mejor generalización fuera de distribución de la plataforma (HTS-Seg IoU 0,587): para laboratorios externos, óptica desconocida, muestras tratadas y morfologías de esferoides inusuales.',
       sperm:
         'Modelo de morfología espermática con extracción de esqueleto para medir cabeza, pieza media y cola',
+      sperm_2part:
+        'Modelo de espermatozoides en dos partes (cabeza + cola, sin pieza intermedia). Misma arquitectura que Morfología espermática, ajustada con espermatozoides anotados solo como cabeza y cola.',
       wound:
         'Modelo U-Net + MiT-B5 (codificador SegFormer) para segmentación de heridas en microscopía de scratch-assay. Una única región de herida binaria por imagen; ideal para time-lapses de cicatrización.',
       microtubule:

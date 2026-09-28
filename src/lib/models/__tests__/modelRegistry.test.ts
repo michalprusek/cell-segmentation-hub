@@ -11,7 +11,7 @@ import {
 
 /**
  * SSOT contract tests for the frontend model registry. These assert the
- * canonical 11-model set, declaration order, the verified project-type
+ * canonical 12-model set, declaration order, the verified project-type
  * compatibility matrix, and the full derived `ModelInfo` shape — guarding
  * against drift between the registry and what consumers expect.
  */
@@ -24,6 +24,7 @@ const CANONICAL_IDS: ModelType[] = [
   'segformer',
   'mamba_unet',
   'sperm',
+  'sperm_2part',
   'wound',
   'microtubule',
   'microcapsule',
@@ -42,10 +43,10 @@ const MODEL_INFO_KEYS: Array<keyof ModelInfo> = [
 ];
 
 describe('model registry SSOT', () => {
-  it('registry keys are exactly the canonical 11 models, in order', () => {
+  it('registry keys are exactly the canonical 12 models, in order', () => {
     expect(Object.keys(MODEL_REGISTRY)).toEqual(CANONICAL_IDS);
     expect(ALL_MODEL_IDS).toEqual(CANONICAL_IDS);
-    expect(ALL_MODEL_IDS).toHaveLength(11);
+    expect(ALL_MODEL_IDS).toHaveLength(12);
   });
 
   it('MODEL_TYPE_COMPATIBILITY deep-equals the verified matrix (incl. order)', () => {
@@ -59,7 +60,7 @@ describe('model registry SSOT', () => {
       ],
       spheroid_invasive: ['spheroid_disintegration'],
       wound: ['wound'],
-      sperm: ['sperm'],
+      sperm: ['sperm', 'sperm_2part'],
       microtubules: ['microtubule'],
       microcapsule: ['microcapsule'],
       neurite: ['neurite_soma'],
@@ -198,6 +199,22 @@ describe('model registry SSOT', () => {
           batchSize: 1,
         },
       },
+      sperm_2part: {
+        id: 'sperm_2part',
+        name: 'Sperm Morphology (head + tail)',
+        displayName: 'Sperm Morphology (head + tail)',
+        description:
+          'Two-part sperm model: measures the head and the tail, without a separate midpiece',
+        size: 'medium',
+        defaultThreshold: 0.5,
+        category: 'sperm',
+        performance: {
+          avgTimePerImage: 0.3,
+          throughput: 3.3,
+          p95Latency: 0.45,
+          batchSize: 1,
+        },
+      },
       wound: {
         id: 'wound',
         name: 'Wound Healing',
@@ -276,6 +293,7 @@ describe('model registry SSOT', () => {
       segformer: 'segformer',
       mamba_unet: 'mamba_unet',
       sperm: 'sperm',
+      sperm_2part: 'sperm_2part',
       wound: 'wound',
       microtubule: 'microtubule',
       microcapsule: 'microcapsule',

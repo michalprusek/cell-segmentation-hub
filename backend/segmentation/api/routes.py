@@ -168,10 +168,10 @@ def _dispatch_inference(loader, model, image, threshold, detect_holes):
     bodies are unchanged; only their residence is.
     """
     with _inference_lock:
-        if model == 'sperm':
-            # Sperm model uses its own mask_threshold (0.3) and score_threshold (0.95)
+        if model in ('sperm', 'sperm_2part'):
+            # Sperm models use their own mask_threshold (0.3) and score_threshold (0.95)
             # Don't override with the user's segmentation threshold — it's calibrated differently
-            result = loader.predict_sperm(image)
+            result = loader.predict_sperm(image, model_name=model)
         elif model == 'wound':
             # Wound model expects grayscale 512×512 — custom preprocessing lives in WoundModel
             result = loader.predict_wound(image, threshold, detect_holes)

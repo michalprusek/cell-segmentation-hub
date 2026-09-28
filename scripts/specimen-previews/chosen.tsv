@@ -44,6 +44,9 @@ wound-3	wound	wound	19178b23-e684-4d37-9df2-8ef46f889ea4	0	0	-	db
 sperm-1	sperm	sperm	6c7710fb-2869-42e0-8f6e-fb753384c868	0	0	-	db
 sperm-2	sperm	sperm	46317ced-f7cb-458a-9dda-db32d025afff	0	0	-	db
 sperm-3	sperm	sperm	2adfcd71-df1e-48f7-8c07-3a6baf8f9056	0	0	-	db
+sperm_2part-1	sperm_2part	sperm	infer-sperm_2part-cos26_038_5	3840	2160	65f797fa-9a3a-47e9-829d-2fcd0e3d3fbe/bf9d5e49-0177-4bb0-ae66-149e2d29e318/originals/1790233317100_5.jpg	infer
+sperm_2part-2	sperm_2part	sperm	infer-sperm_2part-cos26_045_5	3840	2160	65f797fa-9a3a-47e9-829d-2fcd0e3d3fbe/fa6fbcd7-b65e-4ff9-a00a-e2c18a57f1e6/originals/1790233371131_5.jpg	infer
+sperm_2part-3	sperm_2part	sperm	infer-sperm_2part-cos26_038_14	3840	2160	65f797fa-9a3a-47e9-829d-2fcd0e3d3fbe/bf9d5e49-0177-4bb0-ae66-149e2d29e318/originals/1790233317170_14.jpg	infer
 microtubule-1	microtubule	microtubules	6abca1cd-7fc7-4c01-af52-22eb1ae8e975	0	0	-	db
 microtubule-2	microtubule	microtubules	9a5fd0ee-a799-4bf3-bc2a-30994997dea1	0	0	-	db
 microtubule-3	microtubule	microtubules	982abe7d-42b5-4bfd-ac5a-a5c90a8d0326	0	0	-	db

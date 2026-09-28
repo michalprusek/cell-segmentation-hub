@@ -571,6 +571,11 @@ export default {
           description:
             'Model morfologie spermií s extrakcí kostry pro měření hlavy, středního dílu a bičíku',
         },
+        sperm_2part: {
+          name: 'Morfologie spermií (hlavička + bičík)',
+          description:
+            'Dvoudílný model spermií: měří hlavičku a bičík, bez samostatného středního dílu',
+        },
         wound: {
           name: 'Hojení ran (scratch assay)',
           description:
@@ -618,6 +623,8 @@ export default {
         'U-Net s obousměrným Mamba (state-space) bottleneckem (90,75M parametrů). Nejlepší generalizace mimo distribuci v platformě (HTS-Seg IoU 0,587) — určený pro externí laboratoře, neznámou optiku, léčené vzorky a neobvyklé morfologie sféroidů.',
       sperm:
         'Model morfologie spermií s extrakcí kostry pro měření hlavy, středního dílu a bičíku',
+      sperm_2part:
+        'Dvoudílný model spermií (hlavička + bičík, bez středního dílu). Stejná architektura jako Morfologie spermií, doladěná na spermiích anotovaných jen jako hlavička a bičík.',
       wound:
         'U-Net + MiT-B5 (SegFormer enkodér) model pro segmentaci ran v mikroskopii scratch-assay. Jedna binární oblast rány na snímek; ideální pro časové řady hojení.',
       microtubule:

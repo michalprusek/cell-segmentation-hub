@@ -587,6 +587,11 @@ export default {
           description:
             'Sperm morphology model with skeleton extraction for head/midpiece/tail measurement',
         },
+        sperm_2part: {
+          name: 'Sperm Morphology (head + tail)',
+          description:
+            'Two-part sperm model: measures the head and the tail, without a separate midpiece',
+        },
         wound: {
           name: 'Wound Healing (Scratch Assay)',
           description:
@@ -634,6 +639,8 @@ export default {
         'U-Net with a bidirectional Mamba (state-space) bottleneck (90.75M params). Best out-of-distribution generalization in the platform (HTS-Seg IoU 0.587) — built for external labs, unknown optics, drug-treated and unusual spheroid morphologies.',
       sperm:
         'Sperm morphology model with skeleton extraction for head, midpiece, and tail measurement',
+      sperm_2part:
+        'Two-part sperm model (head + tail, no midpiece). Same architecture as Sperm Morphology, fine-tuned on sperm annotated as head and tail only.',
       wound:
         'U-Net + MiT-B5 (SegFormer encoder) model for wound segmentation in scratch-assay microscopy. Single binary wound region per image; ideal for healing-rate timelapses.',
       microtubule:

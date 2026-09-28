@@ -30,11 +30,18 @@ class SpermModel:
     a full pipeline (Mask2Former + graph assembly + polyline extraction).
     """
 
-    def __init__(self):
-        """Initialize without loading — model is loaded separately via load_weights()."""
+    def __init__(self, num_parts: int = 3):
+        """Initialize without loading — model is loaded separately via load_weights().
+
+        num_parts: 3 = head/midpiece/tail (model `sperm`), 2 = head/tail
+        (model `sperm_2part`, trained on the 'Dva segmenty' dataset).
+        """
+        if num_parts not in (2, 3):
+            raise ValueError(f"num_parts must be 2 or 3, got {num_parts}")
+        self.num_parts = num_parts
         self._model = None
         self._device = None
-        logger.info("SpermModel wrapper initialized")
+        logger.info(f"SpermModel wrapper initialized ({num_parts} parts)")
 
     def load_weights(self, weights_path: str, device):
         """Load Mask2Former checkpoint and prepare for inference."""
@@ -67,6 +74,7 @@ class SpermModel:
             raise RuntimeError("Model not loaded. Call load_weights() first.")
 
         import cv2 as _cv2
+        from sperm_final.inference.graph_assembly import THREE_PART, TWO_PART
         from sperm_final.run_pipeline import process_image
 
         # Downscale large images to prevent GPU OOM
@@ -83,6 +91,7 @@ class SpermModel:
             self._model, image_bgr, self._device,
             mask_threshold=mask_threshold,
             score_threshold=score_threshold,
+            scheme=TWO_PART if self.num_parts == 2 else THREE_PART,
         )
 
         # Scale polyline coordinates back to original resolution
