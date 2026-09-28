@@ -144,10 +144,12 @@ describe('useProjectModel', () => {
       renderHook(() => useProjectModel('microtubules', null)).result.current
         .threshold
     ).toBe(0.98);
+    // spheroid_disintegration is a 3-class argmax model and ignores the
+    // threshold; it carries the neutral 0.5 (threshold_applies: false).
     expect(
       renderHook(() => useProjectModel('spheroid_invasive', null)).result
         .current.threshold
-    ).toBe(0.2);
+    ).toBe(0.5);
     expect(
       renderHook(() => useProjectModel('spheroid', null)).result.current
         .threshold
