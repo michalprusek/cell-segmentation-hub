@@ -146,16 +146,26 @@ matrix, where the quantity of interest is how much has left the dense core.
   `0.5`, the API echoes whatever is sent and reports `threshold_applies: false`.
   (The 0.2 this page used to list was never a tuned value.)
 - Inference follows the paper's released `predict.py`: grey level replicated to
-  three channels, CLAHE (8 × 8 tiles) + ImageNet normalisation, one full-frame
-  pass, bfloat16 autocast on a CUDA card with bf16 (fp32 otherwise), no TTA, no
-  sliding window. **One deliberate difference:** `predict.py` builds
-  `A.CLAHE(clip_limit=3.0)`, which albumentations reads as the range (1, 3) and
-  samples anew for every image, so the released script is not deterministic.
-  The app pins the clip limit to 3.0. At 3.0 the app's preprocessed tensor
-  equals the released one to 5e-7 and its mask is identical (checked on one 0 h
-  and one 48 h image with `prod_s42`, CPU fp32); across clip limits 1–3 the
-  48 h image's DI moved from 0.733 to 0.783. Source:
-  `spheroid_rozpad/analysis/review_fixes/hub_clahe_stochastic_check.json`.
+  three channels, CLAHE (8 × 8 tiles, clip limit **2.0**) + ImageNet
+  normalisation, one full-frame pass, bfloat16 autocast on a CUDA card with bf16
+  (fp32 otherwise), no TTA, no sliding window. The clip limit is pinned at 2.0 in
+  both (`CLAHE_CLIP_LIMIT` in `models/disintegration.py`; paper
+  `paper/PREREG_F_CLAHE_PIN.md`, 2026-09-28): training drew it from
+  Uniform[1, 3] per image, because albumentations reads a scalar
+  `A.CLAHE(clip_limit=3.0)` as the range (1, 3), and the earlier `predict.py`
+  inherited that random draw at inference — the paper's run-to-run jitter. 2.0
+  is the midpoint of the training range. (Until 2026-09-28 the app pinned 3.0
+  instead.) The app normalises with the same float32 look-up table as
+  `A.Normalize`, so its preprocessed tensor is bit-identical to `predict.py`'s,
+  and on CPU fp32 with `prod_s42` its mask equals the paper's bit for bit on one
+  0 h and one 48 h image; two predictions of the same image are identical
+  (`segmentation_cpu_tests/test_disintegration_preprocessing.py`). Across clip
+  limits 1–3 the 48 h image's DI moved from 0.733 to 0.783 (0.758 at 2.0). Sources:
+  `spheroid_rozpad/analysis/review_fixes/hub_clahe_stochastic_check.json`,
+  `spheroid_rozpad/analysis/review_fixes/v7/hub_clahe_pin_parity.json`.
+  Determinism is not correctness: a predicted core that splits (the paper's
+  intact spheroid `251201_0 (20)`, flagged `core_fragmented`) now splits every
+  time.
 - The per-image read-out (DI, Index B, reach, fragments, core diagnostics,
   regime flags) is computed from the **raster** argmax mask at inference time by
   `api/disintegration_metrics.py`, a verbatim port of the paper's
