@@ -112,7 +112,7 @@ describe('useProjectModel', () => {
     ['spheroid', 5],
     ['spheroid_invasive', 1],
     ['wound', 1],
-    ['sperm', 1],
+    ['sperm', 2],
     ['microtubules', 1],
     ['microcapsule', 1],
     ['neurite', 1],
