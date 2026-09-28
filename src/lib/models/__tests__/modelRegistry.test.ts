@@ -142,7 +142,7 @@ describe('model registry SSOT', () => {
         description:
           'UNet++ / EfficientNet-B5 3-class model (background / corona / core) for disintegrating spheroids; predicts the dense core directly for a correct Disintegration Index',
         size: 'medium',
-        defaultThreshold: 0.2,
+        defaultThreshold: 0.5,
         category: 'spheroid',
         performance: {
           avgTimePerImage: 0.7,

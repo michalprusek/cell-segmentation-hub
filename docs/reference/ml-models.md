@@ -25,7 +25,7 @@ incompatible pair with a 400 even if you post it directly.
 | `unet_spherohq`           | UNet (Fastest)                     | `spheroid`          | Closed polygons | 0.5               | ~0.18 s (p95 0.29 s) | small       |
 | `segformer`               | SegFormer                          | `spheroid`          | Closed polygons | 0.5               | ~0.20 s              | small       |
 | `mamba_unet`              | Mamba-UNet                         | `spheroid`          | Closed polygons | 0.5               | ~0.24 s              | large       |
-| `spheroid_disintegration` | Spheroid Disintegration            | `spheroid_invasive` | Core + corona   | 0.2               | ~0.70 s              | medium      |
+| `spheroid_disintegration` | Spheroid Disintegration            | `spheroid_invasive` | Core + corona   | none (argmax)     | ~0.70 s              | medium      |
 | `wound`                   | Wound Healing (Scratch Assay)      | `wound`             | Closed polygons | 0.5               | ~0.03 s              | medium      |
 | `sperm`                   | Sperm Morphology                   | `sperm`             | Part polylines  | 0.5               | ~0.30 s              | medium      |
 | `microtubule`             | Microtubule (ResEnc-M + instancer) | `microtubules`      | **Polylines**   | 0.98 (fixed)      | ~0.6 s (p95 ~2 s)    | large       |
@@ -134,8 +134,43 @@ matrix, where the quantity of interest is how much has left the dense core.
 - Architecture: **UNet++ with an EfficientNet-B5 encoder, 3 classes** —
   `0 = background`, `1 = corona (dispersing cells)`, `2 = dense core`. The
   per-pixel class is `argmax` over the three logits.
-- Checkpoint: `weights/spheroid_disintegration_unetpp_effb5_3class.pth`
-- Default threshold **0.2**, not 0.5 — the corona is faint by construction.
+- Checkpoint: `weights/spheroid_disintegration_unetpp_effb5_3class.pth` — the
+  spheroid-disintegration paper's deposited production replicate **`prod_s42`**,
+  SHA-256 `d47d28ad338de2e7424969e8da1dc39df2663bcf1777e681647caffa1f49ea15`,
+  123 609 986 bytes (Zenodo 10.5281/zenodo.22295117, a draft until the paper is
+  published, so it is staged by hand; `scripts/download_weights.py --verify-only`
+  refuses any other file — the checkpoint served before 2026-09-24 has the same
+  size and a different hash). It is ONE of the paper's five replicates; the
+  paper's numbers are five-replicate means unless a replicate is named.
+- **No threshold.** The decision is an argmax; the registry carries a neutral
+  `0.5`, the API echoes whatever is sent and reports `threshold_applies: false`.
+  (The 0.2 this page used to list was never a tuned value.)
+- Inference follows the paper's released `predict.py`: grey level replicated to
+  three channels, CLAHE (8 × 8 tiles, clip limit **2.0**) + ImageNet
+  normalisation, one full-frame pass, bfloat16 autocast on a CUDA card with bf16
+  (fp32 otherwise), no TTA, no sliding window. The clip limit is pinned at 2.0 in
+  both (`CLAHE_CLIP_LIMIT` in `models/disintegration.py`; paper
+  `paper/PREREG_F_CLAHE_PIN.md`, 2026-09-28): training drew it from
+  Uniform[1, 3] per image, because albumentations reads a scalar
+  `A.CLAHE(clip_limit=3.0)` as the range (1, 3), and the earlier `predict.py`
+  inherited that random draw at inference — the paper's run-to-run jitter. 2.0
+  is the midpoint of the training range. (Until 2026-09-28 the app pinned 3.0
+  instead.) The app normalises with the same float32 look-up table as
+  `A.Normalize`, so its preprocessed tensor is bit-identical to `predict.py`'s,
+  and on CPU fp32 with `prod_s42` its mask equals the paper's bit for bit on one
+  0 h and one 48 h image; two predictions of the same image are identical
+  (`segmentation_cpu_tests/test_disintegration_preprocessing.py`). Across clip
+  limits 1–3 the 48 h image's DI moved from 0.733 to 0.783 (0.758 at 2.0). Sources:
+  `spheroid_rozpad/analysis/review_fixes/hub_clahe_stochastic_check.json`,
+  `spheroid_rozpad/analysis/review_fixes/v7/hub_clahe_pin_parity.json`.
+  Determinism is not correctness: a predicted core that splits (the paper's
+  intact spheroid `251201_0 (20)`, flagged `core_fragmented`) now splits every
+  time.
+- The per-image read-out (DI, Index B, reach, fragments, core diagnostics,
+  regime flags) is computed from the **raster** argmax mask at inference time by
+  `api/disintegration_metrics.py`, a verbatim port of the paper's
+  `compute_di.py`, and returned as `image_metrics`; `warnings` carries the
+  input-scale check (validated: 2048 × 2048 px at ~1.28 µm/px).
 - The core is **predicted directly**, not derived by thresholding intensity
   inside the outer boundary. That matters: the previous binary model inferred
   the core heuristically and mis-scaled it at 0 h, which biased every

@@ -534,6 +534,9 @@ export class ExportService {
                   processingTime: true,
                   imageHeight: true,
                   imageWidth: true,
+                  // spheroid_disintegration's raster read-out; see
+                  // metrics/rasterImageMetrics.ts
+                  imageMetrics: true,
                 },
               },
             },
@@ -1715,6 +1718,9 @@ export class ExportService {
               threshold: image.segmentation.threshold,
               confidence: image.segmentation.confidence || undefined,
               processingTime: image.segmentation.processingTime || undefined,
+              // Raster read-out from inference (spheroid_disintegration);
+              // preferred over re-scoring the polygons while it still matches.
+              imageMetrics: image.segmentation.imageMetrics ?? null,
             }
           : undefined,
       };

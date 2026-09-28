@@ -132,7 +132,10 @@ export const MODEL_REGISTRY = {
   },
   spheroid_disintegration: {
     size: 'medium',
-    defaultThreshold: 0.2,
+    // Neutral, like neurite_soma: the model is a 3-class argmax and ignores
+    // the threshold (the ML response says threshold_applies: false). The 0.2
+    // that stood here was never a tuned value.
+    defaultThreshold: 0.5,
     category: 'spheroid',
     performance: {
       avgTimePerImage: 0.7,

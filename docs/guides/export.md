@@ -180,12 +180,16 @@ closure chart embedded, and the same chart as
 property:
 
 `Image Name`, `Total Spheroid Area`, `Core Area`, `Invasion Area`,
-**`Disintegration Index`**, `Radial Reach q95 (R_core)`,
-`Dispersed-Mass Fraction`, `Fragment Count`, `Largest-Fragment Fraction`,
-`Solidity`, `Hole Count`, `Core Equiv. Diameter`, `Whole Equiv. Diameter`.
+**`Disintegration Index`**, `Index B (outside-core fraction)`, `W1`,
+`Reach p90 (R_core)`, `Corona Fragments`, `Largest-Fragment Fraction`,
+`Solidity`, `Core Components`, `Largest Core Component Fraction`,
+`Core Centroid Shift (R_core)`, `Core Fragmented (0/1)`,
+`Unvalidated Regime: Index B 0.15-0.30 (0/1)`,
+`Below Validated Floor: DI < 0.6 (0/1)`, `DI Source`, `Note`,
+`Input-Scale Warning`.
 
-Every one of those columns reads the literal string **`N/A`** when no valid core
-was segmented. That is deliberate — the index is undefined without a core and is
+Every DI-derived column reads the literal string **`N/A`** when no valid core
+(or one below 16 048 px) was segmented. That is deliberate — the index is undefined without a core and is
 never reported as a computed zero. Areas are still reported even if the index
 calculation fails.
 

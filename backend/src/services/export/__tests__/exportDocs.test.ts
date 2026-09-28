@@ -56,8 +56,18 @@ describe('generateMetricsGuide — type-specific dispatch', () => {
       expect(guide).toContain('Core Area');
       expect(guide).toContain('Invasion Area');
       expect(guide).toContain('Disintegration Index');
-      expect(guide).toContain('## Pipeline Overview');
-      expect(guide).toContain('## Core Detection');
+      expect(guide).toContain('## Where the numbers come from');
+      expect(guide).toContain('## Index B and the panel');
+      expect(guide).toContain('## Quality flags (0/1)');
+      expect(guide).toContain('## Input-scale warning');
+    });
+
+    it('documents the paper definitions, not the retired speckle-guarded panel', () => {
+      expect(guide).toContain('90th percentile');
+      expect(guide).toContain('16 048 px');
+      expect(guide).toContain('no threshold applies');
+      expect(guide).not.toContain('q95');
+      expect(guide).not.toContain('Hole Count');
     });
 
     it('excludes per-polygon catalogue sections', () => {

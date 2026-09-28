@@ -1416,13 +1416,26 @@ class ModelLoader:
         core detection: the core is now read straight from the segmentation, so DI
         is anchored correctly on intact (0 h) spheroids too.
 
-        ``threshold`` is accepted for interface symmetry but does not apply — the
-        3-class decision is an argmax. ``detect_holes`` controls internal-hole
-        detection on the foreground (cores are always solid). ``timeout`` is
-        accepted for symmetry with the other predict_* methods.
+        ``threshold`` is accepted for interface symmetry only and has NO effect:
+        the 3-class decision is an argmax, so no threshold is tuned. The response
+        says so (``threshold_applies: False``); ``threshold_used`` still echoes the
+        value because the segmentation row stores a non-null number. ``detect_holes``
+        controls internal-hole detection on the foreground (cores are always
+        solid). ``timeout`` is accepted for symmetry with the other predict_*
+        methods.
+
+        The paper's read-out — DI, Index B, reach_p90, fragments, solidity, areas,
+        core diagnostics and regime flags — is computed HERE, from the raster
+        argmax mask, by ``api.disintegration_metrics`` (a verbatim port of the
+        paper's ``compute_di.py``), and returned as ``image_metrics``. The
+        polygons are for display and editing; re-rasterising them loses the
+        < 50 px components and the holes, which moved DI by up to 0.039 on the
+        deposited masks. ``warnings`` carries the input-scale check (validated
+        regime: 2048 x 2048 px at ~1.28 um/px).
         """
         import time as _time
         from services.postprocessing import PostprocessingService
+        from api.disintegration_metrics import raster_metrics
 
         self.get_model('spheroid_disintegration')
         if 'spheroid_disintegration' not in self.loaded_models:
@@ -1439,8 +1452,33 @@ class ModelLoader:
         start_time = _time.time()
 
         try:
-            rgb = np.array(image.convert('RGB'))
+            # Exactly the released predict.py: grey level replicated to three
+            # channels. For the 8-bit grey BMPs of the dataset this equals
+            # convert('RGB'); for a colour upload it uses the luma, as the paper
+            # pipeline does, instead of feeding the colour channels.
+            gray = np.asarray(image.convert('L'))
+            rgb = np.ascontiguousarray(np.stack([gray] * 3, axis=2))
             mask3 = model.predict(rgb)  # (H, W) uint8: 0 bg / 1 corona / 2 core
+
+            # The paper's read-out, from the raster (not from the polygons).
+            image_metrics = raster_metrics(
+                mask3, original_size[0], original_size[1]
+            )
+            for w in image_metrics["warnings"]:
+                logger.warning("Disintegration input outside validated regime: %s", w)
+            if image_metrics["reference"] != "core":
+                logger.warning(
+                    "Disintegration: DI undefined for this image (%s)",
+                    image_metrics["note"],
+                )
+            elif image_metrics["core_fragmented"]:
+                logger.warning(
+                    "Disintegration: fragmented core (%d pieces, largest %.3f, "
+                    "centroid shift %.3f R_C) — DI rests on a broken anchor",
+                    image_metrics["n_core_components"],
+                    image_metrics["largest_core_component_frac"],
+                    image_metrics["core_centroid_shift"],
+                )
 
             pp = PostprocessingService()
             foreground = (mask3 >= 1).astype(np.float32)
@@ -1498,8 +1536,12 @@ class ModelLoader:
             return {
                 "model_used": "spheroid_disintegration",
                 "threshold_used": threshold,
+                # argmax model: the threshold is echoed, never applied.
+                "threshold_applies": False,
                 "image_size": {"width": original_size[0], "height": original_size[1]},
                 "polygons": polygons,
+                "image_metrics": image_metrics,
+                "warnings": list(image_metrics["warnings"]),
                 "processing_info": {
                     "device": str(self.device),
                     "num_polygons": len(polygons),

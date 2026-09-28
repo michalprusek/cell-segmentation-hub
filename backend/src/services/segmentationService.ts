@@ -42,6 +42,7 @@ import {
 } from './staticChannelProjection';
 import { projectStaticChannelResult } from './staticChannelProjectionService';
 import { resolveSegmentationSource } from './video/types';
+import { serialiseImageMetricsForStorage } from './metrics/rasterImageMetrics';
 
 export interface SegmentationPoint {
   x: number;
@@ -489,6 +490,12 @@ export interface SegmentationResponse {
   // reliably changes on a resegment).
   updatedAt?: string;
   error?: string;
+  // spheroid_disintegration only: the paper's per-image read-out computed by
+  // the ML service from the RASTER mask (see metrics/rasterImageMetrics.ts),
+  // persisted in `segmentations.imageMetrics`.
+  image_metrics?: Record<string, unknown> | null;
+  // Input-regime warnings (e.g. a frame size the model was never validated on).
+  warnings?: string[];
 }
 
 export interface SegmentationTaskStatus {
@@ -1049,7 +1056,11 @@ export class SegmentationService {
     imageWidth: number | null = null,
     imageHeight: number | null = null,
     _userId: string,
-    awaitThumbnails = false
+    awaitThumbnails = false,
+    // The ML service's raster read-out (spheroid_disintegration). Must be
+    // passed through: the queue worker saves AFTER requestSegmentation already
+    // saved, and dropping it here would overwrite the stored read-out with null.
+    imageMetrics: Record<string, unknown> | null = null
   ): Promise<void> {
     // Create compatible segmentation result object
     const segmentationResult: SegmentationResponse = {
@@ -1062,6 +1073,7 @@ export class SegmentationService {
         width: imageWidth || 0,
         height: imageHeight || 0,
       },
+      image_metrics: imageMetrics,
     };
 
     return this.saveSegmentationResultsInternal(
@@ -1272,11 +1284,27 @@ export class SegmentationService {
             : 0,
       };
 
+      // The exact string stored, so the raster read-out below can be tied to
+      // it by hash (a later rewrite of the polygons invalidates it).
+      const polygonsJson = JSON.stringify(polygonsWithIds);
+      const imageMetricsJson = serialiseImageMetricsForStorage(
+        segmentationResult.image_metrics,
+        polygonsJson
+      );
+      if (segmentationResult.warnings && segmentationResult.warnings.length) {
+        logger.warn(
+          'Segmentation input outside the validated regime',
+          'SegmentationService',
+          { imageId, warnings: segmentationResult.warnings }
+        );
+      }
+
       // Log upsert data
       const upsertData = {
         where: { imageId },
         update: {
-          polygons: JSON.stringify(polygonsWithIds),
+          polygons: polygonsJson,
+          imageMetrics: imageMetricsJson,
           model: segmentationResult.model_used,
           threshold: segmentationResult.threshold_used,
           confidence: segmentationData.averageConfidence,
@@ -1290,7 +1318,8 @@ export class SegmentationService {
         create: {
           id: uuidv4(),
           imageId,
-          polygons: JSON.stringify(polygonsWithIds),
+          polygons: polygonsJson,
+          imageMetrics: imageMetricsJson,
           model: segmentationResult.model_used,
           threshold: segmentationResult.threshold_used,
           confidence: segmentationData.averageConfidence,

@@ -115,9 +115,9 @@ describe('BASIC_MODEL_INFO', () => {
       }
     });
 
-    it('spheroid_disintegration has lower threshold (0.2) for dissolved spheroids', () => {
+    it('spheroid_disintegration carries a neutral threshold (argmax model, ignored)', () => {
       expect(BASIC_MODEL_INFO.spheroid_disintegration.defaultThreshold).toBe(
-        0.2
+        0.5
       );
     });
 

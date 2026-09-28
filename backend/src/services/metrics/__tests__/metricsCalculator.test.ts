@@ -20,6 +20,7 @@ import {
   ImageMetrics,
   ImageWithSegmentation,
 } from '../metricsCalculator';
+import { serialiseImageMetricsForStorage } from '../rasterImageMetrics';
 
 // ── logger (hoisted so tests can assert warn/error calls) ──────────────────────
 const { mockLogger } = vi.hoisted(() => ({
@@ -727,11 +728,12 @@ describe('MetricsCalculator — calculateAllImageMetrics (DI / panel)', () => {
     expect(row.disintegrationIndex).toBe(0);
     expect(postMock).not.toHaveBeenCalled();
     expect(row.totalSpheroidArea).toBeCloseTo(100, 3);
-    expect(row.radialReachQ95).toBeNull();
-    expect(row.dispersedMassFraction).toBeNull();
-    expect(row.fragmentCount).toBeNull();
+    expect(row.indexB).toBeNull();
+    expect(row.reachP90).toBeNull();
+    expect(row.nFragments).toBeNull();
     expect(row.solidity).toBeNull();
-    expect(row.coreEquivDiameter).toBeNull();
+    expect(row.coreFragmented).toBeNull();
+    expect(row.diSource).toBe('polygons');
   });
 
   it('referenceMode="failed" when the DI HTTP call rejects (area still computed)', async () => {
@@ -745,23 +747,31 @@ describe('MetricsCalculator — calculateAllImageMetrics (DI / panel)', () => {
     expect(row.totalSpheroidArea).toBeCloseTo(100, 3);
   });
 
-  it('propagates DI + panel values from a successful ML response', async () => {
-    postMock.mockResolvedValue({
-      data: {
-        di: 0.42,
-        w1: 2.1,
-        reference: 'core',
-        n_pixels: 12345,
-        radial_reach_q95: 2.5,
-        dispersed_mass_fraction: 0.7,
-        fragment_count: 4,
-        largest_fragment_fraction: 0.55,
-        solidity: 0.6,
-        hole_count: 2,
-        core_equiv_diameter_px: 10,
-        whole_equiv_diameter_px: 40,
-      },
-    });
+  const corePanel = {
+    di: 0.42,
+    w1: 2.1,
+    reference: 'core',
+    n_pixels: 12345,
+    note: '',
+    warnings: [],
+    index_b: 0.7,
+    reach_p90: 2.5,
+    n_fragments: 4,
+    largest_fragment_frac: 0.55,
+    solidity: 0.6,
+    area_core_px: 3700,
+    area_corona_px: 8645,
+    area_total_px: 12345,
+    n_core_components: 1,
+    largest_core_component_frac: 1.0,
+    core_centroid_shift: 0.0,
+    core_fragmented: 0,
+    unvalidated_regime: 0,
+    below_validated_regime: 1,
+  };
+
+  it('propagates DI + the paper panel from a successful polygon-path response', async () => {
+    postMock.mockResolvedValue({ data: corePanel });
     const image = buildImage('a8', [
       extPolygon(square(10)),
       corePolygon(square(4)),
@@ -771,44 +781,138 @@ describe('MetricsCalculator — calculateAllImageMetrics (DI / panel)', () => {
     expect(row.wassersteinW1).toBeCloseTo(2.1, 5);
     expect(row.referenceMode).toBe('core');
     expect(row.nPixels).toBe(12345);
-    expect(row.radialReachQ95).toBeCloseTo(2.5, 5);
-    expect(row.dispersedMassFraction).toBeCloseTo(0.7, 5);
-    expect(row.fragmentCount).toBe(4);
-    expect(row.largestFragmentFraction).toBeCloseTo(0.55, 5);
+    expect(row.indexB).toBeCloseTo(0.7, 5);
+    expect(row.reachP90).toBeCloseTo(2.5, 5);
+    expect(row.nFragments).toBe(4);
+    expect(row.largestFragmentFrac).toBeCloseTo(0.55, 5);
     expect(row.solidity).toBeCloseTo(0.6, 5);
-    expect(row.holeCount).toBe(2);
-    // No scale → diameters stay in pixels.
-    expect(row.coreEquivDiameter).toBeCloseTo(10, 5);
-    expect(row.wholeEquivDiameter).toBeCloseTo(40, 5);
+    expect(row.nCoreComponents).toBe(1);
+    expect(row.coreFragmented).toBe(0);
+    expect(row.unvalidatedRegime).toBe(0);
+    expect(row.belowValidatedRegime).toBe(1);
+    expect(row.diSource).toBe('polygons');
+    // polygon path keeps the Shoelace areas
+    expect(row.totalSpheroidArea).toBeCloseTo(100, 3);
   });
 
-  it('scales equivalent diameters by µm/px but leaves fractions scale-free', async () => {
-    postMock.mockResolvedValue({
-      data: {
-        di: 0.3,
-        w1: 1.0,
-        reference: 'core',
-        n_pixels: 9999,
-        radial_reach_q95: 3.0,
-        dispersed_mass_fraction: 0.5,
-        fragment_count: 1,
-        largest_fragment_fraction: 1.0,
-        solidity: 0.9,
-        hole_count: 0,
-        core_equiv_diameter_px: 10,
-        whole_equiv_diameter_px: 20,
-      },
-    });
+  it('sends the entered scale to the polygon path only as pixel_size_um', async () => {
+    postMock.mockResolvedValue({ data: { ...corePanel, warnings: ['pixel size is 2 um/px; …'] } });
     const image = buildImage('a8b', [
       extPolygon(square(10)),
       corePolygon(square(4)),
     ], { width: 100, height: 100 });
     const row = (await calc.calculateAllImageMetrics([image], 2))[0]!;
-    expect(row.coreEquivDiameter).toBeCloseTo(20, 5); // length × 2
-    expect(row.wholeEquivDiameter).toBeCloseTo(40, 5);
-    expect(row.radialReachQ95).toBeCloseTo(3.0, 5); // scale-free
-    expect(row.dispersedMassFraction).toBeCloseTo(0.5, 5);
-    expect(row.solidity).toBeCloseTo(0.9, 5);
+    const body = postMock.mock.calls[0][1] as Record<string, unknown>;
+    expect(body.pixel_size_um).toBe(2);
+    expect(row.reachP90).toBeCloseTo(2.5, 5); // scale-free
+    expect(row.warnings).toEqual(['pixel size is 2 um/px; …']);
+  });
+
+  it('maps an undefined-DI reference (core_too_small) to N/A with its note', async () => {
+    postMock.mockResolvedValue({
+      data: {
+        di: 0, w1: 0, reference: 'core_too_small', n_pixels: 500,
+        note: 'core of 16 px is below the minimum core size', warnings: [],
+        index_b: null, reach_p90: null, n_fragments: null,
+        largest_fragment_frac: null, solidity: null,
+        n_core_components: 1, largest_core_component_frac: 1,
+        core_centroid_shift: 0, core_fragmented: null,
+        unvalidated_regime: null, below_validated_regime: null,
+      },
+    });
+    const image = buildImage('a8c', [
+      extPolygon(square(10)),
+      corePolygon(square(4)),
+    ], { width: 100, height: 100 });
+    const row = (await calc.calculateAllImageMetrics([image]))[0]!;
+    expect(row.referenceMode).toBe('core_too_small');
+    expect(row.indexB).toBeNull();
+    expect(row.note).toContain('minimum core size');
+  });
+
+  describe('stored raster read-out', () => {
+    const polys = [extPolygon(square(10)), corePolygon(square(4))];
+    const polygonsJson = JSON.stringify(polys);
+    const raster = {
+      algorithm: 'spheroid_seg/compute_di.py',
+      algorithm_sha256: 'efdb7c3b',
+      source: 'model_raster',
+      image_width: 1024,
+      image_height: 1024,
+      reference: 'core',
+      note: '',
+      warnings: ['frame is 1024x1024 px; …'],
+      DI: 0.61,
+      W1: 0.71,
+      index_B: 0.64,
+      reach_p90: 1.86,
+      n_fragments: 43,
+      largest_fragment_frac: 0.86,
+      solidity: 0.18,
+      area_core_px: 20000,
+      area_corona_px: 35000,
+      area_total_px: 55000,
+      n_core_components: 1,
+      largest_core_component_frac: 1,
+      core_centroid_shift: 0,
+      core_fragmented: 0,
+      unvalidated_regime: 0,
+      below_validated_regime: 0,
+    };
+    const withStored = (id: string, polygons: string, stored: string | null) => ({
+      id,
+      name: `img-${id}.png`,
+      width: 1024,
+      height: 1024,
+      segmentation: { polygons, model: 'spheroid_disintegration', threshold: 0.5, imageMetrics: stored },
+    });
+
+    it('is used, without any ML call, while its hash matches the polygons', async () => {
+      const stored = serialiseImageMetricsForStorage(raster, polygonsJson);
+      const row = (await calc.calculateAllImageMetrics([withStored('r1', polygonsJson, stored)], 2))[0]!;
+      expect(postMock).not.toHaveBeenCalled();
+      expect(row.diSource).toBe('model_raster');
+      expect(row.disintegrationIndex).toBeCloseTo(0.61, 6);
+      expect(row.indexB).toBeCloseTo(0.64, 6);
+      expect(row.nFragments).toBe(43);
+      // raster pixel counts × scale², not the polygons' Shoelace areas
+      expect(row.totalSpheroidArea).toBeCloseTo(55000 * 4, 3);
+      expect(row.coreArea).toBeCloseTo(20000 * 4, 3);
+      expect(row.invasionArea).toBeCloseTo(35000 * 4, 3);
+      // stored frame warning + the export-time pixel-size warning
+      expect(row.warnings).toHaveLength(2);
+      expect(row.warnings[1]).toContain('pixel size is 2 um/px');
+    });
+
+    it('is ignored once the polygons were edited (hash mismatch) and says so', async () => {
+      postMock.mockResolvedValue({ data: corePanel });
+      const stored = serialiseImageMetricsForStorage(raster, polygonsJson);
+      const edited = JSON.stringify([extPolygon(square(11)), corePolygon(square(4))]);
+      const row = (await calc.calculateAllImageMetrics([withStored('r2', edited, stored)]))[0]!;
+      expect(postMock).toHaveBeenCalledTimes(1);
+      expect(row.diSource).toBe('polygons');
+      expect(row.disintegrationIndex).toBeCloseTo(0.42, 6);
+      expect(row.note).toContain('polygons edited since segmentation');
+    });
+
+    it('falls back to the polygons when nothing is stored, with no note', async () => {
+      postMock.mockResolvedValue({ data: corePanel });
+      const row = (await calc.calculateAllImageMetrics([withStored('r3', polygonsJson, null)]))[0]!;
+      expect(row.diSource).toBe('polygons');
+      expect(row.note).toBe('');
+    });
+
+    it('reports an undefined raster DI as N/A even though polygons exist', async () => {
+      const stored = serialiseImageMetricsForStorage(
+        { ...raster, reference: 'core_too_small', note: 'core of 900 px is below the minimum core size', DI: null, index_B: null },
+        polygonsJson
+      );
+      const row = (await calc.calculateAllImageMetrics([withStored('r4', polygonsJson, stored)]))[0]!;
+      expect(postMock).not.toHaveBeenCalled();
+      expect(row.referenceMode).toBe('core_too_small');
+      expect(row.indexB).toBeNull();
+      expect(row.note).toContain('minimum core size');
+    });
   });
 
   it('polygonCount counts every closed polygon but excludes polylines', async () => {
@@ -895,14 +999,20 @@ describe('MetricsCalculator — exportToExcel (spheroid_invasive)', () => {
       totalSpheroidArea: 1200,
       coreArea: 300,
       invasionArea: 900,
-      radialReachQ95: 2.5,
-      dispersedMassFraction: 0.75,
-      fragmentCount: 3,
-      largestFragmentFraction: 0.6,
+      indexB: 0.75,
+      reachP90: 2.5,
+      nFragments: 3,
+      largestFragmentFrac: 0.6,
       solidity: 0.55,
-      holeCount: 1,
-      coreEquivDiameter: 19.5,
-      wholeEquivDiameter: 39.1,
+      nCoreComponents: 2,
+      largestCoreComponentFrac: 0.985,
+      coreCentroidShift: 0.12,
+      coreFragmented: 1,
+      unvalidatedRegime: 0,
+      belowValidatedRegime: 1,
+      diSource: 'model_raster',
+      note: '',
+      warnings: ['frame is 1024x1024 px; …', 'pixel size is 2 um/px; …'],
     },
     {
       imageId: 'img-b',
@@ -915,14 +1025,20 @@ describe('MetricsCalculator — exportToExcel (spheroid_invasive)', () => {
       totalSpheroidArea: 800,
       coreArea: 0,
       invasionArea: 800,
-      radialReachQ95: null,
-      dispersedMassFraction: null,
-      fragmentCount: null,
-      largestFragmentFraction: null,
+      indexB: null,
+      reachP90: null,
+      nFragments: null,
+      largestFragmentFrac: null,
       solidity: null,
-      holeCount: null,
-      coreEquivDiameter: null,
-      wholeEquivDiameter: null,
+      nCoreComponents: null,
+      largestCoreComponentFrac: null,
+      coreCentroidShift: null,
+      coreFragmented: null,
+      unvalidatedRegime: null,
+      belowValidatedRegime: null,
+      diSource: 'polygons',
+      note: 'no core: DI undefined',
+      warnings: [],
     },
   ];
 
@@ -955,38 +1071,45 @@ describe('MetricsCalculator — exportToExcel (spheroid_invasive)', () => {
     ).toBe('N/A');
   });
 
-  it('writes panel metrics for a core row and "N/A" for a no_core row', async () => {
+  it('writes the paper panel for a core row and "N/A" for a no_core row', async () => {
     await calc.exportToExcel([], '/tmp/aspp.xlsx', undefined, sampleImageMetrics);
     const calls = addRowCalls();
     const coreRow = calls[0][0] as Record<string, unknown>;
     const noCoreRow = calls[1][0] as Record<string, unknown>;
-    expect(coreRow.radialReachQ95).toBeCloseTo(2.5, 3);
-    expect(coreRow.dispersedMassFraction).toBeCloseTo(0.75, 4);
-    expect(coreRow.fragmentCount).toBe(3);
-    expect(coreRow.largestFragmentFraction).toBeCloseTo(0.6, 4);
+    expect(coreRow.indexB).toBeCloseTo(0.75, 4);
+    expect(coreRow.reachP90).toBeCloseTo(2.5, 3);
+    expect(coreRow.nFragments).toBe(3);
+    expect(coreRow.largestFragmentFrac).toBeCloseTo(0.6, 4);
     expect(coreRow.solidity).toBeCloseTo(0.55, 4);
-    expect(coreRow.holeCount).toBe(1);
-    expect(coreRow.coreEquivDiameter).toBeCloseTo(19.5, 2);
-    expect(coreRow.wholeEquivDiameter).toBeCloseTo(39.1, 2);
+    expect(coreRow.nCoreComponents).toBe(2);
+    expect(coreRow.coreFragmented).toBe(1);
+    expect(coreRow.belowValidatedRegime).toBe(1);
+    expect(coreRow.diSource).toBe('raster');
+    expect(coreRow.warnings).toBe('frame is 1024x1024 px; … | pixel size is 2 um/px; …');
     for (const key of [
-      'radialReachQ95',
-      'dispersedMassFraction',
-      'fragmentCount',
-      'largestFragmentFraction',
+      'indexB',
+      'wassersteinW1',
+      'reachP90',
+      'nFragments',
+      'largestFragmentFrac',
       'solidity',
-      'holeCount',
-      'coreEquivDiameter',
-      'wholeEquivDiameter',
+      'coreFragmented',
+      'unvalidatedRegime',
+      'belowValidatedRegime',
     ]) {
       expect(noCoreRow[key]).toBe('N/A');
     }
+    expect(noCoreRow.diSource).toBe('polygons');
+    expect(noCoreRow.note).toBe('no core: DI undefined');
   });
 
-  it('uses um^2 and "Equiv. Diameter (um)" headers when a scale is provided', async () => {
+  it('has no q95 / hole-count / equivalent-diameter columns any more', async () => {
     await calc.exportToExcel([], '/tmp/aspp.xlsx', 2.0, sampleImageMetrics);
     const headers = primaryColumns.map(c => c.header ?? '');
     expect(headers.some(h => h.includes('um^2'))).toBe(true);
-    expect(headers.some(h => h.includes('Equiv. Diameter (um)'))).toBe(true);
+    expect(headers).toContain('Index B (outside-core fraction)');
+    expect(headers).toContain('Reach p90 (R_core)');
+    expect(headers.some(h => /q95|Hole Count|Equiv\. Diameter/.test(h))).toBe(false);
   });
 
   it('adds no rows for empty imageMetrics', async () => {
