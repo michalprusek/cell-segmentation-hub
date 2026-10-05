@@ -71,9 +71,9 @@
 # working; and /metrics still labelling `handler="/api/v1/segment"` correctly
 # rather than degrading to "none", which is the failure mode a getattr-and-skip
 # fix could plausibly have introduced.
-fastapi==0.141.1
-starlette==1.6.0
-uvicorn==0.52.4
+fastapi==0.142.2
+starlette==1.7.0
+uvicorn==0.54.0
 pydantic==2.13.5
 # requests 2.33.0 fixes CVE-2024-47081 (.netrc credential leak),
 # CVE-2026-25645 (insecure temp file reuse in extract_zipped_paths), and the
@@ -305,10 +305,10 @@ einops>=0.8.2  # floor records reality; the image already ships 0.8.2
 # base image, arrives only as onnx's transitive, and onnx bounds it only from
 # below (`>=4.25.1`). Nothing else in this file names it, so unpinned it would
 # float on its own schedule.
-onnx==1.22.0
+onnx==1.23.1
 ml_dtypes==0.5.4
 onnx2torch==1.5.15
-protobuf==7.36.1
+protobuf==7.36.2
 
 # Prometheus metrics
 prometheus-fastapi-instrumentator==8.1.0
