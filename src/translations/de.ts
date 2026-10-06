@@ -1681,7 +1681,7 @@ export default {
       title: 'Einführung',
       whatIs: 'Was ist SpheroSeg?',
       description:
-        'SpheroSeg ist eine Plattform für KI-gestützte Segmentierung und Vermessung mikroskopischer Bilder und Zeitrafferaufnahmen. Sie bietet sieben Projekttypen auf Basis von elf Segmentierungsmodellen, einen Editor für Polygone und Polylinien, bildübergreifendes Mikrotubuli-Tracking und einen Stapel-Export.',
+        'SpheroSeg ist eine Plattform für KI-gestützte Segmentierung und Vermessung mikroskopischer Bilder und Zeitrafferaufnahmen. Sie bietet sieben Projekttypen auf Basis von zwölf Segmentierungsmodellen, einen Editor für Polygone und Polylinien, bildübergreifendes Mikrotubuli-Tracking und einen Stapel-Export.',
       developedBy:
         'Die Plattform wurde von Bc. Michal Průšek an der Fakultät für Nuklearwissenschaften und Physikalische Ingenieurwissenschaften der Tschechischen Technischen Universität Prag unter der Betreuung von Ing. Adam Novozámský, Ph.D. entwickelt, in Zusammenarbeit mit dem Institut für Biochemie und Mikrobiologie der UCT Prag.',
       addresses:
@@ -1743,7 +1743,7 @@ export default {
         sperm: {
           name: 'Spermien',
           bestFor:
-            'Für: Spermienmorphologie, gemessen als drei Teile je Zelle — Kopf, Mittelstück und Schwanz.',
+            'Für: Spermienmorphologie, gemessen in Teilen je Zelle — mit dem Standardmodell Kopf, Mittelstück und Schwanz, mit dem zweiteiligen Modell nur Kopf und Schwanz.',
           output:
             'Ergebnis: offene Polylinien mit Teilklasse und Instanz-ID, farblich als Grün, Orange und Cyan unterschieden.',
         },
@@ -1860,9 +1860,9 @@ export default {
     modelSelection: {
       title: 'Modelle',
       description:
-        'Elf Modelle, jedes an die Projekttypen gebunden, für die es trainiert wurde. Die Auswahl zeigt nur kompatible Modelle, und eine echte Wahl haben nur Standard-Sphäroidprojekte — alle anderen Typen haben genau eines.',
+        'Zwölf Modelle, jedes an die Projekttypen gebunden, für die es trainiert wurde. Die Auswahl zeigt nur kompatible Modelle: Standard-Sphäroidprojekte wählen unter fünf, Spermienprojekte zwischen zwei, alle anderen Typen haben genau eines.',
       spheroidModels: 'Sphäroidmodelle — Sie haben die Wahl',
-      specialisedModels: 'Spezialmodelle — eines je Projekttyp',
+      specialisedModels: 'Spezialmodelle — an einen Projekttyp gebunden',
       models: {
         hrnet: {
           name: 'HRNet (ausgewogen)',
@@ -1921,9 +1921,19 @@ export default {
         sperm: {
           name: 'Spermienmorphologie',
           inferenceTime: 'Etwa 0,30 s pro Bild',
-          bestFor: 'Verwendet von: Spermienprojekten.',
+          bestFor:
+            'Verwendet von: Spermienprojekten, als Standard. Misst drei Teile je Zelle — Kopf, Mittelstück und Schwanz.',
           description:
             'Mehrklassige Instanzsegmentierung, die Kopf, Mittelstück und Schwanz direkt als Polylinien erzeugt — über Skelettextraktion statt über geschwellte Flecken.',
+        },
+        spermTwoPart: {
+          name: 'Spermienmorphologie (Kopf + Schwanz)',
+          inferenceTime:
+            'Etwa 0,30 s pro Bild — dieselbe Verarbeitung wie Spermienmorphologie',
+          bestFor:
+            'Verwendet von: Spermienprojekten, wenn Sie es anstelle des Standardmodells wählen. Für Material, das nur als Kopf und Schwanz annotiert und gemessen wird, ohne separates Mittelstück.',
+          description:
+            'Dieselbe Architektur wie Spermienmorphologie, ausgehend von diesem Modell feinabgestimmt auf Spermien, die nur als Kopf und Schwanz annotiert sind. Jede Zelle wird als zwei Polylinien ausgegeben — der Kopf, der hier den gesamten helikalen Abschnitt umfasst, verbunden mit dem Schwanz. Die Grenze zwischen Kopf und Schwanz ist damit gelernt und entsteht nicht dadurch, dass das Mittelstück einem Nachbarteil zugeschlagen wird.',
         },
         microtubule: {
           name: 'Mikrotubuli (SPARSE35)',

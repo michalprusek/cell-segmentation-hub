@@ -3,7 +3,7 @@
 Every segmentation model the platform can run: what it is, what it was trained
 on, what it outputs, how fast it is, and what it will not do.
 
-There are **eleven** models. Each one is locked to one or more project types — the
+There are **twelve** models. Each one is locked to one or more project types — the
 model picker only offers compatible models, and the backend rejects an
 incompatible pair with a 400 even if you post it directly.
 
@@ -18,19 +18,20 @@ incompatible pair with a 400 even if you post it directly.
 
 ## The catalogue at a glance
 
-| Model id                  | Display name                       | Project type        | Output          | Default threshold | Typical time / image | Size bucket |
-| ------------------------- | ---------------------------------- | ------------------- | --------------- | ----------------- | -------------------- | ----------- |
-| `hrnet`                   | HRNet (Balanced)                   | `spheroid`          | Closed polygons | 0.5               | ~0.20 s (p95 0.31 s) | small       |
-| `cbam_resunet`            | CBAM-ResUNet (Precise)             | `spheroid`          | Closed polygons | 0.5               | ~0.38 s (p95 0.48 s) | medium      |
-| `unet_spherohq`           | UNet (Fastest)                     | `spheroid`          | Closed polygons | 0.5               | ~0.18 s (p95 0.29 s) | small       |
-| `segformer`               | SegFormer                          | `spheroid`          | Closed polygons | 0.5               | ~0.20 s              | small       |
-| `mamba_unet`              | Mamba-UNet                         | `spheroid`          | Closed polygons | 0.5               | ~0.24 s              | large       |
-| `spheroid_disintegration` | Spheroid Disintegration            | `spheroid_invasive` | Core + corona   | none (argmax)     | ~0.70 s              | medium      |
-| `wound`                   | Wound Healing (Scratch Assay)      | `wound`             | Closed polygons | 0.5               | ~0.03 s              | medium      |
-| `sperm`                   | Sperm Morphology                   | `sperm`             | Part polylines  | 0.5               | ~0.30 s              | medium      |
-| `microtubule`             | Microtubule (ResEnc-M + instancer) | `microtubules`      | **Polylines**   | 0.98 (fixed)      | ~0.6 s (p95 ~2 s)    | large       |
-| `microcapsule`            | Microcapsule                       | `microcapsule`      | Closed polygons | 0.5               | ~0.30 s              | small       |
-| `neurite_soma`            | Neurite / Soma                     | `neurite`           | Closed polygons | n/a (argmax)      | ~12 s at 2048²       | large       |
+| Model id                  | Display name                       | Project type        | Output          | Default threshold | Typical time / image          | Size bucket |
+| ------------------------- | ---------------------------------- | ------------------- | --------------- | ----------------- | ----------------------------- | ----------- |
+| `hrnet`                   | HRNet (Balanced)                   | `spheroid`          | Closed polygons | 0.5               | ~0.20 s (p95 0.31 s)          | small       |
+| `cbam_resunet`            | CBAM-ResUNet (Precise)             | `spheroid`          | Closed polygons | 0.5               | ~0.38 s (p95 0.48 s)          | medium      |
+| `unet_spherohq`           | UNet (Fastest)                     | `spheroid`          | Closed polygons | 0.5               | ~0.18 s (p95 0.29 s)          | small       |
+| `segformer`               | SegFormer                          | `spheroid`          | Closed polygons | 0.5               | ~0.20 s                       | small       |
+| `mamba_unet`              | Mamba-UNet                         | `spheroid`          | Closed polygons | 0.5               | ~0.24 s                       | large       |
+| `spheroid_disintegration` | Spheroid Disintegration            | `spheroid_invasive` | Core + corona   | none (argmax)     | ~0.70 s                       | medium      |
+| `wound`                   | Wound Healing (Scratch Assay)      | `wound`             | Closed polygons | 0.5               | ~0.03 s                       | medium      |
+| `sperm`                   | Sperm Morphology                   | `sperm`             | Part polylines  | 0.5               | ~0.30 s                       | medium      |
+| `sperm_2part`             | Sperm Morphology (head + tail)     | `sperm`             | Part polylines  | 0.5               | ~0.30 s (copied from `sperm`) | medium      |
+| `microtubule`             | Microtubule (ResEnc-M + instancer) | `microtubules`      | **Polylines**   | 0.98 (fixed)      | ~0.6 s (p95 ~2 s)             | large       |
+| `microcapsule`            | Microcapsule                       | `microcapsule`      | Closed polygons | 0.5               | ~0.30 s                       | small       |
+| `neurite_soma`            | Neurite / Soma                     | `neurite`           | Closed polygons | n/a (argmax)      | ~12 s at 2048²                | large       |
 
 Timings are the registry's recorded measurements on an NVIDIA A5000 and are
 end-to-end (pre-process → inference → post-process → polygon extraction), not
@@ -51,10 +52,15 @@ slower; see [GPU configuration](../GPU-CONFIGURATION.md).
 | `spheroid`          | `hrnet`, `cbam_resunet`, `unet_spherohq`, `segformer`, `mamba_unet` |
 | `spheroid_invasive` | `spheroid_disintegration`                                           |
 | `wound`             | `wound`                                                             |
-| `sperm`             | `sperm`                                                             |
+| `sperm`             | `sperm` (default), `sperm_2part`                                    |
 | `microtubules`      | `microtubule`                                                       |
 | `microcapsule`      | `microcapsule`                                                      |
 | `neurite`           | `neurite_soma`                                                      |
+
+Two types offer a real choice: `spheroid` (five models) and `sperm` (two). The
+other five have exactly one, so their picker is a single locked row. A new
+`sperm` project starts on `sperm`; `sperm_2part` is used only when the owner
+picks it.
 
 `spheroid_disintegration` is deliberately **absent** from plain `spheroid`
 projects: core detection is tied to its post-processing path, so anyone who
@@ -210,10 +216,63 @@ geometry.
   RDP simplification), not as thresholded blobs.
 - Every emitted shape carries `partClass` (`head` / `midpiece` / `tail`) and an
   `instanceId` grouping the parts belonging to one cell.
+- Architecture: Mask2Former with a DINOv3 ConvNeXt-L backbone, followed by a
+  graph assembly that keeps only complete cells along the chain
+  head → midpiece → tail.
 - Checkpoint: `sperm_final/best_model.pth`.
+- This is the **default** for `sperm` projects
+  (`DEFAULT_MODEL_BY_PROJECT_TYPE.sperm`).
 
 See [Sperm projects](../guides/project-types/sperm.md) for the editor and export
 behaviour built on those fields.
+
+---
+
+## `sperm_2part` — Sperm Morphology (head + tail)
+
+The second model for `sperm` projects (added 2026-09-28, PR #566), for material
+that is annotated and measured as **two parts only: head and tail**, with no
+separate midpiece.
+
+- Architecture: the same as `sperm` — Mask2Former with a DINOv3 ConvNeXt-L
+  backbone — **fine-tuned from the deployed `sperm` checkpoint**. It is one
+  wrapper class with a part count: `SpermModel(num_parts=2)` here,
+  `SpermModel(num_parts=3)` for `sperm` (`SPERM_MODELS` in
+  `ml/model_loader.py`).
+- Produces, per detected cell, **two parts**: `head` and `tail`, as polylines.
+  The graph assembly runs the two-part chain head → tail (`TWO_PART` in
+  `sperm_final/inference/graph_assembly.py`), and the post-processing welds the
+  head to the tail by their closest endpoints, since there is no midpiece to
+  join them.
+- Every emitted shape carries `partClass` (`head` / `tail` — never `midpiece`)
+  and an `instanceId`, exactly as for `sperm`.
+- Checkpoint: `weights/sperm_2part.pth`.
+- Like `sperm`, it ignores the request's threshold: the `/segment` route passes
+  none, and the pipeline applies its own mask and score thresholds.
+- Trained on one dataset of 80 images / 115 annotated sperm (see the design
+  spec). **No accuracy figure is quoted here**: the spec defines the evaluation
+  but records no result.
+- The registry's timing for it (0.30 s, p95 0.45 s) is **copied from `sperm`**,
+  not measured separately.
+
+### When to use it instead of `sperm`
+
+The two models do not differ only in whether a midpiece is reported — they put
+the **head/tail boundary in different places**. In the two-part annotation the
+"head" is the whole helical part, which the three-part model splits between
+head and midpiece. Measured on the two-part dataset, the three-part model with
+its midpiece folded into the tail gave a head shorter than the annotation in
+97 % of matched sperm (median −21 %) and a tail longer (median +47 %) — so
+merging parts after the fact does not reproduce a head + tail measurement, and
+the boundary had to be learned. (Source:
+[design spec](../superpowers/specs/2026-09-26-sperm-2part-design.md).)
+
+- Measuring head, midpiece and tail separately → `sperm`.
+- Measuring head and tail only, with the head taken as the whole helical part →
+  `sperm_2part`.
+
+Switching the model does not convert existing segmentations; resegment the
+images to get the other model's parts.
 
 ---
 
@@ -422,6 +481,15 @@ above, the Python wrapper and its `ModelLoader` entry, the weights download
 script, and the `settings.modelSelection.models.<key>.{name,description}`
 translation keys in all six locales. `scripts/check-model-parity.cjs` and
 `scripts/check-i18n.cjs` will tell you what you missed.
+
+Neither script covers the documentation, which is how `sperm_2part` shipped
+undescribed. By hand: this page (count, catalogue, compatibility matrix, a
+section), the project type's guide, the counts in both READMEs, and the in-app
+Documentation page — a `docs.modelSelection.models.<key>` entry in all six
+locales **plus** the key in the explicit list in
+`src/pages/documentation/docsContent.ts`; a key that is not listed there
+renders nowhere. The public API keeps its own per-model table in
+`backend/src/api/v1/models.ts`.
 
 Checkpoints are not in the repository. See
 [Model weights setup](../MODEL_WEIGHTS_SETUP.md) and `make check-weights`.

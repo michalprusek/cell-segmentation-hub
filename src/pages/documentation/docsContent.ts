@@ -337,6 +337,10 @@ export function buildDocsSections(t: Translate): DocsSection[] {
             'disintegration',
             'wound',
             'sperm',
+            // The second sperm model (model id `sperm_2part`). Listed explicitly:
+            // a key in the translations that is not enumerated here renders
+            // nowhere.
+            'spermTwoPart',
             'microtubule',
             'microcapsule',
             'neuriteSoma',

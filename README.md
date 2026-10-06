@@ -1,6 +1,6 @@
 # SpheroSeg - Cell Segmentation Hub
 
-Microscopy segmentation and measurement platform powered by deep learning. Full-stack system with a React frontend, a Node.js backend and a Python ML microservice, running eleven AI models across seven project types with real-time processing.
+Microscopy segmentation and measurement platform powered by deep learning. Full-stack system with a React frontend, a Node.js backend and a Python ML microservice, running twelve AI models across seven project types with real-time processing.
 
 > **Resources**: [Dataset, Paper & Supplementary Materials](https://staff.utia.cas.cz/novozada/spheroseg/)
 
@@ -79,7 +79,7 @@ covers that route.
 │  :3000           │ │  :3001           │ │  :8000           │
 │  Vite + React 18 │ │  Express + Prisma│ │  FastAPI + PyTorch│
 │  shadcn/ui       │ │  Socket.io       │ │  CUDA / CPU      │
-│  TanStack Query  │ │  JWT Auth        │ │  11 Models       │
+│  TanStack Query  │ │  JWT Auth        │ │  12 Models       │
 └──────────────────┘ └────────┬─────────┘ └──────────────────┘
                               │
                     ┌─────────┼─────────┐
@@ -97,7 +97,7 @@ covers that route.
 | ---------- | ------------------------------------------------------------------------ |
 | Frontend   | React 18 + TypeScript + Vite + shadcn/ui (Radix + Tailwind)              |
 | Backend    | Node.js + Express + TypeScript + Prisma ORM                              |
-| ML Service | Python + FastAPI + PyTorch (11 models — see docs/reference/ml-models.md) |
+| ML Service | Python + FastAPI + PyTorch (12 models — see docs/reference/ml-models.md) |
 | Database   | PostgreSQL (dev + prod, via Docker Compose)                              |
 | Real-time  | Socket.io with auto-reconnect + exponential backoff                      |
 | Auth       | JWT access + refresh tokens                                              |
@@ -106,25 +106,29 @@ covers that route.
 
 ## AI Models
 
-Eleven models, each locked to the project types it was trained for. Only
-standard spheroid projects offer a choice; every other type has exactly one.
+Twelve models, each locked to the project types it was trained for. Standard
+spheroid projects choose among five, sperm projects between two (three-part by
+default, or head + tail only); every other type has exactly one.
 
-| Model                   | Project type      | Inference | Throughput |
-| ----------------------- | ----------------- | --------- | ---------- |
-| HRNet (Balanced)        | spheroid          | ~0.20 s   | 4.9 img/s  |
-| CBAM-ResUNet (Precise)  | spheroid          | ~0.38 s   | 2.7 img/s  |
-| UNet (Fastest)          | spheroid          | ~0.18 s   | 5.5 img/s  |
-| SegFormer               | spheroid          | ~0.20 s   | 5.0 img/s  |
-| Mamba-UNet              | spheroid          | ~0.24 s   | 4.2 img/s  |
-| Spheroid Disintegration | spheroid_invasive | ~0.70 s   | 1.5 img/s  |
-| Wound Healing           | wound             | ~0.03 s   | 35 img/s   |
-| Sperm Morphology        | sperm             | ~0.30 s   | 3.3 img/s  |
-| Microtubule (SPARSE35)  | microtubules      | ~0.6 s    | 1.7 img/s  |
-| Microcapsule            | microcapsule      | ~0.30 s   | 3.0 img/s  |
-| Neurite / Soma          | neurite           | ~12 s     | 0.08 img/s |
+| Model                          | Project type      | Inference | Throughput |
+| ------------------------------ | ----------------- | --------- | ---------- |
+| HRNet (Balanced)               | spheroid          | ~0.20 s   | 4.9 img/s  |
+| CBAM-ResUNet (Precise)         | spheroid          | ~0.38 s   | 2.7 img/s  |
+| UNet (Fastest)                 | spheroid          | ~0.18 s   | 5.5 img/s  |
+| SegFormer                      | spheroid          | ~0.20 s   | 5.0 img/s  |
+| Mamba-UNet                     | spheroid          | ~0.24 s   | 4.2 img/s  |
+| Spheroid Disintegration        | spheroid_invasive | ~0.70 s   | 1.5 img/s  |
+| Wound Healing                  | wound             | ~0.03 s   | 35 img/s   |
+| Sperm Morphology               | sperm             | ~0.30 s   | 3.3 img/s  |
+| Sperm Morphology (head + tail) | sperm             | ~0.30 s   | 3.3 img/s  |
+| Microtubule (SPARSE35)         | microtubules      | ~0.6 s    | 1.7 img/s  |
+| Microcapsule                   | microcapsule      | ~0.30 s   | 3.0 img/s  |
+| Neurite / Soma                 | neurite           | ~12 s     | 0.08 img/s |
 
 Full detail — architecture, training data, thresholds and known limits — in
-[docs/reference/ml-models.md](docs/reference/ml-models.md).
+[docs/reference/ml-models.md](docs/reference/ml-models.md). The figures for
+_Sperm Morphology (head + tail)_ are the registry's, copied from _Sperm
+Morphology_ (same architecture and pipeline), not a separate measurement.
 
 Performance measured on NVIDIA GPU. CPU fallback is supported.
 
@@ -259,7 +263,7 @@ search box.
 | Frontend Architecture  | [docs/architecture/frontend.md](docs/architecture/frontend.md)             |
 | Backend Architecture   | [docs/architecture/backend.md](docs/architecture/backend.md)               |
 | ML Service             | [docs/architecture/ml-service.md](docs/architecture/ml-service.md)         |
-| ML Models (all eleven) | [docs/reference/ml-models.md](docs/reference/ml-models.md)                 |
+| ML Models (all twelve) | [docs/reference/ml-models.md](docs/reference/ml-models.md)                 |
 | Metrics reference      | [docs/reference/metrics.md](docs/reference/metrics.md)                     |
 | Database Schema        | [docs/reference/database-schema.md](docs/reference/database-schema.md)     |
 | API Reference          | [docs/api/README.md](docs/api/README.md)                                   |

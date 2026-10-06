@@ -2,7 +2,7 @@
 
 SpheroSeg is a web platform for AI-assisted segmentation and measurement of
 microscopy images and time-lapse videos. It ships **seven project types** backed
-by **eleven segmentation models**, a polygon/polyline editor, cross-frame
+by **twelve segmentation models**, a polygon/polyline editor, cross-frame
 microtubule tracking, and a batch export pipeline.
 
 Live instance: <https://spherosegapp.utia.cas.cz> · Developed at
@@ -75,7 +75,7 @@ Written for the person in front of the browser. No code knowledge assumed.
 
 | Page                                                  | Covers                                                                    |
 | ----------------------------------------------------- | ------------------------------------------------------------------------- |
-| [ML models](reference/ml-models.md)                   | All eleven models: architecture, training data, speed, thresholds, limits |
+| [ML models](reference/ml-models.md)                   | All twelve models: architecture, training data, speed, thresholds, limits |
 | [Metrics](reference/metrics.md)                       | Exact formula and convention behind every measured number                 |
 | [Keyboard shortcuts](reference/keyboard-shortcuts.md) | One table, whole app                                                      |
 | [Database schema](reference/database-schema.md)       | Every Prisma model, column, index and its purpose                         |

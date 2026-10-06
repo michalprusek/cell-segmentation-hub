@@ -582,15 +582,15 @@ There are no longer `scripts/deploy-production.sh` / `rollback-deployment.sh` / 
 
 ## Tech Stack
 
-| Layer      | Technology                                                                                                                                                                    |
-| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Frontend   | React 18 + TypeScript + Vite + shadcn/ui (Radix + Tailwind)                                                                                                                   |
-| Backend    | Node.js + Express + TypeScript + Prisma                                                                                                                                       |
-| ML Service | Python + FastAPI + PyTorch (SegFormer, HRNet, CBAM-ResUNet, U-Net, Mamba-UNet, Spheroid Disintegration, Sperm, Wound, Microcapsule, Neurite/Soma, Microtubule SPARSE35 ep040) |
-| Database   | PostgreSQL (dev + prod via Docker compose)                                                                                                                                    |
-| Real-time  | Socket.io with auto-reconnect + exponential backoff                                                                                                                           |
-| Auth       | JWT access + refresh tokens                                                                                                                                                   |
-| i18n       | 6 languages (EN, CS, ES, DE, FR, ZH) via a hand-rolled `LanguageContext` — **not i18next**                                                                                    |
+| Layer      | Technology                                                                                                                                                                                                |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Frontend   | React 18 + TypeScript + Vite + shadcn/ui (Radix + Tailwind)                                                                                                                                               |
+| Backend    | Node.js + Express + TypeScript + Prisma                                                                                                                                                                   |
+| ML Service | Python + FastAPI + PyTorch (SegFormer, HRNet, CBAM-ResUNet, U-Net, Mamba-UNet, Spheroid Disintegration, Sperm, Sperm 2-part (head + tail), Wound, Microcapsule, Neurite/Soma, Microtubule SPARSE35 ep040) |
+| Database   | PostgreSQL (dev + prod via Docker compose)                                                                                                                                                                |
+| Real-time  | Socket.io with auto-reconnect + exponential backoff                                                                                                                                                       |
+| Auth       | JWT access + refresh tokens                                                                                                                                                                               |
+| i18n       | 6 languages (EN, CS, ES, DE, FR, ZH) via a hand-rolled `LanguageContext` — **not i18next**                                                                                                                |
 
 ---
 
@@ -618,8 +618,10 @@ only a bare ML-status dot.
   ACCURATE compatible model, not the fastest: `spheroid` → `segformer` on
   93 % IoU. Parity between the two copies is enforced by
   `scripts/verify-shared-types.cjs`, NOT by either side's own unit test.
-- **Only `spheroid` has a real choice** (5 models); the other six project types
-  have exactly one each, so their picker is a single disabled row.
+- **Only `spheroid` (5 models) and `sperm` (2: `sperm`, the default, and
+  `sperm_2part` — head + tail, no midpiece; PR #566) have a real choice**; the
+  other five project types have exactly one each, so their picker is a single
+  disabled row.
 - **The server must read the column too.** It shipped once with
   `resolveProjectModel` having zero backend call sites and a docstring claiming
   otherwise, while the queue defaulted to `'hrnet'` — a model compatible with
@@ -757,7 +759,7 @@ Bearer sseg_…` only. A key in the query string is refused with 400 rather
 ### ML service (`/backend/segmentation/`)
 
 - FastAPI + PyTorch, CUDA with CPU fallback
-- Models: SegFormer (~200 ms — **the spheroid default** since 2026-09-20), HRNet (~200 ms), CBAM-ResUNet (~400 ms), U-Net (~200 ms), Mamba-UNet (~240 ms), Spheroid Disintegration, Sperm, Wound, Microcapsule, Neurite/Soma, Microtubule SPARSE35 ep040 (nnU-Net ResEnc-M + curvature-bounded instancer, NATIVE-scale inference since 2026-09-19, ~0.6 s per 1024x1024 frame on the A5000; `backend/segmentation/models/microtubule/MODEL_CARD.md` is the reference for the model, its numbers and its rollback)
+- Models: SegFormer (~200 ms — **the spheroid default** since 2026-09-20), HRNet (~200 ms), CBAM-ResUNet (~400 ms), U-Net (~200 ms), Mamba-UNet (~240 ms), Spheroid Disintegration, Sperm, Sperm 2-part (`sperm_2part`: head + tail, same Mask2Former pipeline, `weights/sperm_2part.pth`), Wound, Microcapsule, Neurite/Soma, Microtubule SPARSE35 ep040 (nnU-Net ResEnc-M + curvature-bounded instancer, NATIVE-scale inference since 2026-09-19, ~0.6 s per 1024x1024 frame on the A5000; `backend/segmentation/models/microtubule/MODEL_CARD.md` is the reference for the model, its numbers and its rollback)
 - Weights from Google Drive; `make check-weights`. Microtubule: `scripts/download-microtubule-weights.sh` stages `weights/microtubule_sparse35_ep040.pth` and refuses any file whose sha256 is not the pinned one (a wrong checkpoint of the right shape loads without an error). `microtubule_v5h.pth` + `params_v5h.json` stay on disk/in git as the rollback. **No `HF_TOKEN`** — the checkpoint is a complete `state_dict` with no frozen backbone, so MT segmentation needs no network at run time. (As of 2026-09-20 **no model fetches on its shipped path** — see the HF note below.)
 - **High-bit-depth input is stretched, not clipped (2026-10-06).** Ten of the
   twelve models go through PIL `convert('RGB'/'L')`, which CLIPS a 16-bit /
