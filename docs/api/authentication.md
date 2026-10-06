@@ -2,6 +2,24 @@
 
 User authentication endpoints for registration, login, logout, and token management.
 
+> **Two different mechanisms — do not mix them up.**
+>
+> - **The app's own routes** (everything on this page, and every other
+>   `/api/...` route) authenticate by an httpOnly **session cookie** set at
+>   login. The backend does not read an `Authorization` header on them, and
+>   has not since the cookie migration. Parts of this page were written
+>   before that and showed `Authorization: Bearer <JWT>`; those have been
+>   corrected, but treat any remaining mention of a bearer token for app
+>   routes as stale.
+> - **The public API** (`/api/v1`) authenticates by an **API key**,
+>   `Authorization: Bearer sseg_…`, created under Settings → API. See
+>   [Public API](public-v1.md).
+>
+> The **login** example below has been re-checked against the live service.
+> The register, refresh and logout examples still show tokens in request and
+> response bodies and have **not** been re-verified; given how login behaves,
+> expect cookies there too and check before relying on them.
+
 ## Base Path
 
 `/api/auth`
@@ -111,15 +129,14 @@ _Note: If `REQUIRE_EMAIL_VERIFICATION=true` environment variable is set, users m
         "preferredLang": "cs",
         "preferredTheme": "light"
       }
-    },
-    "tokens": {
-      "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-      "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-      "expiresIn": 900
     }
   }
 }
 ```
+
+The body carries the user and **no tokens**. The session arrives as cookies:
+`access_token` and `refresh_token` (both httpOnly) and `authenticated` (a
+readable flag for the frontend). Verified against production on 2026-10-06.
 
 #### Error Responses
 
@@ -190,7 +207,7 @@ Exchange refresh token for new access token.
 Invalidate user's refresh token and log out.
 
 **Endpoint**: `POST /logout`  
-**Authentication**: Required (Bearer token)
+**Authentication**: Required (session cookie)
 
 #### Request Body
 
@@ -214,7 +231,7 @@ Invalidate user's refresh token and log out.
 Retrieve current authenticated user's information.
 
 **Endpoint**: `GET /me`  
-**Authentication**: Required (Bearer token)
+**Authentication**: Required (session cookie)
 
 #### Success Response `200`
 
@@ -249,7 +266,7 @@ Retrieve current authenticated user's information.
 Update user profile information.
 
 **Endpoint**: `PUT /profile`  
-**Authentication**: Required (Bearer token)
+**Authentication**: Required (session cookie)
 
 #### Request Body
 
@@ -298,7 +315,7 @@ Update user profile information.
 Delete user account and all associated data. Requires email confirmation for security.
 
 **Endpoint**: `DELETE /profile`  
-**Authentication**: Required (Bearer token)  
+**Authentication**: Required (session cookie)  
 **Rate Limit**: 3 requests per hour per user
 
 #### Request Body
@@ -358,7 +375,7 @@ Delete user account and all associated data. Requires email confirmation for sec
 Change user's password.
 
 **Endpoint**: `POST /change-password`  
-**Authentication**: Required (Bearer token)  
+**Authentication**: Required (session cookie)  
 **Rate Limit**: 5 requests per hour per user
 
 #### Request Body
@@ -562,69 +579,57 @@ _Note: For security reasons, this endpoint always returns success, even if the e
 
 ### Frontend Login Flow
 
+Login sets two httpOnly cookies; the page's JavaScript never sees a token and
+has nothing to store.
+
 ```typescript
-// 1. Login user
-const loginResponse = await fetch('/api/auth/login', {
+// 1. Log in. The response sets the session cookies.
+await fetch('/api/auth/login', {
   method: 'POST',
+  credentials: 'include',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({ email, password }),
 });
 
-const { tokens } = await loginResponse.json();
-
-// 2. Store tokens (in memory, not localStorage for security)
-setAccessToken(tokens.accessToken);
-setRefreshToken(tokens.refreshToken);
-
-// 3. Set up automatic token refresh
+// 2. Keep the session alive. The refresh cookie is sent automatically (it is
+//    scoped to /api/auth); there is no token to put in the body.
 setInterval(
   async () => {
-    try {
-      const refreshResponse = await fetch('/api/auth/refresh', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refreshToken }),
-      });
-
-      const { accessToken } = await refreshResponse.json();
-      setAccessToken(accessToken);
-    } catch (error) {
-      // Redirect to login
-      window.location.href = '/login';
+    const response = await fetch('/api/auth/refresh', {
+      method: 'POST',
+      credentials: 'include',
+    });
+    if (!response.ok) {
+      window.location.href = '/sign-in';
     }
   },
-  14 * 60 * 1000
-); // Refresh 1 minute before expiry
+  13 * 60 * 1000
+); // the access cookie lasts 15 minutes
 ```
 
 ### API Request with Authentication
 
+The session lives in httpOnly cookies, so a request only has to send them.
+There is no token for the page's JavaScript to read or attach.
+
 ```typescript
 const makeAuthenticatedRequest = async (url, options = {}) => {
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
-  });
-
-  if (response.status === 401) {
-    // Try refreshing token
-    await refreshAccessToken();
-
-    // Retry original request
-    return fetch(url, {
+  const send = () =>
+    fetch(url, {
       ...options,
-      headers: {
-        Authorization: `Bearer ${newAccessToken}`,
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json', ...options.headers },
     });
-  }
 
+  let response = await send();
+  if (response.status === 401) {
+    // The access cookie expired: refresh it (also by cookie), then retry once.
+    await fetch('/api/auth/refresh', {
+      method: 'POST',
+      credentials: 'include',
+    });
+    response = await send();
+  }
   return response;
 };
 ```

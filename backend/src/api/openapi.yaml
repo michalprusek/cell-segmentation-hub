@@ -133,7 +133,7 @@ paths:
       description: Vrací seznam projektů aktuálního uživatele
       operationId: getProjects
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: page
           in: query
@@ -173,7 +173,7 @@ paths:
       description: Vytvoří nový projekt pro aktuálního uživatele
       operationId: createProject
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       requestBody:
         required: true
         content:
@@ -208,7 +208,7 @@ paths:
       description: Vrací detail konkrétního projektu
       operationId: getProject
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: projectId
           in: path
@@ -244,7 +244,7 @@ paths:
       description: Aktualizuje existující projekt
       operationId: updateProject
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: projectId
           in: path
@@ -292,7 +292,7 @@ paths:
       description: Smaže existující projekt a všechna související data
       operationId: deleteProject
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: projectId
           in: path
@@ -325,7 +325,7 @@ paths:
       description: Nahraje nový obrázek do projektu
       operationId: uploadImage
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: projectId
           in: path
@@ -384,10 +384,10 @@ paths:
 
 components:
   securitySchemes:
-    bearerAuth:
-      type: http
-      scheme: bearer
-      bearerFormat: JWT
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: access_token
 
   schemas:
     HealthResponse:

@@ -1672,6 +1672,7 @@ export default {
       automatedEssays: 'Automatisierte Assays',
       segmenter: 'Segmenter',
       sharedProjects: 'Freigabe',
+      publicApi: 'Öffentliche API',
       troubleshooting: 'Fehlerbehebung',
     },
 
@@ -2288,6 +2289,54 @@ export default {
         'Die Freigabe dient der Zusammenarbeit, nicht nur dem Lesen.',
       permissionsNoteText:
         'Mitarbeitende können Annotationen ändern, und bei einem Video haben ihre Änderungen dieselben bildübergreifenden Folgen wie Ihre. Nur die Eigentümerin oder der Eigentümer kann ein Projekt umbenennen, seinen Typ ändern, es weitergeben oder löschen.',
+    },
+
+    // Public API
+    publicApi: {
+      title: 'Öffentliche API',
+      intro:
+        'Alles, was die Modelle in der App leisten, steht auch Skripten und anderen Programmen über eine versionierte HTTP-API zur Verfügung. Sie senden ein Bild und erhalten die Segmentierung im gewählten Format zurück. Es wird nichts gespeichert: Es entsteht kein Projekt, und das Bild wird nach dem Senden der Antwort verworfen.',
+      keyHeading: 'Schlüssel erstellen',
+      keyStep1: 'Öffnen Sie Einstellungen → API.',
+      keyStep2:
+        'Benennen Sie den Schlüssel, legen Sie optional ein Ablaufdatum fest und erstellen Sie ihn.',
+      keyStep3:
+        'Kopieren Sie ihn sofort. Gespeichert wird nur ein Hash des Schlüssels, er kann daher nicht erneut angezeigt werden.',
+      keyNoteLabel: 'Der Schlüssel gehört nicht in die URL',
+      keyNoteText:
+        'Senden Sie den Schlüssel ausschließlich im Authorization-Header. Ein Schlüssel in einer URL wird abgelehnt und sollte widerrufen werden, da URLs in Protokollen landen.',
+      requestHeading: 'Die erste Anfrage',
+      requestText:
+        'Listen Sie die Modelle auf und segmentieren Sie dann ein Bild:',
+      formatsHeading: 'Ausgabeformate',
+      formatsText: 'Wählen Sie eines über das Feld output_format:',
+      formatCol: 'Format',
+      formatWhatCol: 'Was Sie erhalten',
+      formatJson:
+        'Die Objekte als JSON: Polygone mit ihren Löchern oder Polylinien, in Bildpixeln. Der Standard.',
+      formatCoco: 'COCO-Instanzannotationen.',
+      formatMask:
+        'Ein 16-Bit-Labelbild: Jedes Objekt hat einen eigenen Pixelwert, 0 ist der Hintergrund.',
+      formatImagej: 'Eine RoiSet.zip für ImageJ / Fiji.',
+      formatYolo:
+        'YOLO-Segmentierungslabels in einer Zip-Datei. Nur für Polygonmodelle.',
+      modelsHeading: 'Modelle und ihre Parameter',
+      modelsText:
+        'Alle zwölf Modelle sind verfügbar. Nicht jedes Modell liest jeden Parameter: threshold und detect_holes gelten für einige Modelle und werden bei den übrigen abgelehnt. Fragen Sie daher GET /api/v1/models, was jedes Modell akzeptiert und zurückgibt.',
+      depthNoteLabel: '16-Bit-Bilder',
+      depthNoteText:
+        'Die Modelle für Mikrotubuli und für Neuriten/Somata verwenden ein 16-Bit-Bild in voller Tiefe. Für alle anderen Modelle wird ein 16-Bit-Bild zunächst auf 8 Bit gestreckt, und die Antwort weist in einer Warnung darauf hin.',
+      limitsHeading: 'Grenzen',
+      limit1: 'Bilder bis 4096 × 4096 Pixel und 64 MiB.',
+      limit2:
+        '120 Anfragen pro Minute und 2 laufende Segmentierungen pro Schlüssel.',
+      limit3:
+        'Ein Bild pro Anfrage. Videos, ND2-Dateien und Tracking gibt es nur in der App.',
+      referenceHeading: 'Vollständige Referenz',
+      referenceText:
+        'Jedes Feld, jeder Fehler und jedes Beispiel steht in der interaktiven Referenz; das OpenAPI-Dokument beschreibt denselben Vertrag für Codegeneratoren.',
+      referenceDocs: 'Interaktive Referenz',
+      referenceOpenApi: 'OpenAPI-Dokument',
     },
 
     // Fehlerbehebung

@@ -1,9 +1,27 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import rateLimit from 'express-rate-limit';
+import swaggerUi from 'swagger-ui-express';
 import { authenticateApiKey } from '../../middleware/apiKeyAuth';
-import { MODEL_REGISTRY } from '../../constants/modelRegistry';
+import {
+  MODEL_REGISTRY,
+  type KnownModelId,
+} from '../../constants/modelRegistry';
+import { describeModel, isKnownModel } from './models';
+import { segmentRoute } from './segment';
 import { logger } from '../../utils/logger';
-import { sendProblem } from './problem';
+import {
+  V1_RATE_LIMIT_PER_MINUTE,
+  V1_UNAUTHENTICATED_LIMIT_PER_MINUTE,
+} from './limits';
+import { buildOpenApi } from './openapi';
+import {
+  PROBLEM_TYPES,
+  PROBLEM_TYPE_BASE,
+  sendProblem,
+  type ProblemCode,
+} from './problem';
+
+export { V1_RATE_LIMIT_PER_MINUTE, V1_UNAUTHENTICATED_LIMIT_PER_MINUTE };
 
 /**
  * The public, versioned API: `/api/v1`.
@@ -23,8 +41,6 @@ import { sendProblem } from './problem';
  * pointing at `ml_service` — that service has no authentication at all.
  */
 
-/** Requests per key per minute. Inference endpoints add their own limits. */
-export const V1_RATE_LIMIT_PER_MINUTE = 120;
 
 const v1RateLimiter = rateLimit({
   windowMs: 60_000,
@@ -54,7 +70,6 @@ const v1RateLimiter = rateLimit({
  * one response is exactly the confusion the global limiter's exemption for
  * this path exists to remove.
  */
-export const V1_UNAUTHENTICATED_LIMIT_PER_MINUTE = 600;
 
 const v1IpRateLimiter = rateLimit({
   windowMs: 60_000,
@@ -80,17 +95,63 @@ export const isPublicApiPath = (path: string): boolean =>
 const router = Router();
 
 router.use(v1IpRateLimiter);
+
+// --- public: the contract itself needs no key to read ----------------------
+
+const openApiDocument = buildOpenApi();
+
+router.get('/openapi.json', (_req: Request, res: Response) => {
+  res.setHeader('Cache-Control', 'public, max-age=300');
+  res.json(openApiDocument);
+});
+
+// Swagger UI over that document. `serveFiles` rather than `serve`: the app
+// already mounts swagger-ui-express for its own spec at /api-docs, and the
+// plain `serve` middleware shares one document between every mount.
+router.use(
+  '/docs',
+  swaggerUi.serveFiles(openApiDocument, {}),
+  swaggerUi.setup(openApiDocument, { customSiteTitle: 'SpheroSeg API v1' })
+);
+
+/** What a problem `type` URI resolves to (RFC 9457 §3.1.1). */
+router.get('/problems/:code', (req: Request, res: Response) => {
+  const code = req.params.code as ProblemCode;
+  if (!Object.prototype.hasOwnProperty.call(PROBLEM_TYPES, code)) {
+    sendProblem(res, 'not-found', { detail: 'No such problem type.' });
+    return;
+  }
+  const { status, title, description } = PROBLEM_TYPES[code];
+  res.setHeader('Cache-Control', 'public, max-age=300');
+  res.json({
+    type: `${PROBLEM_TYPE_BASE}${code}`,
+    code,
+    title,
+    status,
+    description,
+  });
+});
+
+// --- everything below needs an API key --------------------------------------
+
 router.use(authenticateApiKey);
 router.use(v1RateLimiter);
 
 router.get('/models', (_req: Request, res: Response) => {
   res.json({
-    data: Object.entries(MODEL_REGISTRY).map(([id, entry]) => ({
-      id,
-      project_types: entry.compatibleProjectTypes,
-    })),
+    data: (Object.keys(MODEL_REGISTRY) as KnownModelId[]).map(describeModel),
   });
 });
+
+router.get('/models/:id', (req: Request, res: Response) => {
+  if (!isKnownModel(req.params.id)) {
+    sendProblem(res, 'not-found', { detail: 'No such model.' });
+    return;
+  }
+  res.json(describeModel(req.params.id));
+});
+
+router.post('/segment', ...segmentRoute);
 
 // The detail does not echo the requested path. Nothing a browser would render
 // is sent here (the media type is problem+json), but reflecting request input

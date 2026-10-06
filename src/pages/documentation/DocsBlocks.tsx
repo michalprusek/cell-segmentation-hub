@@ -213,6 +213,34 @@ export const DocsBlockView: React.FC<BlockProps> = ({ block, terms }) => {
         </div>
       );
 
+    case 'code':
+      return (
+        <pre className="mb-6 overflow-x-auto rounded-lg bg-gray-900 p-4 text-sm text-gray-100">
+          <code>{block.text}</code>
+        </pre>
+      );
+
+    case 'links':
+      return (
+        <ul className="mb-6 space-y-2">
+          {block.items.map((item, index) => (
+            <li key={index}>
+              <a
+                href={item.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-600 underline hover:text-blue-700 dark:text-blue-400"
+              >
+                <Highlight text={item.label} terms={terms} />
+              </a>
+              <span className="ml-2 font-mono text-xs text-gray-500">
+                {item.href}
+              </span>
+            </li>
+          ))}
+        </ul>
+      );
+
     case 'shortcuts':
       return (
         <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6 dark:bg-gray-900 dark:border-gray-700">

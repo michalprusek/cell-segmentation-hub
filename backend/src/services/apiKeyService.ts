@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { prisma } from '../db';
 import { logger } from '../utils/logger';
+import { crc32 } from '../utils/crc32';
 
 /**
  * API keys for the public `/api/v1` surface.
@@ -40,28 +41,6 @@ export const MAX_API_KEYS_PER_USER = 10;
  * a minute, which is all "when was this key last used" needs.
  */
 const LAST_USED_WRITE_INTERVAL_MS = 60_000;
-
-const CRC32_TABLE = ((): Uint32Array => {
-  const table = new Uint32Array(256);
-  for (let n = 0; n < 256; n++) {
-    let c = n;
-    for (let k = 0; k < 8; k++) {
-      c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
-    }
-    table[n] = c >>> 0;
-  }
-  return table;
-})();
-
-// `zlib.crc32` only exists from Node 20.15 / 22.2, and the checksum of a key
-// must not depend on which runtime minted it.
-export function crc32(input: string): number {
-  let crc = 0xffffffff;
-  for (const byte of Buffer.from(input, 'utf8')) {
-    crc = CRC32_TABLE[(crc ^ byte) & 0xff] ^ (crc >>> 8);
-  }
-  return (crc ^ 0xffffffff) >>> 0;
-}
 
 function checksumFor(randomPart: string): string {
   let value = crc32(randomPart);

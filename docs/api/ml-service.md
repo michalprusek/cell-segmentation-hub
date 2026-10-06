@@ -36,39 +36,65 @@ documents it for people debugging the pipeline or extending it.
 
 `multipart/form-data`:
 
-| Field          | Type   | Default | Notes                            |
-| -------------- | ------ | ------- | -------------------------------- |
-| `file`         | file   | —       | PNG, JPG, JPEG, TIFF, TIF or BMP |
-| `model`        | string | `hrnet` | A model id from the registry     |
-| `threshold`    | float  | `0.5`   | Constrained to 0.1–0.99          |
-| `detect_holes` | bool   | `true`  | Detect internal contours         |
+| Field          | Type   | Default | Notes                                                                                  |
+| -------------- | ------ | ------- | -------------------------------------------------------------------------------------- |
+| `file`         | file   | —       | PNG, JPG, JPEG, TIFF, TIF or BMP. The extension of the filename is checked first       |
+| `model`        | string | `hrnet` | A model id from the registry. An unknown id is a 400                                   |
+| `threshold`    | float  | `0.5`   | Constrained to 0.1–0.99                                                                |
+| `detect_holes` | bool   | `true`  | Detect internal contours                                                               |
+| `page`         | int    | `0`     | Zero-based page of a multi-page image. Past the end is a 400                           |
+| `max_pixels`   | int    | none    | Refuse (413) an image with more pixels, judged from the header before anything decodes |
 
-Returns the polygons, the model used, and timing.
+Returns the polygons (and/or polylines), the model used, `image_size`, `page`,
+`page_count` and timing. The app's queue sends neither `page` nor
+`max_pixels`; the public API (`/api/v1/segment` on the **backend** — a
+different service that happens to share the path) sends both.
 
-**Four models ignore `threshold` on purpose**, because their cut is calibrated
+**High-bit-depth input.** Ten of the twelve models go through Pillow's
+`convert('RGB')` / `convert('L')`, which **clips** a 16-bit, 32-bit or float
+image at 255 instead of rescaling it. Until 2026-10-06 such a frame reached
+those models as a white rectangle: on every such still in production (three,
+of 3 475 in the affected project types) the model saw 1, 1 and 5 grey levels
+and returned no polygons. They are now stretched first, from the frame's
+0.1–99.9 percentile range to 0–255 (`api/input_depth.py`, which also records
+why it is not min-max), and the response carries `input_conversion` with the
+range used. `microtubule` and `neurite_soma` read the native depth and are not
+converted. An 8-bit image is passed through as the same object — verified on
+62 real results across all twelve models, identical before and after.
+
+**Five models ignore `threshold`**, because their cut is calibrated
 differently from the generic one — or does not exist:
 
-- **`sperm`** uses its own mask threshold (0.3) and score threshold (0.95);
-- **`wound`** does its own grayscale pre-processing;
-- **`microtubule`** applies its own `prob_thr` of 0.98 (SPARSE35 ep040; v5H used 0.97) from its parameter
-  file. The backend deliberately sends **no** threshold for it. Note that 0.98
-  is not even expressible through some callers' constraints, so forwarding a
-  user value would either cut a very confident foreground at 0.5 and flood the
-  instancer with noise, or fail validation.
-- **`neurite_soma`** has no threshold at all: background / neurite / soma is an
-  **argmax** over averaged logits, so there is no probability cut to move. The
-  request value is accepted and echoed in the response, and then ignored.
+- **`sperm`** and **`sperm_2part`** use their own mask threshold (0.3) and
+  score threshold (0.95);
+- **`microtubule`** applies its own `prob_thr` of 0.98 (SPARSE35 ep040; v5H
+  used 0.97) from its parameter file. The backend deliberately sends **no**
+  threshold for it. Note that 0.98 is not even expressible through some
+  callers' constraints, so forwarding a user value would either cut a very
+  confident foreground at 0.5 and flood the instancer with noise, or fail
+  validation;
+- **`neurite_soma`** and **`spheroid_disintegration`** have no threshold at
+  all: the classes are an **argmax**, so there is no probability cut to move.
+  The request value is accepted and echoed in the response, and then ignored
+  (`spheroid_disintegration` says so: `threshold_applies: false`).
 
-Microtubule and neurite/soma inference are additionally serialised behind a
-lock.
+`wound`, `microcapsule` and the five spheroid models **do** apply it. (This
+page used to list `wound` among the models that ignore it; `WoundModel`
+thresholds its probability map with the request value.)
+
+`detect_holes` changes the output of the five spheroid models and `wound`
+only. It is forwarded to `spheroid_disintegration` and `neurite_soma` but
+their polygoniser keeps one outer contour per region, so no hole is ever
+emitted.
+
+All inference is serialised behind one loader-wide lock on a single-slot
+executor.
 
 ### `POST /api/v1/batch-segment`
 
-Batch form of the above.
-
-### `GET /api/v1/segment/{task_id}`
-
-Poll a previously submitted task.
+Batch form of the above, built on `predict_batch`, which has only the generic
+(ImageNet-normalised, single sigmoid) path and no per-model dispatch — so it
+is meaningful for the five spheroid models only. The backend does not use it.
 
 ---
 

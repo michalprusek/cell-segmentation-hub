@@ -156,6 +156,59 @@ describe('Documentation page', () => {
       expect(new Set(ids).size).toBe(ids.length);
     });
 
+    it('documents the public API with a runnable request and links to the reference', () => {
+      const section = SECTIONS.find(s => s.id === 'public-api');
+      expect(section).toBeDefined();
+      const blocks = section!.blocks;
+
+      const code = blocks.find(b => b.kind === 'code');
+      expect(code && code.kind === 'code' && code.text).toContain(
+        'Authorization: Bearer $SPHEROSEG_KEY'
+      );
+      expect(code && code.kind === 'code' && code.text).toContain(
+        '/api/v1/segment'
+      );
+
+      const links = blocks.find(b => b.kind === 'links');
+      expect(
+        links && links.kind === 'links' && links.items.map(i => i.href)
+      ).toEqual(['/api/v1/docs', '/api/v1/openapi.json']);
+
+      // Every output format the API offers has a row.
+      const table = blocks.find(b => b.kind === 'table');
+      const formats = (table && table.kind === 'table' ? table.rows : [])
+        .map(row => row[0])
+        .join(', ');
+      for (const format of [
+        'json',
+        'coco',
+        'mask_png',
+        'mask_tiff',
+        'imagej_roi',
+        'yolo',
+      ]) {
+        expect(formats).toContain(format);
+      }
+    });
+
+    it('renders the API request as code and the reference as real links', () => {
+      const { container } = renderDocs();
+      const pre = Array.from(container.querySelectorAll('pre')).find(el =>
+        el.textContent?.includes('/api/v1/segment')
+      );
+      expect(pre).toBeDefined();
+      const anchor = container.querySelector('a[href="/api/v1/docs"]');
+      expect(anchor).not.toBeNull();
+      expect(anchor?.getAttribute('rel')).toContain('noopener');
+    });
+
+    it('finds the API section by text that only occurs in its code sample', () => {
+      const { container } = renderDocs();
+      fireEvent.change(searchBox(), { target: { value: 'SPHEROSEG_KEY' } });
+      const buttons = navButtons(container);
+      expect(buttons).toHaveLength(1);
+    });
+
     it('covers every project type and the standalone tools', () => {
       const ids = SECTIONS.map(section => section.id);
       expect(ids).toEqual(

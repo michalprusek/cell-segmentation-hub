@@ -1540,6 +1540,7 @@ export default {
       automatedEssays: '自动化实验',
       segmenter: 'Segmenter',
       sharedProjects: '共享',
+      publicApi: '公共 API',
       troubleshooting: '疑难解答',
     },
 
@@ -2110,6 +2111,47 @@ export default {
       permissionsNote: '共享意味着协作，而不仅仅是只读。',
       permissionsNoteText:
         '协作者可以修改标注；在视频中，他们的改动与您的改动一样会波及所有帧。只有所有者才能重命名项目、更改其类型、继续对外共享或删除它。',
+    },
+
+    // Public API
+    publicApi: {
+      title: '公共 API',
+      intro:
+        '模型在应用中能做的一切，脚本和其他程序也可以通过带版本号的 HTTP API 使用。发送一张图像，即可按您选择的格式取回分割结果。系统不保存任何内容：不会创建项目，响应发出后图像即被丢弃。',
+      keyHeading: '获取密钥',
+      keyStep1: '打开 设置 → API。',
+      keyStep2: '为密钥命名，可选择设置有效期，然后创建。',
+      keyStep3: '请立即复制。系统只保存密钥的哈希值，因此之后无法再次显示。',
+      keyNoteLabel: '不要把密钥放进 URL',
+      keyNoteText:
+        '只在 Authorization 请求头中发送密钥。放在 URL 中的密钥会被拒绝，并且您应当撤销它，因为 URL 会被写入日志。',
+      requestHeading: '第一个请求',
+      requestText: '先列出模型，再分割一张图像：',
+      formatsHeading: '输出格式',
+      formatsText: '通过 output_format 字段选择：',
+      formatCol: '格式',
+      formatWhatCol: '返回内容',
+      formatJson:
+        'JSON 形式的对象：带孔洞的多边形或折线，坐标为图像像素。默认格式。',
+      formatCoco: 'COCO 实例标注。',
+      formatMask: '16 位标签图像：每个对象有自己的像素值，0 为背景。',
+      formatImagej: '用于 ImageJ / Fiji 的 RoiSet.zip。',
+      formatYolo: '打包为 zip 的 YOLO 分割标签。仅适用于多边形模型。',
+      modelsHeading: '模型及其参数',
+      modelsText:
+        '全部十二个模型均可使用。并非每个模型都读取每个参数：threshold 和 detect_holes 只对部分模型有效，对其余模型会被拒绝，因此请通过 GET /api/v1/models 查询每个模型接受什么、返回什么。',
+      depthNoteLabel: '16 位图像',
+      depthNoteText:
+        '微管模型和神经突/胞体模型按完整位深使用 16 位图像。对于其他所有模型，16 位图像会先被拉伸为 8 位，响应中会以警告说明。',
+      limitsHeading: '限制',
+      limit1: '图像最大 4096 × 4096 像素、64 MiB。',
+      limit2: '每个密钥每分钟 120 个请求、同时 2 个分割任务。',
+      limit3: '每个请求一张图像。视频、ND2 文件和跟踪仅在应用中提供。',
+      referenceHeading: '完整参考',
+      referenceText:
+        '所有字段、错误和示例都在交互式参考中；OpenAPI 文档为代码生成器描述了同一份契约。',
+      referenceDocs: '交互式参考',
+      referenceOpenApi: 'OpenAPI 文档',
     },
 
     // 疑难解答

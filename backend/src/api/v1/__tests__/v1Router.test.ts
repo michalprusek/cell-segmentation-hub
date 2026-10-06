@@ -225,6 +225,82 @@ describe('the identity a key carries', () => {
   });
 });
 
+describe('models', () => {
+  it('describes each model: geometry, parameters and formats', async () => {
+    const res = await request(buildApp())
+      .get('/api/v1/models')
+      .set('Authorization', `Bearer ${liveKey()}`);
+    const byId = Object.fromEntries(
+      res.body.data.map((m: { id: string }) => [m.id, m])
+    );
+    expect(byId.segformer).toMatchObject({
+      geometry: 'polygon',
+      project_types: ['spheroid'],
+      parameters: {
+        threshold: { supported: true, default: 0.5, minimum: 0.1, maximum: 0.99 },
+        detect_holes: { supported: true, default: true },
+      },
+      input_depth: '8bit',
+      output_formats: ['json', 'coco', 'mask_png', 'mask_tiff', 'imagej_roi', 'yolo'],
+    });
+    expect(byId.microtubule).toMatchObject({
+      geometry: 'polyline',
+      parameters: {
+        threshold: { supported: false },
+        detect_holes: { supported: false },
+      },
+      input_depth: 'native',
+      output_formats: ['json', 'coco', 'mask_png', 'mask_tiff', 'imagej_roi'],
+    });
+    expect(byId.sperm.parts).toEqual(['head', 'midpiece', 'tail']);
+    expect(byId.spheroid_disintegration.returns_metrics).toBe(true);
+  });
+
+  it('serves one model by id and 404s an unknown one', async () => {
+    const app = buildApp();
+    const auth = `Bearer ${liveKey()}`;
+    const one = await request(app).get('/api/v1/models/wound').set('Authorization', auth);
+    expect(one.status).toBe(200);
+    expect(one.body.id).toBe('wound');
+
+    const none = await request(app).get('/api/v1/models/constructor').set('Authorization', auth);
+    expect(none.status).toBe(404);
+    expect(none.headers['content-type']).toMatch(PROBLEM);
+  });
+});
+
+describe('the public meta endpoints need no key', () => {
+  it('serves the OpenAPI document', async () => {
+    const res = await request(buildApp()).get('/api/v1/openapi.json');
+    expect(res.status).toBe(200);
+    expect(res.body.openapi).toBe('3.1.0');
+    expect(Object.keys(res.body.paths)).toContain('/segment');
+    expect(findUnique).not.toHaveBeenCalled();
+  });
+
+  it('resolves a problem type URI to its description', async () => {
+    const res = await request(buildApp()).get('/api/v1/problems/validation-failed');
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      type: 'https://spherosegapp.utia.cas.cz/api/v1/problems/validation-failed',
+      code: 'validation-failed',
+      status: 422,
+    });
+    expect(res.body.description).toContain('errors');
+  });
+
+  it.each(['nope', 'constructor', '__proto__'])('404s the unknown problem type %s', async code => {
+    const res = await request(buildApp()).get(`/api/v1/problems/${code}`);
+    expect(res.status).toBe(404);
+    expect(res.headers['content-type']).toMatch(PROBLEM);
+  });
+
+  it('still counts them against the per-IP limit, and nothing else is public', async () => {
+    const res = await request(buildApp()).get('/api/v1/models');
+    expect(res.status).toBe(401);
+  });
+});
+
 describe('errors stay in problem+json', () => {
   it('answers an unknown path with a 404 problem, after authentication', async () => {
     const app = buildApp();

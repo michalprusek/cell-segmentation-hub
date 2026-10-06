@@ -154,12 +154,11 @@ describe('setupSwagger', () => {
       expect(res.headers['content-type']).toMatch(/application\/json/);
     });
 
-    it('returns a Postman collection with info, auth, variable, and item fields', async () => {
+    it('returns a Postman collection with info, variable, and item fields', async () => {
       const app = buildApp();
       const res = await request(app).get('/api-docs/postman.json');
       const body = res.body;
       expect(body).toHaveProperty('info');
-      expect(body).toHaveProperty('auth');
       expect(body).toHaveProperty('variable');
       expect(body).toHaveProperty('item');
       expect(body.info.name).toBe('Test API');
@@ -212,6 +211,14 @@ describe('setupSwagger', () => {
       const createItem = projectsFolder?.item[0];
       // Empty security array → effectiveSecurity.length === 0 → no auth
       expect(createItem?.request?.auth).toBeUndefined();
+    });
+
+    it('sets no collection-level auth: app routes use the session cookie', async () => {
+      const app = buildApp();
+      const res = await request(app).get('/api-docs/postman.json');
+      expect(res.status).toBe(200);
+      expect(res.body.item.length).toBeGreaterThan(0);
+      expect(res.body.auth).toBeUndefined();
     });
 
     it('places tag-less endpoints in the Default folder', async () => {
@@ -280,11 +287,15 @@ describe('setupSwagger', () => {
       expect(swaggerOptions.definition?.openapi).toBe('3.0.0');
     });
 
-    it('definition contains bearerAuth security scheme', () => {
+    it('declares the session cookie, not a bearer JWT, for the app routes', () => {
+      // It used to assert a `bearerAuth` scheme — which described an
+      // Authorization header the backend has never read on these routes.
       const schemes = (
         swaggerOptions.definition?.components as Record<string, unknown>
       )?.securitySchemes as Record<string, unknown>;
-      expect(schemes).toHaveProperty('bearerAuth');
+      expect(schemes).toEqual({
+        cookieAuth: { type: 'apiKey', in: 'cookie', name: 'access_token' },
+      });
     });
   });
 });

@@ -1,6 +1,7 @@
 """API routes for segmentation microservice"""
 
 import time
+from typing import Optional
 import logging
 import asyncio
 import threading
@@ -10,6 +11,7 @@ from fastapi import APIRouter, HTTPException, UploadFile, File, Depends, Form
 import torch
 
 from ._errors import internal_error
+from .input_depth import decode_or_400, open_image_page, prepare_for_model
 from PIL import Image
 import io
 
@@ -167,6 +169,10 @@ def _dispatch_inference(loader, model, image, threshold, detect_holes):
     `_INFERENCE_EXECUTOR` instead of running it on the event loop. The branch
     bodies are unchanged; only their residence is.
     """
+    # Before the lock: this is CPU work on the caller's own image and needs
+    # nothing the lock protects. See `input_depth` for why it exists at all.
+    decode_or_400(image)
+    image, input_conversion = prepare_for_model(image, model)
     with _inference_lock:
         if model in ('sperm', 'sperm_2part'):
             # Sperm models use their own mask_threshold (0.3) and score_threshold (0.95)
@@ -259,6 +265,9 @@ def _dispatch_inference(loader, model, image, threshold, detect_holes):
             result = loader.predict_disintegration(image, threshold, detect_holes)
         else:
             result = loader.predict(image, model, threshold, detect_holes)
+    if input_conversion is not None and isinstance(result, dict):
+        # Said out loud, because it changes what the model was shown.
+        result["input_conversion"] = input_conversion
     return result
 
 
@@ -291,6 +300,17 @@ async def segment_image(
         description="Segmentation threshold",
     ),
     detect_holes: bool = Form(True, description="Whether to detect holes in segmentation"),
+    page: int = Form(
+        0,
+        ge=0,
+        description="Zero-based page of a multi-page image (TIFF) to segment",
+    ),
+    max_pixels: Optional[int] = Form(
+        None,
+        ge=1,
+        description="Refuse (413) an image with more pixels than this. "
+        "Read from the header, before anything is decoded.",
+    ),
     loader = Depends(get_model_loader)
 ):
     """Main segmentation endpoint"""
@@ -304,10 +324,33 @@ async def segment_image(
                 detail="Invalid image file. Supported formats: PNG, JPG, JPEG, TIFF, TIF, BMP"
             )
         
+        # Refuse an unknown model HERE. Further down it reached
+        # `loader.get_model`, which runs `_auto_unload_if_needed` BEFORE it
+        # notices the id is unknown - so a typo could evict a loaded model
+        # under memory pressure, and then answered 500.
+        if model not in loader.AVAILABLE_MODELS:
+            raise HTTPException(status_code=400, detail=f"Unknown model: {model!r}")
+
         # Read image data and convert to PIL Image
         image_data = await file.read()
-        image = Image.open(io.BytesIO(image_data))
-        
+        image, page_count = open_image_page(image_data, page)
+
+        # A caller-supplied ceiling, checked on the header alone. The app's
+        # own queue sends none and is unaffected; the public API sends one so
+        # that a synchronous request cannot ask for minutes of GPU time.
+        width, height = image.size
+        if max_pixels is not None and width * height > max_pixels:
+            raise HTTPException(
+                status_code=413,
+                detail={
+                    "error": "image_too_large",
+                    "width": width,
+                    "height": height,
+                    "pixels": width * height,
+                    "max_pixels": max_pixels,
+                },
+            )
+
         logger.info(f"Processing image: {file.filename}, Model: {model}, Threshold: {threshold}, Detect holes: {detect_holes}")
         
         # Perform segmentation with timing
@@ -334,6 +377,10 @@ async def segment_image(
         result["gpu_enabled"] = torch.cuda.is_available()
         result["batch_size_used"] = getattr(loader, 'last_batch_size', 1)
         result["success"] = True
+        # Only page `page` was segmented; a caller that sent a stack needs to
+        # be able to tell that the rest was not looked at.
+        result["page"] = page
+        result["page_count"] = page_count
         
         # Add warning metadata if no detections found (check both polygons and polylines)
         polygon_count = len(result.get('polygons', []))

@@ -90,10 +90,10 @@ const swaggerOptions: swaggerJsdoc.Options = {
     ],
     components: {
       securitySchemes: {
-        bearerAuth: {
-          type: 'http',
-          scheme: 'bearer',
-          bearerFormat: 'JWT',
+        cookieAuth: {
+          type: 'apiKey',
+          in: 'cookie',
+          name: 'access_token',
         },
       },
     },
@@ -119,16 +119,7 @@ function convertToPostman(openApiSpec: any) {
       schema:
         'https://schema.getpostman.com/json/collection/v2.1.0/collection.json',
     },
-    auth: {
-      type: 'bearer',
-      bearer: [
-        {
-          key: 'token',
-          value: '{{accessToken}}',
-          type: 'string',
-        },
-      ],
-    },
+    // No collection-level auth: the app's routes use the session cookie.
     variable: [
       {
         key: 'baseUrl',
@@ -309,56 +300,41 @@ const swaggerUiOptions = {
 
 ## Authentication Integration
 
-### JWT Bearer Token Support
+### Authentication in this spec
 
-The Swagger UI is configured to handle JWT authentication:
+This document covers the app's **own** routes, which authenticate by the
+httpOnly session cookie set at login:
 
 ```yaml
 components:
   securitySchemes:
-    bearerAuth:
-      type: http
-      scheme: bearer
-      bearerFormat: JWT
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: access_token
 ```
 
-**Usage in Swagger UI**:
+It used to declare a `bearerAuth` JWT scheme. The backend does not read an
+`Authorization` header on these routes, so "Try it out" with a pasted token
+never authenticated anything. To try a route from Swagger UI, sign in to the
+app in the same browser first — the cookie is then sent automatically.
 
-1. Click the "Authorize" button in the top-right corner
-2. Enter JWT access token (without "Bearer " prefix)
-3. All subsequent "Try it out" requests will include the Authorization header
+API keys (`Authorization: Bearer sseg_…`) belong to the separate **public
+API**, which has its own document and UI at `/api/v1/openapi.json` and
+`/api/v1/docs`. See [Public API](public-v1.md).
 
 ### Postman Authentication
 
-The auto-generated Postman collection includes:
+The generated collection sets **no** collection-level authentication, and
+attaches bearer authentication to a request only if its operation declares a
+bearer/JWT security scheme. The app's routes declare `cookieAuth`, so no
+`Authorization` header is sent for them — which is correct: they never read
+one. (Until 2026-10-06 the generator set collection-level bearer
+`{{accessToken}}` on everything.) To call them from Postman, log
+in through `POST /api/auth/login` first and let Postman keep the cookies.
 
-```json
-{
-  "auth": {
-    "type": "bearer",
-    "bearer": [
-      {
-        "key": "token",
-        "value": "{{accessToken}}",
-        "type": "string"
-      }
-    ]
-  },
-  "variable": [
-    {
-      "key": "accessToken",
-      "value": "",
-      "type": "string"
-    }
-  ]
-}
-```
-
-**Setup in Postman**:
-
-1. Import the collection from `/api-docs/postman.json`
-2. Set the `accessToken` variable with your JWT token
-3. All authenticated requests will automatically include the token
+For scripted access use the public API and an API key instead
+([Public API](public-v1.md)).
 
 ## API Endpoint Categories
 

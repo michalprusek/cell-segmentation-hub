@@ -1656,6 +1656,7 @@ export default {
       automatedEssays: 'Ensayos automatizados',
       segmenter: 'Segmenter',
       sharedProjects: 'Compartir',
+      publicApi: 'API pública',
       troubleshooting: 'Resolución de problemas',
     },
 
@@ -2267,6 +2268,53 @@ export default {
       permissionsNote: 'Compartir es colaborar, no solo leer.',
       permissionsNoteText:
         'Los colaboradores pueden cambiar las anotaciones y, en un vídeo, sus ediciones tienen las mismas consecuencias entre fotogramas que las suyas. Solo el propietario puede renombrar un proyecto, cambiar su tipo, compartirlo con otros o borrarlo.',
+    },
+
+    // Public API
+    publicApi: {
+      title: 'API pública',
+      intro:
+        'Todo lo que los modelos hacen en la aplicación está también disponible para scripts y otros programas mediante una API HTTP versionada. Envías una imagen y recibes la segmentación en el formato que elijas. No se guarda nada: no se crea ningún proyecto y la imagen se descarta al enviar la respuesta.',
+      keyHeading: 'Obtener una clave',
+      keyStep1: 'Abre Configuración → API.',
+      keyStep2:
+        'Pon un nombre a la clave, opcionalmente una caducidad, y créala.',
+      keyStep3:
+        'Cópiala de inmediato. Solo se guarda un hash de la clave, por lo que no se puede volver a mostrar.',
+      keyNoteLabel: 'No pongas la clave en una URL',
+      keyNoteText:
+        'Envía la clave únicamente en la cabecera Authorization. Una clave incluida en una URL se rechaza, y deberías revocarla, porque las URL acaban en los registros.',
+      requestHeading: 'Tu primera solicitud',
+      requestText: 'Lista los modelos y luego segmenta una imagen:',
+      formatsHeading: 'Formatos de salida',
+      formatsText: 'Elige uno con el campo output_format:',
+      formatCol: 'Formato',
+      formatWhatCol: 'Qué recibes',
+      formatJson:
+        'Los objetos en JSON: polígonos con sus huecos, o polilíneas, en píxeles de la imagen. Es el formato por defecto.',
+      formatCoco: 'Anotaciones de instancias COCO.',
+      formatMask:
+        'Una imagen de etiquetas de 16 bits: cada objeto tiene su propio valor de píxel y 0 es el fondo.',
+      formatImagej: 'Un RoiSet.zip para ImageJ / Fiji.',
+      formatYolo:
+        'Etiquetas de segmentación YOLO en un zip. Solo para modelos de polígonos.',
+      modelsHeading: 'Modelos y sus parámetros',
+      modelsText:
+        'Están disponibles los doce modelos. No todos los modelos leen todos los parámetros: threshold y detect_holes se aplican a algunos y se rechazan en los demás, así que consulta GET /api/v1/models para saber qué acepta y devuelve cada uno.',
+      depthNoteLabel: 'Imágenes de 16 bits',
+      depthNoteText:
+        'Los modelos de microtúbulos y de neuritas/somas usan la imagen de 16 bits con toda su profundidad. Para los demás modelos, una imagen de 16 bits se convierte primero a 8 bits y la respuesta lo indica con una advertencia.',
+      limitsHeading: 'Límites',
+      limit1: 'Imágenes de hasta 4096 × 4096 píxeles y 64 MiB.',
+      limit2:
+        '120 solicitudes por minuto y 2 segmentaciones en curso por clave.',
+      limit3:
+        'Una imagen por solicitud. Los vídeos, los archivos ND2 y el seguimiento solo están disponibles en la aplicación.',
+      referenceHeading: 'Referencia completa',
+      referenceText:
+        'Todos los campos, errores y ejemplos están en la referencia interactiva; el documento OpenAPI describe el mismo contrato para generadores de código.',
+      referenceDocs: 'Referencia interactiva',
+      referenceOpenApi: 'Documento OpenAPI',
     },
 
     // Resolución de problemas

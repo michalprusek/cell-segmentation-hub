@@ -38,7 +38,8 @@ const swaggerOptions: swaggerJsdoc.Options = {
     info: {
       title: 'Cell Segmentation Hub API',
       version: '1.0.0',
-      description: 'API pro platformu segmentace buněčných struktur',
+      description:
+        "The app's own REST API (session-cookie authentication). For scripts and other programs use the public API instead: /api/v1/docs.",
       contact: {
         name: 'API Support',
         url: 'https://github.com/michalprusek/cell-segmentation-hub',
@@ -56,10 +57,14 @@ const swaggerOptions: swaggerJsdoc.Options = {
     ],
     components: {
       securitySchemes: {
-        bearerAuth: {
-          type: 'http',
-          scheme: 'bearer',
-          bearerFormat: 'JWT',
+        // The app's own routes authenticate by the httpOnly session cookie.
+        // This used to declare a `bearerAuth` JWT scheme that the backend has
+        // never read. API keys (`Authorization: Bearer sseg_...`) belong to
+        // the separate public API, described at /api/v1/openapi.json.
+        cookieAuth: {
+          type: 'apiKey',
+          in: 'cookie',
+          name: 'access_token',
         },
       },
     },
@@ -178,14 +183,6 @@ interface PostmanCollection {
     description: string;
     schema: string;
   };
-  auth: {
-    type: string;
-    bearer: Array<{
-      key: string;
-      value: string;
-      type: string;
-    }>;
-  };
   variable: Array<{
     key: string;
     value: string;
@@ -228,16 +225,11 @@ function convertToPostman(openApiSpec: OpenAPISpec): PostmanCollection {
       schema:
         'https://schema.getpostman.com/json/collection/v2.1.0/collection.json',
     },
-    auth: {
-      type: 'bearer',
-      bearer: [
-        {
-          key: 'token',
-          value: '{{accessToken}}',
-          type: 'string',
-        },
-      ],
-    },
+    // No collection-level auth. It used to be bearer `{{accessToken}}`, which
+    // put an Authorization header on EVERY request — including the app's own
+    // routes, which authenticate by session cookie and never read it. A
+    // request gets bearer auth below only if its operation declares a
+    // bearer/JWT scheme.
     variable: [
       {
         key: 'baseUrl',
