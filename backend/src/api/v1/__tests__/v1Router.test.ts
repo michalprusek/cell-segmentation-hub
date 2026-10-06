@@ -1,0 +1,282 @@
+/**
+ * The public API's front door, mounted with the REAL router, the REAL
+ * `authenticateApiKey`, the real key service and the real rate limiter. The
+ * claims here are about the middleware chain — what is refused, with which
+ * status, header and media type — so mocking any of it would test nothing.
+ * Only the database and the logger are doubles.
+ */
+
+import request from 'supertest';
+import express from 'express';
+import cookieParser from 'cookie-parser';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+
+vi.mock('../../../db', () => ({
+  __esModule: true,
+  prisma: {
+    apiKey: { findUnique: vi.fn(), update: vi.fn(async () => ({})) },
+  },
+}));
+
+vi.mock('../../../utils/logger', () => ({
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+}));
+
+import v1Routes, { V1_RATE_LIMIT_PER_MINUTE } from '../index';
+import { authenticateApiKey } from '../../../middleware/apiKeyAuth';
+import { prisma } from '../../../db';
+import { generateApiKey, hashApiKey } from '../../../services/apiKeyService';
+import { SEGMENTATION_MODELS } from '../../../constants/modelRegistry';
+
+const findUnique = prisma.apiKey.findUnique as unknown as ReturnType<
+  typeof vi.fn
+>;
+
+const PROBLEM = /^application\/problem\+json/;
+
+const buildApp = () => {
+  const app = express();
+  app.set('query parser', 'extended');
+  app.use(express.json());
+  app.use(cookieParser());
+  // The production app wraps res.json to force `application/json`
+  // (server.ts). Reproduced here because it is exactly what would clobber
+  // the problem media type if `sendProblem` used res.json.
+  app.use((_req, res, next) => {
+    const originalJson = res.json;
+    res.json = function (body) {
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      return originalJson.call(this, body);
+    };
+    next();
+  });
+  app.use('/api/v1', v1Routes);
+  return app;
+};
+
+/** Registers a live key with the fake database and returns it. */
+const liveKey = (overrides: Record<string, unknown> = {}) => {
+  const key = generateApiKey();
+  const id = `key-${Math.random().toString(36).slice(2)}`;
+  const hash = hashApiKey(key);
+  const previous = findUnique.getMockImplementation();
+  findUnique.mockImplementation(async (args: { where: { keyHash: string } }) =>
+    args.where.keyHash === hash
+      ? {
+          id,
+          name: 'test key',
+          prefix: key.slice(0, 9),
+          expiresAt: null,
+          lastUsedAt: new Date(),
+          user: {
+            id: 'user-1',
+            email: 'user@example.com',
+            emailVerified: true,
+          },
+          ...overrides,
+        }
+      : ((await previous?.(args)) ?? null)
+  );
+  return key;
+};
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  findUnique.mockReset();
+  findUnique.mockResolvedValue(null);
+});
+
+describe('authentication', () => {
+  it('answers a request with no credentials with a bare Bearer challenge', async () => {
+    const res = await request(buildApp()).get('/api/v1/models');
+
+    expect(res.status).toBe(401);
+    expect(res.headers['content-type']).toMatch(PROBLEM);
+    // RFC 6750 §3.1: no error code when no credentials were presented.
+    expect(res.headers['www-authenticate']).toBe('Bearer realm="spheroseg-api"');
+    expect(res.body).toMatchObject({
+      type: 'https://spherosegapp.utia.cas.cz/api/v1/problems/authentication-required',
+      status: 401,
+      code: 'authentication-required',
+    });
+    expect(findUnique).not.toHaveBeenCalled();
+  });
+
+  it('accepts a valid key and lists every registered model', async () => {
+    const res = await request(buildApp())
+      .get('/api/v1/models')
+      .set('Authorization', `Bearer ${liveKey()}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.map((m: { id: string }) => m.id)).toEqual([
+      ...SEGMENTATION_MODELS,
+    ]);
+    expect(res.body.data).toHaveLength(12);
+  });
+
+  it('treats the auth scheme case-insensitively', async () => {
+    const res = await request(buildApp())
+      .get('/api/v1/models')
+      .set('Authorization', `bearer ${liveKey()}`);
+    expect(res.status).toBe(200);
+  });
+
+  it.each([
+    ['an unknown but well-formed key', () => `Bearer ${generateApiKey()}`],
+    ['a malformed key', () => 'Bearer sseg_nope'],
+    ['a different scheme', () => `Basic ${generateApiKey()}`],
+    ['a key with trailing junk', () => `Bearer ${generateApiKey()} extra`],
+    [
+      'an expired key',
+      () => `Bearer ${liveKey({ expiresAt: new Date(Date.now() - 1000) })}`,
+    ],
+  ])('rejects %s as invalid_token, indistinguishably', async (_name, header) => {
+    const res = await request(buildApp())
+      .get('/api/v1/models')
+      .set('Authorization', header());
+
+    expect(res.status).toBe(401);
+    expect(res.headers['content-type']).toMatch(PROBLEM);
+    expect(res.headers['www-authenticate']).toBe(
+      'Bearer realm="spheroseg-api", error="invalid_token"'
+    );
+    expect(res.body.code).toBe('invalid-api-key');
+    expect(res.body.detail).toBe(
+      'The API key is not valid. It may have been revoked or expired.'
+    );
+  });
+
+  it.each(['api_key', 'access_token', 'key', 'token', 'apikey'])(
+    'refuses a key in the ?%s= query parameter even when the header is valid',
+    async param => {
+      const key = liveKey();
+      const res = await request(buildApp())
+        .get(`/api/v1/models?${param}=${key}`)
+        .set('Authorization', `Bearer ${key}`);
+
+      expect(res.status).toBe(400);
+      expect(res.headers['content-type']).toMatch(PROBLEM);
+      expect(res.body.code).toBe('credentials-in-url');
+      expect(findUnique).not.toHaveBeenCalled();
+    }
+  );
+
+  it('does not accept the app session cookie', async () => {
+    const res = await request(buildApp())
+      .get('/api/v1/models')
+      .set('Cookie', 'accessToken=anything; access_token=anything');
+    expect(res.status).toBe(401);
+    expect(res.body.code).toBe('authentication-required');
+  });
+});
+
+describe('the identity a key carries', () => {
+  const probe = () => {
+    const app = express();
+    app.get('/probe', authenticateApiKey, (req, res) => {
+      res.json({ user: req.user, apiKey: req.apiKey });
+    });
+    return app;
+  };
+
+  it('is the owning account, the key, and never an administrator', async () => {
+    const key = liveKey();
+    const res = await request(probe())
+      .get('/probe')
+      .set('Authorization', `Bearer ${key}`);
+
+    expect(res.body).toEqual({
+      user: {
+        id: 'user-1',
+        email: 'user@example.com',
+        emailVerified: true,
+        // The fake row below says nothing about isAdmin on purpose: the
+        // middleware must not derive it from the account at all.
+        isAdmin: false,
+        profile: null,
+      },
+      apiKey: {
+        id: expect.any(String),
+        name: 'test key',
+        prefix: key.slice(0, 9),
+      },
+    });
+  });
+
+  it('does not ask the database for the admin flag', async () => {
+    await request(probe())
+      .get('/probe')
+      .set('Authorization', `Bearer ${liveKey()}`);
+    const { select } = findUnique.mock.calls[0][0];
+    expect(select.user.select.isAdmin).toBeUndefined();
+  });
+});
+
+describe('errors stay in problem+json', () => {
+  it('answers an unknown path with a 404 problem, after authentication', async () => {
+    const app = buildApp();
+
+    const anonymous = await request(app).get('/api/v1/nope');
+    expect(anonymous.status).toBe(401);
+
+    const res = await request(app)
+      .post('/api/v1/nope')
+      .set('Authorization', `Bearer ${liveKey()}`);
+    expect(res.status).toBe(404);
+    expect(res.headers['content-type']).toMatch(PROBLEM);
+    expect(res.body).toMatchObject({
+      code: 'not-found',
+      detail: 'No such endpoint: POST /api/v1/nope',
+    });
+  });
+
+  it('answers a database failure with a 500 problem that leaks nothing', async () => {
+    findUnique.mockRejectedValue(new Error('connect ECONNREFUSED 10.0.0.5'));
+    const res = await request(buildApp())
+      .get('/api/v1/models')
+      .set('Authorization', `Bearer ${generateApiKey()}`);
+
+    expect(res.status).toBe(500);
+    expect(res.headers['content-type']).toMatch(PROBLEM);
+    expect(res.body.code).toBe('internal-error');
+    expect(JSON.stringify(res.body)).not.toContain('ECONNREFUSED');
+  });
+});
+
+describe('rate limiting', () => {
+  it('limits per key, announces the policy and sends Retry-After on 429', async () => {
+    const app = buildApp();
+    const noisy = `Bearer ${liveKey()}`;
+    const quiet = `Bearer ${liveKey()}`;
+
+    const first = await request(app)
+      .get('/api/v1/models')
+      .set('Authorization', noisy);
+    expect(first.status).toBe(200);
+    expect(first.headers['ratelimit-policy']).toContain(
+      `q=${V1_RATE_LIMIT_PER_MINUTE}`
+    );
+    expect(first.headers['ratelimit']).toContain(
+      `r=${V1_RATE_LIMIT_PER_MINUTE - 1}`
+    );
+
+    for (let i = 1; i < V1_RATE_LIMIT_PER_MINUTE; i++) {
+      await request(app).get('/api/v1/models').set('Authorization', noisy);
+    }
+
+    const limited = await request(app)
+      .get('/api/v1/models')
+      .set('Authorization', noisy);
+    expect(limited.status).toBe(429);
+    expect(limited.headers['content-type']).toMatch(PROBLEM);
+    expect(limited.body.code).toBe('rate-limit-exceeded');
+    expect(Number(limited.headers['retry-after'])).toBeGreaterThan(0);
+    expect(Number(limited.headers['retry-after'])).toBeLessThanOrEqual(60);
+
+    // Another key of the same account is unaffected.
+    const other = await request(app)
+      .get('/api/v1/models')
+      .set('Authorization', quiet);
+    expect(other.status).toBe(200);
+  });
+});

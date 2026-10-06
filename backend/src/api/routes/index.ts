@@ -22,6 +22,8 @@ import feedbackRoutes from './feedbackRoutes';
 import projectFolderRoutes from './projectFolderRoutes';
 import { essaysRoutes } from './essaysRoutes';
 import segmenterRoutes from './segmenterRoutes';
+import apiKeyRoutes from './apiKeyRoutes';
+import v1Routes from '../v1';
 
 interface RouteInfo {
   path: string;
@@ -68,6 +70,12 @@ export function setupRoutes(app: Express): void {
   app.use('/api/admin', adminRoutes);
 
   app.use('/api/users', userRoutes);
+  // API keys are MANAGED here, with the session cookie, and USED on /api/v1.
+  app.use('/api/api-keys', apiKeyRoutes);
+  // The public, API-key-authenticated surface. Mounted before the routers
+  // below that sit on bare `/api` or apply a blanket cookie `authenticate`,
+  // so a `/api/v1` request can only ever be answered by its own router.
+  app.use('/api/v1', v1Routes);
   // IMPORTANT: exportRoutes and sharingRoutes must be registered BEFORE
   // projectRoutes/imageRoutes. They expose paths shaped like
   // /api/projects/:projectId/... that need a public ?token= query-auth

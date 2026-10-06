@@ -200,6 +200,11 @@ function getUsername(req: AuthRequest): string {
   if (impersonatorEmail && req.user?.email) {
     return `${impersonatorEmail}(as:${req.user.email})`;
   }
+  // A request made with an API key is the account's, but not the person at
+  // the keyboard — and WHICH key matters when one has to be revoked.
+  if (req.apiKey && req.user?.email) {
+    return `${req.user.email}(key:${req.apiKey.prefix})`;
+  }
   if (req.user?.email) {
     return req.user.email;
   }
