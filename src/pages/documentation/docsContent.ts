@@ -852,6 +852,8 @@ export function buildDocsSections(t: Translate): DocsSection[] {
           label: s('docs.publicApi.depthNoteLabel'),
           text: s('docs.publicApi.depthNoteText'),
         },
+        { kind: 'heading', text: s('docs.publicApi.jobsHeading') },
+        { kind: 'paragraph', text: s('docs.publicApi.jobsText') },
         { kind: 'heading', text: s('docs.publicApi.limitsHeading') },
         {
           kind: 'list',

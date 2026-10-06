@@ -2303,6 +2303,9 @@ export default {
       depthNoteLabel: '16-bit images',
       depthNoteText:
         'The microtubule and neurite/soma models use a 16-bit image at full depth. For every other model a 16-bit image is first stretched to 8 bits, and the response says so in a warning.',
+      jobsHeading: 'Larger images and batches',
+      jobsText:
+        "A request to /segment holds the connection until the model has finished. For an image above 4096 × 4096 pixels, or for many images, create a job with POST /api/v1/jobs: the upload returns at once, you poll the job, and you fetch each image's result when it is ready — choosing the output format then. A job takes up to 20 images of up to 8192 × 8192 pixels (4096 × 4096 for the spheroid_disintegration model), and its results are kept for 24 hours.",
       limitsHeading: 'Limits',
       limit1: 'Images up to 4096 × 4096 pixels and 64 MiB.',
       limit2: '120 requests per minute and 2 running segmentations per key.',

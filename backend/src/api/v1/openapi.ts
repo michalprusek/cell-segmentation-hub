@@ -1,12 +1,16 @@
 import { MODEL_REGISTRY } from '../../constants/modelRegistry';
-import { V1_RATE_LIMIT_PER_MINUTE } from './limits';
+import { SYNC_MAX_PIXELS, V1_RATE_LIMIT_PER_MINUTE } from './limits';
 import { OUTPUT_FORMATS } from './models';
-import { PROBLEM_TYPES, PROBLEM_TYPE_BASE, type ProblemCode } from './problem';
 import {
-  MAX_CONCURRENT_PER_KEY,
-  SYNC_MAX_BYTES,
-  SYNC_MAX_PIXELS,
-} from './segment';
+  JOB_MAX_FILE_BYTES,
+  JOB_MAX_ITEMS,
+  JOB_MAX_PIXELS,
+  JOB_MAX_TOTAL_BYTES,
+  JOB_STATUSES,
+  MAX_ACTIVE_JOBS_PER_USER,
+} from './jobs/limits';
+import { PROBLEM_TYPES, PROBLEM_TYPE_BASE, type ProblemCode } from './problem';
+import { MAX_CONCURRENT_PER_KEY, SYNC_MAX_BYTES } from './segment';
 
 /**
  * The OpenAPI 3.1 description of `/api/v1`, built from the constants the
@@ -64,6 +68,36 @@ export const SEGMENT_PROBLEMS: ProblemCode[] = [
   'segmentation-failed',
 ];
 
+export const JOB_PROBLEMS: ProblemCode[] = [
+  ...AUTH_PROBLEMS,
+  'too-many-jobs',
+  'unsupported-media-type',
+  'validation-failed',
+  'payload-too-large',
+  'idempotency-key-reused',
+  'server-busy',
+  'not-found',
+  'result-not-ready',
+  'result-unavailable',
+  'result-expired',
+  'not-acceptable',
+  'output-not-representable',
+];
+
+const jobId = {
+  name: 'id',
+  in: 'path',
+  required: true,
+  schema: { type: 'string', format: 'uuid' },
+};
+
+const jobResponse = (description: string): Record<string, unknown> => ({
+  description,
+  content: {
+    'application/json': { schema: { $ref: '#/components/schemas/Job' } },
+  },
+});
+
 const point = {
   type: 'array',
   prefixItems: [{ type: 'number' }, { type: 'number' }],
@@ -95,6 +129,7 @@ export function buildOpenApi(): Record<string, unknown> {
     tags: [
       { name: 'Models' },
       { name: 'Segmentation' },
+      { name: 'Jobs', description: 'Asynchronous segmentation of larger images and batches.' },
       { name: 'Meta', description: 'Public; no API key needed.' },
     ],
     paths: {
@@ -247,6 +282,208 @@ export function buildOpenApi(): Record<string, unknown> {
               },
             },
             ...byStatus(SEGMENT_PROBLEMS),
+          },
+        },
+      },
+      '/jobs': {
+        post: {
+          tags: ['Jobs'],
+          operationId: 'createJob',
+          summary: 'Create a job',
+          description: [
+            `Queue 1–${JOB_MAX_ITEMS} images for one model and return at once. Poll the job, then fetch each image's result — and choose its format — from \`/jobs/{id}/results/{index}\`.`,
+            '',
+            `Limits: ${JOB_MAX_FILE_BYTES / 1024 / 1024} MiB per file and ${JOB_MAX_TOTAL_BYTES / 1024 / 1024 / 1024} GiB per job; images up to ${JOB_MAX_PIXELS} pixels (8192 x 8192), except \`spheroid_disintegration\`, which keeps the synchronous ${SYNC_MAX_PIXELS}; ${MAX_ACTIVE_JOBS_PER_USER} active jobs per account.`,
+            '',
+            'An image over the pixel limit, or one that cannot be decoded, fails as an item of the job — it is found when it is processed, not at upload.',
+            '',
+            'Send an `Idempotency-Key` header to make a retry safe: the same key with the same request returns the job already created (200, `Idempotent-Replayed: true`); with a different request it is a 422.',
+          ].join('\n'),
+          parameters: [
+            {
+              name: 'Idempotency-Key',
+              in: 'header',
+              required: false,
+              schema: { type: 'string', maxLength: 255 },
+              description: 'Any unique string, e.g. a UUID. An IETF draft, not yet a standard.',
+            },
+          ],
+          requestBody: {
+            required: true,
+            content: {
+              'multipart/form-data': {
+                schema: {
+                  type: 'object',
+                  required: ['images', 'model'],
+                  properties: {
+                    images: {
+                      type: 'array',
+                      minItems: 1,
+                      maxItems: JOB_MAX_ITEMS,
+                      items: {},
+                      description: 'One file part named `images` per image.',
+                    },
+                    model: { $ref: '#/components/schemas/ModelId' },
+                    threshold: { type: 'number', minimum: 0.1, maximum: 0.99 },
+                    detect_holes: { type: 'boolean' },
+                    page: { type: 'integer', minimum: 0, default: 0 },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            '202': {
+              ...jobResponse('The job was queued.'),
+              headers: {
+                Location: {
+                  schema: { type: 'string' },
+                  description: 'The job to poll.',
+                },
+                'Retry-After': {
+                  schema: { type: 'integer' },
+                  description: 'Seconds to wait before polling.',
+                },
+              },
+            },
+            '200': jobResponse(
+              'A replay: this `Idempotency-Key` had already created this job.'
+            ),
+            ...byStatus([
+              ...AUTH_PROBLEMS,
+              'too-many-jobs',
+              'unsupported-media-type',
+              'validation-failed',
+              'payload-too-large',
+              'idempotency-key-reused',
+              'server-busy',
+            ]),
+          },
+        },
+        get: {
+          tags: ['Jobs'],
+          operationId: 'listJobs',
+          summary: 'List your 50 most recent jobs',
+          responses: {
+            '200': {
+              description: 'Jobs, newest first, without their items.',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    required: ['data'],
+                    properties: {
+                      data: {
+                        type: 'array',
+                        items: { $ref: '#/components/schemas/Job' },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            ...byStatus(AUTH_PROBLEMS),
+          },
+        },
+      },
+      '/jobs/{id}': {
+        get: {
+          tags: ['Jobs'],
+          operationId: 'getJob',
+          summary: 'Get a job and the state of each image',
+          parameters: [jobId],
+          responses: {
+            '200': {
+              ...jobResponse('The job. `Retry-After` is present while it is still running.'),
+              headers: {
+                'Retry-After': {
+                  schema: { type: 'integer' },
+                  description: 'Seconds to wait before polling again.',
+                },
+              },
+            },
+            ...byStatus([...AUTH_PROBLEMS, 'not-found']),
+          },
+        },
+        delete: {
+          tags: ['Jobs'],
+          operationId: 'deleteJob',
+          summary: 'Delete a job and everything stored for it',
+          parameters: [jobId],
+          responses: {
+            '204': { description: 'Deleted.' },
+            ...byStatus([...AUTH_PROBLEMS, 'not-found']),
+          },
+        },
+      },
+      '/jobs/{id}/cancel': {
+        post: {
+          tags: ['Jobs'],
+          operationId: 'cancelJob',
+          summary: 'Cancel a job',
+          description:
+            'Best effort and idempotent. Images not yet started are canceled; one already running finishes; results already produced stay available. Cancelling a finished job changes nothing.',
+          parameters: [jobId],
+          responses: {
+            '200': jobResponse('The job, with cancellation requested.'),
+            ...byStatus([...AUTH_PROBLEMS, 'not-found']),
+          },
+        },
+      },
+      '/jobs/{id}/results/{index}': {
+        get: {
+          tags: ['Jobs'],
+          operationId: 'getJobResult',
+          summary: 'Get one image\'s result, in any format',
+          description:
+            'The same representations as `POST /segment`. The format is chosen here, so one job can be read in several formats without running anything again.',
+          parameters: [
+            jobId,
+            {
+              name: 'index',
+              in: 'path',
+              required: true,
+              schema: { type: 'integer', minimum: 0 },
+              description: 'The image\'s position in the upload, from 0.',
+            },
+            {
+              name: 'output_format',
+              in: 'query',
+              required: false,
+              schema: { $ref: '#/components/schemas/OutputFormat' },
+            },
+          ],
+          responses: {
+            '200': {
+              description: 'The result, in the requested format.',
+              content: {
+                'application/json': {
+                  schema: { $ref: '#/components/schemas/Segmentation' },
+                },
+                'image/png': {
+                  schema: { type: 'string', contentMediaType: 'image/png' },
+                },
+                'image/tiff': {
+                  schema: { type: 'string', contentMediaType: 'image/tiff' },
+                },
+                'application/zip': {
+                  schema: {
+                    type: 'string',
+                    contentMediaType: 'application/zip',
+                  },
+                },
+              },
+            },
+            ...byStatus([
+              ...AUTH_PROBLEMS,
+              'not-found',
+              'validation-failed',
+              'result-not-ready',
+              'result-unavailable',
+              'result-expired',
+              'not-acceptable',
+              'output-not-representable',
+            ]),
           },
         },
       },
@@ -487,6 +724,91 @@ export function buildOpenApi(): Record<string, unknown> {
                 },
               },
             },
+          },
+        },
+        Job: {
+          type: 'object',
+          required: [
+            'id',
+            'status',
+            'model',
+            'parameters',
+            'page',
+            'counts',
+            'created_at',
+            'started_at',
+            'completed_at',
+            'expires_at',
+            'urls',
+          ],
+          properties: {
+            id: { type: 'string', format: 'uuid' },
+            status: {
+              type: 'string',
+              enum: [...JOB_STATUSES],
+              description:
+                '`queued` → `processing` → `succeeded` (every image), `partially_succeeded` (some), `failed` (none) or `canceled` (at least one image was skipped) → `expired` once the results have been deleted.',
+            },
+            model: { $ref: '#/components/schemas/ModelId' },
+            parameters: { type: 'object' },
+            page: { type: 'integer' },
+            counts: {
+              type: 'object',
+              properties: {
+                total: { type: 'integer' },
+                queued: { type: 'integer' },
+                processing: { type: 'integer' },
+                succeeded: { type: 'integer' },
+                failed: { type: 'integer' },
+                canceled: { type: 'integer' },
+              },
+            },
+            created_at: { type: 'string', format: 'date-time' },
+            started_at: { type: ['string', 'null'], format: 'date-time' },
+            completed_at: { type: ['string', 'null'], format: 'date-time' },
+            expires_at: {
+              type: ['string', 'null'],
+              format: 'date-time',
+              description: 'When the results are deleted: 24 hours after the job finished.',
+            },
+            urls: {
+              type: 'object',
+              properties: {
+                self: { type: 'string' },
+                cancel: { type: 'string' },
+              },
+            },
+            items: {
+              type: 'array',
+              description: 'One per uploaded image, in upload order. Absent in the list.',
+              items: { $ref: '#/components/schemas/JobItem' },
+            },
+          },
+        },
+        JobItem: {
+          type: 'object',
+          required: ['index', 'filename', 'status'],
+          properties: {
+            index: { type: 'integer' },
+            filename: { type: 'string' },
+            status: {
+              type: 'string',
+              enum: ['queued', 'processing', 'succeeded', 'failed', 'canceled'],
+            },
+            error: {
+              type: 'object',
+              description: 'Why the image failed: a problem `code` and its detail.',
+              properties: {
+                code: { type: 'string' },
+                detail: { type: 'string' },
+              },
+            },
+            object_count: { type: 'integer' },
+            width: { type: 'integer' },
+            height: { type: 'integer' },
+            warnings: { type: 'array', items: { type: 'string' } },
+            inference_ms: { type: 'integer' },
+            result_url: { type: 'string' },
           },
         },
         ProblemType: {

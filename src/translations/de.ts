@@ -2326,6 +2326,9 @@ export default {
       depthNoteLabel: '16-Bit-Bilder',
       depthNoteText:
         'Die Modelle für Mikrotubuli und für Neuriten/Somata verwenden ein 16-Bit-Bild in voller Tiefe. Für alle anderen Modelle wird ein 16-Bit-Bild zunächst auf 8 Bit gestreckt, und die Antwort weist in einer Warnung darauf hin.',
+      jobsHeading: 'Größere Bilder und Stapel',
+      jobsText:
+        'Eine Anfrage an /segment hält die Verbindung offen, bis das Modell fertig ist. Für ein Bild über 4096 × 4096 Pixel oder für viele Bilder legen Sie mit POST /api/v1/jobs einen Job an: Der Upload antwortet sofort, Sie fragen den Job ab und holen das Ergebnis jedes Bildes, sobald es fertig ist — das Ausgabeformat wählen Sie erst dann. Ein Job nimmt bis zu 20 Bilder mit bis zu 8192 × 8192 Pixeln (4096 × 4096 beim Modell spheroid_disintegration) auf, und seine Ergebnisse werden 24 Stunden aufbewahrt.',
       limitsHeading: 'Grenzen',
       limit1: 'Bilder bis 4096 × 4096 Pixel und 64 MiB.',
       limit2:

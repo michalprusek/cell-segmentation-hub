@@ -25,6 +25,16 @@ import {
 import { OUTPUT_FORMATS, V1_MODELS } from '../models';
 import { PROBLEM_TYPES } from '../problem';
 import {
+  JOB_MAX_FILE_BYTES,
+  JOB_MAX_ITEMS,
+  JOB_MAX_PIXELS,
+  JOB_MAX_TOTAL_BYTES,
+  JOB_RESULT_TTL_MS,
+  JOB_STATUSES,
+  MAX_ACTIVE_JOBS_PER_USER,
+  jobMaxPixels,
+} from '../jobs/limits';
+import {
   MAX_CONCURRENT_PER_KEY,
   SYNC_MAX_BYTES,
   SYNC_MAX_PIXELS,
@@ -83,6 +93,24 @@ describe.skipIf(!present)('docs/api/public-v1.md', () => {
     ]) {
       expect(page).toContain(`| \`${code}\``);
     }
+  });
+
+  it('documents every job state and the job limits the code enforces', () => {
+    for (const status of JOB_STATUSES) {
+      expect(page).toMatch(new RegExp(`\\|\\s*\`${status}\`\\s*\\|`));
+    }
+    expect(page).toContain(`**${JOB_MAX_ITEMS} images** per job`);
+    expect(page).toContain(`**${JOB_MAX_FILE_BYTES / 1024 / 1024} MiB** per file`);
+    expect(page).toContain(
+      `**${JOB_MAX_TOTAL_BYTES / 1024 / 1024 / 1024} GiB** per job`
+    );
+    expect(JOB_MAX_PIXELS).toBe(8192 * 8192);
+    expect(page).toContain('**8192 × 8192 pixels**');
+    expect(page).toContain(`**${MAX_ACTIVE_JOBS_PER_USER} active jobs**`);
+    expect(page).toContain(`**${JOB_RESULT_TTL_MS / 3600000} hours**`);
+    // The one model that keeps the synchronous ceiling in a job is named.
+    expect(jobMaxPixels('spheroid_disintegration')).toBe(SYNC_MAX_PIXELS);
+    expect(page).toContain('except `spheroid_disintegration`');
   });
 
   it('quotes the limits the code enforces', () => {

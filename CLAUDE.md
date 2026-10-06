@@ -405,11 +405,24 @@ Each of these shipped to production at least once in 2026 despite green pre-comm
 21. **A generated baseline file hides the error it is regenerated over.** `typecheck-baseline.json` and `eslint-baseline.json` record tolerated problems; re-running `npm run type-check:update` after a conflict silently accepts anything new. When you must regenerate, **diff the result against both parents** and account for every entry that appears in neither. On 2026-09-04 all five such entries turned out to be pre-existing errors whose message text changed because `AuthContextType` gained `isAdmin` — but the total was FALLING (1649 → 1608), so a genuinely new error would have been invisible.
 
 22. **A stale Prisma client makes the host TS check lie.** After any `schema.prisma` change, `npx tsc` on the host reports `Property 'x' does not exist` until the client is regenerated — and `npx prisma generate` **fails on the host** (`EACCES: permission denied, unlink .prisma/client/index.d.ts`) because `backend/node_modules` is root-owned, written by the containers. Regenerate through the container:
+
     ```bash
     docker run --rm --user root --entrypoint /bin/sh \
       -v $PWD/backend:/app -w /app cell-segmentation-hub-backend -c "npx prisma generate"
     ```
+
     Same root cause makes `cp -al node_modules` fail silently for a non-root user (`fs.protected_hardlinks=1`): it creates the directory tree and **zero files**.
+
+23. **Start-up code that needs something a migration creates.** Anything on
+    the server's start-up path that reads a table — a worker re-queuing its
+    interrupted work, a cache warm-up — turns "the migration has not run yet"
+    from a failing endpoint into a server that cannot start. Two rules, both
+    learned from the 2026-10-06 outage described under
+    [Production](#production-single-stack-post-2026-05-15): migrate before
+    recreating, and keep optional subsystems out of the critical start-up
+    `try` (the job worker's `startJobWorker` now touches no database at all;
+    its recovery runs in the first tick, where a failure is logged and
+    retried).
 
 ---
 
@@ -526,6 +539,10 @@ Blue-green is gone (see memory `project_blue_green_removal_2026_05_15`). Deploy 
 ```bash
 # 1. Build the changed services
 make build-service SERVICE=backend                     # or frontend / ml
+# 1b. If the change has a migration, apply it FROM THE NEW IMAGE, BEFORE the swap
+docker compose -f docker-compose.production.yml \
+  --env-file .env.production \
+  run --rm --no-deps -T backend npx prisma migrate deploy
 # 2. Recreate (no need to stop the others)
 docker compose -f docker-compose.production.yml \
   --env-file .env.production \
@@ -535,6 +552,18 @@ docker restart spheroseg-nginx
 # 4. Verify
 curl https://spherosegapp.utia.cas.cz/health           # → "production-healthy"
 ```
+
+**Migrate before you recreate, not after.** The other order — recreate, then
+`docker exec spheroseg-backend npx prisma migrate deploy` — works only while
+no code touches the new table until a request asks for it. On 2026-10-06 a
+worker queried its new table at START-UP, inside the server's "critical
+services" `try`: the table did not exist yet, the query threw, the server
+exited, and `restart: always` turned that into twelve restarts and about four
+minutes with the whole app down. `docker exec` cannot even run while the
+container is restarting, so the documented fix was unavailable; the table was
+created by piping the (idempotent) migration SQL into `psql`. Step 1b runs the
+migration in a throwaway container from the NEW image, on the production
+network, and does not touch the running backend.
 
 `make prod` rebuilds and recreates everything; useful for big changes but unnecessary for service-scoped updates.
 
@@ -685,6 +714,29 @@ Bearer sseg_…` only. A key in the query string is refused with 400 rather
   (`v1/openapi.ts`) and `docs/api/public-v1.md` is checked against them by
   `docs.test.ts`, which is SKIPPED when only `backend/` is mounted — it needs
   the repo root.
+- **Jobs (`/api/v1/jobs`, table `api_jobs`, files under
+  `<UPLOAD_DIR>/api-jobs/<id>/`) are a separate mechanism from
+  `SegmentationQueue`**, which has hard foreign keys to `Image` and `Project`
+  and cannot hold a stateless job. `jobs/worker.ts` runs in the backend
+  process, ONE image per tick, through the same single-slot `mlClient` as
+  `/segment` — so jobs add no parallelism. Fairness is `ORDER BY updatedAt`:
+  processing an image touches its job, so waiting jobs take turns.
+- **A job stores the model's result, not a rendering.** `output_format` is
+  chosen at `GET /jobs/:id/results/:index`; it is not a field of `POST /jobs`.
+- **The worker is the only writer of `items`.** A request never rewrites it:
+  cancel sets `cancelRequested` (its own column) and the next tick acts on
+  it; DELETE removes the row and the worker notices its save found nothing.
+- **Idempotency is decided by the unique index** `(userId, idempotencyKey)`,
+  in the `P2002` handler — there is no look-up-first step, so a retry and two
+  racing requests take the same path. "Same request" includes a SHA-256 of
+  every uploaded file.
+- **`spheroid_disintegration` keeps the synchronous pixel ceiling in a job**
+  (`jobMaxPixels`): it runs at native resolution with no tiling, so a larger
+  frame costs GPU memory, not just time. Every other model may take 8192².
+- Admission to `POST /jobs` (active-job limit, storage budget) runs BEFORE the
+  upload is read, like the slot reservation on `/segment`.
+- Results expire 24 h after a job finishes (`sweep`, every 10 min); the row
+  stays as `expired` for 7 days. Inputs are deleted as each image is used.
 - **The ML service's routes are also called `/api/v1/*`** on its own port.
   Unrelated. Never add an nginx `location /api/v1/` pointing at `ml_service`,
   which has no authentication at all.

@@ -8,6 +8,7 @@ import {
 } from '../../constants/modelRegistry';
 import { describeModel, isKnownModel } from './models';
 import { segmentRoute } from './segment';
+import jobRoutes from './jobs/routes';
 import { logger } from '../../utils/logger';
 import {
   V1_RATE_LIMIT_PER_MINUTE,
@@ -152,6 +153,7 @@ router.get('/models/:id', (req: Request, res: Response) => {
 });
 
 router.post('/segment', ...segmentRoute);
+router.use('/jobs', jobRoutes);
 
 // The detail does not echo the requested path. Nothing a browser would render
 // is sent here (the media type is problem+json), but reflecting request input

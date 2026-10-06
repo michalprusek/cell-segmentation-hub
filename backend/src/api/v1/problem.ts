@@ -89,6 +89,36 @@ export const PROBLEM_TYPES = {
     description:
       'The Accept header excludes the media type of the chosen `output_format`. Accept is a check on the format, not the way to choose it.',
   },
+  'too-many-jobs': {
+    status: 429,
+    title: 'Too many active jobs',
+    description:
+      'This account already has the maximum number of jobs queued or running. Wait for one to finish, or cancel one.',
+  },
+  'idempotency-key-reused': {
+    status: 422,
+    title: 'Idempotency-Key reused with a different request',
+    description:
+      'The Idempotency-Key was already used to create a job from a different request. Use a new key for a new request.',
+  },
+  'result-not-ready': {
+    status: 409,
+    title: 'Result not ready',
+    description:
+      'This image has not been processed yet. Poll the job and fetch the result once the item has succeeded.',
+  },
+  'result-unavailable': {
+    status: 409,
+    title: 'No result for this image',
+    description:
+      'This image failed or was canceled, so it has no result. The item in the job says why.',
+  },
+  'result-expired': {
+    status: 410,
+    title: 'Result expired',
+    description:
+      'Results are kept for 24 hours after a job finishes. This one has been deleted.',
+  },
   'server-busy': {
     status: 503,
     title: 'Segmentation service is busy',

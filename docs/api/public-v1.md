@@ -83,14 +83,20 @@ labels = tifffile.imread(io.BytesIO(r.content))   # uint16, 0 = background
 
 ## Endpoints
 
-| Method | Path               | Purpose                                                    |
-| ------ | ------------------ | ---------------------------------------------------------- |
-| GET    | `/models`          | Every model: what it returns and which parameters it reads |
-| GET    | `/models/{id}`     | One model                                                  |
-| POST   | `/segment`         | Segment one image                                          |
-| GET    | `/openapi.json`    | The OpenAPI 3.1 document (public)                          |
-| GET    | `/docs`            | Swagger UI over that document (public)                     |
-| GET    | `/problems/{code}` | What a problem `type` URI resolves to (public)             |
+| Method | Path                         | Purpose                                                    |
+| ------ | ---------------------------- | ---------------------------------------------------------- |
+| GET    | `/models`                    | Every model: what it returns and which parameters it reads |
+| GET    | `/models/{id}`               | One model                                                  |
+| POST   | `/segment`                   | Segment one image                                          |
+| POST   | `/jobs`                      | Queue 1–20 images; returns at once                         |
+| GET    | `/jobs`                      | Your 50 most recent jobs                                   |
+| GET    | `/jobs/{id}`                 | A job and the state of each image                          |
+| POST   | `/jobs/{id}/cancel`          | Cancel what has not started                                |
+| DELETE | `/jobs/{id}`                 | Delete a job and everything stored for it                  |
+| GET    | `/jobs/{id}/results/{index}` | One image's result, in any format                          |
+| GET    | `/openapi.json`              | The OpenAPI 3.1 document (public)                          |
+| GET    | `/docs`                      | Swagger UI over that document (public)                     |
+| GET    | `/problems/{code}`           | What a problem `type` URI resolves to (public)             |
 
 ### `POST /segment`
 
@@ -116,6 +122,104 @@ Limits for this synchronous endpoint:
 - inference is serial across the whole service (one GPU), so a request can
   wait behind others. Allow a client timeout of a few minutes.
 
+## Jobs: larger images and batches
+
+`POST /segment` holds the connection until the model has finished, which is
+fine for one ordinary frame. For a frame above 4096 × 4096, or for many
+frames, create a **job**: the upload returns at once and you collect the
+results when they are ready.
+
+```bash
+# 1. Queue up to 20 images for one model. Answers 202 immediately.
+curl -s -H "Authorization: Bearer $SPHEROSEG_KEY" \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -F images=@a.tif -F images=@b.tif -F model=segformer \
+  https://spherosegapp.utia.cas.cz/api/v1/jobs
+
+# 2. Poll. `Retry-After` says how long to wait while it is still running.
+curl -s -H "Authorization: Bearer $SPHEROSEG_KEY" \
+  https://spherosegapp.utia.cas.cz/api/v1/jobs/$JOB
+
+# 3. Fetch each image's result - choosing the format now, not at upload.
+curl -s -H "Authorization: Bearer $SPHEROSEG_KEY" \
+  -o a.labels.tif \
+  "https://spherosegapp.utia.cas.cz/api/v1/jobs/$JOB/results/0?output_format=mask_tiff"
+```
+
+```python
+import time, requests
+
+job = requests.post(
+    f"{API}/jobs",
+    headers={**headers, "Idempotency-Key": my_unique_id},
+    files=[("images", open(p, "rb")) for p in paths],
+    data={"model": "segformer"},
+).json()
+
+while job["status"] in ("queued", "processing"):
+    time.sleep(5)
+    job = requests.get(f"{API}/jobs/{job['id']}", headers=headers).json()
+
+for item in job["items"]:
+    if item["status"] == "succeeded":
+        result = requests.get(API.rsplit("/api/v1", 1)[0] + item["result_url"],
+                              headers=headers).json()
+    else:
+        print(item["filename"], "->", item["status"], item.get("error"))
+```
+
+**Creating a job** takes the same fields as `/segment` — `model`, and
+`threshold`, `detect_holes`, `page` where the model reads them — but the files
+go in parts named **`images`** and there is **no `output_format`**: a job
+stores the model's result, not a rendering of it, so one job can be read as
+JSON, as COCO and as a label image without running anything twice.
+
+**A job's `status`**
+
+| Status                | Meaning                                                              |
+| --------------------- | -------------------------------------------------------------------- |
+| `queued`              | Nothing has started yet                                              |
+| `processing`          | Images are being run, one at a time                                  |
+| `succeeded`           | Every image succeeded                                                |
+| `partially_succeeded` | Some images succeeded and some failed                                |
+| `failed`              | No image succeeded                                                   |
+| `canceled`            | It was canceled and at least one image was skipped                   |
+| `expired`             | It finished more than 24 hours ago and its results have been deleted |
+
+Each entry of `items` has its own `status` (`queued`, `processing`,
+`succeeded`, `failed`, `canceled`). A failed item carries
+`error: { code, detail }` with one of the problem codes below — an image that
+is too large or cannot be decoded fails **as an item**, when it is processed,
+not at upload. A succeeded item carries `object_count`, the image size, its
+warning codes and a `result_url`.
+
+**Limits**
+
+- **20 images** per job, **256 MiB** per file, **2 GiB** per job;
+- images up to **8192 × 8192 pixels** — except `spheroid_disintegration`,
+  which runs at the frame's native resolution and keeps the synchronous
+  4096 × 4096;
+- **5 active jobs** (queued or processing) per account;
+- results are kept for **24 hours** after a job finishes, then deleted; the
+  uploads are deleted as each image is processed.
+
+**Things worth knowing**
+
+- Images run one at a time, in turn with everyone else's — a job does not get
+  more of the GPU than a synchronous request does. With several jobs waiting,
+  each gets one image per turn.
+- `POST /jobs/{id}/cancel` is best effort: images not yet started are skipped,
+  one already running finishes, results already produced stay available.
+- `DELETE /jobs/{id}` removes the job and everything stored for it at once.
+- A job belongs to your account: any of your keys can read it, nobody else's
+  can (they get 404).
+- `Idempotency-Key` makes a retried upload safe. The same key with the same
+  request returns the job already created (200, `Idempotent-Replayed: true`);
+  with a different request it is 422 `idempotency-key-reused`. It follows an
+  IETF **draft**, not a standard.
+- A job survives a restart of the service: an image that was running is run
+  again.
+
 ## Models
 
 | id                        | Name                           | Geometry | Classes                                    | `threshold`       | `detect_holes`     | Input depth |
@@ -133,7 +237,13 @@ Limits for this synchronous endpoint:
 | `microcapsule`            | Microcapsule                   | polygon  | `microcapsule`, `membrane`                 | yes (default 0.5) | no                 | 8bit        |
 | `neurite_soma`            | Neurite / Soma                 | polygon  | `neurite`, `soma`                          | no                | no                 | native      |
 
+- **`hrnet`** — The image is resized to 1024 x 1024 for inference, whatever its size or aspect ratio, and the outlines are scaled back. A frame much larger than that gains no detail; segment one spheroid per image.
+- **`cbam_resunet`** — The image is resized to 1024 x 1024 for inference, whatever its size or aspect ratio, and the outlines are scaled back. A frame much larger than that gains no detail; segment one spheroid per image.
+- **`unet_spherohq`** — The image is resized to 1024 x 1024 for inference, whatever its size or aspect ratio, and the outlines are scaled back. A frame much larger than that gains no detail; segment one spheroid per image.
 - **`spheroid_disintegration`** — Runs at the native resolution of the image. Validated on 2048 x 2048 px frames; other sizes are reported in the result warnings. Holes are never emitted for this model.
+- **`segformer`** — The image is resized to 1024 x 1024 for inference, whatever its size or aspect ratio, and the outlines are scaled back. A frame much larger than that gains no detail; segment one spheroid per image.
+- **`mamba_unet`** — The image is resized to 1024 x 1024 for inference, whatever its size or aspect ratio, and the outlines are scaled back. A frame much larger than that gains no detail; segment one spheroid per image.
+- **`wound`** — The image is resized to 256 x 256 for inference and the outline is scaled back, so its edge is only as fine as that grid.
 - **`microtubule`** — IRM (label-free) images only. On fluorescence (TIRF) frames the output does not track image content. The detection cut is part of the fitted model and cannot be set.
 - **`microcapsule`** — A membrane outline encloses its capsule, so the two overlap. In mask outputs the smaller object is drawn on top.
 - **`neurite_soma`** — Single-channel images. A colour image is accepted only if its channels are identical. Holes are never emitted for this model.
@@ -274,14 +384,19 @@ description of the problem.
 | 401    | `invalid-api-key`              | The key is malformed, unknown, revoked or expired. These cases are deliberately not distinguished.                                                                     |
 | 404    | `not-found`                    | No such endpoint or resource in this API version.                                                                                                                      |
 | 406    | `not-acceptable`               | The Accept header excludes the media type of the chosen `output_format`. Accept is a check on the format, not the way to choose it.                                    |
+| 409    | `result-not-ready`             | This image has not been processed yet. Poll the job and fetch the result once the item has succeeded.                                                                  |
+| 409    | `result-unavailable`           | This image failed or was canceled, so it has no result. The item in the job says why.                                                                                  |
+| 410    | `result-expired`               | Results are kept for 24 hours after a job finishes. This one has been deleted.                                                                                         |
 | 413    | `image-too-large`              | The image has more pixels than a synchronous request accepts (`max_pixels`).                                                                                           |
 | 413    | `payload-too-large`            | The upload exceeds the size limit in bytes (`max_bytes`).                                                                                                              |
 | 415    | `unsupported-media-type`       | The request body must be multipart/form-data with the image in a file part named `image`.                                                                              |
+| 422    | `idempotency-key-reused`       | The Idempotency-Key was already used to create a job from a different request. Use a new key for a new request.                                                        |
 | 422    | `output-not-representable`     | The result cannot be written in the requested format, for example more objects than a 16-bit label image can number.                                                   |
 | 422    | `unsupported-image`            | The upload is not a readable PNG, JPEG, TIFF or BMP image. The file is judged by its content, not its name.                                                            |
 | 422    | `validation-failed`            | One or more request fields are invalid. `errors` lists every one as `{field, detail}`. A parameter the chosen model does not read is refused here rather than ignored. |
 | 429    | `rate-limit-exceeded`          | Too many requests. Wait the number of seconds given in the Retry-After header.                                                                                         |
 | 429    | `too-many-concurrent-requests` | This key already has the maximum number of segmentations in flight. Wait for one to finish.                                                                            |
+| 429    | `too-many-jobs`                | This account already has the maximum number of jobs queued or running. Wait for one to finish, or cancel one.                                                          |
 | 500    | `internal-error`               | An unexpected error. Nothing about the cause is disclosed; the server log has it.                                                                                      |
 | 502    | `segmentation-failed`          | The segmentation service could not process the image.                                                                                                                  |
 | 503    | `server-busy`                  | Too many segmentations are queued. Retry after the number of seconds in Retry-After.                                                                                   |
@@ -312,8 +427,6 @@ anything, or changing a default, would be `v2`.
 
 ## Not in v1
 
-- **Asynchronous jobs** for larger images and batches — planned as
-  `/api/v1/jobs`.
 - **Image by URL** — deliberately absent; fetching URLs on a caller's behalf
   is a server-side request forgery risk.
 - **Videos, ND2 files and cross-frame tracking** — use the app.

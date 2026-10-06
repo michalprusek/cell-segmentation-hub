@@ -130,14 +130,20 @@ output format. It has its own page — **[Public API](public-v1.md)** — its ow
 OpenAPI 3.1 document at `/api/v1/openapi.json` and its own Swagger UI at
 `/api/v1/docs`.
 
-| Method | Path                     | Auth | Purpose                                                    |
-| ------ | ------------------------ | :--: | ---------------------------------------------------------- |
-| GET    | `/api/v1/models`         | key  | Every model: geometry, classes, parameters, output formats |
-| GET    | `/api/v1/models/:id`     | key  | One model                                                  |
-| POST   | `/api/v1/segment`        | key  | Segment one uploaded image; nothing is stored              |
-| GET    | `/api/v1/openapi.json`   |  no  | The OpenAPI document                                       |
-| GET    | `/api/v1/docs`           |  no  | Swagger UI                                                 |
-| GET    | `/api/v1/problems/:code` |  no  | What a problem `type` URI resolves to                      |
+| Method | Path                              | Auth | Purpose                                                    |
+| ------ | --------------------------------- | :--: | ---------------------------------------------------------- |
+| GET    | `/api/v1/models`                  | key  | Every model: geometry, classes, parameters, output formats |
+| GET    | `/api/v1/models/:id`              | key  | One model                                                  |
+| POST   | `/api/v1/segment`                 | key  | Segment one uploaded image; nothing is stored              |
+| POST   | `/api/v1/jobs`                    | key  | Queue 1–20 images; answers 202 at once                     |
+| GET    | `/api/v1/jobs`                    | key  | The caller's 50 most recent jobs                           |
+| GET    | `/api/v1/jobs/:id`                | key  | A job and the state of each image                          |
+| POST   | `/api/v1/jobs/:id/cancel`         | key  | Cancel what has not started                                |
+| DELETE | `/api/v1/jobs/:id`                | key  | Delete a job and its files                                 |
+| GET    | `/api/v1/jobs/:id/results/:index` | key  | One image's result, in any output format                   |
+| GET    | `/api/v1/openapi.json`            |  no  | The OpenAPI document                                       |
+| GET    | `/api/v1/docs`                    |  no  | Swagger UI                                                 |
+| GET    | `/api/v1/problems/:code`          |  no  | What a problem `type` URI resolves to                      |
 
 Three things about it differ from every other route on this page:
 
