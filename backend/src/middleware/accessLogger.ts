@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { AuthRequest } from '../types/auth';
 import { logger } from '../utils/logger';
+import { redactUrlCredentials } from '../utils/redactUrl';
 
 /**
  * Access Log Middleware
@@ -265,7 +266,8 @@ export const accessLogger = (
     ensureLogDirectory();
   }
 
-  const url = req.originalUrl || req.url;
+  // Redacted HERE, at capture: this is the copy that reaches the file.
+  const url = redactUrlCredentials(req.originalUrl || req.url);
 
   // Skip health check endpoints to reduce log verbosity
   if (SKIP_ENDPOINTS.includes(url)) {

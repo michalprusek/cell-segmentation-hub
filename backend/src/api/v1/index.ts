@@ -46,8 +46,40 @@ const v1RateLimiter = rateLimit({
   },
 });
 
+/**
+ * Before authentication, per IP. A well-formed but unknown key costs a
+ * database read, and anyone can compute a valid checksum, so something has to
+ * bound that for callers who have no key to be limited by. It sends no
+ * RateLimit headers: those describe the per-key budget, and two policies on
+ * one response is exactly the confusion the global limiter's exemption for
+ * this path exists to remove.
+ */
+export const V1_UNAUTHENTICATED_LIMIT_PER_MINUTE = 600;
+
+const v1IpRateLimiter = rateLimit({
+  windowMs: 60_000,
+  limit: V1_UNAUTHENTICATED_LIMIT_PER_MINUTE,
+  standardHeaders: false,
+  legacyHeaders: false,
+  handler: (req: Request, res: Response) => {
+    logger.warn(`Rate limit exceeded on /api/v1 for IP ${req.ip}`, 'V1');
+    sendProblem(res, 'rate-limit-exceeded', {
+      detail:
+        'Too many requests from this address. Retry after the number of seconds in the Retry-After header.',
+      // Set by hand: with its headers switched off the limiter sends none,
+      // and a 429 without Retry-After leaves the client guessing.
+      headers: { 'Retry-After': '60' },
+    });
+  },
+});
+
+/** True for a request the global limiter in server.ts must leave to v1. */
+export const isPublicApiPath = (path: string): boolean =>
+  path === '/api/v1' || path.startsWith('/api/v1/');
+
 const router = Router();
 
+router.use(v1IpRateLimiter);
 router.use(authenticateApiKey);
 router.use(v1RateLimiter);
 

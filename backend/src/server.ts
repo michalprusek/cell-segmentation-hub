@@ -27,6 +27,7 @@ import {
   getMonitoringHealth,
   initializeMetricsCollection,
 } from './middleware/monitoring';
+import { isPublicApiPath } from './api/v1';
 import { WebSocketService } from './services/websocketService';
 import { initializeStorageDirectories } from './utils/initializeStorage';
 import { initializeRedis, closeRedis, redisHealthCheck } from './config/redis';
@@ -94,6 +95,12 @@ if (config.RATE_LIMIT_ENABLED) {
     standardHeaders: true,
     legacyHeaders: false,
     skip: req => {
+      // The public API brings its own limiters (per IP before auth, per key
+      // after). Running this one as well made every /api/v1 response carry
+      // TWO RateLimit-Policy headers in two different syntaxes.
+      if (isPublicApiPath(req.path)) {
+        return true;
+      }
       // Skip rate limiting for health checks and metrics in development
       if (config.NODE_ENV === 'development') {
         return (

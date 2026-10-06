@@ -22,7 +22,11 @@ vi.mock('../../../utils/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-import v1Routes, { V1_RATE_LIMIT_PER_MINUTE } from '../index';
+import v1Routes, {
+  V1_RATE_LIMIT_PER_MINUTE,
+  V1_UNAUTHENTICATED_LIMIT_PER_MINUTE,
+  isPublicApiPath,
+} from '../index';
 import { authenticateApiKey } from '../../../middleware/apiKeyAuth';
 import { prisma } from '../../../db';
 import { generateApiKey, hashApiKey } from '../../../services/apiKeyService';
@@ -161,6 +165,15 @@ describe('authentication', () => {
     }
   );
 
+  it('refuses a key in the query string whatever the case of the name', async () => {
+    const key = liveKey();
+    const res = await request(buildApp())
+      .get(`/api/v1/models?API_Key=${key}`)
+      .set('Authorization', `Bearer ${key}`);
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe('credentials-in-url');
+  });
+
   it('does not accept the app session cookie', async () => {
     const res = await request(buildApp())
       .get('/api/v1/models')
@@ -277,5 +290,48 @@ describe('rate limiting', () => {
       .get('/api/v1/models')
       .set('Authorization', quiet);
     expect(other.status).toBe(200);
+  });
+});
+
+describe('unauthenticated traffic', () => {
+  it('is limited per IP before any key is looked up, with Retry-After and no RateLimit headers', async () => {
+    const app = buildApp();
+    const unknown = `Bearer ${generateApiKey()}`;
+
+    const first = await request(app)
+      .get('/api/v1/models')
+      .set('Authorization', unknown);
+    expect(first.status).toBe(401);
+    // A rejected request must not advertise the per-key policy it never
+    // reached, nor any other.
+    expect(first.headers['ratelimit-policy']).toBeUndefined();
+    expect(first.headers['ratelimit']).toBeUndefined();
+
+    for (let i = 1; i < V1_UNAUTHENTICATED_LIMIT_PER_MINUTE; i++) {
+      await request(app).get('/api/v1/models').set('Authorization', unknown);
+    }
+    const lookupsBefore = findUnique.mock.calls.length;
+
+    const limited = await request(app)
+      .get('/api/v1/models')
+      .set('Authorization', unknown);
+    expect(limited.status).toBe(429);
+    expect(limited.headers['content-type']).toMatch(PROBLEM);
+    expect(limited.headers['retry-after']).toBe('60');
+    expect(findUnique.mock.calls.length).toBe(lookupsBefore);
+  });
+});
+
+describe('isPublicApiPath', () => {
+  it.each([
+    ['/api/v1', true],
+    ['/api/v1/', true],
+    ['/api/v1/models', true],
+    ['/api/v10/models', false],
+    ['/api/v1x', false],
+    ['/api/projects', false],
+    ['/api-docs', false],
+  ])('%s -> %s', (path, expected) => {
+    expect(isPublicApiPath(path)).toBe(expected);
   });
 });

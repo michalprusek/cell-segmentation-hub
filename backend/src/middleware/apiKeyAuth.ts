@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { verifyApiKey, ApiKeyVerification } from '../services/apiKeyService';
 import { sendProblem } from '../api/v1/problem';
 import { logger } from '../utils/logger';
+import { isCredentialQueryParam } from '../utils/redactUrl';
 
 declare module 'express-serve-static-core' {
   interface Request {
@@ -12,9 +13,6 @@ declare module 'express-serve-static-core' {
 
 const REALM = 'spheroseg-api';
 
-/** Query parameters other APIs use for a key. Never accepted here. */
-const KEY_QUERY_PARAMS = ['api_key', 'apikey', 'access_token', 'key', 'token'];
-
 /**
  * Authenticate a `/api/v1` request by API key.
  *
@@ -22,9 +20,10 @@ const KEY_QUERY_PARAMS = ['api_key', 'apikey', 'access_token', 'key', 'token'];
  * §2.1). Two alternatives are refused on purpose:
  *
  *  - A key in the QUERY STRING is rejected with 400 rather than ignored.
- *    `accessLogger` writes the full URL of every request to access.log, so a
- *    client that "worked" this way would be leaking its key into a log file
- *    on each call; failing loudly is the only way it finds out.
+ *    URLs are what gets logged — by this app (which redacts these
+ *    parameters, see `utils/redactUrl`) and by the nginx in front of it
+ *    (which does not). A client that "worked" this way would leak its key on
+ *    every call; failing loudly is the only way it finds out.
  *  - The session COOKIE is not consulted. The app's cookie auth relies on
  *    SameSite alone — there is no CSRF token — which is acceptable for the
  *    app's own JSON routes and not for an API meant to be scripted.
@@ -41,7 +40,7 @@ export const authenticateApiKey = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    if (KEY_QUERY_PARAMS.some(name => name in req.query)) {
+    if (Object.keys(req.query).some(isCredentialQueryParam)) {
       sendProblem(res, 'credentials-in-url', {
         detail:
           'Send the API key in the Authorization header: "Authorization: Bearer <key>". ' +
