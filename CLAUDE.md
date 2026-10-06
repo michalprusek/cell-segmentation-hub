@@ -884,9 +884,13 @@ Batch microtubule assay of ND2 wells. `essays_api.py` is a thin FastAPI job runn
   - **Per-channel files are separate passes over the positions**, so the stage
     leaves each field and returns between the IRM and the TIRF frame. Do not
     assume that registers: MEASURE it by sliding the IRM centerlines over the
-    TIRF frame and finding where the signal peaks. On the first folder the
-    offset was 0–1.4 px and zero shift kept a median 99.0 % of the peak
-    contrast, so nothing is shifted — but that is one microscope.
+    TIRF frame and finding where the signal peaks. On the first folder
+    (55 positions sampled across 110 wells) the 17 positions WITH fluorescence
+    on their filaments peaked at a median 1.0 px (max 2.2) and zero shift kept
+    a median 99.9 % of the contrast, so nothing is shifted — but that is one
+    microscope. **Classify by contrast before reading a shift**: 36 of the 55
+    had no TIRF signal on the filaments at all, and there the "offset" is a
+    noise peak of 14 px that changes from frame to frame.
   - **Files of one well are refused unless they show the same fields**: same
     position count, same frame size, stage XY within 5 µm.
 - **The module is vendored at `backend/essays/module`** (it was a separate private repo cloned at image build until 2026-08-11 — no more git clone, build secret, or network at build time).

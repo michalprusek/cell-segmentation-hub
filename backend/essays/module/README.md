@@ -350,15 +350,26 @@ keeps its partial results.
 **Are per-channel files registered to each other?** In that layout the
 channels are recorded in separate passes over the positions, so the stage
 leaves a field and comes back between the IRM frame and the TIRF frame.
-Measured 2026-10-07 on the first such folder (wells D04–D06, 12 positions, 761
+Measured 2026-10-07 on the first such folder (110 wells, 440 positions, 61 226
 microtubules, 1536² px at 72 nm/px) by sliding the IRM centerlines over the
-TIRF frame and finding where the signal under them peaks: the offset is
-**0–1.4 px** (most often a constant +1 px in x, i.e. optics, the same 0–1 px
-the single-file layout shows), and at zero offset the centerlines keep a median
-**99.0 %** of the peak contrast (worst position 84.3 %). So nothing is shifted
-— same rule as the alignment diagnostic above. That is one folder from one
-microscope; a stage with worse repeatability would show up as a clear non-zero
-peak in the same measurement.
+TIRF frame (±15 px) and finding where the signal under them peaks, on every
+eighth position (55):
+
+| Positions                                    | n   | Offset of the peak          | Contrast kept at zero shift |
+| -------------------------------------------- | --- | --------------------------- | --------------------------- |
+| with TIRF signal on the filaments (> 20 cts) | 17  | median 1.0 px, max 2.2 px   | median 99.9 %, min 84.3 %   |
+| weak signal (5–20 counts)                    | 2   | 0 px                        | 100 %                       |
+| no signal (< 5 counts above background)      | 36  | not measurable (noise peak) | —                           |
+
+Where there is signal the offset is at most a couple of pixels — most often a
+constant +1 px in x, i.e. optics, the same 0–1 px the single-file layout shows
+— and the same in all five TIRF frames (15 of 17). So nothing is shifted, the
+same rule as the alignment diagnostic above. Two things to keep in mind when
+repeating this: a position with no fluorescence on its filaments has no peak
+to find, and its "offset" is a random one that changes from frame to frame
+(1 of 36 agreed across frames) — **classify by contrast before reading a
+shift**; and this is one folder from one microscope. A stage with worse
+repeatability would show up as a clear, consistent, non-zero peak.
 
 A well with no IRM channel is **skipped with a warning** and counted as a
 failure, rather than segmented on some other channel: the checkpoint is
