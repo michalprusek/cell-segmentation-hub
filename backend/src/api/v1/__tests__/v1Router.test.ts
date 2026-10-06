@@ -128,8 +128,11 @@ describe('authentication', () => {
   it.each([
     ['an unknown but well-formed key', () => `Bearer ${generateApiKey()}`],
     ['a malformed key', () => 'Bearer sseg_nope'],
-    ['a different scheme', () => `Basic ${generateApiKey()}`],
-    ['a key with trailing junk', () => `Bearer ${generateApiKey()} extra`],
+    // These two present a LIVE key. With an unknown one they pass whatever the
+    // header parser does - the key would be refused anyway - and a parser
+    // that accepted any scheme survived mutation testing for that reason.
+    ['a live key under a different scheme', () => `Basic ${liveKey()}`],
+    ['a live key with trailing junk', () => `Bearer ${liveKey()} extra`],
     [
       'an expired key',
       () => `Bearer ${liveKey({ expiresAt: new Date(Date.now() - 1000) })}`,

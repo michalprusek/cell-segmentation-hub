@@ -49,8 +49,18 @@ export const authenticateApiKey = async (
       return;
     }
 
+    // The key is verified UNCONDITIONALLY, and only the answer is branched on.
+    // Written the other way round - "no header? return; no match? skip
+    // verification" - whether the check runs at all is decided by a value
+    // the caller controls, which is what CodeQL's user-controlled-bypass
+    // flags and, more to the point, the shape in which a future edit can
+    // open a path around the check. An absent or non-Bearer header becomes
+    // the empty string, which fails the checksum without a database read.
     const header = req.headers.authorization;
-    if (!header) {
+    const presented = /^Bearer +(\S+)$/i.exec(header ?? '')?.[1] ?? '';
+    const verification: ApiKeyVerification = await verifyApiKey(presented);
+
+    if (verification.ok === false && !header) {
       sendProblem(res, 'authentication-required', {
         detail:
           'This endpoint needs an API key: "Authorization: Bearer <key>". ' +
@@ -59,11 +69,6 @@ export const authenticateApiKey = async (
       });
       return;
     }
-
-    const match = /^Bearer +(\S+)$/i.exec(header);
-    const verification: ApiKeyVerification = match
-      ? await verifyApiKey(match[1])
-      : { ok: false, reason: 'malformed' };
 
     // `=== false`, not `!`: this tsconfig has strictNullChecks off, and
     // without it a truthiness test does not narrow a discriminated union.
