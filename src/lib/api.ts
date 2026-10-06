@@ -306,6 +306,16 @@ export interface ChannelAlignmentSummary {
   maxAbsShift: { dy: number; dx: number };
 }
 
+export interface ApiKeySummary {
+  id: string;
+  name: string;
+  /** `sseg_` plus the first four characters; enough to tell keys apart. */
+  prefix: string;
+  createdAt: string;
+  lastUsedAt: string | null;
+  expiresAt: string | null;
+}
+
 class ApiClient {
   private instance: AxiosInstance;
   private baseURL: string;
@@ -1026,6 +1036,31 @@ class ApiClient {
     });
     const project = this.extractData(response);
     return this.mapProjectFields(project);
+  }
+
+  // ---- API keys ---------------------------------------------------------
+  //
+  // Managing keys uses the session cookie like every other call here. The
+  // keys themselves authenticate the PUBLIC API (/api/v1), which this client
+  // never calls.
+
+  async getApiKeys(): Promise<ApiKeySummary[]> {
+    const response = await this.instance.get('/api-keys');
+    const keys = this.extractData<unknown>(response);
+    return Array.isArray(keys) ? (keys as ApiKeySummary[]) : [];
+  }
+
+  /** The returned `key` is shown to the user once and exists nowhere else. */
+  async createApiKey(data: {
+    name: string;
+    expiresInDays?: number | null;
+  }): Promise<ApiKeySummary & { key: string }> {
+    const response = await this.instance.post('/api-keys', data);
+    return this.extractData<ApiKeySummary & { key: string }>(response);
+  }
+
+  async deleteApiKey(id: string): Promise<void> {
+    await this.instance.delete(`/api-keys/${id}`);
   }
 
   // ---- Project folders --------------------------------------------------

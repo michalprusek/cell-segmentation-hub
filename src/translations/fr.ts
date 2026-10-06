@@ -515,6 +515,53 @@ export default {
   settings: {
     manageSettings: 'Gérer vos préférences de compte',
     appearance: 'Apparence',
+    api: 'API',
+    apiKeys: {
+      title: 'Clés API',
+      description:
+        "Les clés API permettent à des scripts et à d'autres programmes d'utiliser SpheroSeg en votre nom via l'API publique. Une clé ne fonctionne que pour l'API : elle ne permet pas de se connecter à l'application, de modifier votre compte ni de gérer d'autres clés.",
+      createTitle: 'Créer une clé',
+      nameLabel: 'Nom',
+      namePlaceholder: "p. ex. Pipeline d'analyse",
+      expiryLabel: 'Expiration',
+      expiryNever: 'Jamais',
+      expiryDays: 'Dans {{days}} jours',
+      create: 'Créer la clé',
+      creating: 'Création…',
+      createdTitle: 'Votre nouvelle clé API',
+      createdWarning:
+        'Copiez-la maintenant. Seule une empreinte de la clé est enregistrée, elle ne pourra donc plus être affichée.',
+      copy: 'Copier',
+      copied: 'Copié dans le presse-papiers',
+      copyFailed:
+        'Copie impossible. Sélectionnez la clé et copiez-la manuellement.',
+      done: "Je l'ai enregistrée",
+      listTitle: 'Vos clés',
+      empty: "Vous n'avez pas encore de clé API.",
+      colName: 'Nom',
+      colKey: 'Clé',
+      colCreated: 'Créée',
+      colLastUsed: 'Dernière utilisation',
+      colExpires: 'Expiration',
+      neverUsed: 'Jamais',
+      noExpiry: 'Jamais',
+      expired: 'Expirée',
+      revoke: 'Révoquer',
+      revokeTitle: 'Révoquer cette clé ?',
+      revokeDescription:
+        'Tout ce qui utilise la clé « {{name}} » cessera immédiatement de fonctionner. Cette action est irréversible.',
+      revoked: 'Clé API révoquée',
+      loadFailed: 'Impossible de charger vos clés API',
+      createFailed: 'Impossible de créer la clé API',
+      revokeFailed: 'Impossible de révoquer la clé API',
+      limitReached:
+        "Vous avez atteint la limite de {{max}} clés. Révoquez-en une que vous n'utilisez plus.",
+      impersonationForbidden:
+        "Les clés API ne peuvent pas être créées ni révoquées pendant l'emprunt d'identité d'un utilisateur.",
+      usageTitle: 'Utiliser une clé',
+      usageDescription:
+        "Envoyez la clé dans l'en-tête Authorization de chaque requête :",
+    },
     themeSettings: 'Paramètres du thème',
     systemDefault: 'Défaut du système',
     languageSettings: 'Paramètres de langue',
