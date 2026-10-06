@@ -251,28 +251,6 @@ const create = async (
         hash.update(`${await sha256File(file.path)}\n`);
       }
       requestHash = hash.digest('hex');
-
-      const existing = await prisma.apiJob.findUnique({
-        where: {
-          userId_idempotencyKey: {
-            userId: owner,
-            idempotencyKey: idempotency.key,
-          },
-        },
-      });
-      if (existing) {
-        if (existing.requestHash !== requestHash) {
-          sendProblem(res, 'idempotency-key-reused', {
-            detail:
-              'This Idempotency-Key already created a job from a different request.',
-          });
-          return;
-        }
-        res.setHeader('Idempotent-Replayed', 'true');
-        res.setHeader('Location', `${BASE}/jobs/${existing.id}`);
-        res.status(200).json(describeJob(existing, BASE));
-        return;
-      }
     }
 
     const id = uuidv4();
@@ -308,7 +286,10 @@ const create = async (
       res.status(202).json(describeJob(job, BASE));
     } catch (error) {
       await removeQuietly(jobDir(id));
-      // Two requests with the same new key raced; the other one won.
+      // The key has been used before. This is the ONLY place that is
+      // decided — there is no look-up-first step — so a retry and two
+      // requests racing with the same new key take the same path, and the
+      // unique index is what makes "at most one job per key" true.
       if ((error as { code?: string }).code === 'P2002' && idempotency.key) {
         const winner = await prisma.apiJob.findUnique({
           where: {
@@ -442,12 +423,6 @@ const result = wrap(async (req, res) => {
     return;
   }
 
-  if (job.status === 'expired') {
-    sendProblem(res, 'result-expired', {
-      detail: 'This job expired and its results were deleted.',
-    });
-    return;
-  }
   if (item.status === 'queued' || item.status === 'processing') {
     sendProblem(res, 'result-not-ready', {
       detail: `Image ${index} is ${item.status}.`,
@@ -466,10 +441,12 @@ const result = wrap(async (req, res) => {
   if (refuseUnacceptable(req, res, parsed.format)) {
     return;
   }
+  // An expired job's files are gone, so this is also what answers for one:
+  // there is no separate check on the job's status to keep in step with it.
   const stored = await readResult(job.id, index);
   if (!stored) {
     sendProblem(res, 'result-expired', {
-      detail: 'This result is no longer stored.',
+      detail: 'Results are kept for 24 hours after a job finishes; this one has been deleted.',
     });
     return;
   }

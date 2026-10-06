@@ -67,15 +67,19 @@ const saveItems = (
       throw error;
     });
 
-async function finalize(job: ApiJob, items: JobItem[]): Promise<void> {
+async function finalize(
+  job: ApiJob,
+  items: JobItem[]
+): Promise<ApiJob | null> {
   const now = new Date();
-  await saveItems(job, items, {
+  const saved = await saveItems(job, items, {
     status: finalStatus(items),
     completedAt: now,
     expiresAt: new Date(now.getTime() + JOB_RESULT_TTL_MS),
     inputBytes: BigInt(0),
   });
   await removeQuietly(path.join(jobDir(job.id), 'input'));
+  return saved;
 }
 
 /** Process at most one image. Exported for tests; `start()` calls it. */
@@ -168,22 +172,15 @@ export async function tick(): Promise<void> {
   // The input is gone as soon as it has been used, whatever the outcome.
   await removeQuietly(source);
 
-  // What happened to the job while this image ran?
-  const current = await prisma.apiJob.findUnique({
-    where: { id: job.id },
-    select: { cancelRequested: true },
-  });
-  if (!current) {
-    // Deleted by its owner. `writeResult` may have re-created the directory.
+  // A cancel that arrived while this image ran needs nothing here: the flag
+  // is on the row and the next tick acts on it. A DELETE does: the row is
+  // gone, so `saveItems` reports it, and `writeResult` may have re-created
+  // the directory the route had just removed.
+  const saved = items.some(i => i.status === 'queued')
+    ? await saveItems(job, items)
+    : await finalize(job, items);
+  if (!saved) {
     await removeQuietly(jobDir(job.id));
-    return;
-  }
-  if (current.cancelRequested) {
-    await finalize(job, cancelPending(items));
-  } else if (items.some(i => i.status === 'queued')) {
-    await saveItems(job, items);
-  } else {
-    await finalize(job, items);
   }
 }
 

@@ -372,6 +372,9 @@ describe('the worker', () => {
     expect(mid.headers['retry-after']).toBe('5');
     expect(mid.body.counts).toMatchObject({ succeeded: 1, queued: 1 });
     expect(mid.body.started_at).not.toBeNull();
+    // The first image's upload is deleted the moment it has been used; the
+    // second is still waiting.
+    expect(readdirSync(path.join(jobDir(id), 'input'))).toEqual(['1.png']);
 
     await tick();
     const done = await get(alice, `/api/v1/jobs/${id}`);
@@ -543,6 +546,11 @@ describe('results', () => {
       expect(res.headers['content-disposition']).toContain(`filename="${filename}"`);
       expect(res.headers['spheroseg-object-count']).toBe('1');
     }
+    // Class-indexed formats are rendered from the stored result plus the
+    // model's own class list, which is not stored with it.
+    const coco = await get(alice, `/api/v1/jobs/${id}/results/0?output_format=coco`);
+    expect(coco.body.categories.map((c: any) => c.name)).toEqual(['spheroid']);
+    expect(coco.body.annotations[0].iscrowd).toBe(1);
     expect(segmentWithMl).toHaveBeenCalledTimes(1);
   });
 
@@ -654,6 +662,21 @@ describe('cancel and delete', () => {
       expect(res.body.status).toBe('succeeded');
     }
     expect(rows.get(id).cancelRequested).toBe(false);
+  });
+
+  it('deletes a finished job together with its stored results', async () => {
+    const id = (await createJob(alice, [PNG(1)])).body.id;
+    await drain();
+    expect(existsSync(resultPath(id, 0))).toBe(true);
+
+    const res = await request(app).delete(`/api/v1/jobs/${id}`).set('Authorization', alice);
+    expect(res.status).toBe(204);
+    expect(rows.has(id)).toBe(false);
+    expect(existsSync(jobDir(id))).toBe(false);
+    // Deleting it again, or anything that never existed, is a 404.
+    expect(
+      (await request(app).delete(`/api/v1/jobs/${id}`).set('Authorization', alice)).status
+    ).toBe(404);
   });
 
   it('deletes the job and its files, even while it is running', async () => {
