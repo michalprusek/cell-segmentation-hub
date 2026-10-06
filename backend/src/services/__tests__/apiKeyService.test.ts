@@ -24,10 +24,10 @@ vi.mock('../../utils/logger', () => ({
 }));
 
 import { prisma } from '../../db';
+import { crc32 } from '../../utils/crc32';
 import {
   ApiKeyLimitError,
   MAX_API_KEYS_PER_USER,
-  crc32,
   createApiKey,
   deleteApiKey,
   generateApiKey,

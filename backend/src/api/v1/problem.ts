@@ -27,6 +27,38 @@ export const PROBLEM_TYPES = {
     title: 'Credentials must not be sent in the URL',
   },
   'rate-limit-exceeded': { status: 429, title: 'Rate limit exceeded' },
+  'too-many-concurrent-requests': {
+    status: 429,
+    title: 'Too many concurrent requests',
+  },
+  'unsupported-media-type': {
+    status: 415,
+    title: 'Unsupported request media type',
+  },
+  'validation-failed': { status: 422, title: 'Request validation failed' },
+  'unsupported-image': {
+    status: 422,
+    title: 'The image could not be read',
+  },
+  'payload-too-large': { status: 413, title: 'Upload too large' },
+  'image-too-large': {
+    status: 413,
+    title: 'Image has too many pixels for a synchronous request',
+  },
+  'output-not-representable': {
+    status: 422,
+    title: 'The result cannot be represented in the requested format',
+  },
+  'not-acceptable': {
+    status: 406,
+    title: 'The requested output format does not match the Accept header',
+  },
+  'server-busy': { status: 503, title: 'Segmentation service is busy' },
+  'segmentation-timeout': {
+    status: 504,
+    title: 'Segmentation did not finish in time',
+  },
+  'segmentation-failed': { status: 502, title: 'Segmentation failed' },
   'not-found': { status: 404, title: 'Resource not found' },
   'internal-error': { status: 500, title: 'Internal server error' },
 } as const;

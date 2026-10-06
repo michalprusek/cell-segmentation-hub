@@ -1,7 +1,12 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import rateLimit from 'express-rate-limit';
 import { authenticateApiKey } from '../../middleware/apiKeyAuth';
-import { MODEL_REGISTRY } from '../../constants/modelRegistry';
+import {
+  MODEL_REGISTRY,
+  type KnownModelId,
+} from '../../constants/modelRegistry';
+import { describeModel, isKnownModel } from './models';
+import { segmentRoute } from './segment';
 import { logger } from '../../utils/logger';
 import { sendProblem } from './problem';
 
@@ -85,12 +90,19 @@ router.use(v1RateLimiter);
 
 router.get('/models', (_req: Request, res: Response) => {
   res.json({
-    data: Object.entries(MODEL_REGISTRY).map(([id, entry]) => ({
-      id,
-      project_types: entry.compatibleProjectTypes,
-    })),
+    data: (Object.keys(MODEL_REGISTRY) as KnownModelId[]).map(describeModel),
   });
 });
+
+router.get('/models/:id', (req: Request, res: Response) => {
+  if (!isKnownModel(req.params.id)) {
+    sendProblem(res, 'not-found', { detail: 'No such model.' });
+    return;
+  }
+  res.json(describeModel(req.params.id));
+});
+
+router.post('/segment', ...segmentRoute);
 
 // The detail does not echo the requested path. Nothing a browser would render
 // is sent here (the media type is problem+json), but reflecting request input
