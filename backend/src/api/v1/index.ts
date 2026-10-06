@@ -60,9 +60,13 @@ router.get('/models', (_req: Request, res: Response) => {
   });
 });
 
-router.use((req: Request, res: Response) => {
+// The detail does not echo the requested path. Nothing a browser would render
+// is sent here (the media type is problem+json), but reflecting request input
+// into a response buys the client nothing it does not already know.
+router.use((_req: Request, res: Response) => {
   sendProblem(res, 'not-found', {
-    detail: `No such endpoint: ${req.method} ${req.baseUrl}${req.path}`,
+    detail:
+      'No such endpoint in API version v1. Check the method and the path.',
   });
 });
 

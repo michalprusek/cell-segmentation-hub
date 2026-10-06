@@ -220,14 +220,13 @@ describe('errors stay in problem+json', () => {
     expect(anonymous.status).toBe(401);
 
     const res = await request(app)
-      .post('/api/v1/nope')
+      .post('/api/v1/nope?q=%3Cscript%3E')
       .set('Authorization', `Bearer ${liveKey()}`);
     expect(res.status).toBe(404);
     expect(res.headers['content-type']).toMatch(PROBLEM);
-    expect(res.body).toMatchObject({
-      code: 'not-found',
-      detail: 'No such endpoint: POST /api/v1/nope',
-    });
+    expect(res.body.code).toBe('not-found');
+    // Request input is never reflected into the body.
+    expect(JSON.stringify(res.body)).not.toContain('nope');
   });
 
   it('answers a database failure with a 500 problem that leaks nothing', async () => {
