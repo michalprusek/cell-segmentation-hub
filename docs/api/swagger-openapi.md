@@ -361,9 +361,9 @@ For scripted access use the public API and an API key instead
 | `/api/auth/logout`  | POST   | User logout         |
 | `/api/auth/profile` | PUT    | Update user profile |
 
-There is no `DELETE /api/auth/profile`: it answers 404, although the web app's
-"Delete account" dialog calls it. See
-[Authentication → Known gaps](authentication.md#known-gaps).
+`DELETE /api/auth/profile` deletes the account and needs the e-mail and the
+current password in the body. See
+[Authentication → Delete the account](authentication.md#delete-the-account).
 
 ### 4. Project Management (🔒 Protected)
 

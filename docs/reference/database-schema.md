@@ -18,6 +18,13 @@ shares, feedback, folders, essay jobs and segmenter datasets — all cascading o
 delete, except feedback, which is **soft-anonymised** (`userId` set to null) so
 report history survives a GDPR deletion.
 
+`sessionsValidAfter` (nullable) is what "sign out everywhere" is made of: every
+session of the user that began before it is void. It is set when the password
+is changed or reset. Live sessions are refresh records in **Redis**, keyed by
+a hash of the token, so they cannot be listed per user and deleted — instead
+`authenticate` compares each access token's `iat`, and the refresh path each
+record's `createdAt`, with this column. `NULL` means never revoked.
+
 ### `Profile` → `profiles`
 
 One per user. Display fields (username, avatar, bio, organisation, location,
@@ -34,8 +41,11 @@ Avatars are files on disk; the row stores the path, MIME type and size.
 
 ### `Session` → `sessions`
 
-One row per refresh token, so a session can be invalidated server-side. Carries
-the user agent, IP, `rememberMe` and an expiry.
+**Legacy, and unused since 2026-10-07.** Sessions live in Redis (see
+`sessionService`); nothing reads this table, and the last code that wrote to
+it — one row per registration, and an `isValid = false` update on password
+change that revoked nothing — is gone. The table is kept only because dropping
+it is a destructive migration nobody has needed.
 
 ---
 
