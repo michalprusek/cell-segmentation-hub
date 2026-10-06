@@ -50,7 +50,11 @@ vi.mock('../../utils/config', () => ({
 }));
 
 // ── Hoisted mocks (referenced by vi.mock factories, which vitest hoists) ──────
-const { prismaMock, sessionServiceMock, accountFilesMock } = vi.hoisted(() => ({
+const { prismaMock, sessionServiceMock, accountFilesMock, liveMock } =
+  vi.hoisted(() => ({
+  liveMock: {
+    disconnectUserSockets: vi.fn() as ReturnType<typeof vi.fn>,
+  },
   accountFilesMock: {
     collectUserFiles: vi.fn() as ReturnType<typeof vi.fn>,
     deleteUserFiles: vi.fn() as ReturnType<typeof vi.fn>,
@@ -70,14 +74,6 @@ const { prismaMock, sessionServiceMock, accountFilesMock } = vi.hoisted(() => ({
       upsert: vi.fn() as ReturnType<typeof vi.fn>,
       create: vi.fn() as ReturnType<typeof vi.fn>,
       update: vi.fn() as ReturnType<typeof vi.fn>,
-      deleteMany: vi.fn() as ReturnType<typeof vi.fn>,
-    },
-    session: {
-      findUnique: vi.fn() as ReturnType<typeof vi.fn>,
-      create: vi.fn() as ReturnType<typeof vi.fn>,
-      update: vi.fn() as ReturnType<typeof vi.fn>,
-      updateMany: vi.fn() as ReturnType<typeof vi.fn>,
-      delete: vi.fn() as ReturnType<typeof vi.fn>,
       deleteMany: vi.fn() as ReturnType<typeof vi.fn>,
     },
     project: {
@@ -119,6 +115,9 @@ vi.mock('../../services/sessionService', () => ({
 // deleteAccount hands the files to this module; what it does with the disk is
 // accountFiles' own suite. Here only the ORDER of the calls matters.
 vi.mock('../accountFiles', () => accountFilesMock);
+// The real one reaches for the WebSocket server; here only WHETHER it is asked
+// to close a user's sockets matters.
+vi.mock('../liveConnections', () => liveMock);
 
 const mockStorageUpload = vi.fn();
 const mockStorageGetUrl = vi.fn();
@@ -204,13 +203,13 @@ const NEW_HASH = 'new-hashed-pw';
 const PASSWORD_RESET_REQUESTED =
   'Pokud email existuje, byl odeslán odkaz pro reset hesla.';
 
-// A wall clock that is NOT on a whole second, and the cut-off it must produce:
-// `sessionsValidAfter` is floored to the second because a JWT's `iat` is.
-const NOW_OFF_THE_SECOND = new Date('2026-10-06T12:00:00.789Z');
-const CUTOFF_FOR_NOW = new Date('2026-10-06T12:00:00.000Z');
+// A wall clock that is NOT on a whole second. `sessionsValidAfter` must be
+// this instant exactly, to the millisecond: an access token carries `iatMs`,
+// so nothing is rounded to the second any more.
+const FROZEN_NOW = new Date('2026-10-06T12:00:00.789Z');
 const freezeClock = () => {
   vi.useFakeTimers({ toFake: ['Date'] });
-  vi.setSystemTime(NOW_OFF_THE_SECOND);
+  vi.setSystemTime(FROZEN_NOW);
 };
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -298,13 +297,11 @@ describe('AuthService', () => {
         requiresEmailVerification: false,
       });
       expect(mockHashPassword).toHaveBeenCalledWith(registerData.password);
-      // The session lives in the refresh-token store only; the legacy
-      // `sessions` table gets no row any more.
+      // The session lives in the refresh-token store, and nowhere else.
       expect(sessionServiceMock.storeRefreshToken).toHaveBeenCalledWith(
         mockUser.id,
         mockTokens.refreshToken
       );
-      expect(prismaMock.session.create).not.toHaveBeenCalled();
     });
 
     it('creates the account but signs nobody in when a verified e-mail is required', async () => {
@@ -638,19 +635,16 @@ describe('AuthService', () => {
   // =========================================================================
   describe('refreshToken (token rotation)', () => {
     it('returns new tokens and the session\'s rememberMe when rotation succeeds', async () => {
-      sessionServiceMock.verifyRefreshToken.mockResolvedValueOnce({
-        userId: 'user-1',
-        createdAt: '2026-10-01T00:00:00.000Z',
-        rememberMe: false,
-      });
       sessionServiceMock.rotateRefreshToken.mockResolvedValueOnce({
         token: 'rotated-rt',
         userId: 'user-1',
         rememberMe: false,
+        presentedCreatedAt: '2026-10-01T00:00:00.000Z',
       });
-      prismaMock.user.findUnique
-        .mockResolvedValueOnce({ sessionsValidAfter: null }) // cut-off lookup
-        .mockResolvedValueOnce(baseUser); // payload rebuild
+      prismaMock.user.findUnique.mockResolvedValueOnce({
+        ...baseUser,
+        sessionsValidAfter: null,
+      });
 
       const result = await authService.refreshToken({ refreshToken: 'old-rt' });
 
@@ -659,33 +653,34 @@ describe('AuthService', () => {
         refreshToken: 'rotated-rt',
         rememberMe: false,
       });
-      expect(sessionServiceMock.verifyRefreshToken).toHaveBeenCalledWith(
+      expect(sessionServiceMock.rotateRefreshToken).toHaveBeenCalledWith(
         'old-rt'
       );
-      expect(prismaMock.user.findUnique).toHaveBeenNthCalledWith(1, {
-        where: { id: 'user-1' },
-        select: { sessionsValidAfter: true },
-      });
-      // The record is inspected BEFORE it is rotated.
+      // No look-before-rotate: a check made first and a rotation made second
+      // are two steps, and a password change can land between them.
+      expect(sessionServiceMock.verifyRefreshToken).not.toHaveBeenCalled();
+      expect(sessionServiceMock.deleteRefreshToken).not.toHaveBeenCalled();
+      // The user row is read AFTER the rotation; that row carries the cut-off.
+      expect(prismaMock.user.findUnique).toHaveBeenCalledTimes(1);
       expect(
-        sessionServiceMock.verifyRefreshToken.mock.invocationCallOrder[0]
-      ).toBeLessThan(
         sessionServiceMock.rotateRefreshToken.mock.invocationCallOrder[0]
-      );
+      ).toBeLessThan(prismaMock.user.findUnique.mock.invocationCallOrder[0]);
     });
 
     it.each([
-      ['issued before the cut-off', '2026-10-01T00:00:00.000Z'],
-      ['with no createdAt at all', undefined],
+      ['written before the cut-off', '2026-10-01T00:00:00.000Z'],
+      ['with no creation time at all', undefined],
     ])(
-      'refuses a record %s, deletes it, and does not rotate',
-      async (_label, createdAt) => {
-        sessionServiceMock.verifyRefreshToken.mockResolvedValueOnce({
+      'rotates a record %s, then withdraws its successor',
+      async (_label, presentedCreatedAt) => {
+        sessionServiceMock.rotateRefreshToken.mockResolvedValueOnce({
+          token: 'rotated-rt',
           userId: 'user-1',
           rememberMe: true,
-          ...(createdAt ? { createdAt } : {}),
+          presentedCreatedAt,
         });
         prismaMock.user.findUnique.mockResolvedValueOnce({
+          ...baseUser,
           sessionsValidAfter: new Date('2026-10-05T00:00:00.000Z'),
         });
 
@@ -696,29 +691,81 @@ describe('AuthService', () => {
           message: 'Neplatný nebo vypršený refresh token',
         });
 
-        expect(sessionServiceMock.deleteRefreshToken).toHaveBeenCalledWith(
+        expect(sessionServiceMock.rotateRefreshToken).toHaveBeenCalledWith(
           'stale-rt'
         );
-        expect(sessionServiceMock.rotateRefreshToken).not.toHaveBeenCalled();
+        // The PRESENTED token was consumed by the rotation; what has to go
+        // is the successor the rotation wrote, which is dated now and would
+        // otherwise pass every later check.
+        expect(sessionServiceMock.deleteRefreshToken).toHaveBeenCalledTimes(1);
+        expect(sessionServiceMock.deleteRefreshToken).toHaveBeenCalledWith(
+          'rotated-rt'
+        );
         expect(mockGenerateTokenPair).not.toHaveBeenCalled();
       }
     );
 
-    it('rotates a record issued after the cut-off', async () => {
-      sessionServiceMock.verifyRefreshToken.mockResolvedValueOnce({
+    it('keeps a record written after the cut-off', async () => {
+      sessionServiceMock.rotateRefreshToken.mockResolvedValueOnce({
+        token: 'rotated-rt',
         userId: 'user-1',
-        createdAt: '2026-10-05T00:00:01.000Z',
         rememberMe: true,
+        presentedCreatedAt: '2026-10-05T00:00:00.001Z',
       });
-      prismaMock.user.findUnique
-        .mockResolvedValueOnce({
-          sessionsValidAfter: new Date('2026-10-05T00:00:00.000Z'),
-        })
-        .mockResolvedValueOnce(baseUser);
+      prismaMock.user.findUnique.mockResolvedValueOnce({
+        ...baseUser,
+        sessionsValidAfter: new Date('2026-10-05T00:00:00.000Z'),
+      });
 
       const result = await authService.refreshToken({ refreshToken: 'ok-rt' });
 
-      expect(result.refreshToken).toBe('new-rt');
+      expect(result.refreshToken).toBe('rotated-rt');
+      expect(sessionServiceMock.deleteRefreshToken).not.toHaveBeenCalled();
+    });
+
+    it('never revokes a record of any age while the user has no cut-off', async () => {
+      // A legacy record has no creation time; without a cut-off that is fine.
+      sessionServiceMock.rotateRefreshToken.mockResolvedValueOnce({
+        token: 'rotated-rt',
+        userId: 'user-1',
+        rememberMe: true,
+      });
+      prismaMock.user.findUnique.mockResolvedValueOnce({
+        ...baseUser,
+        sessionsValidAfter: null,
+      });
+
+      const result = await authService.refreshToken({ refreshToken: 'old-rt' });
+
+      expect(result.refreshToken).toBe('rotated-rt');
+      expect(sessionServiceMock.deleteRefreshToken).not.toHaveBeenCalled();
+    });
+
+    it('exempts an impersonated session from the cut-off', async () => {
+      // It is the admin's credential, not the user's: a user changing their
+      // password must not throw support out mid-diagnosis.
+      sessionServiceMock.rotateRefreshToken.mockResolvedValueOnce({
+        token: 'rotated-rt',
+        userId: 'user-1',
+        rememberMe: true,
+        presentedCreatedAt: '2026-10-01T00:00:00.000Z',
+        impersonatorId: 'admin-1',
+        impersonationSessionId: 'imp-1',
+      });
+      prismaMock.user.findUnique
+        .mockResolvedValueOnce({
+          ...baseUser,
+          sessionsValidAfter: new Date('2026-10-05T00:00:00.000Z'),
+        })
+        .mockResolvedValueOnce({
+          id: 'admin-1',
+          email: 'admin@example.com',
+          isAdmin: true,
+        });
+
+      const result = await authService.refreshToken({ refreshToken: 'imp-rt' });
+
+      expect(result.refreshToken).toBe('rotated-rt');
       expect(sessionServiceMock.deleteRefreshToken).not.toHaveBeenCalled();
     });
 
@@ -940,15 +987,22 @@ describe('AuthService', () => {
           password: NEW_HASH,
           resetToken: null,
           resetTokenExpiry: null,
-          sessionsValidAfter: CUTOFF_FOR_NOW,
+          sessionsValidAfter: FROZEN_NOW,
         },
       });
       const { sessionsValidAfter } =
         prismaMock.user.update.mock.calls[0][0].data;
       expect(sessionsValidAfter).toBeInstanceOf(Date);
-      expect(sessionsValidAfter.getMilliseconds()).toBe(0);
-      // The legacy `sessions` table is not what ends a session any more.
-      expect(prismaMock.session.updateMany).not.toHaveBeenCalled();
+      expect(sessionsValidAfter.toISOString()).toBe(
+        '2026-10-06T12:00:00.789Z'
+      );
+      // Sockets already open are not asked again by themselves: they are
+      // closed, after the cut-off is written.
+      expect(liveMock.disconnectUserSockets).toHaveBeenCalledTimes(1);
+      expect(liveMock.disconnectUserSockets).toHaveBeenCalledWith('u1');
+      expect(prismaMock.user.update.mock.invocationCallOrder[0]).toBeLessThan(
+        liveMock.disconnectUserSockets.mock.invocationCallOrder[0]
+      );
     });
 
     it('throws when no users have non-expired reset tokens', async () => {
@@ -960,6 +1014,7 @@ describe('AuthService', () => {
           newPassword: 'newpass',
         })
       ).rejects.toThrow();
+      expect(liveMock.disconnectUserSockets).not.toHaveBeenCalled();
     });
 
     it('throws when the token does not match any stored hash', async () => {
@@ -978,6 +1033,9 @@ describe('AuthService', () => {
           newPassword: 'newpass',
         })
       ).rejects.toThrow();
+      // An invalid token ends nobody's session and closes nobody's socket.
+      expect(prismaMock.user.update).not.toHaveBeenCalled();
+      expect(liveMock.disconnectUserSockets).not.toHaveBeenCalled();
     });
 
     it('wraps an unexpected DB error as internalError', async () => {
@@ -1012,14 +1070,20 @@ describe('AuthService', () => {
         where: { id: 'user-1' },
         data: {
           password: NEW_HASH,
-          sessionsValidAfter: CUTOFF_FOR_NOW,
+          sessionsValidAfter: FROZEN_NOW,
         },
       });
       const { sessionsValidAfter } =
         prismaMock.user.update.mock.calls[0][0].data;
       expect(sessionsValidAfter).toBeInstanceOf(Date);
-      expect(sessionsValidAfter.getMilliseconds()).toBe(0);
-      expect(prismaMock.session.updateMany).not.toHaveBeenCalled();
+      expect(sessionsValidAfter.toISOString()).toBe(
+        '2026-10-06T12:00:00.789Z'
+      );
+      expect(liveMock.disconnectUserSockets).toHaveBeenCalledTimes(1);
+      expect(liveMock.disconnectUserSockets).toHaveBeenCalledWith('user-1');
+      expect(prismaMock.user.update.mock.invocationCallOrder[0]).toBeLessThan(
+        liveMock.disconnectUserSockets.mock.invocationCallOrder[0]
+      );
     });
 
     it('returns only the message, and leaves every session to reissueSession', async () => {
@@ -1066,6 +1130,7 @@ describe('AuthService', () => {
       for (const fn of Object.values(sessionServiceMock)) {
         expect(fn).not.toHaveBeenCalled();
       }
+      expect(liveMock.disconnectUserSockets).not.toHaveBeenCalled();
     });
 
     it('wraps an unexpected error as internalError', async () => {
@@ -1579,7 +1644,6 @@ describe('AuthService', () => {
 
       await authService.deleteAccount('user-1', CONFIRMATION);
 
-      expect(prismaMock.session.deleteMany).not.toHaveBeenCalled();
       expect(prismaMock.segmentation.deleteMany).not.toHaveBeenCalled();
       expect(prismaMock.segmentationQueue.deleteMany).not.toHaveBeenCalled();
       expect(prismaMock.image.deleteMany).not.toHaveBeenCalled();

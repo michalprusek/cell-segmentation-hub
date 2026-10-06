@@ -224,7 +224,12 @@ describe('an impersonated session survives token rotation', () => {
   it('leaves an ORDINARY session on the full 30-day TTL', async () => {
     rows(TARGET);
     await sessionService.storeRefreshToken(TARGET.id, 'plain-token');
-    expect([...ttls.values()]).toEqual([60 * 60 * 24 * 30]);
+    // The record, and the family pointer that leads to it — nothing else,
+    // and both on the full 30 days.
+    const THIRTY_DAYS = 60 * 60 * 24 * 30;
+    const prefixes = [...ttls.keys()].map(k => k.slice(0, k.indexOf(':') + 1));
+    expect(prefixes.sort()).toEqual(['refresh-family:', 'refresh:']);
+    expect([...ttls.values()]).toEqual([THIRTY_DAYS, THIRTY_DAYS]);
   });
 
   it('leaves an ordinary session with no impersonator claim at all', async () => {

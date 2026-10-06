@@ -1958,7 +1958,7 @@ export default {
         step3:
           "Select the images you want and click Segment; the project's model is used",
         step4:
-          'Each model carries its own detection threshold, fixed when it was validated — there is nothing to tune per run',
+          'The detection threshold is fixed per model — and two models have none at all, deciding by argmax — so there is nothing to tune per run',
         step5:
           'On a multi-channel video, choose which channel the model should read',
         step6:

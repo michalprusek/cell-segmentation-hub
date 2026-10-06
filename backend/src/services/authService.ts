@@ -6,6 +6,7 @@ import {
 } from '../auth/password';
 import { generateTokenPair, JwtPayload } from '../auth/jwt';
 import { cutoffForNow, isIssuedBeforeCutoff } from '../auth/sessionCutoff';
+import { disconnectUserSockets } from './liveConnections';
 import { logger } from '../utils/logger';
 import { ApiError } from '../middleware/error';
 import * as EmailService from './emailService';
@@ -299,23 +300,6 @@ export async function refreshToken(
   data: RefreshTokenData
 ): Promise<{ accessToken: string; refreshToken: string; rememberMe: boolean }> {
   try {
-    // Checked BEFORE rotating: a rotation would write a fresh record, dated
-    // now, and so launder a session the password change had just ended.
-    const record = await sessionService.verifyRefreshToken(data.refreshToken);
-    if (record && !record.impersonatorId) {
-      const owner = await prisma.user.findUnique({
-        where: { id: record.userId },
-        select: { sessionsValidAfter: true },
-      });
-      const issuedAt = record.createdAt
-        ? Date.parse(record.createdAt)
-        : undefined;
-      if (isIssuedBeforeCutoff(issuedAt, owner?.sessionsValidAfter)) {
-        await sessionService.deleteRefreshToken(data.refreshToken);
-        throw ApiError.unauthorized('Neplatný nebo vypršený refresh token');
-      }
-    }
-
     const rotated = await sessionService.rotateRefreshToken(data.refreshToken);
     if (!rotated) {
       throw ApiError.unauthorized('Neplatný nebo vypršený refresh token');
@@ -326,17 +310,19 @@ export async function refreshToken(
       throw ApiError.unauthorized('Uživatel nenalezen');
     }
 
-    // ...and checked AGAIN, against the row read after the rotation. The
-    // check above and the rotation are not one step: a password change that
-    // lands between them finds the old record still valid, and the rotation
-    // then writes a successor dated now - newer than the cut-off, so it would
-    // pass every later check. The record that was PRESENTED is what gets
-    // judged, and its successor is withdrawn.
+    // The session cut-off, judged AFTER the rotation and against the user
+    // row read after it - never before. A check made first and a rotation
+    // made second are two steps: a password change landing between them
+    // finds the old record still valid, and the rotation then writes a
+    // successor dated now, newer than the cut-off, which would pass every
+    // later check. What is judged is the record that was PRESENTED; its
+    // successor is withdrawn.
     if (
-      record &&
-      !record.impersonatorId &&
+      !rotated.impersonatorId &&
       isIssuedBeforeCutoff(
-        record.createdAt ? Date.parse(record.createdAt) : undefined,
+        rotated.presentedCreatedAt
+          ? Date.parse(rotated.presentedCreatedAt)
+          : undefined,
         user.sessionsValidAfter
       )
     ) {
@@ -608,6 +594,7 @@ export async function resetPasswordWithToken(
         sessionsValidAfter: cutoffForNow(),
       },
     });
+    disconnectUserSockets(matchedUser.id);
 
     logger.info('Password reset completed successfully', 'AuthService', {
       userId: matchedUser.id,
@@ -664,6 +651,7 @@ export async function changePassword(
       where: { id: userId },
       data: { password: hashedPassword, sessionsValidAfter: cutoffForNow() },
     });
+    disconnectUserSockets(userId);
 
     logger.info('Password changed successfully', 'AuthService', { userId });
 

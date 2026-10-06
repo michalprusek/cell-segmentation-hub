@@ -1930,7 +1930,7 @@ export default {
         step3:
           'Vyberte snímky a klikněte na Segmentovat; použije se model daného projektu',
         step4:
-          'Každý model má vlastní práh detekce, pevně daný při jeho validaci — pro jednotlivý běh není co nastavovat',
+          'Práh detekce je u každého modelu pevně daný — a dva modely žádný nemají, rozhoduje u nich argmax — takže pro jednotlivý běh není co nastavovat',
         step5: 'U vícekanálového videa zvolte, který kanál má model číst',
         step6:
           'Model může měnit jen vlastník projektu; spolupracovníci segmentují jeho volbou',

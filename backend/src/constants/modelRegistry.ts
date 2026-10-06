@@ -12,8 +12,14 @@
  * single-image processing to bypass a broken batch endpoint) — a queue concern,
  * not model identity. Keep them out of this registry.
  *
- * Cross-tree (frontend) and cross-language (Python ML) parity is enforced by
- * `scripts/check-model-parity.cjs` plus per-side equality tests.
+ * Cross-tree (frontend) and cross-language (Python ML) parity of the model-ID
+ * SET is enforced by `scripts/check-model-parity.cjs`, which compares this
+ * registry's keys with the frontend registry's, Python's `AVAILABLE_MODELS` and
+ * the `ModelType` enum. It runs as step 8 of `make ci` and in the `frontend`
+ * job of `.github/workflows/ci.yml` — and ran NOWHERE until 2026-10-06, while
+ * this comment said it enforced parity. It checks ids only. Each side's own
+ * `modelRegistry.test.ts` additionally pins that side's key list against a
+ * literal written in the test; neither compares the two sides.
  */
 
 /** Project-type keys exactly as used by the compatibility map.
@@ -97,9 +103,12 @@ type CompatibleModelFor<PT extends ProjectTypeKey> = {
  * spheroid candidates) lives there in full.
  *
  * Parity between the two copies is enforced by `scripts/verify-shared-types.cjs`
- * (`SHARED_CONSTS`), which runs in pre-commit and in CI. It is NOT covered by
- * either side's `modelRegistry.test.ts` — those check each side against itself
- * only. Unlike `MODEL_TYPE_COMPATIBILITY`, which both sides DERIVE by
+ * (`SHARED_CONSTS`): step 9 of `make ci`, the `frontend` job of
+ * `.github/workflows/ci.yml`, and lint-staged whenever this file or its
+ * frontend mirror is staged. (Until 2026-10-06 it ran only from lint-staged,
+ * and only for files under `types/` — so NOT for an edit to this file.) It is
+ * NOT covered by either side's `modelRegistry.test.ts` — those check each side
+ * against itself only. Unlike `MODEL_TYPE_COMPATIBILITY`, which both sides DERIVE by
  * inverting their registry and so cannot drift, this map is a literal choice
  * written out twice.
  *

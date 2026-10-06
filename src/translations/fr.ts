@@ -1964,7 +1964,7 @@ export default {
         step3:
           'Sélectionnez les images puis cliquez sur Segmenter ; le modèle du projet est utilisé',
         step4:
-          'Chaque modèle porte son propre seuil de détection, fixé lors de sa validation : il n’y a rien à régler à chaque exécution',
+          'Le seuil de détection est fixe pour chaque modèle, et deux modèles n’en ont aucun car ils décident par argmax : il n’y a rien à régler à chaque exécution',
         step5:
           'Sur une vidéo multicanale, choisissez le canal que le modèle doit lire',
         step6:

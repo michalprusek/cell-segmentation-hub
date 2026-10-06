@@ -515,6 +515,7 @@ vi.mock('@/components/project/SegmentChannelDialog', () => ({
     open ? (
       <div data-testid="segment-channel-dialog">
         <span data-testid="dialog-channels">{channels.join(',')}</span>
+        <span data-testid="dialog-default">{defaultChannel}</span>
         <button
           data-testid="confirm-channel"
           onClick={() => onConfirm(defaultChannel)}
@@ -1162,13 +1163,31 @@ describe('ProjectDetail page', () => {
       expect(screen.getByTestId('dialog-channels').textContent).toBe('ch0,ch1');
     });
 
-    it('confirming the picked channel queues it', async () => {
+    it('preselects nothing when no channel is a marked segmentation source', async () => {
+      // "The first one" used to be preselected - alphabetically first, which
+      // on a microtubule stack is a fluorescence channel. Nothing preselected
+      // leaves the real dialog's Confirm disabled until the user picks.
       wireHooks(multiChannel(), { projectChannels: ['ch0', 'ch1'] });
       renderPage();
 
       await userEvent.click(screen.getByTestId('select-img-1'));
       await userEvent.click(screen.getByTestId('segment-all-btn'));
       await waitFor(() => screen.getByTestId('segment-channel-dialog'));
+
+      expect(screen.getByTestId('dialog-default').textContent).toBe('');
+    });
+
+    it('preselects the marked source even when it is not the first channel, and queues it', async () => {
+      wireHooks(multiChannel(), {
+        projectChannels: ['ch0', 'ch1'],
+        projectSegmentationSources: ['ch1'],
+      });
+      renderPage();
+
+      await userEvent.click(screen.getByTestId('select-img-1'));
+      await userEvent.click(screen.getByTestId('segment-all-btn'));
+      await waitFor(() => screen.getByTestId('segment-channel-dialog'));
+      expect(screen.getByTestId('dialog-default').textContent).toBe('ch1');
 
       await userEvent.click(screen.getByTestId('confirm-channel'));
 
@@ -1184,7 +1203,7 @@ describe('ProjectDetail page', () => {
             0,
             false,
             false,
-            'ch0'
+            'ch1'
           );
         },
         { timeout: 2000 }

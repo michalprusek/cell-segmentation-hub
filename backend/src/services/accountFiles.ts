@@ -6,7 +6,8 @@ import { logger } from '../utils/logger';
 import { assertSafeStorageSegment } from '../utils/storagePath';
 
 /**
- * The files that belong to one account, for deleting them with it.
+ * The files that belong to one account or one project, for deleting them
+ * with it.
  *
  * WHAT COUNTS AS THE USER'S is decided by the PROJECT, not by the folder a
  * file sits in. An upload is stored under `<uploaderId>/<projectId>/…`, and
@@ -30,33 +31,22 @@ export interface UserFiles {
   dirKeys: string[];
 }
 
-/** Must be called BEFORE the user row is deleted - the rows are the list. */
-export async function collectUserFiles(userId: string): Promise<UserFiles> {
-  const safeUserId = assertSafeStorageSegment(userId, 'userId');
+interface ImagePaths {
+  id: string;
+  originalPath: string;
+  thumbnailPath: string | null;
+  segmentationThumbnailPath: string | null;
+}
 
-  const [images, essayJobs, apiJobs] = await Promise.all([
-    prisma.image.findMany({
-      where: { project: { userId } },
-      select: {
-        id: true,
-        projectId: true,
-        originalPath: true,
-        thumbnailPath: true,
-        segmentationThumbnailPath: true,
-      },
-    }),
-    prisma.essayJob.findMany({
-      where: { userId },
-      select: { resultZipKey: true },
-    }),
-    prisma.apiJob.findMany({ where: { userId }, select: { id: true } }),
-  ]);
-  const projects = await prisma.project.findMany({
-    where: { userId },
-    select: { id: true },
-  });
+const IMAGE_PATHS = {
+  id: true,
+  originalPath: true,
+  thumbnailPath: true,
+  segmentationThumbnailPath: true,
+} as const;
 
-  const fileKeys = new Set<string>();
+/** Every file an image row points at, plus its converted-PNG cache. */
+function addImageKeys(fileKeys: Set<string>, images: ImagePaths[]): void {
   for (const image of images) {
     for (const key of [
       image.originalPath,
@@ -70,6 +60,68 @@ export async function collectUserFiles(userId: string): Promise<UserFiles> {
     // The browser-compatible PNG cached for a TIFF/BMP original.
     fileKeys.add(path.posix.join('converted', `${image.id}.png`));
   }
+}
+
+/** The directories that hold nothing but one project's own files. */
+function addProjectDirs(
+  dirKeys: Set<string>,
+  ownerId: string,
+  projectId: string
+): void {
+  const safeProjectId = assertSafeStorageSegment(projectId, 'projectId');
+  // Video containers, their frames and channels.
+  dirKeys.add(path.posix.join('projects', safeProjectId));
+  // What the OWNER uploaded into the project. (What others uploaded into it
+  // sits under their folders and is covered by the per-image keys.)
+  dirKeys.add(
+    path.posix.join(assertSafeStorageSegment(ownerId, 'userId'), safeProjectId)
+  );
+}
+
+/**
+ * The files of ONE project, for deleting them with it.
+ *
+ * Deleting a project used to remove its rows and nothing else: the cascade
+ * took the images and segmentations out of the database and left every still
+ * image on disk, unreachable and uncounted, for good. Must be called BEFORE
+ * the project row is deleted - the rows are the list.
+ */
+export async function collectProjectFiles(
+  projectId: string,
+  ownerId: string
+): Promise<UserFiles> {
+  const images = await prisma.image.findMany({
+    where: { projectId },
+    select: IMAGE_PATHS,
+  });
+
+  const fileKeys = new Set<string>();
+  addImageKeys(fileKeys, images);
+  const dirKeys = new Set<string>();
+  addProjectDirs(dirKeys, ownerId, projectId);
+
+  return { fileKeys: [...fileKeys], dirKeys: [...dirKeys] };
+}
+
+/** Must be called BEFORE the user row is deleted - the rows are the list. */
+export async function collectUserFiles(userId: string): Promise<UserFiles> {
+  const safeUserId = assertSafeStorageSegment(userId, 'userId');
+
+  const [images, projects, essayJobs, apiJobs] = await Promise.all([
+    prisma.image.findMany({
+      where: { project: { userId } },
+      select: IMAGE_PATHS,
+    }),
+    prisma.project.findMany({ where: { userId }, select: { id: true } }),
+    prisma.essayJob.findMany({
+      where: { userId },
+      select: { resultZipKey: true },
+    }),
+    prisma.apiJob.findMany({ where: { userId }, select: { id: true } }),
+  ]);
+
+  const fileKeys = new Set<string>();
+  addImageKeys(fileKeys, images);
   for (const job of essayJobs) {
     if (job.resultZipKey) {
       fileKeys.add(job.resultZipKey);
@@ -78,12 +130,7 @@ export async function collectUserFiles(userId: string): Promise<UserFiles> {
 
   const dirKeys = new Set<string>();
   for (const { id } of projects) {
-    const projectId = assertSafeStorageSegment(id, 'projectId');
-    // Video containers, their frames and channels.
-    dirKeys.add(path.posix.join('projects', projectId));
-    // What the owner uploaded into their own project. (What OTHERS uploaded
-    // into it is covered by the per-image keys above.)
-    dirKeys.add(path.posix.join(safeUserId, projectId));
+    addProjectDirs(dirKeys, safeUserId, id);
   }
   dirKeys.add(path.posix.join('avatars', safeUserId));
   dirKeys.add(path.posix.join('essays', safeUserId));

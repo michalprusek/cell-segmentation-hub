@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { cutoffForNow, isIssuedBeforeCutoff } from '../sessionCutoff';
+import {
+  cutoffForNow,
+  isIssuedBeforeCutoff,
+  tokenIssuedAtMs,
+} from '../sessionCutoff';
 
 describe('isIssuedBeforeCutoff', () => {
   const cutoff = new Date('2026-10-07T12:00:00.000Z');
@@ -12,8 +16,8 @@ describe('isIssuedBeforeCutoff', () => {
 
   it('revokes what was issued before the cut-off and keeps what was issued at or after it', () => {
     expect(isIssuedBeforeCutoff(cutoff.getTime() - 1, cutoff)).toBe(true);
-    // AT the cut-off is valid: the replacement session is minted in the same
-    // second, and a JWT's iat cannot say which half of it.
+    // AT the cut-off is valid: the replacement session can be signed in the
+    // same millisecond as the write that set it.
     expect(isIssuedBeforeCutoff(cutoff.getTime(), cutoff)).toBe(false);
     expect(isIssuedBeforeCutoff(cutoff.getTime() + 1, cutoff)).toBe(false);
   });
@@ -28,28 +32,45 @@ describe('isIssuedBeforeCutoff', () => {
 });
 
 describe('cutoffForNow', () => {
-  it('floors to the second, so a token minted later in that second survives its own cut-off', () => {
+  it('is this instant, to the millisecond', () => {
     const now = Date.parse('2026-10-07T12:00:00.750Z');
-    const cutoff = cutoffForNow(now);
 
-    expect(cutoff.toISOString()).toBe('2026-10-07T12:00:00.000Z');
-
-    // What jsonwebtoken would stamp on a token signed at `now`.
-    const iatMs = Math.floor(now / 1000) * 1000;
-    expect(isIssuedBeforeCutoff(iatMs, cutoff)).toBe(false);
-
-    // A millisecond cut-off - the obvious implementation - would have
-    // revoked that very token.
-    expect(isIssuedBeforeCutoff(iatMs, new Date(now))).toBe(true);
+    expect(cutoffForNow(now).toISOString()).toBe('2026-10-07T12:00:00.750Z');
   });
 
-  it('still revokes a token from the previous second', () => {
-    const now = Date.parse('2026-10-07T12:00:00.750Z');
+  it('tells a session from just before the change from the one issued just after it, in the same second', () => {
+    const cutoff = cutoffForNow(Date.parse('2026-10-07T12:00:00.750Z'));
+
+    // 12:00:00.700 - before the password change: revoked.
     expect(
       isIssuedBeforeCutoff(
-        Date.parse('2026-10-07T11:59:59.000Z'),
-        cutoffForNow(now)
+        tokenIssuedAtMs({ iat: 1791374400, iatMs: 1791374400700 }),
+        cutoff
       )
-    ).toBe(true);
+    ).toBe(Date.parse('2026-10-07T12:00:00.700Z') < cutoff.getTime());
+    // 12:00:00.760 - the replacement session: kept.
+    expect(isIssuedBeforeCutoff(cutoff.getTime() + 10, cutoff)).toBe(false);
+    expect(isIssuedBeforeCutoff(cutoff.getTime() - 50, cutoff)).toBe(true);
+  });
+});
+
+describe('tokenIssuedAtMs', () => {
+  it('prefers the millisecond claim', () => {
+    expect(tokenIssuedAtMs({ iat: 100, iatMs: 100_750 })).toBe(100_750);
+  });
+
+  it('falls back to the START of the second for a token without it - never later than the truth', () => {
+    // A legacy token minted at 12:00:00.900, after a change at 12:00:00.750,
+    // reads as 12:00:00.000 and is revoked. Too eager, by design: the other
+    // direction would keep a token that should have died.
+    const cutoff = new Date(100_750);
+    expect(tokenIssuedAtMs({ iat: 100 })).toBe(100_000);
+    expect(isIssuedBeforeCutoff(tokenIssuedAtMs({ iat: 100 }), cutoff)).toBe(
+      true
+    );
+  });
+
+  it('is undefined when the token carries no issue time at all', () => {
+    expect(tokenIssuedAtMs({})).toBeUndefined();
   });
 });

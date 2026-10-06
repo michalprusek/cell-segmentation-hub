@@ -61,6 +61,15 @@ vi.mock('../../db', () => ({
   prisma: prismaMock,
 }));
 vi.mock('../../utils/logger');
+// deleteProject hands the project's files to this module. What it does with
+// the disk has its own suite; here it must only not touch a real one.
+const { accountFilesMock } = vi.hoisted(() => ({
+  accountFilesMock: {
+    collectProjectFiles: vi.fn(),
+    deleteUserFiles: vi.fn(),
+  },
+}));
+vi.mock('../accountFiles', () => accountFilesMock);
 vi.mock('../sharingService', () => ({
   hasProjectAccess: vi.fn(),
 }));
@@ -468,6 +477,15 @@ describe('ProjectService', () => {
       };
       prismaMock.project.findFirst.mockResolvedValueOnce(existingProject);
       prismaMock.project.delete.mockResolvedValueOnce({ id: projectId });
+    accountFilesMock.collectProjectFiles.mockResolvedValue({
+      fileKeys: [],
+      dirKeys: [],
+    });
+    accountFilesMock.deleteUserFiles.mockResolvedValue({
+      removed: 0,
+      failed: 0,
+      refused: 0,
+    });
 
       const result = await projectService.deleteProject(projectId, userId);
 
@@ -488,6 +506,10 @@ describe('ProjectService', () => {
       const result = await projectService.deleteProject(projectId, userId);
 
       expect(result).toBeNull();
+      // Not found, or not this user's: no row and no file is touched.
+      expect(prismaMock.project.delete).not.toHaveBeenCalled();
+      expect(accountFilesMock.collectProjectFiles).not.toHaveBeenCalled();
+      expect(accountFilesMock.deleteUserFiles).not.toHaveBeenCalled();
     });
   });
 

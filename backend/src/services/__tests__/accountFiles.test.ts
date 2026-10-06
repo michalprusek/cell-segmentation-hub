@@ -29,7 +29,11 @@ vi.mock('../../utils/logger', () => ({
 }));
 
 import { prisma } from '../../db';
-import { collectUserFiles, deleteUserFiles } from '../accountFiles';
+import {
+  collectProjectFiles,
+  collectUserFiles,
+  deleteUserFiles,
+} from '../accountFiles';
 
 const OWNER = '11111111-1111-4111-8111-111111111111';
 const SHAREE = '22222222-2222-4222-8222-222222222222';
@@ -115,6 +119,53 @@ describe('collectUserFiles', () => {
 
   it('refuses a user id that is not a single path component', async () => {
     await expect(collectUserFiles('../etc')).rejects.toThrow();
+  });
+});
+
+describe('collectProjectFiles', () => {
+  beforeEach(() => {
+    vi.mocked(prisma.image.findMany).mockResolvedValue([
+      {
+        id: 'img-own',
+        originalPath: `${OWNER}/${OWN_PROJECT}/originals/a.png`,
+        thumbnailPath: `${OWNER}/${OWN_PROJECT}/thumbnails/a.jpg`,
+        segmentationThumbnailPath: null,
+      },
+      {
+        id: 'img-by-sharee',
+        originalPath: `${SHAREE}/${OWN_PROJECT}/originals/b.png`,
+        thumbnailPath: null,
+        segmentationThumbnailPath: null,
+      },
+    ] as never);
+  });
+
+  it('lists this project’s images and nothing of the owner’s other projects', async () => {
+    const { fileKeys, dirKeys } = await collectProjectFiles(OWN_PROJECT, OWNER);
+
+    expect(prisma.image.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { projectId: OWN_PROJECT } })
+    );
+    expect(fileKeys).toEqual(
+      expect.arrayContaining([
+        `${OWNER}/${OWN_PROJECT}/originals/a.png`,
+        `${OWNER}/${OWN_PROJECT}/thumbnails/a.jpg`,
+        `${SHAREE}/${OWN_PROJECT}/originals/b.png`,
+        'converted/img-own.png',
+        'converted/img-by-sharee.png',
+      ])
+    );
+    expect([...dirKeys].sort()).toEqual(
+      [`projects/${OWN_PROJECT}`, `${OWNER}/${OWN_PROJECT}`].sort()
+    );
+    // Not the avatar, not the essays, not the whole user folder: deleting a
+    // project is not deleting an account.
+    expect(dirKeys.some(d => d.startsWith('avatars/'))).toBe(false);
+    expect(dirKeys).not.toContain(OWNER);
+  });
+
+  it('refuses a project id that is not a single path component', async () => {
+    await expect(collectProjectFiles('../x', OWNER)).rejects.toThrow();
   });
 });
 

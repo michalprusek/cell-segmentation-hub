@@ -1,3 +1,4 @@
+import { pickDefaultSegmentationChannel } from '@/lib/segmentationChannelDefault';
 import React, {
   useState,
   useEffect,
@@ -1656,11 +1657,15 @@ const ProjectDetail = () => {
               images.map(img => (img as { originalPath?: string }).originalPath)
             );
       if (detectedChannels.length > 1 && !pendingChannelChoice) {
-        // Default to the first channel; backend already validates against the
-        // queue row's set so an unknown token returns 400 cleanly.
+        // Preselect only a channel the container itself marks as the
+        // segmentation source; with none, the user has to choose. See
+        // `pickDefaultSegmentationChannel` for why "the first one" was wrong.
         setPendingChannelChoice({
           channels: detectedChannels,
-          defaultChannel: detectedChannels[0],
+          defaultChannel: pickDefaultSegmentationChannel(
+            detectedChannels,
+            projectSegmentationSources
+          ),
         });
         return;
       }

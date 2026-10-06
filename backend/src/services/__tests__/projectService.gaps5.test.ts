@@ -59,6 +59,15 @@ const { prismaMock } = vi.hoisted(() => {
 
 vi.mock('../../db', () => ({ prisma: prismaMock }));
 vi.mock('../../utils/logger');
+// deleteProject hands the project's files to this module. What it does with
+// the disk has its own suite; here it must only not touch a real one.
+const { accountFilesMock } = vi.hoisted(() => ({
+  accountFilesMock: {
+    collectProjectFiles: vi.fn(),
+    deleteUserFiles: vi.fn(),
+  },
+}));
+vi.mock('../accountFiles', () => accountFilesMock);
 vi.mock('../sharingService', () => ({
   hasProjectAccess: vi
     .fn()
@@ -249,10 +258,21 @@ describe('projectService.deleteProject', () => {
     prismaMock.project.delete.mockRejectedValueOnce(
       new Error('Constraint violation')
     );
+  accountFilesMock.collectProjectFiles.mockResolvedValue({
+    fileKeys: [],
+    dirKeys: [],
+  });
+  accountFilesMock.deleteUserFiles.mockResolvedValue({
+    removed: 0,
+    failed: 0,
+    refused: 0,
+  });
 
     await expect(
       projectService.deleteProject('proj-1', 'user-1')
     ).rejects.toThrow('Constraint violation');
+    // The project still exists, so its files must too.
+    expect(accountFilesMock.deleteUserFiles).not.toHaveBeenCalled();
   });
 });
 

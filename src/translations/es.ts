@@ -1957,7 +1957,7 @@ export default {
         step3:
           'Seleccione las imágenes y haga clic en Segmentar; se usa el modelo del proyecto',
         step4:
-          'Cada modelo lleva su propio umbral de detección, fijado al validarlo: no hay nada que ajustar en cada ejecución',
+          'El umbral de detección es fijo para cada modelo, y dos modelos no tienen ninguno porque deciden por argmax: no hay nada que ajustar en cada ejecución',
         step5: 'En un vídeo multicanal, elija qué canal debe leer el modelo',
         step6:
           'Solo el propietario del proyecto puede cambiar el modelo; los colaboradores segmentan con su elección',

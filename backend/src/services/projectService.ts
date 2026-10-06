@@ -1,3 +1,4 @@
+import { collectProjectFiles, deleteUserFiles } from './accountFiles';
 import { prisma } from '../db';
 import {
   CreateProjectData,
@@ -614,11 +615,24 @@ export async function deleteProject(
       return null;
     }
 
-    // Delete the project (cascade will handle images and segmentations)
+    // The file list is read BEFORE the rows go - afterwards nothing records
+    // which files were this project's.
+    const files = await collectProjectFiles(projectId, userId);
+
+    // Delete the project (the cascade removes its images and segmentations)
     await prisma.project.delete({
       where: {
         id: projectId,
       },
+    });
+
+    // The cascade only reaches the database. Without this every still image
+    // of a deleted project stayed on disk for good. After the commit and
+    // never fatal: the project is gone either way.
+    const removed = await deleteUserFiles(files);
+    logger.info('Project files removed', 'ProjectService', {
+      projectId,
+      ...removed,
     });
 
     logger.info(`Project deleted: ${projectId}`, 'ProjectService', {

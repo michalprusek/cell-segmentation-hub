@@ -1,3 +1,4 @@
+import { pickDefaultSegmentationChannel } from '@/lib/segmentationChannelDefault';
 import React from 'react';
 import { generateSafePolygonKey } from '@/lib/polygonIdUtils';
 import { ensureBrowserCompatibleUrl } from '@/lib/tiffUtils';
@@ -848,12 +849,16 @@ const SegmentationEditorLayout: React.FC<SegmentationEditorLayoutProps> = ({
         open={showResegmentChannelDialog}
         channels={video.container?.channels?.map(c => c.name) ?? []}
         defaultChannel={
-          // Prefer the channel currently picked as the segmentation
-          // source (so the user's first click typically just confirms);
-          // fall back to the first channel in the container.
-          video.container?.channels?.find(c => c.isSegmentationSource)?.name ??
-          video.container?.channels?.[0]?.name ??
-          ''
+          // The channel the container marks as the segmentation source, so
+          // the first click typically just confirms - and NOTHING when none
+          // is marked, so that an unidentified channel is never one click
+          // away. See `pickDefaultSegmentationChannel`.
+          pickDefaultSegmentationChannel(
+            video.container?.channels?.map(c => c.name) ?? [],
+            video.container?.channels
+              ?.filter(c => c.isSegmentationSource)
+              .map(c => c.name)
+          )
         }
         onConfirm={channel => {
           setShowResegmentChannelDialog(false);

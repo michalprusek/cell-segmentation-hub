@@ -3,7 +3,7 @@ import { prisma } from '../db';
 import { verifyAccessToken, JwtPayload } from '../auth/jwt';
 import { ResponseHelper } from '../utils/response';
 import { logger } from '../utils/logger';
-import { isIssuedBeforeCutoff } from '../auth/sessionCutoff';
+import { isIssuedBeforeCutoff, tokenIssuedAtMs } from '../auth/sessionCutoff';
 import { ACCESS_TOKEN_COOKIE } from '../utils/authCookies';
 
 // Extend Express Request interface to include user
@@ -61,10 +61,6 @@ declare module 'express-serve-static-core' {
     };
   }
 }
-
-/** `iat` is whole seconds since the epoch; jsonwebtoken always sets it. */
-const issuedAtMs = (payload: JwtPayload & { iat?: number }): number | undefined =>
-  typeof payload.iat === 'number' ? payload.iat * 1000 : undefined;
 
 /**
  * Middleware to authenticate user using JWT token
@@ -127,7 +123,7 @@ export const authenticate = async (
     // sessions are exempt.
     if (
       !payload.impersonatorId &&
-      isIssuedBeforeCutoff(issuedAtMs(payload), user.sessionsValidAfter)
+      isIssuedBeforeCutoff(tokenIssuedAtMs(payload), user.sessionsValidAfter)
     ) {
       ResponseHelper.unauthorized(res, 'Token vypršel', 'Auth');
       return;
@@ -411,7 +407,7 @@ export const optionalAuthenticate = async (
     const revoked =
       user &&
       !payload.impersonatorId &&
-      isIssuedBeforeCutoff(issuedAtMs(payload), user.sessionsValidAfter);
+      isIssuedBeforeCutoff(tokenIssuedAtMs(payload), user.sessionsValidAfter);
 
     if (user && !revoked) {
       // An impersonated token reaching an optionally-authenticated route (the

@@ -36,6 +36,9 @@ vi.mock('../../services/emailService');
 vi.mock('../../services/sessionService', () => ({
   sessionService: sessionServiceMock,
 }));
+vi.mock('../liveConnections', () => ({
+  disconnectUserSockets: vi.fn(),
+}));
 vi.mock('../accountFiles', () => ({
   collectUserFiles: vi.fn(),
   deleteUserFiles: vi.fn(),
@@ -67,102 +70,100 @@ beforeEach(() => {
   sessionServiceMock.deleteRefreshToken.mockResolvedValue(true);
 });
 
+/** What `rotateRefreshToken` hands back for a record written at `createdAt`. */
+const rotatedFrom = (
+  presentedCreatedAt: string | undefined,
+  extra: Record<string, unknown> = {}
+) => ({
+  token: 'rotated',
+  userId: USER_ID,
+  rememberMe: false,
+  ...(presentedCreatedAt ? { presentedCreatedAt } : {}),
+  ...extra,
+});
+
 describe('refreshToken and the session cut-off', () => {
-  it('refuses a record written before the cut-off, deletes it, and does NOT rotate', async () => {
-    sessionServiceMock.verifyRefreshToken.mockResolvedValue({
-      userId: USER_ID,
-      createdAt: before,
-    });
+  it('withdraws the successor of a record written before the cut-off', async () => {
+    sessionServiceMock.rotateRefreshToken.mockResolvedValue(
+      rotatedFrom(before)
+    );
     prismaMock.user.findUnique.mockResolvedValue(userRow(CUTOFF));
 
     await expect(
       authService.refreshToken({ refreshToken: 'old' })
     ).rejects.toMatchObject({ statusCode: 401 });
 
-    // Rotating would write a fresh record dated now - and so launder the
-    // very session the password change ended.
-    expect(sessionServiceMock.rotateRefreshToken).not.toHaveBeenCalled();
-    expect(sessionServiceMock.deleteRefreshToken).toHaveBeenCalledWith('old');
-  });
-
-  it('refuses a record with no creation time once the user has a cut-off', async () => {
-    sessionServiceMock.verifyRefreshToken.mockResolvedValue({
-      userId: USER_ID,
-    });
-    prismaMock.user.findUnique.mockResolvedValue(userRow(CUTOFF));
-
-    await expect(
-      authService.refreshToken({ refreshToken: 'legacy' })
-    ).rejects.toMatchObject({ statusCode: 401 });
-    expect(sessionServiceMock.rotateRefreshToken).not.toHaveBeenCalled();
-  });
-
-  it('withdraws the rotated token when the password changed BETWEEN the check and the rotation', async () => {
-    // The race: the pre-check reads "no cut-off", a password change lands,
-    // and the rotation then writes a successor dated now - newer than the
-    // cut-off, so nothing would ever refuse it again.
-    sessionServiceMock.verifyRefreshToken.mockResolvedValue({
-      userId: USER_ID,
-      createdAt: before,
-    });
-    prismaMock.user.findUnique
-      .mockResolvedValueOnce({ sessionsValidAfter: null }) // pre-check
-      .mockResolvedValueOnce(userRow(CUTOFF)); // after the rotation
-
-    await expect(
-      authService.refreshToken({ refreshToken: 'racing' })
-    ).rejects.toMatchObject({ statusCode: 401 });
-
-    expect(sessionServiceMock.rotateRefreshToken).toHaveBeenCalledWith(
-      'racing'
-    );
-    // The successor, not the presented token (rotation already consumed it).
+    // The successor - the presented token was consumed by the rotation.
     expect(sessionServiceMock.deleteRefreshToken).toHaveBeenCalledWith(
       'rotated'
     );
   });
 
-  it('rotates a record written after the cut-off', async () => {
-    sessionServiceMock.verifyRefreshToken.mockResolvedValue({
-      userId: USER_ID,
-      createdAt: after,
+  it('judges against the user row read AFTER the rotation - there is no earlier check to race', async () => {
+    const order: string[] = [];
+    sessionServiceMock.rotateRefreshToken.mockImplementation(async () => {
+      order.push('rotate');
+      return rotatedFrom(before);
     });
+    prismaMock.user.findUnique.mockImplementation(async () => {
+      order.push('read user');
+      return userRow(CUTOFF);
+    });
+
+    await expect(
+      authService.refreshToken({ refreshToken: 'racing' })
+    ).rejects.toMatchObject({ statusCode: 401 });
+
+    // A cut-off read before the rotation can be stale by the time the
+    // successor is written; then nothing would ever refuse that successor.
+    expect(order).toEqual(['rotate', 'read user']);
+    expect(sessionServiceMock.verifyRefreshToken).not.toHaveBeenCalled();
+  });
+
+  it('refuses a record with no creation time once the user has a cut-off', async () => {
+    sessionServiceMock.rotateRefreshToken.mockResolvedValue(
+      rotatedFrom(undefined)
+    );
+    prismaMock.user.findUnique.mockResolvedValue(userRow(CUTOFF));
+
+    await expect(
+      authService.refreshToken({ refreshToken: 'legacy' })
+    ).rejects.toMatchObject({ statusCode: 401 });
+    expect(sessionServiceMock.deleteRefreshToken).toHaveBeenCalledWith(
+      'rotated'
+    );
+  });
+
+  it('keeps a record written after the cut-off', async () => {
+    sessionServiceMock.rotateRefreshToken.mockResolvedValue(rotatedFrom(after));
     prismaMock.user.findUnique.mockResolvedValue(userRow(CUTOFF));
 
     const result = await authService.refreshToken({ refreshToken: 'fresh' });
 
-    expect(sessionServiceMock.rotateRefreshToken).toHaveBeenCalledWith('fresh');
     expect(sessionServiceMock.deleteRefreshToken).not.toHaveBeenCalled();
     expect(result.refreshToken).toBe('rotated');
   });
 
   it('leaves a legacy record alone while the user has no cut-off - a deploy signs nobody out', async () => {
-    sessionServiceMock.verifyRefreshToken.mockResolvedValue({
-      userId: USER_ID,
-    });
+    sessionServiceMock.rotateRefreshToken.mockResolvedValue(
+      rotatedFrom(undefined)
+    );
     prismaMock.user.findUnique.mockResolvedValue(userRow(null));
 
-    await authService.refreshToken({ refreshToken: 'legacy' });
+    const result = await authService.refreshToken({ refreshToken: 'legacy' });
 
-    expect(sessionServiceMock.rotateRefreshToken).toHaveBeenCalledWith(
-      'legacy'
-    );
+    expect(result.refreshToken).toBe('rotated');
+    expect(sessionServiceMock.deleteRefreshToken).not.toHaveBeenCalled();
   });
 
   it('exempts an impersonated session from the target’s cut-off', async () => {
-    sessionServiceMock.verifyRefreshToken.mockResolvedValue({
-      userId: USER_ID,
-      createdAt: before,
-      impersonatorId: 'admin-1',
-      impersonationSessionId: 'imp-1',
-    });
-    sessionServiceMock.rotateRefreshToken.mockResolvedValue({
-      token: 'rotated',
-      userId: USER_ID,
-      rememberMe: true,
-      impersonatorId: 'admin-1',
-      impersonationSessionId: 'imp-1',
-    });
+    sessionServiceMock.rotateRefreshToken.mockResolvedValue(
+      rotatedFrom(before, {
+        rememberMe: true,
+        impersonatorId: 'admin-1',
+        impersonationSessionId: 'imp-1',
+      })
+    );
     prismaMock.user.findUnique.mockImplementation(
       async (args: { where: { id: string } }) =>
         args.where.id === 'admin-1'
@@ -170,24 +171,21 @@ describe('refreshToken and the session cut-off', () => {
           : userRow(CUTOFF)
     );
 
-    await authService.refreshToken({ refreshToken: 'impersonated' });
+    const result = await authService.refreshToken({
+      refreshToken: 'impersonated',
+    });
 
-    expect(sessionServiceMock.rotateRefreshToken).toHaveBeenCalledWith(
-      'impersonated'
-    );
+    expect(result.refreshToken).toBe('rotated');
+    expect(sessionServiceMock.deleteRefreshToken).not.toHaveBeenCalled();
   });
 
   it('reports the session’s own rememberMe, which decides the cookie lifetime', async () => {
-    sessionServiceMock.verifyRefreshToken.mockResolvedValue({
-      userId: USER_ID,
-      createdAt: after,
-    });
+    sessionServiceMock.rotateRefreshToken.mockResolvedValue(rotatedFrom(after));
     prismaMock.user.findUnique.mockResolvedValue(userRow(null));
 
     const result = await authService.refreshToken({ refreshToken: 'short' });
 
-    // rotateRefreshToken is mocked to answer `false` above; a hard-coded
-    // `true` - what the controller used to pass - fails here.
+    // A hard-coded `true` - what the controller used to pass - fails here.
     expect(result.rememberMe).toBe(false);
   });
 });

@@ -1973,7 +1973,7 @@ export default {
         step3:
           'Wählen Sie die Bilder und klicken Sie auf Segmentieren; das Modell des Projekts wird verwendet',
         step4:
-          'Jedes Modell bringt seinen eigenen Erkennungsschwellwert mit, festgelegt bei der Validierung — pro Lauf gibt es nichts einzustellen',
+          'Der Erkennungsschwellwert ist je Modell fest — und zwei Modelle haben gar keinen, sie entscheiden per Argmax — pro Lauf gibt es also nichts einzustellen',
         step5:
           'Wählen Sie bei einem Mehrkanalvideo, welchen Kanal das Modell lesen soll',
         step6:
