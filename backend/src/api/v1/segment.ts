@@ -1,30 +1,19 @@
 import { Request, Response, NextFunction, RequestHandler } from 'express';
 import multer from 'multer';
-import { z } from 'zod';
-import type { KnownModelId } from '../../constants/modelRegistry';
-import { logger } from '../../utils/logger';
 import {
-  FormatNotRepresentableError,
-  MEDIA_TYPES,
-  render,
-  type SegmentationResult,
-} from './formats';
-import {
-  MlBusyError,
-  MlRejectedError,
-  MlTimeoutError,
-  MlUnavailableError,
-  segmentWithMl,
-} from './mlClient';
-import {
-  OUTPUT_FORMATS,
-  V1_MODELS,
-  isKnownModel,
-  outputFormatsFor,
-  type OutputFormat,
-} from './models';
-import { buildObjects, type V1Warning } from './objects';
+  describeFailure,
+  readSegmentationFields,
+  refuseUnacceptable,
+  runSegmentation,
+  sendResult,
+} from './execute';
 import { sendProblem } from './problem';
+
+export {
+  contentDisposition,
+  safeBasename,
+  sniffImageExtension,
+} from './execute';
 
 /**
  * `POST /api/v1/segment` — one image in, one segmentation out, nothing kept.
@@ -64,80 +53,6 @@ const upload = multer({
   // download's Content-Disposition. Seen on the deployed API.
   defParamCharset: 'utf8',
 }).single('image');
-
-type FieldError = { field: string; detail: string };
-
-/**
- * What kind of image the bytes are, by their first bytes — never by the
- * filename or the declared content type, both of which the client chooses.
- * The extension matters only because the ML service's own (older) gate reads
- * one off the filename it is given.
- */
-export function sniffImageExtension(data: Buffer): string | null {
-  if (data.length < 4) {
-    return null;
-  }
-  if (data[0] === 0x89 && data[1] === 0x50 && data[2] === 0x4e && data[3] === 0x47) {
-    return 'png';
-  }
-  if (data[0] === 0xff && data[1] === 0xd8 && data[2] === 0xff) {
-    return 'jpg';
-  }
-  // TIFF and BigTIFF, either byte order.
-  const le = data[0] === 0x49 && data[1] === 0x49 && data[3] === 0x00;
-  const be = data[0] === 0x4d && data[1] === 0x4d && data[2] === 0x00;
-  if ((le && (data[2] === 0x2a || data[2] === 0x2b)) || (be && (data[3] === 0x2a || data[3] === 0x2b))) {
-    return 'tif';
-  }
-  if (data[0] === 0x42 && data[1] === 0x4d) {
-    return 'bmp';
-  }
-  return null;
-}
-
-/** A client-supplied name reduced to something safe to echo in a header. */
-export function safeBasename(name: string | undefined): string {
-  const base = (name ?? '').split(/[\\/]/).pop() ?? '';
-  // eslint-disable-next-line no-control-regex
-  const cleaned = base.replace(/[\u0000-\u001f\u007f"\\]/g, '').trim();
-  return cleaned.slice(0, 200) || 'image';
-}
-
-/** RFC 6266 §4.3 + §5: an ASCII fallback and the UTF-8 form. */
-export function contentDisposition(filename: string): string {
-  const ascii = filename.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_');
-  const utf8 = encodeURIComponent(filename).replace(
-    /['()*]/g,
-    c => `%${c.charCodeAt(0).toString(16).toUpperCase()}`
-  );
-  return `attachment; filename="${ascii}"; filename*=UTF-8''${utf8}`;
-}
-
-const booleanField = z.enum(['true', 'false']).transform(value => value === 'true');
-
-const fieldsSchema = z.object({
-  model: z.string({ required_error: 'model is required' }),
-  threshold: z.coerce
-    .number({ invalid_type_error: 'threshold must be a number' })
-    .min(0.1, 'threshold must be at least 0.1')
-    .max(0.99, 'threshold must be at most 0.99')
-    .optional(),
-  detect_holes: booleanField.optional(),
-  page: z.coerce
-    .number({ invalid_type_error: 'page must be an integer' })
-    .int('page must be an integer')
-    .min(0, 'page must not be negative')
-    .optional(),
-  output_format: z
-    .enum(OUTPUT_FORMATS, {
-      errorMap: () => ({
-        message: `output_format must be one of: ${OUTPUT_FORMATS.join(', ')}`,
-      }),
-    })
-    .optional(),
-});
-
-const KNOWN_FIELDS = Object.keys(fieldsSchema.shape);
 
 const inFlight = new Map<string, number>();
 let totalInFlight = 0;
@@ -235,69 +150,17 @@ export const segmentHandler = async (
   res: Response,
   next: NextFunction
 ): Promise<void> => {
-  const errors: FieldError[] = [];
-
-  for (const field of Object.keys(req.body ?? {})) {
-    if (!KNOWN_FIELDS.includes(field)) {
-      // Refused, not ignored: a misspelt `treshold` would otherwise run with
-      // the default and look like it had worked.
-      errors.push({ field, detail: 'Unknown field.' });
-    }
-  }
-
-  const parsed = fieldsSchema.safeParse(req.body ?? {});
-  if (!parsed.success) {
-    for (const issue of parsed.error.issues) {
-      errors.push({ field: String(issue.path[0] ?? ''), detail: issue.message });
-    }
-  }
-  const fields = parsed.success ? parsed.data : undefined;
-
+  const { request, errors } = readSegmentationFields(req.body, {
+    acceptOutputFormat: true,
+  });
   const file = req.file;
   if (!file || file.size === 0) {
-    errors.push({ field: 'image', detail: 'A non-empty file part named "image" is required.' });
-  }
-
-  // Read from the raw body, not from `fields`: that is undefined whenever
-  // ANY field failed to parse, and an unknown model must still be reported
-  // alongside the others.
-  const rawModel: unknown = req.body?.model;
-  const requested = typeof rawModel === 'string' ? rawModel : undefined;
-  const modelId: KnownModelId | undefined =
-    requested && isKnownModel(requested) ? requested : undefined;
-  const model = modelId ? V1_MODELS[modelId] : undefined;
-  if (requested !== undefined && !model) {
     errors.push({
-      field: 'model',
-      detail: `Unknown model. Available: ${Object.keys(V1_MODELS).join(', ')}.`,
+      field: 'image',
+      detail: 'A non-empty file part named "image" is required.',
     });
   }
-
-  const format: OutputFormat = fields?.output_format ?? 'json';
-  if (fields && model && modelId) {
-    // A parameter the model does not read is refused, never dropped: the
-    // caller would otherwise believe it had been applied.
-    if (fields.threshold !== undefined && !model.threshold) {
-      errors.push({
-        field: 'threshold',
-        detail: `The ${modelId} model does not use a threshold.`,
-      });
-    }
-    if (fields.detect_holes !== undefined && !model.detectHoles) {
-      errors.push({
-        field: 'detect_holes',
-        detail: `The ${modelId} model does not use detect_holes.`,
-      });
-    }
-    if (!outputFormatsFor(model).includes(format)) {
-      errors.push({
-        field: 'output_format',
-        detail: `The ${modelId} model returns ${model.geometry}s, which "${format}" cannot represent. Available: ${outputFormatsFor(model).join(', ')}.`,
-      });
-    }
-  }
-
-  if (errors.length > 0 || !fields || !model || !modelId || !file) {
+  if (errors.length > 0 || !request || !file) {
     sendProblem(res, 'validation-failed', {
       detail: 'One or more request fields are invalid.',
       extensions: { errors },
@@ -305,170 +168,28 @@ export const segmentHandler = async (
     return;
   }
 
-  // `Accept` is a CHECK on the chosen format, not the way to choose it:
-  // three of the six formats share a media type (RFC 9110 §15.5.7). Done
-  // here, before the inference, because the answer does not depend on it.
-  const mediaType = MEDIA_TYPES[format];
-  if (req.headers.accept && !req.accepts(mediaType)) {
-    sendProblem(res, 'not-acceptable', {
-      detail: `output_format "${format}" is ${mediaType}, which the Accept header excludes.`,
-      extensions: { content_type: mediaType },
-    });
+  if (refuseUnacceptable(req, res, request.format)) {
     return;
   }
 
-  const extension = sniffImageExtension(file.buffer);
-  if (!extension) {
-    sendProblem(res, 'unsupported-image', {
-      detail: 'The file is not a PNG, JPEG, TIFF or BMP image.',
-    });
-    return;
-  }
-
-  const page = fields.page ?? 0;
-  const parameters: Record<string, unknown> = {};
-  if (model.threshold) {
-    parameters.threshold = fields.threshold ?? model.threshold.default;
-  }
-  if (model.detectHoles) {
-    parameters.detect_holes = fields.detect_holes ?? true;
-  }
-
+  const limits = { maxPixels: SYNC_MAX_PIXELS, timeoutMs: SYNC_TIMEOUT_MS };
   try {
-    const started = Date.now();
-    const ml = await segmentWithMl({
+    const result = await runSegmentation({
       image: file.buffer,
-      filename: `upload.${extension}`,
-      model: modelId,
-      threshold: parameters.threshold as number | undefined,
-      detectHoles: parameters.detect_holes as boolean | undefined,
-      page,
-      maxPixels: SYNC_MAX_PIXELS,
-      timeoutMs: SYNC_TIMEOUT_MS,
+      originalName: file.originalname,
+      request,
+      ...limits,
     });
-
-    const size = ml.image_size;
-    if (!size || !Number.isInteger(size.width) || !Number.isInteger(size.height)) {
-      throw new Error('ML response carries no image_size');
-    }
-
-    const { objects, warnings } = buildObjects(
-      modelId,
-      ml.polygons ?? [],
-      ml.polylines ?? []
-    );
-    const pageCount = ml.page_count ?? 1;
-    const allWarnings: V1Warning[] = [...warnings];
-    if (pageCount > 1) {
-      allWarnings.push({
-        code: 'multipage_image',
-        detail: `The image has ${pageCount} pages; only page ${page} was segmented. Use the "page" field to choose another.`,
-      });
-    }
-    if (ml.input_conversion) {
-      const c = ml.input_conversion;
-      allWarnings.push({
-        code: 'input_depth_converted',
-        detail: `The ${modelId} model works on 8-bit input. The image (${c.from_mode}) was stretched from its ${c.low_percentile}-${c.high_percentile} percentile range [${c.low}, ${c.high}] to 0-255.`,
-      });
-    }
-    if (Array.isArray(ml.warnings)) {
-      for (const warning of ml.warnings) {
-        allWarnings.push({ code: 'model_warning', detail: String(warning) });
-      }
-    }
-    if (objects.length === 0) {
-      allWarnings.push({
-        code: 'no_objects',
-        detail: 'The model found nothing in this image.',
-      });
-    }
-
-    const result: SegmentationResult = {
-      model: modelId,
-      modelInfo: model,
-      image: {
-        filename: safeBasename(file.originalname),
-        width: size.width,
-        height: size.height,
-        page,
-        page_count: pageCount,
-      },
-      parameters,
-      objects,
-      ...(ml.image_metrics ? { metrics: ml.image_metrics } : {}),
-      warnings: allWarnings,
-      timing: {
-        inference_ms: Math.round((ml.inference_time ?? 0) * 1000) || Date.now() - started,
-      },
-    };
-
-    const output = await render(result, format);
-
-    res.setHeader('SpheroSeg-Object-Count', String(objects.length));
-    if (allWarnings.length > 0) {
-      res.setHeader(
-        'SpheroSeg-Warnings',
-        [...new Set(allWarnings.map(w => w.code))].join(', ')
-      );
-    }
-    if (output.filename) {
-      res.setHeader('Content-Disposition', contentDisposition(output.filename));
-    }
-    res.setHeader('Cache-Control', 'no-store');
-    res.status(200).type(output.contentType).send(output.body);
+    await sendResult(res, result, request.format);
   } catch (error) {
-    if (error instanceof MlBusyError) {
-      sendProblem(res, 'server-busy', {
-        detail: 'Too many segmentations are queued. Retry shortly.',
-        headers: { 'Retry-After': '10' },
-      });
-    } else if (error instanceof MlTimeoutError) {
-      sendProblem(res, 'segmentation-timeout', {
-        detail: `The segmentation did not finish within ${SYNC_TIMEOUT_MS / 1000} s.`,
-      });
-    } else if (error instanceof MlRejectedError) {
-      rejectedByMl(res, error);
-    } else if (error instanceof FormatNotRepresentableError) {
-      sendProblem(res, 'output-not-representable', { detail: error.message });
-    } else if (error instanceof MlUnavailableError) {
-      logger.error('ML service failed a v1 segmentation', error, 'V1');
-      sendProblem(res, 'segmentation-failed', {
-        detail: 'The segmentation service could not process the image.',
-      });
+    const failure = describeFailure(error, limits);
+    if (failure) {
+      sendProblem(res, failure.code, failure.options);
     } else {
       next(error);
     }
   }
 };
-
-/** Map the ML service's own 4xx onto this API's problems. */
-function rejectedByMl(res: Response, error: MlRejectedError): void {
-  const detail = error.detail;
-  if (error.status === 413 && detail && typeof detail === 'object') {
-    const d = detail as { width?: number; height?: number; pixels?: number };
-    sendProblem(res, 'image-too-large', {
-      detail: `The image is ${d.width} x ${d.height} px (${d.pixels} pixels); a synchronous request accepts at most ${SYNC_MAX_PIXELS}.`,
-      extensions: {
-        width: d.width,
-        height: d.height,
-        max_pixels: SYNC_MAX_PIXELS,
-      },
-    });
-    return;
-  }
-  const text = typeof detail === 'string' ? detail : '';
-  if (/^page \d+ is out of range/.test(text)) {
-    sendProblem(res, 'validation-failed', {
-      detail: 'One or more request fields are invalid.',
-      extensions: { errors: [{ field: 'page', detail: text }] },
-    });
-    return;
-  }
-  sendProblem(res, 'unsupported-image', {
-    detail: text || 'The image could not be decoded.',
-  });
-}
 
 export const segmentRoute: RequestHandler[] = [
   reserveSlot,
