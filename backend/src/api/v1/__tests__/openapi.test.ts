@@ -7,8 +7,14 @@
 import { describe, it, expect } from 'vitest';
 import { MODEL_REGISTRY, SEGMENTATION_MODELS } from '../../../constants/modelRegistry';
 import { OUTPUT_FORMATS, V1_MODELS, describeModel, outputFormatsFor } from '../models';
-import { SEGMENT_PROBLEMS, buildOpenApi } from '../openapi';
+import { JOB_PROBLEMS, SEGMENT_PROBLEMS, buildOpenApi } from '../openapi';
 import { PROBLEM_TYPES } from '../problem';
+import {
+  JOB_MAX_ITEMS,
+  JOB_MAX_PIXELS,
+  JOB_STATUSES,
+  MAX_ACTIVE_JOBS_PER_USER,
+} from '../jobs/limits';
 
 const doc = buildOpenApi() as any;
 const schemas = doc.components.schemas;
@@ -117,10 +123,11 @@ describe('the document', () => {
       expect(responses[status].description, code).toContain(`\`${code}\``);
       expect(Object.keys(responses[status].content)).toEqual(['application/problem+json']);
     }
-    // Every type is reachable from /segment except the generic 404.
-    expect(Object.keys(PROBLEM_TYPES).filter(c => !SEGMENT_PROBLEMS.includes(c as any))).toEqual([
-      'not-found',
-    ]);
+    // Every problem type is documented on some endpoint.
+    const documented = new Set<string>([...SEGMENT_PROBLEMS, ...JOB_PROBLEMS]);
+    expect(Object.keys(PROBLEM_TYPES).filter(c => !documented.has(c))).toEqual(
+      []
+    );
     expect(schemas.Problem.properties.code.enum).toEqual(Object.keys(PROBLEM_TYPES));
   });
 
@@ -141,6 +148,38 @@ describe('the document', () => {
       'page',
       'threshold',
     ]);
+  });
+
+  it('documents every job problem under its real status on some job endpoint', () => {
+    const jobOperations = Object.entries(doc.paths)
+      .filter(([path]) => path.startsWith('/jobs'))
+      .flatMap(([, item]: [string, any]) => Object.values(item) as any[]);
+    expect(jobOperations).toHaveLength(6);
+    for (const code of JOB_PROBLEMS) {
+      const status = String(PROBLEM_TYPES[code].status);
+      const found = jobOperations.some(op =>
+        op.responses[status]?.description?.includes(`\`${code}\``)
+      );
+      expect(found, code).toBe(true);
+    }
+  });
+
+  it('publishes the job states and limits the code uses', () => {
+    expect(schemas.Job.properties.status.enum).toEqual([...JOB_STATUSES]);
+    for (const state of JOB_STATUSES) {
+      expect(schemas.Job.properties.status.description).toContain(
+        `\`${state}\``
+      );
+    }
+    const create = doc.paths['/jobs'].post;
+    const form = create.requestBody.content['multipart/form-data'].schema;
+    expect(form.properties.images.maxItems).toBe(JOB_MAX_ITEMS);
+    expect(create.description).toContain(`${JOB_MAX_PIXELS} pixels`);
+    expect(create.description).toContain(
+      `${MAX_ACTIVE_JOBS_PER_USER} active jobs`
+    );
+    // output_format belongs to fetching a result, not to creating a job.
+    expect(Object.keys(form.properties)).not.toContain('output_format');
   });
 
   it('gives every problem type a description', () => {

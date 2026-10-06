@@ -4,6 +4,13 @@ import type { ApiJob } from '@prisma/client';
 import { prisma } from '../../../db';
 import { config } from '../../../utils/config';
 import { SYNC_MAX_PIXELS } from '../limits';
+import {
+  ACTIVE_STATUSES,
+  JOB_MAX_PIXELS,
+  type JobStatus,
+} from './limits';
+
+export * from './limits';
 import { V1_MODELS, type V1Model } from '../models';
 import type { SegmentationResult } from '../formats';
 import type { KnownModelId } from '../../../constants/modelRegistry';
@@ -28,17 +35,6 @@ import type { KnownModelId } from '../../../constants/modelRegistry';
  *  - Results are kept JOB_RESULT_TTL_MS after a job finishes; inputs are
  *    deleted as soon as each image has been processed.
  */
-export const JOB_MAX_ITEMS = 20;
-export const JOB_MAX_FILE_BYTES = 256 * 1024 * 1024;
-export const JOB_MAX_TOTAL_BYTES = 2 * 1024 * 1024 * 1024;
-export const JOB_MAX_PIXELS = 8192 * 8192;
-export const JOB_ITEM_TIMEOUT_MS = 30 * 60 * 1000;
-export const MAX_ACTIVE_JOBS_PER_USER = 5;
-export const JOB_STORAGE_BUDGET_BYTES = 20 * 1024 * 1024 * 1024;
-export const JOB_RESULT_TTL_MS = 24 * 60 * 60 * 1000;
-/** How long an expired job's row (no files) stays visible before deletion. */
-export const JOB_ROW_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-
 /** Models whose memory grows with the frame keep the synchronous ceiling. */
 const NATIVE_RESOLUTION_MODELS: ReadonlySet<string> = new Set([
   'spheroid_disintegration',
@@ -49,16 +45,6 @@ export function jobMaxPixels(modelId: string): number {
     ? SYNC_MAX_PIXELS
     : JOB_MAX_PIXELS;
 }
-
-export const ACTIVE_STATUSES = ['queued', 'processing'] as const;
-export type JobStatus =
-  | 'queued'
-  | 'processing'
-  | 'succeeded'
-  | 'partially_succeeded'
-  | 'failed'
-  | 'canceled'
-  | 'expired';
 
 export type ItemStatus =
   | 'queued'
