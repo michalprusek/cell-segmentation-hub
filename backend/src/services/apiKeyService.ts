@@ -153,21 +153,32 @@ export async function createApiKey(
   name: string,
   expiresAt: Date | null
 ): Promise<ApiKeySummary & { key: string }> {
-  const existing = await prisma.apiKey.count({ where: { userId } });
-  if (existing >= MAX_API_KEYS_PER_USER) {
-    throw new ApiKeyLimitError();
-  }
-
   const key = generateApiKey();
-  const created = await prisma.apiKey.create({
-    data: {
-      userId,
-      name,
-      keyHash: hashApiKey(key),
-      prefix: displayPrefix(key),
-      expiresAt,
-    },
-    select: SUMMARY_SELECT,
+
+  // Count and insert under one per-user lock. As two bare queries they raced:
+  // 18 concurrent POSTs from one session left 11 keys on the account in two
+  // runs out of three, each request having read "fewer than 10" before any
+  // of them wrote. The advisory lock is transaction-scoped, so it is released
+  // on commit or rollback and can never be leaked; it serialises one user's
+  // key creation and nobody else's.
+  const created = await prisma.$transaction(async tx => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`api_keys:${userId}`}, 0))`;
+
+    const existing = await tx.apiKey.count({ where: { userId } });
+    if (existing >= MAX_API_KEYS_PER_USER) {
+      throw new ApiKeyLimitError();
+    }
+
+    return tx.apiKey.create({
+      data: {
+        userId,
+        name,
+        keyHash: hashApiKey(key),
+        prefix: displayPrefix(key),
+        expiresAt,
+      },
+      select: SUMMARY_SELECT,
+    });
   });
 
   logger.info(

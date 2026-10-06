@@ -48,6 +48,11 @@ vi.mock('../../../db', () => ({
       update: vi.fn(),
       deleteMany: vi.fn(),
     },
+    $executeRaw: vi.fn(async () => 1),
+    // Runs the callback against the same double, as `tx`.
+    $transaction: vi.fn(async (run: (tx: unknown) => unknown) =>
+      run((await import('../../../db')).prisma)
+    ),
   },
 }));
 

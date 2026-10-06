@@ -11,6 +11,11 @@ vi.mock('../../db', () => ({
       update: vi.fn(),
       deleteMany: vi.fn(),
     },
+    $executeRaw: vi.fn(async () => 1),
+    // Runs the callback against the same double, as `tx`.
+    $transaction: vi.fn(async (run: (tx: unknown) => unknown) =>
+      run((await import('../../db')).prisma)
+    ),
   },
 }));
 
@@ -136,6 +141,36 @@ describe('createApiKey', () => {
     expect(data.prefix).toBe(created.key.slice(0, 9));
     expect(JSON.stringify(data)).not.toContain(created.key);
     expect(isWellFormedApiKey(created.key)).toBe(true);
+  });
+
+  it('takes a per-user lock BEFORE counting, inside one transaction', async () => {
+    const order: string[] = [];
+    const raw = (prisma as unknown as { $executeRaw: ReturnType<typeof vi.fn> })
+      .$executeRaw;
+    raw.mockImplementation(async (strings: TemplateStringsArray, arg: string) => {
+      order.push(`lock:${strings.join('?')}:${arg}`);
+      return 1;
+    });
+    db.count.mockImplementation(async () => {
+      order.push('count');
+      return 0;
+    });
+    db.create.mockImplementation(async () => {
+      order.push('create');
+      return { id: 'k', name: 'n', prefix: 'p' };
+    });
+
+    await createApiKey('user-1', 'pipeline', null);
+
+    expect(order).toHaveLength(3);
+    expect(order[0]).toContain('pg_advisory_xact_lock');
+    // Keyed by the user, so one account's creations never wait on another's.
+    expect(order[0]).toContain('api_keys:user-1');
+    expect(order.slice(1)).toEqual(['count', 'create']);
+    expect(
+      (prisma as unknown as { $transaction: ReturnType<typeof vi.fn> })
+        .$transaction
+    ).toHaveBeenCalledTimes(1);
   });
 
   it('refuses once the account holds the maximum', async () => {
