@@ -337,6 +337,27 @@ def test_tirf_frames_of_another_size_are_refused(folder):
         list(iter_positions(well))
 
 
+def test_solution_frames_of_another_size_are_refused_too(folder):
+    """Only a median is read from it - but it is another acquisition's median."""
+    (well,) = group_wells(_split_well(folder, sol={"size": 8}))
+
+    with pytest.raises(ValueError, match="InSol.*8x8 px.*6x6 px"):
+        list(iter_positions(well))
+
+
+def test_a_shorter_list_of_stage_positions_is_refused(folder):
+    """Four images but three recorded stage points: `zip` would compare three
+    and wave the fourth through."""
+    files = _split_well(folder)
+    tirf = folder.files["WellD04_ChannelTIRF_488_Seq0001.nd2"]
+    tirf._stage = tirf._stage[:3]              # the pixels still hold 4 fields
+
+    (well,) = group_wells(files)
+
+    with pytest.raises(ValueError, match="lists 3 stage position.*lists 4"):
+        list(iter_positions(well))
+
+
 def test_an_unknown_axis_is_refused_by_name(folder):
     path = folder.add("WellD03_ChannelIRM_TIRF_488_Seq0000.nd2",
                       FakeND2([IRM, SOL, TIRF], base=1000, extra_axis="Z"))

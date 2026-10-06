@@ -688,6 +688,12 @@ def _check_same_positions(reference: "tuple[str, nd2.ND2File]",
     ref_xy, xy = _stage_positions(ref_file), _stage_positions(f)
     if ref_xy is None or xy is None:
         return  # Nothing to compare; the position COUNT is checked by shape.
+    if len(ref_xy) != len(xy):
+        # `zip` below would stop at the shorter list and call the rest "the
+        # same fields" without having looked at them.
+        raise ValueError(
+            f"{name} lists {len(xy)} stage position(s) but {ref_name} lists "
+            f"{len(ref_xy)}: the files do not show the same fields of view")
     for index, ((x0, y0), (x1, y1)) in enumerate(zip(ref_xy, xy)):
         if max(abs(x0 - x1), abs(y0 - y1)) > _SAME_POSITION_UM:
             raise ValueError(
@@ -831,7 +837,11 @@ def iter_positions(source: "Path | WellSource", *, irm_match=("irm",),
                 raise ValueError(
                     f"{name} has {frames.shape[0]} position(s) but {irm_name} "
                     f"has {irm_all.shape[0]}")
-            if label == "TIRF" and frames.shape[2:] != irm_all.shape[2:]:
+            # For TIRF this is what makes the centerlines land on the right
+            # pixels. For the solution channel only a median is taken, but a
+            # frame of another size is another acquisition all the same - and
+            # its median would be written into the row as this well's.
+            if frames.shape[2:] != irm_all.shape[2:]:
                 raise ValueError(
                     f"{name} frames are {frames.shape[3]}x{frames.shape[2]} px "
                     f"but {irm_name} frames are "
