@@ -48,6 +48,8 @@ let timer: NodeJS.Timeout | null = null;
 let busy = false;
 let notBefore = 0;
 let lastSweep = 0;
+/** Images a dead process left `processing` have not been re-queued yet. */
+let needsRecovery = true;
 
 const saveItems = (
   job: ApiJob,
@@ -248,6 +250,16 @@ async function run(): Promise<void> {
   }
   busy = true;
   try {
+    if (needsRecovery) {
+      const recovered = await recoverInterrupted();
+      needsRecovery = false;
+      if (recovered > 0) {
+        logger.info(
+          `Re-queued ${recovered} interrupted API job image(s)`,
+          'ApiJobs'
+        );
+      }
+    }
     if (Date.now() - lastSweep > SWEEP_EVERY_MS) {
       lastSweep = Date.now();
       await sweep();
@@ -261,19 +273,43 @@ async function run(): Promise<void> {
   }
 }
 
-export async function startJobWorker(): Promise<void> {
+/**
+ * Start the worker. This NEVER throws and touches no database.
+ *
+ * It used to re-queue interrupted images right here, with the server's
+ * critical start-up `try` around it. On 2026-10-06 the code reached
+ * production one step ahead of its migration: `api_jobs` did not exist, the
+ * query threw, the server treated that as fatal and crash-looped — twelve
+ * restarts, about four minutes with the whole app down, for a table only the
+ * public API's job endpoints read. Recovery is now the first thing a tick
+ * does, where a failure is logged and retried and costs nothing but jobs.
+ */
+export function startJobWorker(): void {
   if (timer) {
     return;
   }
-  await fs.mkdir(incomingDir(), { recursive: true });
-  const recovered = await recoverInterrupted();
-  if (recovered > 0) {
-    logger.info(`Re-queued ${recovered} interrupted API job image(s)`, 'ApiJobs');
-  }
+  needsRecovery = true;
   timer = setInterval(() => void run(), TICK_MS);
   // Do not keep the process alive for this alone.
   timer.unref();
+  void fs
+    .mkdir(incomingDir(), { recursive: true })
+    .catch((error: Error) =>
+      logger.error('Cannot create the API job directory', error, 'ApiJobs')
+    );
   logger.info(`API job worker started (${jobsRoot()})`, 'ApiJobs');
+}
+
+/** One pass of the worker loop. Exported for tests. */
+export const runOnce = run;
+
+/** Put the loop's module-level state back to "just loaded". Tests only. */
+export function resetJobWorkerForTests(): void {
+  stopJobWorker();
+  busy = false;
+  notBefore = 0;
+  lastSweep = Date.now();
+  needsRecovery = true;
 }
 
 export function stopJobWorker(): void {

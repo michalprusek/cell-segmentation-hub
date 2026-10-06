@@ -418,8 +418,9 @@ const startServer = async (): Promise<void> => {
       queueWorker.start();
       logger.info('🏃 Queue worker started');
 
-      // The public API's own job worker (/api/v1/jobs).
-      await startJobWorker();
+      // The public API's own job worker (/api/v1/jobs). Not awaited and not
+      // able to throw: nothing about it may stop the app from starting.
+      startJobWorker();
     } catch (error) {
       logger.error('Failed to initialize critical services:', error as Error);
       logger.error('Server cannot start without required services. Exiting...');

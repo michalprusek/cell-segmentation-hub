@@ -151,7 +151,16 @@ import {
   resultPath,
   incomingDir,
 } from '../jobs/store';
-import { recoverInterrupted, sweep, tick } from '../jobs/worker';
+import {
+  recoverInterrupted,
+  resetJobWorkerForTests,
+  runOnce,
+  startJobWorker,
+  stopJobWorker,
+  sweep,
+  tick,
+} from '../jobs/worker';
+import { logger } from '../../../utils/logger';
 import { SYNC_MAX_PIXELS } from '../limits';
 
 const PROBLEM = /^application\/problem\+json/;
@@ -224,6 +233,7 @@ const fieldErrors = (res: request.Response) =>
   Object.fromEntries(res.body.errors.map((e: any) => [e.field, e.detail]));
 
 beforeEach(async () => {
+  resetJobWorkerForTests();
   rows.clear();
   segmentWithMl.mockReset();
   segmentWithMl.mockResolvedValue(mlResult());
@@ -497,6 +507,29 @@ describe('the worker', () => {
     await drain();
     expect(rows.get(created.body.id).status).toBe('succeeded');
     expect(segmentWithMl).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('starting the worker', () => {
+  it('cannot fail the server start, even with the table missing', async () => {
+    const tableMissing = Object.assign(
+      new Error('The table `public.api_jobs` does not exist'),
+      { code: 'P2021' }
+    );
+    // The first thing a pass does is re-queue interrupted images.
+    apiJob.findMany.mockRejectedValueOnce(tableMissing);
+    try {
+      // Synchronous: it must neither throw nor return a promise to reject.
+      expect(startJobWorker()).toBeUndefined();
+      await expect(runOnce()).resolves.toBeUndefined();
+      expect(vi.mocked(logger.error)).toHaveBeenCalledWith(
+        'API job worker tick failed',
+        tableMissing,
+        'ApiJobs'
+      );
+    } finally {
+      stopJobWorker();
+    }
   });
 });
 

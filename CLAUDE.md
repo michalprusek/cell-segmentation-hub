@@ -405,11 +405,24 @@ Each of these shipped to production at least once in 2026 despite green pre-comm
 21. **A generated baseline file hides the error it is regenerated over.** `typecheck-baseline.json` and `eslint-baseline.json` record tolerated problems; re-running `npm run type-check:update` after a conflict silently accepts anything new. When you must regenerate, **diff the result against both parents** and account for every entry that appears in neither. On 2026-09-04 all five such entries turned out to be pre-existing errors whose message text changed because `AuthContextType` gained `isAdmin` — but the total was FALLING (1649 → 1608), so a genuinely new error would have been invisible.
 
 22. **A stale Prisma client makes the host TS check lie.** After any `schema.prisma` change, `npx tsc` on the host reports `Property 'x' does not exist` until the client is regenerated — and `npx prisma generate` **fails on the host** (`EACCES: permission denied, unlink .prisma/client/index.d.ts`) because `backend/node_modules` is root-owned, written by the containers. Regenerate through the container:
+
     ```bash
     docker run --rm --user root --entrypoint /bin/sh \
       -v $PWD/backend:/app -w /app cell-segmentation-hub-backend -c "npx prisma generate"
     ```
+
     Same root cause makes `cp -al node_modules` fail silently for a non-root user (`fs.protected_hardlinks=1`): it creates the directory tree and **zero files**.
+
+23. **Start-up code that needs something a migration creates.** Anything on
+    the server's start-up path that reads a table — a worker re-queuing its
+    interrupted work, a cache warm-up — turns "the migration has not run yet"
+    from a failing endpoint into a server that cannot start. Two rules, both
+    learned from the 2026-10-06 outage described under
+    [Production](#production-single-stack-post-2026-05-15): migrate before
+    recreating, and keep optional subsystems out of the critical start-up
+    `try` (the job worker's `startJobWorker` now touches no database at all;
+    its recovery runs in the first tick, where a failure is logged and
+    retried).
 
 ---
 
@@ -526,6 +539,10 @@ Blue-green is gone (see memory `project_blue_green_removal_2026_05_15`). Deploy 
 ```bash
 # 1. Build the changed services
 make build-service SERVICE=backend                     # or frontend / ml
+# 1b. If the change has a migration, apply it FROM THE NEW IMAGE, BEFORE the swap
+docker compose -f docker-compose.production.yml \
+  --env-file .env.production \
+  run --rm --no-deps -T backend npx prisma migrate deploy
 # 2. Recreate (no need to stop the others)
 docker compose -f docker-compose.production.yml \
   --env-file .env.production \
@@ -535,6 +552,18 @@ docker restart spheroseg-nginx
 # 4. Verify
 curl https://spherosegapp.utia.cas.cz/health           # → "production-healthy"
 ```
+
+**Migrate before you recreate, not after.** The other order — recreate, then
+`docker exec spheroseg-backend npx prisma migrate deploy` — works only while
+no code touches the new table until a request asks for it. On 2026-10-06 a
+worker queried its new table at START-UP, inside the server's "critical
+services" `try`: the table did not exist yet, the query threw, the server
+exited, and `restart: always` turned that into twelve restarts and about four
+minutes with the whole app down. `docker exec` cannot even run while the
+container is restarting, so the documented fix was unavailable; the table was
+created by piping the (idempotent) migration SQL into `psql`. Step 1b runs the
+migration in a throwaway container from the NEW image, on the production
+network, and does not touch the running backend.
 
 `make prod` rebuilds and recreates everything; useful for big changes but unnecessary for service-scoped updates.
 
