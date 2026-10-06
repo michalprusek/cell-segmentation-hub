@@ -59,6 +59,12 @@ const SPHEROID_BASE = {
   threshold: { default: 0.5 },
   detectHoles: true,
   inputDepth: '8bit',
+  // `ModelLoader.preprocess_image`, target_size (1024, 1024). Said out loud
+  // because it decides what a larger upload buys: a 6 x 6 mosaic of spheroids
+  // at 6000 x 6000 came back from the deployed API with no objects at all.
+  notes: [
+    'The image is resized to 1024 x 1024 for inference, whatever its size or aspect ratio, and the outlines are scaled back. A frame much larger than that gains no detail; segment one spheroid per image.',
+  ],
 } as const;
 
 const DETAILS: Record<KnownModelId, V1Model> = {
@@ -128,6 +134,9 @@ const DETAILS: Record<KnownModelId, V1Model> = {
   wound: {
     name: 'Wound Healing',
     description: 'The cell-free wound area in scratch-assay images.',
+    notes: [
+      'The image is resized to 256 x 256 for inference and the outline is scaled back, so its edge is only as fine as that grid.',
+    ],
     geometry: 'polygon',
     classes: ['wound'],
     threshold: { default: 0.5 },

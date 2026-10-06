@@ -237,7 +237,13 @@ warning codes and a `result_url`.
 | `microcapsule`            | Microcapsule                   | polygon  | `microcapsule`, `membrane`                 | yes (default 0.5) | no                 | 8bit        |
 | `neurite_soma`            | Neurite / Soma                 | polygon  | `neurite`, `soma`                          | no                | no                 | native      |
 
+- **`hrnet`** — The image is resized to 1024 x 1024 for inference, whatever its size or aspect ratio, and the outlines are scaled back. A frame much larger than that gains no detail; segment one spheroid per image.
+- **`cbam_resunet`** — The image is resized to 1024 x 1024 for inference, whatever its size or aspect ratio, and the outlines are scaled back. A frame much larger than that gains no detail; segment one spheroid per image.
+- **`unet_spherohq`** — The image is resized to 1024 x 1024 for inference, whatever its size or aspect ratio, and the outlines are scaled back. A frame much larger than that gains no detail; segment one spheroid per image.
 - **`spheroid_disintegration`** — Runs at the native resolution of the image. Validated on 2048 x 2048 px frames; other sizes are reported in the result warnings. Holes are never emitted for this model.
+- **`segformer`** — The image is resized to 1024 x 1024 for inference, whatever its size or aspect ratio, and the outlines are scaled back. A frame much larger than that gains no detail; segment one spheroid per image.
+- **`mamba_unet`** — The image is resized to 1024 x 1024 for inference, whatever its size or aspect ratio, and the outlines are scaled back. A frame much larger than that gains no detail; segment one spheroid per image.
+- **`wound`** — The image is resized to 256 x 256 for inference and the outline is scaled back, so its edge is only as fine as that grid.
 - **`microtubule`** — IRM (label-free) images only. On fluorescence (TIRF) frames the output does not track image content. The detection cut is part of the fitted model and cannot be set.
 - **`microcapsule`** — A membrane outline encloses its capsule, so the two overlap. In mask outputs the smaller object is drawn on top.
 - **`neurite_soma`** — Single-channel images. A colour image is accepted only if its channels are identical. Holes are never emitted for this model.
