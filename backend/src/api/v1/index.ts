@@ -1,5 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import rateLimit from 'express-rate-limit';
+import swaggerUi from 'swagger-ui-express';
 import { authenticateApiKey } from '../../middleware/apiKeyAuth';
 import {
   MODEL_REGISTRY,
@@ -103,6 +104,15 @@ router.get('/openapi.json', (_req: Request, res: Response) => {
   res.setHeader('Cache-Control', 'public, max-age=300');
   res.json(openApiDocument);
 });
+
+// Swagger UI over that document. `serveFiles` rather than `serve`: the app
+// already mounts swagger-ui-express for its own spec at /api-docs, and the
+// plain `serve` middleware shares one document between every mount.
+router.use(
+  '/docs',
+  swaggerUi.serveFiles(openApiDocument, {}),
+  swaggerUi.setup(openApiDocument, { customSiteTitle: 'SpheroSeg API v1' })
+);
 
 /** What a problem `type` URI resolves to (RFC 9457 §3.1.1). */
 router.get('/problems/:code', (req: Request, res: Response) => {

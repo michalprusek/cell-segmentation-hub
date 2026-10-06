@@ -2,6 +2,19 @@
 
 User authentication endpoints for registration, login, logout, and token management.
 
+> **Two different mechanisms — do not mix them up.**
+>
+> - **The app's own routes** (everything on this page, and every other
+>   `/api/...` route) authenticate by an httpOnly **session cookie** set at
+>   login. The backend does not read an `Authorization` header on them, and
+>   has not since the cookie migration. Parts of this page were written
+>   before that and showed `Authorization: Bearer <JWT>`; those have been
+>   corrected, but treat any remaining mention of a bearer token for app
+>   routes as stale.
+> - **The public API** (`/api/v1`) authenticates by an **API key**,
+>   `Authorization: Bearer sseg_…`, created under Settings → API. See
+>   [Public API](public-v1.md).
+
 ## Base Path
 
 `/api/auth`
@@ -190,7 +203,7 @@ Exchange refresh token for new access token.
 Invalidate user's refresh token and log out.
 
 **Endpoint**: `POST /logout`  
-**Authentication**: Required (Bearer token)
+**Authentication**: Required (session cookie)
 
 #### Request Body
 
@@ -214,7 +227,7 @@ Invalidate user's refresh token and log out.
 Retrieve current authenticated user's information.
 
 **Endpoint**: `GET /me`  
-**Authentication**: Required (Bearer token)
+**Authentication**: Required (session cookie)
 
 #### Success Response `200`
 
@@ -249,7 +262,7 @@ Retrieve current authenticated user's information.
 Update user profile information.
 
 **Endpoint**: `PUT /profile`  
-**Authentication**: Required (Bearer token)
+**Authentication**: Required (session cookie)
 
 #### Request Body
 
@@ -298,7 +311,7 @@ Update user profile information.
 Delete user account and all associated data. Requires email confirmation for security.
 
 **Endpoint**: `DELETE /profile`  
-**Authentication**: Required (Bearer token)  
+**Authentication**: Required (session cookie)  
 **Rate Limit**: 3 requests per hour per user
 
 #### Request Body
@@ -358,7 +371,7 @@ Delete user account and all associated data. Requires email confirmation for sec
 Change user's password.
 
 **Endpoint**: `POST /change-password`  
-**Authentication**: Required (Bearer token)  
+**Authentication**: Required (session cookie)  
 **Rate Limit**: 5 requests per hour per user
 
 #### Request Body
@@ -599,32 +612,27 @@ setInterval(
 
 ### API Request with Authentication
 
+The session lives in httpOnly cookies, so a request only has to send them.
+There is no token for the page's JavaScript to read or attach.
+
 ```typescript
 const makeAuthenticatedRequest = async (url, options = {}) => {
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
-  });
-
-  if (response.status === 401) {
-    // Try refreshing token
-    await refreshAccessToken();
-
-    // Retry original request
-    return fetch(url, {
+  const send = () =>
+    fetch(url, {
       ...options,
-      headers: {
-        Authorization: `Bearer ${newAccessToken}`,
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json', ...options.headers },
     });
-  }
 
+  let response = await send();
+  if (response.status === 401) {
+    // The access cookie expired: refresh it (also by cookie), then retry once.
+    await fetch('/api/auth/refresh', {
+      method: 'POST',
+      credentials: 'include',
+    });
+    response = await send();
+  }
   return response;
 };
 ```

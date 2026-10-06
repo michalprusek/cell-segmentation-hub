@@ -280,11 +280,15 @@ describe('setupSwagger', () => {
       expect(swaggerOptions.definition?.openapi).toBe('3.0.0');
     });
 
-    it('definition contains bearerAuth security scheme', () => {
+    it('declares the session cookie, not a bearer JWT, for the app routes', () => {
+      // It used to assert a `bearerAuth` scheme — which described an
+      // Authorization header the backend has never read on these routes.
       const schemes = (
         swaggerOptions.definition?.components as Record<string, unknown>
       )?.securitySchemes as Record<string, unknown>;
-      expect(schemes).toHaveProperty('bearerAuth');
+      expect(schemes).toEqual({
+        cookieAuth: { type: 'apiKey', in: 'cookie', name: 'access_token' },
+      });
     });
   });
 });
