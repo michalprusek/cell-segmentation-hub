@@ -1420,7 +1420,13 @@ describe('user profile', () => {
   it('deleteAccount — propagates a DELETE error and still calls the endpoint', async () => {
     mockAxiosInstance.delete.mockRejectedValue(new Error('Network error'));
 
-    await expect(c().deleteAccount()).rejects.toThrow('Network error');
-    expect(mockAxiosInstance.delete).toHaveBeenCalledWith('/auth/profile');
+    const confirmation = { email: 'user@example.com', password: 'pw' };
+    await expect(c().deleteAccount(confirmation)).rejects.toThrow(
+      'Network error'
+    );
+    // axios sends a DELETE body only from `data`.
+    expect(mockAxiosInstance.delete).toHaveBeenCalledWith('/auth/profile', {
+      data: confirmation,
+    });
   });
 });

@@ -1,3 +1,4 @@
+import { isIssuedBeforeCutoff } from '../auth/sessionCutoff';
 import { Server as SocketIOServer, Socket } from 'socket.io';
 import { Server as HTTPServer } from 'http';
 import { logger } from '../utils/logger';
@@ -188,6 +189,8 @@ export class WebSocketService {
           userId: string;
           email: string;
           emailVerified?: boolean;
+          iat?: number;
+          impersonatorId?: string;
         };
 
         // Verify user exists in database
@@ -202,6 +205,25 @@ export class WebSocketService {
             {
               userId: decoded.userId,
             }
+          );
+          return next(new Error('Invalid authentication token'));
+        }
+
+        // The same cut-off the HTTP middleware applies: a token from before
+        // the user's last password change must not open a socket either, or
+        // a stolen one would keep receiving live events for its remaining
+        // minutes. (A socket that is ALREADY open is not re-checked.)
+        if (
+          !decoded.impersonatorId &&
+          isIssuedBeforeCutoff(
+            typeof decoded.iat === 'number' ? decoded.iat * 1000 : undefined,
+            user.sessionsValidAfter
+          )
+        ) {
+          logger.warn(
+            'WebSocket authentication failed - session revoked',
+            'WebSocketService',
+            { userId: decoded.userId }
           );
           return next(new Error('Invalid authentication token'));
         }

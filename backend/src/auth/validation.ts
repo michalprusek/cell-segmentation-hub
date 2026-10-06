@@ -44,6 +44,11 @@ export const changePasswordSchema = z.object({
   newPassword: z.string().min(6, 'Nové heslo musí mít minimálně 6 znaků'),
 });
 
+export const deleteAccountSchema = z.object({
+  email: z.string().email('Neplatná emailová adresa'),
+  password: z.string().min(1, 'Heslo je vyžadováno'),
+});
+
 export const refreshTokenSchema = z.object({
   refreshToken: z.string().min(1, 'Refresh token je vyžadován'),
 });
@@ -98,6 +103,7 @@ export type ResetPasswordConfirmData = z.infer<
   typeof resetPasswordConfirmSchema
 >;
 export type ChangePasswordData = z.infer<typeof changePasswordSchema>;
+export type DeleteAccountData = z.infer<typeof deleteAccountSchema>;
 export type RefreshTokenData = z.infer<typeof refreshTokenSchema>;
 export type VerifyEmailData = z.infer<typeof verifyEmailSchema>;
 export type ResendVerificationData = z.infer<typeof resendVerificationSchema>;

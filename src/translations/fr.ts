@@ -740,6 +740,8 @@ export default {
       },
       confirmationLabel: 'Veuillez taper {email} pour confirmer :',
       confirmationPlaceholder: '{email}',
+      passwordLabel: 'Saisissez votre mot de passe :',
+      wrongCredentials: 'L’e-mail ou le mot de passe est incorrect',
     },
     fillAllFields: 'Veuillez remplir tous les champs requis',
     passwordsDoNotMatch: 'Les mots de passe ne correspondent pas',
@@ -829,9 +831,9 @@ export default {
     sendNewPassword: 'Envoyer nouveau mot de passe',
     emailSent: 'Email envoyé',
     checkEmailForNewPassword:
-      'Vérifiez votre email pour des instructions de sécurité',
+      'Si un compte existe pour cette adresse, un lien de réinitialisation est en route vers votre boîte de réception. Il peut mettre quelques minutes à arriver.',
     resetPasswordEmailSent:
-      'Email de réinitialisation envoyé si le compte existe',
+      'Si un compte existe pour cette adresse, un lien de réinitialisation du mot de passe a été envoyé',
     resetPasswordError: 'Erreur lors de la réinitialisation du mot de passe',
     backToSignIn: 'Retour à la connexion',
     didntReceiveEmail: "Vous n'avez pas reçu l'email ?",
@@ -1897,7 +1899,8 @@ export default {
         },
         disintegration: {
           name: 'Désagrégation des sphéroïdes',
-          inferenceTime: 'Environ 0,70 s par image · seuil par défaut 0,2',
+          inferenceTime:
+            'Environ 0,70 s par image · pas de seuil : la décision est un argmax',
           bestFor: 'Utilisé par : les projets de sphéroïdes en désagrégation.',
           description:
             'UNet++ à encodeur EfficientNet-B5 prédisant trois classes : fond, couronne et noyau dense. Le noyau est prédit directement plutôt que déduit, et c’est ce qui rend l’indice de désagrégation fiable.',

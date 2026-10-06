@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { toast } from 'sonner';
 import { useLanguage } from '@/contexts/useLanguage';
 import { authEventEmitter, AuthEvent } from '@/lib/authEvents';
+import { ACCOUNT_DELETED_FLAG } from '@/lib/hardRedirect';
 
 /**
  * Hook that handles auth-related toast messages
@@ -22,6 +23,12 @@ export function useAuthToasts() {
         case 'signup_success':
           toast.success(t('auth.registrationSuccess'), {
             description: t('auth.welcomeMessage'),
+          });
+          break;
+
+        case 'signup_verification_required':
+          toast.success(t('auth.registrationSuccess'), {
+            description: t('auth.verifyEmail'),
           });
           break;
 
@@ -59,8 +66,19 @@ export function useAuthToasts() {
     };
 
     // Subscribe to all auth events
+    // Set by AuthContext.deleteAccount just before it reloads the app.
+    try {
+      if (sessionStorage.getItem(ACCOUNT_DELETED_FLAG)) {
+        sessionStorage.removeItem(ACCOUNT_DELETED_FLAG);
+        toast.success(t('settings.accountDeleted'));
+      }
+    } catch {
+      // Storage unavailable: nothing to announce.
+    }
+
     authEventEmitter.on('signin_success', handleAuthEvent);
     authEventEmitter.on('signup_success', handleAuthEvent);
+    authEventEmitter.on('signup_verification_required', handleAuthEvent);
     authEventEmitter.on('signin_error', handleAuthEvent);
     authEventEmitter.on('signup_error', handleAuthEvent);
     authEventEmitter.on('logout_error', handleAuthEvent);
@@ -72,6 +90,7 @@ export function useAuthToasts() {
       // Cleanup
       authEventEmitter.off('signin_success', handleAuthEvent);
       authEventEmitter.off('signup_success', handleAuthEvent);
+      authEventEmitter.off('signup_verification_required', handleAuthEvent);
       authEventEmitter.off('signin_error', handleAuthEvent);
       authEventEmitter.off('signup_error', handleAuthEvent);
       authEventEmitter.off('logout_error', handleAuthEvent);

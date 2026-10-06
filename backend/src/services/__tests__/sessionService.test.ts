@@ -77,6 +77,84 @@ describe('SessionService', () => {
     });
   });
 
+  describe('storeRefreshToken — the options object', () => {
+    const DAY = 60 * 60 * 24;
+    const IMPERSONATION = {
+      impersonatorId: 'admin-1',
+      impersonationSessionId: 'imp-session-1',
+    };
+    const stored = (call = 0) => {
+      const [key, ttl, value] = mockSetEx.mock.calls[call];
+      return { key, ttl, record: JSON.parse(value as string) };
+    };
+
+    it('defaults to a rememberMe record on the 30-day TTL', async () => {
+      await sessionService.storeRefreshToken(TEST_UUID, 'rt_abc');
+
+      const { ttl, record } = stored();
+      expect(ttl).toBe(30 * DAY);
+      expect(record.rememberMe).toBe(true);
+    });
+
+    it('keeps a rememberMe=true session for 30 days', async () => {
+      await sessionService.storeRefreshToken(TEST_UUID, 'rt_abc', {
+        rememberMe: true,
+      });
+
+      const { ttl, record } = stored();
+      expect(ttl).toBe(30 * DAY);
+      expect(record.rememberMe).toBe(true);
+    });
+
+    it('keeps a rememberMe=false session for 7 days, and records it', async () => {
+      await sessionService.storeRefreshToken(TEST_UUID, 'rt_abc', {
+        rememberMe: false,
+      });
+
+      const { ttl, record } = stored();
+      expect(ttl).toBe(7 * DAY);
+      expect(record.rememberMe).toBe(false);
+    });
+
+    it('bounds an impersonated session at 24 hours whatever rememberMe says', async () => {
+      await sessionService.storeRefreshToken(TEST_UUID, 'rt_abc', {
+        impersonation: IMPERSONATION,
+        rememberMe: true,
+      });
+
+      const { ttl, record } = stored();
+      expect(ttl).toBe(DAY);
+      expect(record).toMatchObject(IMPERSONATION);
+    });
+
+    it('stamps the record with the moment it was written, and expires it one TTL later', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      try {
+        vi.setSystemTime(new Date('2026-10-06T12:00:00.789Z'));
+
+        await sessionService.storeRefreshToken(TEST_UUID, 'rt_abc', {
+          rememberMe: false,
+        });
+
+        const { record } = stored();
+        expect(record.createdAt).toBe('2026-10-06T12:00:00.789Z');
+        expect(record.expiresAt).toBe('2026-10-13T12:00:00.789Z');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('uses the family it is given, and invents one otherwise', async () => {
+      await sessionService.storeRefreshToken(TEST_UUID, 'rt_a', {
+        family: 'fam_given',
+      });
+      await sessionService.storeRefreshToken(TEST_UUID, 'rt_b');
+
+      expect(stored(0).record.family).toBe('fam_given');
+      expect(stored(1).record.family).toMatch(/^[0-9a-f]{32}$/);
+    });
+  });
+
   describe('verifyRefreshToken', () => {
     it('returns the original UUID userId after JSON round-trip', async () => {
       // Round-trip through JSON.stringify/parse must preserve the
@@ -138,6 +216,81 @@ describe('SessionService', () => {
       mockGet.mockResolvedValueOnce(null);
       const result = await sessionService.rotateRefreshToken('rt_unknown');
       expect(result).toBeNull();
+    });
+
+    const liveRecord = (extra: Record<string, unknown> = {}) =>
+      JSON.stringify({
+        userId: TEST_UUID,
+        expiresAt: new Date(Date.now() + 86400_000).toISOString(),
+        family: 'fam_xyz',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        ...extra,
+      });
+    const rotatedWrite = (writes = 1) => {
+      // The only write of a successful rotation is the new record (plus,
+      // for an impersonated session, its index entry).
+      expect(mockSetEx).toHaveBeenCalledTimes(writes);
+      const [, ttl, value] = mockSetEx.mock.calls[0];
+      return { ttl, record: JSON.parse(value as string) };
+    };
+
+    it('carries rememberMe=false to the new record, on the 7-day TTL', async () => {
+      // The refresh endpoint used to promote every session to 30 days at its
+      // first rotation, 13 minutes after login.
+      mockGet.mockResolvedValueOnce(liveRecord({ rememberMe: false }));
+
+      const result = await sessionService.rotateRefreshToken('rt_old');
+
+      expect(result!.rememberMe).toBe(false);
+      const { ttl, record } = rotatedWrite();
+      expect(ttl).toBe(60 * 60 * 24 * 7);
+      expect(record.rememberMe).toBe(false);
+      expect(record.family).toBe('fam_xyz');
+    });
+
+    it('carries rememberMe=true to the new record, on the 30-day TTL', async () => {
+      mockGet.mockResolvedValueOnce(liveRecord({ rememberMe: true }));
+
+      const result = await sessionService.rotateRefreshToken('rt_old');
+
+      expect(result!.rememberMe).toBe(true);
+      const { ttl, record } = rotatedWrite();
+      expect(ttl).toBe(60 * 60 * 24 * 30);
+      expect(record.rememberMe).toBe(true);
+    });
+
+    it('treats a record from before the field existed as a 30-day one', async () => {
+      mockGet.mockResolvedValueOnce(liveRecord());
+
+      const result = await sessionService.rotateRefreshToken('rt_old');
+
+      expect(result!.rememberMe).toBe(true);
+      expect(rotatedWrite().ttl).toBe(60 * 60 * 24 * 30);
+    });
+
+    it('carries the impersonation to the new record and the result', async () => {
+      const impersonation = {
+        impersonatorId: 'admin-1',
+        impersonationSessionId: 'imp-session-1',
+      };
+      mockGet.mockResolvedValueOnce(liveRecord(impersonation));
+
+      const result = await sessionService.rotateRefreshToken('rt_old');
+
+      expect(result).toMatchObject(impersonation);
+      const { ttl, record } = rotatedWrite(2);
+      expect(ttl).toBe(60 * 60 * 24);
+      expect(record).toMatchObject({ ...impersonation, family: 'fam_xyz' });
+    });
+
+    it('dates the new record now, not when the old one was written', async () => {
+      mockGet.mockResolvedValueOnce(liveRecord());
+
+      await sessionService.rotateRefreshToken('rt_old');
+
+      expect(rotatedWrite().record.createdAt).not.toBe(
+        '2026-01-01T00:00:00.000Z'
+      );
     });
   });
   describe('the raw token never reaches Redis', () => {

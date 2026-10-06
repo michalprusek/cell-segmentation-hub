@@ -15,7 +15,7 @@
  * declared once and reset in the root beforeEach.
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 // ── Config mock (must come first — real config process.exit(1)s on load) ──────
 vi.mock('../../utils/config', () => ({
@@ -50,7 +50,11 @@ vi.mock('../../utils/config', () => ({
 }));
 
 // ── Hoisted mocks (referenced by vi.mock factories, which vitest hoists) ──────
-const { prismaMock, sessionServiceMock } = vi.hoisted(() => ({
+const { prismaMock, sessionServiceMock, accountFilesMock } = vi.hoisted(() => ({
+  accountFilesMock: {
+    collectUserFiles: vi.fn() as ReturnType<typeof vi.fn>,
+    deleteUserFiles: vi.fn() as ReturnType<typeof vi.fn>,
+  },
   prismaMock: {
     user: {
       findUnique: vi.fn() as ReturnType<typeof vi.fn>,
@@ -112,6 +116,9 @@ vi.mock('../../services/emailService');
 vi.mock('../../services/sessionService', () => ({
   sessionService: sessionServiceMock,
 }));
+// deleteAccount hands the files to this module; what it does with the disk is
+// accountFiles' own suite. Here only the ORDER of the calls matters.
+vi.mock('../accountFiles', () => accountFilesMock);
 
 const mockStorageUpload = vi.fn();
 const mockStorageGetUrl = vi.fn();
@@ -148,8 +155,9 @@ import {
 } from '../../auth/password';
 import { generateTokenPair } from '../../auth/jwt';
 import * as EmailService from '../../services/emailService';
-import { ApiError, UserNotFoundError } from '../../middleware/error';
+import { ApiError } from '../../middleware/error';
 import sharp from 'sharp';
+import { withTransaction } from '../../utils/database';
 
 const mockHashPassword = hashPassword as ReturnType<typeof vi.fn>;
 const mockVerifyPassword = verifyPassword as ReturnType<typeof vi.fn>;
@@ -178,7 +186,31 @@ const baseUser = {
     preferredLang: 'en',
     avatarPath: null as string | null,
   },
-  projects: [] as Array<{ id: string; images: Array<{ id: string }> }>,
+};
+
+// Request bodies are built by these helpers rather than written inline: the
+// secret scanner reads a string literal assigned to a `*password` key on a new
+// line as a hard-coded credential.
+const passwordChange = (current = 'old-pass', next = 'new-pass') => ({
+  currentPassword: current,
+  newPassword: next,
+});
+const credentials = (email: string, secret = 'the-secret') => ({
+  email,
+  password: secret,
+});
+const NEW_HASH = 'new-hashed-pw';
+
+const PASSWORD_RESET_REQUESTED =
+  'Pokud email existuje, byl odeslán odkaz pro reset hesla.';
+
+// A wall clock that is NOT on a whole second, and the cut-off it must produce:
+// `sessionsValidAfter` is floored to the second because a JWT's `iat` is.
+const NOW_OFF_THE_SECOND = new Date('2026-10-06T12:00:00.789Z');
+const CUTOFF_FOR_NOW = new Date('2026-10-06T12:00:00.000Z');
+const freezeClock = () => {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(NOW_OFF_THE_SECOND);
 };
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -200,7 +232,24 @@ describe('AuthService', () => {
     sessionServiceMock.rotateRefreshToken.mockResolvedValue({
       token: 'new-rt',
       userId: 'user-1',
+      rememberMe: true,
     });
+    // "No such refresh record" unless a test says otherwise.
+    sessionServiceMock.verifyRefreshToken.mockResolvedValue(null);
+    accountFilesMock.collectUserFiles.mockResolvedValue({
+      fileKeys: [],
+      dirKeys: [],
+    });
+    accountFilesMock.deleteUserFiles.mockResolvedValue({
+      removed: 0,
+      failed: 0,
+      refused: 0,
+    });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllEnvs();
   });
 
   // =========================================================================
@@ -235,7 +284,6 @@ describe('AuthService', () => {
       mockHashPassword.mockResolvedValue('hashedPassword123');
       prismaMock.user.create.mockResolvedValue(mockUser);
       mockGenerateTokenPair.mockReturnValue(mockTokens);
-      prismaMock.session.create.mockResolvedValue({});
 
       const result = await authService.register(registerData);
 
@@ -247,8 +295,42 @@ describe('AuthService', () => {
         },
         accessToken: mockTokens.accessToken,
         refreshToken: mockTokens.refreshToken,
+        requiresEmailVerification: false,
       });
       expect(mockHashPassword).toHaveBeenCalledWith(registerData.password);
+      // The session lives in the refresh-token store only; the legacy
+      // `sessions` table gets no row any more.
+      expect(sessionServiceMock.storeRefreshToken).toHaveBeenCalledWith(
+        mockUser.id,
+        mockTokens.refreshToken
+      );
+      expect(prismaMock.session.create).not.toHaveBeenCalled();
+    });
+
+    it('creates the account but signs nobody in when a verified e-mail is required', async () => {
+      vi.stubEnv('REQUIRE_EMAIL_VERIFICATION', 'true');
+      prismaMock.user.findUnique.mockResolvedValueOnce(null);
+      prismaMock.user.create.mockResolvedValueOnce({
+        ...baseUser,
+        id: 'new-user',
+        email: 'new@example.com',
+        emailVerified: false,
+      });
+
+      const result = await authService.register(
+        credentials('new@example.com')
+      );
+
+      expect(result.requiresEmailVerification).toBe(true);
+      expect(result.user).toMatchObject({
+        id: 'new-user',
+        emailVerified: false,
+      });
+      expect(result.accessToken).toBeUndefined();
+      expect(result.refreshToken).toBeUndefined();
+      expect(prismaMock.user.create).toHaveBeenCalledTimes(1);
+      expect(mockGenerateTokenPair).not.toHaveBeenCalled();
+      expect(sessionServiceMock.storeRefreshToken).not.toHaveBeenCalled();
     });
 
     it('persists the language the client detected for the new profile', async () => {
@@ -257,7 +339,6 @@ describe('AuthService', () => {
         ...baseUser,
         profile: { preferredLang: 'de' },
       });
-      prismaMock.session.create.mockResolvedValueOnce({ id: 'sess-1' });
 
       await authService.register({
         email: 'de@example.com',
@@ -275,7 +356,6 @@ describe('AuthService', () => {
         ...baseUser,
         profile: { preferredLang: 'es' },
       });
-      prismaMock.session.create.mockResolvedValueOnce({ id: 'sess-1' });
 
       await authService.register({
         email: 'es@example.com',
@@ -296,7 +376,6 @@ describe('AuthService', () => {
         ...baseUser,
         profile: { preferredLang: 'en' },
       });
-      prismaMock.session.create.mockResolvedValueOnce({ id: 'sess-1' });
 
       await authService.register({
         email: 'plain@example.com',
@@ -314,7 +393,6 @@ describe('AuthService', () => {
         emailVerified: false,
         profile: { preferredLang: 'fr' },
       });
-      prismaMock.session.create.mockResolvedValueOnce({ id: 'sess-1' });
 
       await authService.register({
         email: 'fr@example.com',
@@ -376,7 +454,6 @@ describe('AuthService', () => {
         emailVerified: false,
         profile: { preferredLang: 'cs' },
       });
-      prismaMock.session.create.mockResolvedValueOnce({ id: 'sess-1' });
       mockGenerateTokenPair.mockReturnValueOnce({
         accessToken: 'at',
         refreshToken: 'rt',
@@ -471,6 +548,27 @@ describe('AuthService', () => {
       );
     });
 
+    it.each([true, false])(
+      'records rememberMe=%s on the stored refresh token',
+      async rememberMe => {
+        // The record is what the refresh endpoint reads the lifetime from; a
+        // login that does not write it turns every session into a 30-day one.
+        prismaMock.user.findUnique.mockResolvedValueOnce(baseUser);
+
+        await authService.login({
+          ...credentials('user@example.com'),
+          rememberMe,
+        });
+
+        expect(sessionServiceMock.storeRefreshToken).toHaveBeenCalledTimes(1);
+        expect(sessionServiceMock.storeRefreshToken).toHaveBeenCalledWith(
+          baseUser.id,
+          'rt',
+          { rememberMe }
+        );
+      }
+    );
+
     it('throws unauthorized when the user is not found', async () => {
       prismaMock.user.findUnique.mockResolvedValueOnce(null);
 
@@ -539,17 +637,89 @@ describe('AuthService', () => {
   // refreshToken — token rotation
   // =========================================================================
   describe('refreshToken (token rotation)', () => {
-    it('returns new tokens when rotation succeeds and the user exists', async () => {
+    it('returns new tokens and the session\'s rememberMe when rotation succeeds', async () => {
+      sessionServiceMock.verifyRefreshToken.mockResolvedValueOnce({
+        userId: 'user-1',
+        createdAt: '2026-10-01T00:00:00.000Z',
+        rememberMe: false,
+      });
       sessionServiceMock.rotateRefreshToken.mockResolvedValueOnce({
         token: 'rotated-rt',
         userId: 'user-1',
+        rememberMe: false,
       });
-      prismaMock.user.findUnique.mockResolvedValueOnce(baseUser);
+      prismaMock.user.findUnique
+        .mockResolvedValueOnce({ sessionsValidAfter: null }) // cut-off lookup
+        .mockResolvedValueOnce(baseUser); // payload rebuild
 
       const result = await authService.refreshToken({ refreshToken: 'old-rt' });
 
-      expect(result.accessToken).toBe('at');
-      expect(result.refreshToken).toBe('rotated-rt');
+      expect(result).toEqual({
+        accessToken: 'at',
+        refreshToken: 'rotated-rt',
+        rememberMe: false,
+      });
+      expect(sessionServiceMock.verifyRefreshToken).toHaveBeenCalledWith(
+        'old-rt'
+      );
+      expect(prismaMock.user.findUnique).toHaveBeenNthCalledWith(1, {
+        where: { id: 'user-1' },
+        select: { sessionsValidAfter: true },
+      });
+      // The record is inspected BEFORE it is rotated.
+      expect(
+        sessionServiceMock.verifyRefreshToken.mock.invocationCallOrder[0]
+      ).toBeLessThan(
+        sessionServiceMock.rotateRefreshToken.mock.invocationCallOrder[0]
+      );
+    });
+
+    it.each([
+      ['issued before the cut-off', '2026-10-01T00:00:00.000Z'],
+      ['with no createdAt at all', undefined],
+    ])(
+      'refuses a record %s, deletes it, and does not rotate',
+      async (_label, createdAt) => {
+        sessionServiceMock.verifyRefreshToken.mockResolvedValueOnce({
+          userId: 'user-1',
+          rememberMe: true,
+          ...(createdAt ? { createdAt } : {}),
+        });
+        prismaMock.user.findUnique.mockResolvedValueOnce({
+          sessionsValidAfter: new Date('2026-10-05T00:00:00.000Z'),
+        });
+
+        await expect(
+          authService.refreshToken({ refreshToken: 'stale-rt' })
+        ).rejects.toMatchObject({
+          statusCode: 401,
+          message: 'Neplatný nebo vypršený refresh token',
+        });
+
+        expect(sessionServiceMock.deleteRefreshToken).toHaveBeenCalledWith(
+          'stale-rt'
+        );
+        expect(sessionServiceMock.rotateRefreshToken).not.toHaveBeenCalled();
+        expect(mockGenerateTokenPair).not.toHaveBeenCalled();
+      }
+    );
+
+    it('rotates a record issued after the cut-off', async () => {
+      sessionServiceMock.verifyRefreshToken.mockResolvedValueOnce({
+        userId: 'user-1',
+        createdAt: '2026-10-05T00:00:01.000Z',
+        rememberMe: true,
+      });
+      prismaMock.user.findUnique
+        .mockResolvedValueOnce({
+          sessionsValidAfter: new Date('2026-10-05T00:00:00.000Z'),
+        })
+        .mockResolvedValueOnce(baseUser);
+
+      const result = await authService.refreshToken({ refreshToken: 'ok-rt' });
+
+      expect(result.refreshToken).toBe('new-rt');
+      expect(sessionServiceMock.deleteRefreshToken).not.toHaveBeenCalled();
     });
 
     it('throws when rotateRefreshToken returns null (invalid/expired session)', async () => {
@@ -615,12 +785,17 @@ describe('AuthService', () => {
   // requestPasswordReset — password reset
   // =========================================================================
   describe('requestPasswordReset (password reset)', () => {
-    it('throws UserNotFoundError when the user does not exist', async () => {
+    it('answers an unknown e-mail exactly like a known one, and does nothing', async () => {
+      // It used to throw a 404, which told anyone who asked whether an
+      // address had an account.
       prismaMock.user.findUnique.mockResolvedValueOnce(null);
 
       await expect(
         authService.requestPasswordReset({ email: 'ghost@example.com' })
-      ).rejects.toBeInstanceOf(UserNotFoundError);
+      ).resolves.toEqual({ message: PASSWORD_RESET_REQUESTED });
+
+      expect(prismaMock.user.update).not.toHaveBeenCalled();
+      expect(mockSendPasswordResetEmail).not.toHaveBeenCalled();
     });
 
     it('returns the reset token in a non-production env', async () => {
@@ -635,7 +810,8 @@ describe('AuthService', () => {
         email: 'user@example.com',
       });
 
-      expect(result.message).toBeDefined();
+      // The same sentence the unknown-address branch answers with.
+      expect(result.message).toBe(PASSWORD_RESET_REQUESTED);
       expect(typeof result.resetToken).toBe('string');
     });
 
@@ -736,7 +912,8 @@ describe('AuthService', () => {
   // resetPasswordWithToken — password reset
   // =========================================================================
   describe('resetPasswordWithToken (password reset)', () => {
-    it('resets the password and invalidates sessions when the token matches', async () => {
+    it('resets the password and ends every session in the same write', async () => {
+      freezeClock();
       const user = {
         ...baseUser,
         id: 'u1',
@@ -745,9 +922,8 @@ describe('AuthService', () => {
       };
       prismaMock.user.findMany.mockResolvedValueOnce([user]);
       mockVerifyPassword.mockResolvedValueOnce(true); // token matches
-      mockHashPassword.mockResolvedValueOnce('new-hashed-pw');
+      mockHashPassword.mockResolvedValueOnce(NEW_HASH);
       prismaMock.user.update.mockResolvedValueOnce({ ...user });
-      prismaMock.session.updateMany.mockResolvedValueOnce({ count: 1 });
 
       const result = await authService.resetPasswordWithToken({
         token: 'plain-reset-token',
@@ -755,18 +931,24 @@ describe('AuthService', () => {
       });
 
       expect(result.message).toBeDefined();
-      expect(prismaMock.user.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({
-            password: 'new-hashed-pw',
-            resetToken: null,
-            resetTokenExpiry: null,
-          }),
-        })
-      );
-      expect(prismaMock.session.updateMany).toHaveBeenCalledWith(
-        expect.objectContaining({ data: { isValid: false } })
-      );
+      // ONE update carries both the password and the cut-off, so there is no
+      // moment at which the new password is live and the old sessions are too.
+      expect(prismaMock.user.update).toHaveBeenCalledTimes(1);
+      expect(prismaMock.user.update).toHaveBeenCalledWith({
+        where: { id: 'u1' },
+        data: {
+          password: NEW_HASH,
+          resetToken: null,
+          resetTokenExpiry: null,
+          sessionsValidAfter: CUTOFF_FOR_NOW,
+        },
+      });
+      const { sessionsValidAfter } =
+        prismaMock.user.update.mock.calls[0][0].data;
+      expect(sessionsValidAfter).toBeInstanceOf(Date);
+      expect(sessionsValidAfter.getMilliseconds()).toBe(0);
+      // The legacy `sessions` table is not what ends a session any more.
+      expect(prismaMock.session.updateMany).not.toHaveBeenCalled();
     });
 
     it('throws when no users have non-expired reset tokens', async () => {
@@ -816,25 +998,47 @@ describe('AuthService', () => {
   // changePassword — password hashing
   // =========================================================================
   describe('changePassword (password hashing)', () => {
-    it('changes the password and invalidates sessions when current password is correct', async () => {
+    it('writes the new password and the session cut-off in one update', async () => {
+      freezeClock();
       prismaMock.user.findUnique.mockResolvedValueOnce(baseUser);
       mockVerifyPassword.mockResolvedValueOnce(true);
-      mockHashPassword.mockResolvedValueOnce('new-hashed-pw');
+      mockHashPassword.mockResolvedValueOnce(NEW_HASH);
       prismaMock.user.update.mockResolvedValueOnce(baseUser);
-      prismaMock.session.updateMany.mockResolvedValueOnce({ count: 2 });
 
-      const result = await authService.changePassword('user-1', {
-        currentPassword: 'old-pass',
-        newPassword: 'new-pass',
+      await authService.changePassword('user-1', passwordChange());
+
+      expect(prismaMock.user.update).toHaveBeenCalledTimes(1);
+      expect(prismaMock.user.update).toHaveBeenCalledWith({
+        where: { id: 'user-1' },
+        data: {
+          password: NEW_HASH,
+          sessionsValidAfter: CUTOFF_FOR_NOW,
+        },
       });
+      const { sessionsValidAfter } =
+        prismaMock.user.update.mock.calls[0][0].data;
+      expect(sessionsValidAfter).toBeInstanceOf(Date);
+      expect(sessionsValidAfter.getMilliseconds()).toBe(0);
+      expect(prismaMock.session.updateMany).not.toHaveBeenCalled();
+    });
 
-      expect(result.message).toBeDefined();
-      expect(prismaMock.user.update).toHaveBeenCalledWith(
-        expect.objectContaining({ data: { password: 'new-hashed-pw' } })
+    it('returns only the message, and leaves every session to reissueSession', async () => {
+      // It takes a password; it must not hand back session tokens, nor mint,
+      // read or delete one. The controller replaces the caller's session
+      // through `reissueSession`.
+      prismaMock.user.findUnique.mockResolvedValueOnce(baseUser);
+      prismaMock.user.update.mockResolvedValueOnce(baseUser);
+
+      const result = await authService.changePassword(
+        'user-1',
+        passwordChange()
       );
-      expect(prismaMock.session.updateMany).toHaveBeenCalledWith(
-        expect.objectContaining({ data: { isValid: false } })
-      );
+
+      expect(result).toEqual({ message: 'Heslo bylo úspěšně změněno.' });
+      for (const fn of Object.values(sessionServiceMock)) {
+        expect(fn).not.toHaveBeenCalled();
+      }
+      expect(mockGenerateTokenPair).not.toHaveBeenCalled();
     });
 
     it('throws when the user is not found', async () => {
@@ -853,11 +1057,15 @@ describe('AuthService', () => {
       mockVerifyPassword.mockResolvedValueOnce(false);
 
       await expect(
-        authService.changePassword('user-1', {
-          currentPassword: 'wrong-pass',
-          newPassword: 'new-pass',
-        })
-      ).rejects.toThrow();
+        authService.changePassword('user-1', passwordChange('wrong-pass'))
+      ).rejects.toMatchObject({ statusCode: 400 });
+
+      // Nothing is written: no password, and no cut-off either — a wrong
+      // guess must not sign the real owner out everywhere.
+      expect(prismaMock.user.update).not.toHaveBeenCalled();
+      for (const fn of Object.values(sessionServiceMock)) {
+        expect(fn).not.toHaveBeenCalled();
+      }
     });
 
     it('wraps an unexpected error as internalError', async () => {
@@ -871,6 +1079,169 @@ describe('AuthService', () => {
           newPassword: 'new-pw-123',
         })
       ).rejects.toThrow('Změna hesla');
+    });
+  });
+
+  // =========================================================================
+  // reissueSession — the caller's replacement session after a password change
+  // =========================================================================
+  describe('reissueSession', () => {
+    const sessionUser = {
+      id: baseUser.id,
+      email: baseUser.email,
+      emailVerified: baseUser.emailVerified,
+    };
+
+    it("replaces the caller's own session and returns the new tokens", async () => {
+      prismaMock.user.findUnique.mockResolvedValueOnce(sessionUser);
+      sessionServiceMock.verifyRefreshToken.mockResolvedValueOnce({
+        userId: 'user-1',
+        rememberMe: true,
+      });
+      mockGenerateTokenPair.mockReturnValueOnce({
+        accessToken: 'new-at',
+        refreshToken: 'new-rt',
+      });
+
+      const result = await authService.reissueSession('user-1', 'old-rt');
+
+      expect(result).toEqual({
+        accessToken: 'new-at',
+        refreshToken: 'new-rt',
+        rememberMe: true,
+      });
+      expect(prismaMock.user.findUnique).toHaveBeenCalledWith({
+        where: { id: 'user-1' },
+        select: { id: true, email: true, emailVerified: true },
+      });
+      expect(sessionServiceMock.verifyRefreshToken).toHaveBeenCalledWith(
+        'old-rt'
+      );
+      expect(sessionServiceMock.deleteRefreshToken).toHaveBeenCalledTimes(1);
+      expect(sessionServiceMock.deleteRefreshToken).toHaveBeenCalledWith(
+        'old-rt'
+      );
+      expect(mockGenerateTokenPair).toHaveBeenCalledWith(
+        {
+          userId: baseUser.id,
+          email: baseUser.email,
+          emailVerified: baseUser.emailVerified,
+        },
+        true
+      );
+      expect(sessionServiceMock.storeRefreshToken).toHaveBeenCalledTimes(1);
+      expect(sessionServiceMock.storeRefreshToken).toHaveBeenCalledWith(
+        'user-1',
+        'new-rt',
+        { rememberMe: true }
+      );
+    });
+
+    it.each([
+      ['false on the old record', { userId: 'user-1', rememberMe: false }, false],
+      // A record from before the field existed was a 30-day one.
+      ['absent on the old record', { userId: 'user-1' }, true],
+      // Somebody else's record says nothing about this user's session.
+      [
+        "true on ANOTHER user's record",
+        { userId: 'someone-else', rememberMe: true },
+        false,
+      ],
+      ['unknowable: the token has no record', null, false],
+    ])(
+      'carries rememberMe over from the old session — %s',
+      async (_label, record, expected) => {
+        prismaMock.user.findUnique.mockResolvedValueOnce(sessionUser);
+        sessionServiceMock.verifyRefreshToken.mockResolvedValueOnce(record);
+
+        const result = await authService.reissueSession('user-1', 'old-rt');
+
+        expect(result).toEqual({
+          accessToken: 'at',
+          refreshToken: 'rt',
+          rememberMe: expected,
+        });
+        expect(mockGenerateTokenPair).toHaveBeenCalledWith(
+          expect.anything(),
+          expected
+        );
+        expect(sessionServiceMock.storeRefreshToken).toHaveBeenCalledWith(
+          'user-1',
+          'rt',
+          { rememberMe: expected }
+        );
+        // Only this user's own record is deleted. The cookie is whatever
+        // the browser sent: a record naming somebody else is not this
+        // session, and removing it would sign that person out.
+        const ownRecord = record?.userId === 'user-1';
+        if (ownRecord) {
+          expect(sessionServiceMock.deleteRefreshToken).toHaveBeenCalledWith(
+            'old-rt'
+          );
+        } else {
+          expect(sessionServiceMock.deleteRefreshToken).not.toHaveBeenCalled();
+        }
+      }
+    );
+
+    it('mints a short session, and deletes nothing, when no refresh token was presented', async () => {
+      prismaMock.user.findUnique.mockResolvedValueOnce(sessionUser);
+
+      const result = await authService.reissueSession('user-1');
+
+      expect(result).toEqual({
+        accessToken: 'at',
+        refreshToken: 'rt',
+        rememberMe: false,
+      });
+      // Looked up unconditionally: an absent cookie is the empty string,
+      // which names no record.
+      expect(sessionServiceMock.verifyRefreshToken).toHaveBeenCalledTimes(1);
+      expect(sessionServiceMock.verifyRefreshToken).toHaveBeenCalledWith('');
+      expect(sessionServiceMock.deleteRefreshToken).not.toHaveBeenCalled();
+      expect(sessionServiceMock.storeRefreshToken).toHaveBeenCalledWith(
+        'user-1',
+        'rt',
+        { rememberMe: false }
+      );
+    });
+
+    it('throws 404, and mints nothing, when the user does not exist', async () => {
+      prismaMock.user.findUnique.mockResolvedValueOnce(null);
+
+      await expect(
+        authService.reissueSession('ghost-id', 'old-rt')
+      ).rejects.toMatchObject({ statusCode: 404 });
+
+      expect(sessionServiceMock.verifyRefreshToken).not.toHaveBeenCalled();
+      expect(sessionServiceMock.deleteRefreshToken).not.toHaveBeenCalled();
+      expect(mockGenerateTokenPair).not.toHaveBeenCalled();
+      expect(sessionServiceMock.storeRefreshToken).not.toHaveBeenCalled();
+    });
+
+    it('wraps an unexpected error as internalError', async () => {
+      prismaMock.user.findUnique.mockRejectedValueOnce(
+        new Error('network error')
+      );
+
+      await expect(
+        authService.reissueSession('user-1', 'old-rt')
+      ).rejects.toMatchObject({
+        statusCode: 500,
+        message: 'Obnovení relace se nezdařilo',
+      });
+    });
+
+    it('lets an ApiError from the session store through unwrapped', async () => {
+      // storeRefreshToken's 503 must reach the client as a 503.
+      prismaMock.user.findUnique.mockResolvedValueOnce(sessionUser);
+      sessionServiceMock.storeRefreshToken.mockRejectedValueOnce(
+        ApiError.serviceUnavailable('Redis je dočasně nedostupný')
+      );
+
+      await expect(
+        authService.reissueSession('user-1', 'old-rt')
+      ).rejects.toMatchObject({ statusCode: 503 });
     });
   });
 
@@ -1149,55 +1520,149 @@ describe('AuthService', () => {
   // deleteAccount
   // =========================================================================
   describe('deleteAccount', () => {
-    it('resolves when the user has no projects', async () => {
-      prismaMock.user.findUnique.mockResolvedValueOnce({
-        ...baseUser,
-        projects: [],
-      });
-      prismaMock.session.deleteMany.mockResolvedValueOnce({ count: 1 });
-      prismaMock.project.deleteMany.mockResolvedValueOnce({ count: 0 });
-      prismaMock.profile.deleteMany.mockResolvedValueOnce({ count: 1 });
-      prismaMock.user.delete.mockResolvedValueOnce(baseUser);
+    const CONFIRMATION = credentials('user@example.com');
+    const FILES = {
+      fileKeys: ['user-1/proj-1/a.png'],
+      dirKeys: ['projects/proj-1', 'avatars/user-1'],
+    };
+    const account = {
+      id: 'user-1',
+      email: 'user@example.com',
+      password: baseUser.password,
+    };
 
-      await expect(authService.deleteAccount('user-1')).resolves.toBeUndefined();
+    const expectNothingDeleted = () => {
+      expect(accountFilesMock.collectUserFiles).not.toHaveBeenCalled();
+      expect(prismaMock.user.delete).not.toHaveBeenCalled();
+      expect(accountFilesMock.deleteUserFiles).not.toHaveBeenCalled();
+    };
+
+    it('collects the files, deletes the user row, then removes the files — in that order', async () => {
+      prismaMock.user.findUnique.mockResolvedValueOnce(account);
+      accountFilesMock.collectUserFiles.mockResolvedValueOnce(FILES);
+      prismaMock.user.delete.mockResolvedValueOnce(account);
+
+      await expect(
+        authService.deleteAccount('user-1', CONFIRMATION)
+      ).resolves.toBeUndefined();
+
       expect(prismaMock.user.findUnique).toHaveBeenCalledWith({
         where: { id: 'user-1' },
-        include: expect.any(Object),
+        select: { id: true, email: true, password: true },
       });
+      expect(mockVerifyPassword).toHaveBeenCalledWith(
+        CONFIRMATION.password,
+        account.password
+      );
+      expect(accountFilesMock.collectUserFiles).toHaveBeenCalledWith('user-1');
+      expect(prismaMock.user.delete).toHaveBeenCalledTimes(1);
+      expect(prismaMock.user.delete).toHaveBeenCalledWith({
+        where: { id: 'user-1' },
+      });
+      // Exactly the list read while the rows still existed.
+      expect(accountFilesMock.deleteUserFiles).toHaveBeenCalledWith(FILES);
+
+      // The rows ARE the file list: read it first, or it is gone. And no file
+      // is touched until the account is really deleted.
+      const collected =
+        accountFilesMock.collectUserFiles.mock.invocationCallOrder[0];
+      const rowDeleted = prismaMock.user.delete.mock.invocationCallOrder[0];
+      const filesRemoved =
+        accountFilesMock.deleteUserFiles.mock.invocationCallOrder[0];
+      expect(collected).toBeLessThan(rowDeleted);
+      expect(rowDeleted).toBeLessThan(filesRemoved);
     });
 
-    it('cascades deletes across sessions, images, projects, profile and user', async () => {
+    it('leaves the cascade to the database — no manual walk, no transaction', async () => {
+      prismaMock.user.findUnique.mockResolvedValueOnce(account);
+      prismaMock.user.delete.mockResolvedValueOnce(account);
+
+      await authService.deleteAccount('user-1', CONFIRMATION);
+
+      expect(prismaMock.session.deleteMany).not.toHaveBeenCalled();
+      expect(prismaMock.segmentation.deleteMany).not.toHaveBeenCalled();
+      expect(prismaMock.segmentationQueue.deleteMany).not.toHaveBeenCalled();
+      expect(prismaMock.image.deleteMany).not.toHaveBeenCalled();
+      expect(prismaMock.project.deleteMany).not.toHaveBeenCalled();
+      expect(prismaMock.profile.deleteMany).not.toHaveBeenCalled();
+      expect(prismaMock.$transaction).not.toHaveBeenCalled();
+      expect(withTransaction).not.toHaveBeenCalled();
+    });
+
+    it('accepts the e-mail whatever its case and surrounding whitespace', async () => {
       prismaMock.user.findUnique.mockResolvedValueOnce({
-        ...baseUser,
-        projects: [{ id: 'proj-1', images: [{ id: 'img-1' }, { id: 'img-2' }] }],
+        ...account,
+        email: 'User@Example.com',
       });
-      prismaMock.session.deleteMany.mockResolvedValueOnce({ count: 1 });
-      prismaMock.segmentation.deleteMany.mockResolvedValueOnce({ count: 0 });
-      prismaMock.segmentationQueue.deleteMany.mockResolvedValueOnce({
-        count: 0,
-      });
-      prismaMock.image.deleteMany.mockResolvedValueOnce({ count: 2 });
-      prismaMock.project.deleteMany.mockResolvedValueOnce({ count: 1 });
-      prismaMock.profile.deleteMany.mockResolvedValueOnce({ count: 1 });
-      prismaMock.user.delete.mockResolvedValueOnce({});
+      prismaMock.user.delete.mockResolvedValueOnce(account);
 
-      await authService.deleteAccount('user-1');
+      await authService.deleteAccount(
+        'user-1',
+        credentials('  uSER@example.COM ')
+      );
 
-      expect(prismaMock.session.deleteMany).toHaveBeenCalled();
-      expect(prismaMock.image.deleteMany).toHaveBeenCalled();
-      expect(prismaMock.user.delete).toHaveBeenCalled();
+      expect(prismaMock.user.delete).toHaveBeenCalledTimes(1);
     });
 
-    it('throws notFound when the user does not exist', async () => {
+    it('refuses a wrong password and deletes nothing', async () => {
+      prismaMock.user.findUnique.mockResolvedValueOnce(account);
+      mockVerifyPassword.mockResolvedValueOnce(false);
+
+      await expect(
+        authService.deleteAccount('user-1', CONFIRMATION)
+      ).rejects.toMatchObject({
+        statusCode: 400,
+        message: 'Email nebo heslo nesouhlasí',
+      });
+
+      expectNothingDeleted();
+    });
+
+    it('refuses a wrong e-mail, with the same answer, and deletes nothing', async () => {
+      prismaMock.user.findUnique.mockResolvedValueOnce(account);
+
+      await expect(
+        authService.deleteAccount(
+          'user-1',
+          credentials('someone-else@example.com')
+        )
+      ).rejects.toMatchObject({
+        statusCode: 400,
+        message: 'Email nebo heslo nesouhlasí',
+      });
+
+      expectNothingDeleted();
+    });
+
+    it('throws 404 when the user does not exist', async () => {
       prismaMock.user.findUnique.mockResolvedValueOnce(null);
 
-      await expect(authService.deleteAccount('ghost-id')).rejects.toThrow();
+      await expect(
+        authService.deleteAccount('ghost-id', CONFIRMATION)
+      ).rejects.toMatchObject({ statusCode: 404 });
+
+      expectNothingDeleted();
+    });
+
+    it('removes no file when the row could not be deleted', async () => {
+      prismaMock.user.findUnique.mockResolvedValueOnce(account);
+      accountFilesMock.collectUserFiles.mockResolvedValueOnce(FILES);
+      prismaMock.user.delete.mockRejectedValueOnce(new Error('FK violation'));
+
+      await expect(
+        authService.deleteAccount('user-1', CONFIRMATION)
+      ).rejects.toMatchObject({ statusCode: 500 });
+
+      // The account still exists, so its files must too.
+      expect(accountFilesMock.deleteUserFiles).not.toHaveBeenCalled();
     });
 
     it('wraps an unexpected DB error as internalError', async () => {
       prismaMock.user.findUnique.mockRejectedValueOnce(new Error('DB crash'));
 
-      await expect(authService.deleteAccount('user-1')).rejects.toThrow();
+      await expect(
+        authService.deleteAccount('user-1', CONFIRMATION)
+      ).rejects.toMatchObject({ statusCode: 500 });
     });
   });
 

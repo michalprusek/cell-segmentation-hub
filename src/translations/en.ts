@@ -739,6 +739,8 @@ export default {
       },
       confirmationLabel: 'Please type {email} to confirm:',
       confirmationPlaceholder: 'Enter email to confirm',
+      passwordLabel: 'Enter your password:',
+      wrongCredentials: 'The e-mail or password is incorrect',
     },
     fillAllFields: 'Please fill in all required fields',
     passwordsDoNotMatch: 'Passwords do not match',
@@ -1126,9 +1128,10 @@ export default {
     sending: 'Sending...',
     sendNewPassword: 'Send New Password',
     emailSent: 'Email Sent',
-    checkEmailForNewPassword: 'Check your email for new password',
+    checkEmailForNewPassword:
+      'If an account exists for this address, a reset link is on its way to your inbox. It can take a few minutes to arrive.',
     resetPasswordEmailSent:
-      'If email exists, an email with new password was sent',
+      'If an account exists for this address, a password reset link has been sent',
     resetPasswordError: 'Failed to send password reset email',
     backToSignIn: 'Back to Sign In',
     didntReceiveEmail: "Didn't receive email?",
@@ -1891,7 +1894,8 @@ export default {
         },
         disintegration: {
           name: 'Spheroid Disintegration',
-          inferenceTime: 'About 0.70 s per image · default threshold 0.2',
+          inferenceTime:
+            'About 0.70 s per image · no threshold — the decision is an argmax',
           bestFor: 'Used by: Disintegrated spheroid projects.',
           description:
             'UNet++ with an EfficientNet-B5 encoder predicting three classes — background, corona and dense core. The core is predicted directly rather than inferred, which is what makes the Disintegration Index trustworthy.',

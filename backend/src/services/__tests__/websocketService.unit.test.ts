@@ -324,6 +324,56 @@ describe('WebSocketService - Core Unit Tests', () => {
       );
     });
 
+    it.each([
+      // [label, token iat (s), impersonated?, expected to connect]
+      ['a token from before the password change', 1_791_000_000 - 1, false, false],
+      ['a token from the second of the change (the replacement session)', 1_791_000_000, false, true],
+      ['an impersonated session, which is the admin\'s credential', 1_791_000_000 - 3600, true, true],
+    ])(
+      'applies the session cut-off at connect: %s',
+      async (_label, iat, impersonated, connects) => {
+        process.env.JWT_ACCESS_SECRET = 'test-secret';
+
+        const middleware = io.use.mock.calls[0][0] as (
+          socket: any,
+          next: (err?: Error) => void
+        ) => Promise<void>;
+
+        jwtMock.verify.mockReturnValueOnce({
+          userId: 'user-1',
+          email: 'user@example.com',
+          iat,
+          ...(impersonated ? { impersonatorId: 'admin-1' } : {}),
+        });
+        prismaMock.user.findUnique.mockResolvedValueOnce({
+          id: 'user-1',
+          email: 'user@example.com',
+          sessionsValidAfter: new Date(1_791_000_000 * 1000),
+        });
+
+        const socket: any = {
+          id: 'socket-cutoff',
+          handshake: {
+            auth: {},
+            headers: { cookie: 'access_token=valid-format-token' },
+          },
+        };
+        const next = vi.fn();
+
+        await middleware(socket, next);
+
+        if (connects) {
+          expect(next).toHaveBeenCalledWith();
+          expect(socket.userId).toBe('user-1');
+        } else {
+          expect(next).toHaveBeenCalledWith(
+            expect.objectContaining({ message: 'Invalid authentication token' })
+          );
+          expect(socket.userId).toBeUndefined();
+        }
+      }
+    );
+
     it('rejects socket when user not found in database', async () => {
       process.env.JWT_ACCESS_SECRET = 'test-secret';
 

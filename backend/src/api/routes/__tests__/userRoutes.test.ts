@@ -230,8 +230,13 @@ describe('User Routes', () => {
   });
 
   // -------------------------------------------------------------------------
-  describe('POST /api/users/change-password', () => {
-    it('should change password when authenticated with valid body', async () => {
+  describe('the removed stubs', () => {
+    // Both used to answer `success: true` and do nothing at all — a script
+    // calling them was told its password had changed, or its account was
+    // being deleted. The real ones are POST /api/auth/change-password and
+    // DELETE /api/auth/profile. Authenticated here, so a 404 means "no such
+    // route" and not "refused before routing".
+    it('POST /api/users/change-password no longer exists', async () => {
       const response = await request(app)
         .post('/api/users/change-password')
         .set('Authorization', 'Bearer valid-token')
@@ -240,76 +245,20 @@ describe('User Routes', () => {
           newPassword: 'NewPass1!',
           confirmPassword: 'NewPass1!',
         })
-        .expect(200);
+        .expect(404);
 
-      expect(response.body.success).toBe(true);
-      expect(response.body.message).toBe('Password changed successfully');
+      expect(mockedAuthenticate).toHaveBeenCalled();
+      expect(response.body.success).not.toBe(true);
     });
 
-    it('should return 401 when not authenticated', async () => {
-      mockedAuthenticate.mockImplementation(((_req: any, res: any) => {
-        res
-          .status(401)
-          .json({ success: false, message: 'Chybí autentizační token' });
-      }) as any);
-
-      await request(app)
-        .post('/api/users/change-password')
-        .send({
-          currentPassword: 'old',
-          newPassword: 'NewPass1!',
-          confirmPassword: 'NewPass1!',
-        })
-        .expect(401);
-    });
-
-    it('should log password change request', async () => {
-      await request(app)
-        .post('/api/users/change-password')
-        .set('Authorization', 'Bearer valid-token')
-        .send({
-          currentPassword: 'old',
-          newPassword: 'NewPass1!',
-          confirmPassword: 'NewPass1!',
-        });
-
-      expect(mockedLogger.info).toHaveBeenCalledWith(
-        expect.stringContaining('Password change requested for user')
-      );
-    });
-  });
-
-  // -------------------------------------------------------------------------
-  describe('DELETE /api/users/account', () => {
-    it('should initiate account deletion when authenticated', async () => {
+    it('DELETE /api/users/account no longer exists', async () => {
       const response = await request(app)
         .delete('/api/users/account')
         .set('Authorization', 'Bearer valid-token')
-        .expect(200);
+        .expect(404);
 
-      expect(response.body.success).toBe(true);
-      expect(response.body.message).toContain('Account deletion initiated');
       expect(mockedAuthenticate).toHaveBeenCalled();
-    });
-
-    it('should return 401 when not authenticated', async () => {
-      mockedAuthenticate.mockImplementation(((_req: any, res: any) => {
-        res
-          .status(401)
-          .json({ success: false, message: 'Chybí autentizační token' });
-      }) as any);
-
-      await request(app).delete('/api/users/account').expect(401);
-    });
-
-    it('should log a warning for account deletion', async () => {
-      await request(app)
-        .delete('/api/users/account')
-        .set('Authorization', 'Bearer valid-token');
-
-      expect(mockedLogger.warn).toHaveBeenCalledWith(
-        expect.stringContaining('Account deletion requested for user')
-      );
+      expect(response.body.success).not.toBe(true);
     });
   });
 
@@ -446,7 +395,7 @@ describe('User Routes', () => {
         { method: 'put', path: '/api/users/profile' },
         { method: 'get', path: '/api/users/settings' },
         { method: 'get', path: '/api/users/storage-stats' },
-        { method: 'delete', path: '/api/users/account' },
+        { method: 'get', path: '/api/users/activity' },
       ];
 
       for (const route of routes) {

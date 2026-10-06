@@ -725,6 +725,8 @@ export default {
       },
       confirmationLabel: 'Por favor escribe {email} para confirmar:',
       confirmationPlaceholder: '{email}',
+      passwordLabel: 'Introduce tu contraseña:',
+      wrongCredentials: 'El correo o la contraseña no son correctos',
     },
     personal: 'Información Personal',
     fullName: 'Nombre Completo',
@@ -828,8 +830,10 @@ export default {
     sending: 'Enviando...',
     sendNewPassword: 'Enviar nueva contraseña',
     emailSent: 'Email enviado',
-    checkEmailForNewPassword: 'Revisa tu email para la nueva contraseña',
-    resetPasswordEmailSent: 'Email de restablecimiento de contraseña enviado',
+    checkEmailForNewPassword:
+      'Si existe una cuenta para esta dirección, el enlace para restablecer la contraseña va de camino a tu bandeja de entrada. Puede tardar unos minutos en llegar.',
+    resetPasswordEmailSent:
+      'Si existe una cuenta para esta dirección, se ha enviado un enlace para restablecer la contraseña',
     resetPasswordError: 'Error al restablecer contraseña',
     backToSignIn: 'Volver al inicio de sesión',
     didntReceiveEmail: '¿No recibiste el email?',
@@ -1889,7 +1893,8 @@ export default {
         },
         disintegration: {
           name: 'Disgregación de esferoides',
-          inferenceTime: 'Unos 0,70 s por imagen · umbral predeterminado 0,2',
+          inferenceTime:
+            'Unos 0,70 s por imagen · sin umbral: la decisión es un argmax',
           bestFor: 'La usan: los proyectos de esferoides en disgregación.',
           description:
             'UNet++ con codificador EfficientNet-B5 que predice tres clases: fondo, corona y núcleo denso. El núcleo se predice directamente en lugar de inferirse, y eso es lo que hace fiable el índice de disgregación.',

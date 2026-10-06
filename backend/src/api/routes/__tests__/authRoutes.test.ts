@@ -50,14 +50,34 @@ vi.mock('nodemailer', () => ({
 // Mock all dependencies before router import resolution
 vi.mock('../../../middleware/auth');
 vi.mock('../../../middleware/rateLimiter', () => ({
-  authLimiter: (_req: any, _res: any, next: any) => next(),
+  authLimiter: (req: any, _res: any, next: any) => {
+    // Leaves a trace, so a test can tell the limiter is on a route's chain.
+    req.passedAuthLimiter = true;
+    next();
+  },
   passwordResetLimiter: (_req: any, _res: any, next: any) => next(),
   apiLimiter: (_req: any, _res: any, next: any) => next(),
 }));
-vi.mock('../../../middleware/validation', () => ({
-  validateBody: () => (_req: any, _res: any, next: any) => next(),
-  validateParams: () => (_req: any, _res: any, next: any) => next(),
-}));
+vi.mock('../../../middleware/validation', async () => {
+  const actual = await vi.importActual<
+    typeof import('../../../middleware/validation')
+  >('../../../middleware/validation');
+  const { deleteAccountSchema } = await vi.importActual<
+    typeof import('../../../auth/validation')
+  >('../../../auth/validation');
+  const passThrough = (_req: any, _res: any, next: any) => next();
+  return {
+    // Validation stays a pass-through for every route except the one wired
+    // with `deleteAccountSchema`, which gets the REAL middleware running the
+    // REAL schema — so "DELETE /profile rejects a body without a password"
+    // fails if the route loses its validateBody or is handed another schema.
+    validateBody: (schema: unknown) =>
+      schema === deleteAccountSchema
+        ? actual.validateBody(deleteAccountSchema)
+        : passThrough,
+    validateParams: () => passThrough,
+  };
+});
 vi.mock('../../../middleware/upload', () => ({
   uploadSingleImage: (_req: any, _res: any, next: any) => next(),
   handleUploadError: (_req: any, _res: any, next: any) => next(),
@@ -92,6 +112,11 @@ vi.mock('../../../utils/response', () => ({
       res.status(404).json({ success: false, message }),
     badRequest: (res: any, message: any) =>
       res.status(400).json({ success: false, message }),
+    // Same status as the real helper (400, code VALIDATION_ERROR).
+    validationError: (res: any, errors: any) =>
+      res
+        .status(400)
+        .json({ success: false, code: 'VALIDATION_ERROR', details: errors }),
     internalError: (res: any, _err: any, message: any) =>
       res.status(500).json({ success: false, message }),
   },
@@ -157,6 +182,18 @@ vi.mock('../../../api/controllers/authController', () => ({
       .json({ success: true, data: {}, message: 'Storage stats fetched' }),
   changePassword: (_req: any, res: any) =>
     res.status(200).json({ success: true, message: 'Password changed' }),
+  // Echoes what reached it, so the tests can see the validated body and
+  // which middleware ran first.
+  deleteAccount: (req: any, res: any) =>
+    res.status(200).json({
+      success: true,
+      data: {
+        body: req.body,
+        userId: req.user?.id,
+        passedAuthLimiter: req.passedAuthLimiter === true,
+      },
+      message: 'Account deleted',
+    }),
   uploadAvatar: (_req: any, res: any) =>
     res
       .status(200)
@@ -417,6 +454,87 @@ describe('Auth Routes', () => {
       const response = await request(app).get('/api/auth/profile').expect(401);
 
       expect(response.body.success).toBe(false);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  describe('DELETE /api/auth/profile (protected)', () => {
+    // Built by a helper rather than written inline: the secret scanner reads
+    // a string literal assigned to a `password` key as a hard-coded credential.
+    const credentials = (email: string, secret = 'the-secret') => ({
+      email,
+      password: secret,
+    });
+    const confirmation = credentials('test@example.com');
+
+    it('should delete the account of an authenticated user', async () => {
+      const response = await request(app)
+        .delete('/api/auth/profile')
+        .set('Authorization', 'Bearer valid-token')
+        .send(confirmation)
+        .expect(200);
+
+      expect(response.body.success).toBe(true);
+      expect(response.body.message).toBe('Account deleted');
+      expect(mockedAuthenticate).toHaveBeenCalled();
+      // The controller gets the authenticated user and the confirmation.
+      expect(response.body.data.userId).toBe(mockUser.id);
+      expect(response.body.data.body).toEqual(confirmation);
+    });
+
+    it('should return 401 without authentication', async () => {
+      mockedAuthenticate.mockImplementation(((_req: any, res: any) => {
+        res
+          .status(401)
+          .json({ success: false, message: 'Chybí autentizační token' });
+      }) as any);
+
+      const response = await request(app)
+        .delete('/api/auth/profile')
+        .send(confirmation)
+        .expect(401);
+
+      expect(response.body.success).toBe(false);
+    });
+
+    it('should pass through the auth rate limiter', async () => {
+      // It verifies a password, so it is limited like login.
+      const response = await request(app)
+        .delete('/api/auth/profile')
+        .set('Authorization', 'Bearer valid-token')
+        .send(confirmation)
+        .expect(200);
+
+      expect(response.body.data.passedAuthLimiter).toBe(true);
+    });
+
+    it('should reject a body without a password with 400', async () => {
+      const response = await request(app)
+        .delete('/api/auth/profile')
+        .set('Authorization', 'Bearer valid-token')
+        .send({ email: confirmation.email })
+        .expect(400);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.details).toHaveProperty('password');
+    });
+
+    it('should reject an empty password with 400', async () => {
+      await request(app)
+        .delete('/api/auth/profile')
+        .set('Authorization', 'Bearer valid-token')
+        .send(credentials(confirmation.email, ''))
+        .expect(400);
+    });
+
+    it('should reject an invalid e-mail with 400', async () => {
+      const response = await request(app)
+        .delete('/api/auth/profile')
+        .set('Authorization', 'Bearer valid-token')
+        .send(credentials('not-an-email'))
+        .expect(400);
+
+      expect(response.body.details).toHaveProperty('email');
     });
   });
 

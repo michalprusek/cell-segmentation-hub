@@ -3,6 +3,7 @@ import { prisma } from '../db';
 import { verifyAccessToken, JwtPayload } from '../auth/jwt';
 import { ResponseHelper } from '../utils/response';
 import { logger } from '../utils/logger';
+import { isIssuedBeforeCutoff } from '../auth/sessionCutoff';
 import { ACCESS_TOKEN_COOKIE } from '../utils/authCookies';
 
 // Extend Express Request interface to include user
@@ -61,6 +62,10 @@ declare module 'express-serve-static-core' {
   }
 }
 
+/** `iat` is whole seconds since the epoch; jsonwebtoken always sets it. */
+const issuedAtMs = (payload: JwtPayload & { iat?: number }): number | undefined =>
+  typeof payload.iat === 'number' ? payload.iat * 1000 : undefined;
+
 /**
  * Middleware to authenticate user using JWT token
  */
@@ -105,12 +110,26 @@ export const authenticate = async (
         email: true,
         emailVerified: true,
         isAdmin: true,
+        sessionsValidAfter: true,
         profile: true,
       },
     });
 
     if (!user) {
       ResponseHelper.unauthorized(res, 'Uživatel nenalezen', 'Auth');
+      return;
+    }
+
+    // The password was changed or reset after this token was issued: the
+    // session it belongs to is over. Same wording as an expired token, so the
+    // client does what it does then - tries to refresh, is refused there too,
+    // and signs out. See `auth/sessionCutoff.ts` for why impersonated
+    // sessions are exempt.
+    if (
+      !payload.impersonatorId &&
+      isIssuedBeforeCutoff(issuedAtMs(payload), user.sessionsValidAfter)
+    ) {
+      ResponseHelper.unauthorized(res, 'Token vypršel', 'Auth');
       return;
     }
 
@@ -383,11 +402,18 @@ export const optionalAuthenticate = async (
         email: true,
         emailVerified: true,
         isAdmin: true,
+        sessionsValidAfter: true,
         profile: true,
       },
     });
 
-    if (user) {
+    // A revoked session is anonymous here, like any other invalid token.
+    const revoked =
+      user &&
+      !payload.impersonatorId &&
+      isIssuedBeforeCutoff(issuedAtMs(payload), user.sessionsValidAfter);
+
+    if (user && !revoked) {
       // An impersonated token reaching an optionally-authenticated route (the
       // share-invitation endpoints) must still be attributed to the real
       // actor, and must still stop working when the admin flag is revoked.

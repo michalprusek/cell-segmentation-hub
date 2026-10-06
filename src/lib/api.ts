@@ -51,6 +51,11 @@ export interface AuthResponse {
     email: string;
     username?: string;
   };
+  /**
+   * True when the server requires a verified e-mail before sign-in: the
+   * account was created but NO session was opened.
+   */
+  requiresEmailVerification?: boolean;
 }
 
 export interface Project {
@@ -575,12 +580,16 @@ class ApiClient {
       ...(preferredLang ? { preferredLang } : {}),
     });
 
-    // Registration logs the user in via httpOnly cookies set by the server.
-    // The body carries only the user.
+    // Registration logs the user in via httpOnly cookies set by the server -
+    // unless the server requires e-mail verification first. The body carries
+    // the user and that flag, never a token.
     const backendData = response.data.data || response.data;
-    const { user } = backendData;
+    const { user, requiresEmailVerification } = backendData;
 
-    return { user };
+    return {
+      user,
+      requiresEmailVerification: requiresEmailVerification === true,
+    };
   }
 
   async logout(): Promise<void> {
@@ -2421,13 +2430,19 @@ class ApiClient {
     return this.extractData(response);
   }
 
-  async deleteAccount(): Promise<void> {
+  async deleteAccount(confirmation: {
+    email: string;
+    password: string;
+  }): Promise<void> {
+    // The server re-checks both: the typed e-mail and the current password.
     // Deleting the account invalidates the session server-side (the user row
     // is gone, so the access/refresh tokens stop verifying). Auth lives in
     // httpOnly cookies now — there is nothing for the client to clear. The
     // backend clears the auth cookies on success; AuthContext resets the
     // user state and navigates away.
-    await this.instance.delete('/auth/profile');
+    //
+    // axios sends a DELETE body only from `data`.
+    await this.instance.delete('/auth/profile', { data: confirmation });
   }
 
   // Queue management methods

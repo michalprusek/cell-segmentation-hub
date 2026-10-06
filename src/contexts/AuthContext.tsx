@@ -4,6 +4,7 @@ import apiClient, { AuthResponse } from '@/lib/api';
 import { User, Profile, getErrorMessage } from '@/types';
 import { logger } from '@/lib/logger';
 import { authEventEmitter } from '@/lib/authEvents';
+import { hardRedirect, ACCOUNT_DELETED_FLAG } from '@/lib/hardRedirect';
 import { tokenRefreshManager } from '@/lib/tokenRefresh';
 import { resolveClientLanguage } from './translationLoader';
 import {
@@ -214,6 +215,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         resolveClientLanguage()
       );
 
+      // The server requires a verified e-mail before sign-in: the account
+      // exists, but there is no session. Treating this as signed in would
+      // land on a dashboard whose every request is a 401.
+      if (authResponse.requiresEmailVerification) {
+        setTimeout(
+          () => authEventEmitter.emit({ type: 'signup_verification_required' }),
+          0
+        );
+        navigate('/sign-in');
+        return;
+      }
+
       setUser(authResponse.user);
       setIsAuthenticated(true);
 
@@ -300,42 +313,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const deleteAccount = async (confirmationText?: string) => {
-    // Validate confirmation text is provided and matches expected value
-    if (!confirmationText || confirmationText !== user?.email) {
+  const deleteAccount = async (confirmationEmail: string, password: string) => {
+    // A convenience check only - the server verifies both for real.
+    if (!confirmationEmail || confirmationEmail !== user?.email || !password) {
       throw new Error(
-        'Confirmation text is required and must match your email address'
+        'The confirmation e-mail must match your address and the password is required'
       );
     }
 
+    // Deliberately NOT `setLoading(true)`: ProtectedRoute renders a spinner
+    // in place of the page while `loading` is set, which unmounts Settings
+    // and with it the dialog - so after a mistyped password the dialog, the
+    // error and everything typed into it simply vanished. The dialog shows
+    // its own progress.
     try {
-      setLoading(true);
+      await apiClient.deleteAccount({ email: confirmationEmail, password });
 
-      // Stop token refresh management
+      // Only once the account is really gone. Stopping the refresh timer
+      // BEFORE the request, as this used to, left a user whose deletion was
+      // refused (a mistyped password) signed in with a session that would
+      // silently lapse 15 minutes later.
       tokenRefreshManager.stopTokenRefreshManager();
 
-      await apiClient.deleteAccount();
-
-      setUser(null);
-      setProfile(null);
-      setIsAuthenticated(false);
-
-      // Toast message will be shown by the calling component
-      navigate('/');
+      // A full page load, not `navigate('/')`. Clearing the user here and
+      // navigating raced with ProtectedRoute, which saw "no user" first and
+      // sent the browser to /sign-in?returnTo=/settings - a login prompt for
+      // an account that no longer exists - and remounted the toaster on the
+      // way, swallowing the confirmation. A reload also drops every cached
+      // query of the deleted account. The flag lets the landing page say
+      // what happened (see useAuthToasts).
+      try {
+        sessionStorage.setItem(ACCOUNT_DELETED_FLAG, '1');
+      } catch {
+        // Private mode: the user lands on the home page without the toast.
+      }
+      hardRedirect('/');
     } catch (error: unknown) {
+      // No toast from here: the dialog shows one, translated, and knows
+      // whether the server refused the credentials or something else broke.
       logger.error('Error deleting account:', error);
-      const errorMessage = getErrorMessage(error) || 'Failed to delete account';
-      setTimeout(
-        () =>
-          authEventEmitter.emit({
-            type: 'profile_error',
-            data: { error: errorMessage },
-          }),
-        0
-      );
       throw error;
-    } finally {
-      setLoading(false);
     }
   };
 
