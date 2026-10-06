@@ -1,4 +1,7 @@
-import { isIssuedBeforeCutoff } from '../auth/sessionCutoff';
+import {
+  isIssuedBeforeCutoff,
+  tokenIssuedAtMs,
+} from '../auth/sessionCutoff';
 import { Server as SocketIOServer, Socket } from 'socket.io';
 import { Server as HTTPServer } from 'http';
 import { logger } from '../utils/logger';
@@ -190,6 +193,7 @@ export class WebSocketService {
           email: string;
           emailVerified?: boolean;
           iat?: number;
+          iatMs?: number;
           impersonatorId?: string;
         };
 
@@ -216,7 +220,7 @@ export class WebSocketService {
         if (
           !decoded.impersonatorId &&
           isIssuedBeforeCutoff(
-            typeof decoded.iat === 'number' ? decoded.iat * 1000 : undefined,
+            tokenIssuedAtMs(decoded),
             user.sessionsValidAfter
           )
         ) {
@@ -708,6 +712,16 @@ export class WebSocketService {
   /**
    * Get connected users count
    */
+  /**
+   * Close every socket of one user. They all sit in the `user:<id>` room,
+   * joined at connect. `true` closes the underlying connection rather than
+   * only the namespace, so the client goes through the handshake - and its
+   * authentication - again.
+   */
+  public disconnectUser(userId: string): void {
+    this.io.in(`user:${userId}`).disconnectSockets(true);
+  }
+
   public getConnectedUsersCount(): number {
     return this.connectedUsers.size;
   }

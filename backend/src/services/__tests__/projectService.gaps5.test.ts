@@ -59,6 +59,19 @@ const { prismaMock } = vi.hoisted(() => {
 
 vi.mock('../../db', () => ({ prisma: prismaMock }));
 vi.mock('../../utils/logger');
+// deleteProject hands the project's files to this module. What it does with
+// the disk has its own suite; here it must only not touch a real one.
+const { accountFilesMock } = vi.hoisted(() => ({
+  accountFilesMock: {
+    collectProjectFiles: vi.fn(),
+    recordPendingCleanup: vi.fn(),
+    discardPendingCleanup: vi.fn(),
+    completeCleanup: vi.fn(),
+    // Still exported by the module, no longer called by projectService.
+    deleteUserFiles: vi.fn(),
+  },
+}));
+vi.mock('../accountFiles', () => accountFilesMock);
 vi.mock('../sharingService', () => ({
   hasProjectAccess: vi
     .fn()
@@ -249,10 +262,32 @@ describe('projectService.deleteProject', () => {
     prismaMock.project.delete.mockRejectedValueOnce(
       new Error('Constraint violation')
     );
+    accountFilesMock.collectProjectFiles.mockResolvedValue({
+      fileKeys: [],
+      dirKeys: [],
+    });
+    accountFilesMock.recordPendingCleanup.mockResolvedValue(
+      '/tmp/manifest.json'
+    );
+    accountFilesMock.discardPendingCleanup.mockResolvedValue(undefined);
+    accountFilesMock.completeCleanup.mockResolvedValue({
+      removed: 0,
+      failed: 0,
+      refused: 0,
+    });
 
     await expect(
       projectService.deleteProject('proj-1', 'user-1')
     ).rejects.toThrow('Constraint violation');
+    // The project still exists, so its files must too: the recorded clean-up
+    // is withdrawn, or the next sweep would carry it out.
+    expect(accountFilesMock.recordPendingCleanup).toHaveBeenCalledTimes(1);
+    expect(accountFilesMock.discardPendingCleanup).toHaveBeenCalledTimes(1);
+    expect(accountFilesMock.discardPendingCleanup).toHaveBeenCalledWith(
+      '/tmp/manifest.json'
+    );
+    expect(accountFilesMock.completeCleanup).not.toHaveBeenCalled();
+    expect(accountFilesMock.deleteUserFiles).not.toHaveBeenCalled();
   });
 });
 

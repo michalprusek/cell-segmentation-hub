@@ -13,7 +13,7 @@ PascalCase.
 
 ### `User` → `users`
 
-Account credentials and e-mail verification state. Owns projects, sessions,
+Account credentials and e-mail verification state. Owns projects,
 shares, feedback, folders, essay jobs and segmenter datasets — all cascading on
 delete, except feedback, which is **soft-anonymised** (`userId` set to null) so
 report history survives a GDPR deletion.
@@ -22,7 +22,7 @@ report history survives a GDPR deletion.
 session of the user that began before it is void. It is set when the password
 is changed or reset. Live sessions are refresh records in **Redis**, keyed by
 a hash of the token, so they cannot be listed per user and deleted — instead
-`authenticate` compares each access token's `iat`, and the refresh path each
+`authenticate` compares each access token's `iatMs`, and the refresh path each
 record's `createdAt`, with this column. `NULL` means never revoked.
 
 ### `Profile` → `profiles`
@@ -39,13 +39,13 @@ title, `publicProfile`) plus the settings that drive the app:
 
 Avatars are files on disk; the row stores the path, MIME type and size.
 
-### `Session` → `sessions`
+### Sessions are not in this database
 
-**Legacy, and unused since 2026-10-07.** Sessions live in Redis (see
-`sessionService`); nothing reads this table, and the last code that wrote to
-it — one row per registration, and an `isValid = false` update on password
-change that revoked nothing — is gone. The table is kept only because dropping
-it is a destructive migration nobody has needed.
+Sessions are refresh records in Redis, keyed by a SHA-256 of the token (see
+`backend/src/services/sessionService.ts`). The `sessions` table that used to
+be here was dropped on 2026-10-07 (`20261007_drop_legacy_sessions`): nothing
+had read it since the cookie migration, and it held one registration refresh
+token per row in the clear.
 
 ---
 

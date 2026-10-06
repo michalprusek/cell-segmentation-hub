@@ -58,11 +58,25 @@ _Measured on v5H at its 0.97 cut (2026-08-17); the argument carries over to SPAR
 The symptom of feeding it TIRF is exactly that: many plausible polylines with
 no contrast underneath them.
 
-**So: make sure the IRM channel is the segmentation source.** If no channel name
-is recognisable and no wavelength is recorded, _no_ channel is marked as the
-source and the platform silently falls back to channel 0 — which may well be
-TIRF. Set it explicitly in the channel list, or in the picker that appears
-before Segment All.
+**So: make sure the model reads the IRM channel — and check it yourself, because
+the platform will not.** If no channel name is recognisable and no zero
+wavelength is recorded, _no_ channel is marked as the source. Outside the
+channel picker everything then falls back to **channel 0**, which may well be
+TIRF, and nothing warns you:
+
+- The channel picker that opens before **Segment** / **Resegment** on a
+  multi-channel video preselects the channel marked as the segmentation
+  source. When none is marked it preselects **nothing**, and **Segment** stays
+  disabled until you choose — so in the interface an unidentified channel is
+  never one click away. The silent fall-back to channel 0 remains only where
+  there is no picker: a single-channel video, and requests made straight to
+  the API without a `channel`.
+- **Pick the IRM channel in that picker every time.** The choice applies to that
+  batch only; it is not remembered.
+- There is no control in the interface that marks a channel as the source. The
+  "● src" badge in the editor's channel list is read-only. (Adding a channel
+  named `IRM`, `BF`, `DIC`, … to a video that has no source does mark it.)
+- A single-channel video is segmented with no picker at all.
 
 ### 2. The threshold is not a user setting
 

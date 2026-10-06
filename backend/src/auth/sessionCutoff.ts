@@ -5,7 +5,7 @@
  * way to list one user's sessions and delete them. Instead the user row
  * carries `sessionsValidAfter`, and anything issued before it is refused:
  *
- *  - an ACCESS token by its `iat`, in `authenticate` (which loads that row on
+ *  - an ACCESS token by its `iatMs` (see `tokenIssuedAtMs`), in `authenticate` (which loads that row on
  *    every request already, so the check costs no query);
  *  - a REFRESH record by its `createdAt`, in `authService.refreshToken`.
  *
@@ -38,17 +38,31 @@ export function isIssuedBeforeCutoff(
 }
 
 /**
- * The cut-off to store when revoking NOW.
+ * When an access token was issued, in milliseconds.
  *
- * Floored to the second because a JWT's `iat` is whole seconds: with a
- * millisecond cut-off, the replacement session minted a moment later in the
- * same second would carry an `iat` that reads as EARLIER than the cut-off
- * and be refused - the user would change their password and be signed out
- * by it. The price is that a token issued earlier in that same second
- * survives. Closing that would need a millisecond-precision claim in every
- * access token, for a window that requires the thief's token to have been
- * minted in the very second of the password change.
+ * `iatMs` is this app's own claim, set beside the standard `iat` when the
+ * token is signed. `iat` alone is whole seconds, which is too coarse here: a
+ * password change and the replacement session it issues happen within the
+ * same second, so on `iat` the two cannot be told apart. A token from before
+ * `iatMs` existed falls back to `iat` - the START of its second, i.e. never
+ * later than it really was, so it can only be revoked too eagerly, not kept
+ * too long.
+ */
+export function tokenIssuedAtMs(payload: {
+  iat?: number;
+  iatMs?: number;
+}): number | undefined {
+  if (typeof payload.iatMs === 'number') {
+    return payload.iatMs;
+  }
+  return typeof payload.iat === 'number' ? payload.iat * 1000 : undefined;
+}
+
+/**
+ * The cut-off to store when revoking NOW: this instant, to the millisecond.
+ * Everything issued before it is void; the replacement session is signed
+ * afterwards and carries a later (or equal) `iatMs`.
  */
 export function cutoffForNow(now: number = Date.now()): Date {
-  return new Date(Math.floor(now / 1000) * 1000);
+  return new Date(now);
 }

@@ -6,9 +6,10 @@
   ],
   "_comment_type_check": "TypeScript is NOT run here. .husky/pre-commit runs `npm run type-check` (scripts/type-check-baseline.mjs) once, for the whole project. Adding it here too would (a) run a second full tsc per commit and (b) race the first one on the shared *.tsbuildinfo files, since lint-staged runs patterns concurrently.",
   "src/**/*.{ts,tsx}": ["bash -c 'npx madge --circular src/ || true'"],
-  "{src/types/**/*.ts,backend/src/types/**/*.ts}": [
+  "{src/types/**/*.ts,backend/src/types/**/*.ts,src/lib/models/modelRegistry.ts,backend/src/constants/modelRegistry.ts,src/lib/microcapsuleRelevance.ts,backend/src/services/microcapsuleRelevance.ts}": [
     "bash -c 'node scripts/verify-shared-types.cjs'"
   ],
+  "_comment_shared_types": "The pattern above must list EVERY file scripts/verify-shared-types.cjs reads (its SHARED_CONSTS table). It used to name only the two types/ directories, so editing either modelRegistry.ts — where DEFAULT_MODEL_BY_PROJECT_TYPE and PROJECT_TYPES_WITH_HOLE_DETECTION live — never triggered the check. `make ci` and the CI `frontend` job run it unconditionally, so this entry is the early warning, not the gate.",
   "*.{js,jsx}": [
     "eslint --fix --cache --max-warnings=0 --format=stylish --no-warn-ignored",
     "prettier --write"

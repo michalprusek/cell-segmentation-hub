@@ -240,11 +240,20 @@ is ignored, and a request carrying only that is a `401`.
 { "success": true, "data": null, "message": "Token byl úspěšně obnoven" }
 ```
 
-The refresh token **rotates**: each call issues a new one and the one just
-used stops working — replaying it afterwards is a `401`. The rotation reads
-and deletes the stored record in two steps, so two requests carrying the same
-cookie _at the same moment_ (two tabs waking together) can both succeed; only
-a replay after the first has completed is refused.
+The refresh token **rotates**: each call issues a new one and retires the one
+just used. What a second presentation of a retired token gets depends on when:
+
+- **within 30 seconds** — the same new token again. Two tabs refreshing
+  together, or a retry after a lost response, all end up holding the one live
+  token of the session; it does not fork. (30 s is Okta's default grace period
+  for the same situation; Auth0 calls it the reuse interval.)
+- **later** — `401`, and **the whole session is ended**: its current token is
+  revoked too. A token presented twice, minutes apart, has two holders, and
+  the server cannot tell which one is the user.
+
+Redis stores only hashes of tokens. The successor is derived from the old
+token and a server secret, which is what lets the same one be handed out
+again without ever having been stored.
 
 A refreshed session keeps the lifetime it was opened with: **7 days** from
 each refresh for a plain login, **30** for `rememberMe: true` and for the
@@ -601,8 +610,9 @@ is read from the code, not observed: the measurements for this page ran with
 
 ## Token payloads
 
-Both tokens are HS256 JWTs signed with different secrets, and both carry the
-same claims — there is no `type` or `sessionId` claim:
+The access token is an HS256 JWT with these claims — there is no `type` or
+`sessionId` claim. `iatMs` is this app's own: the issue time in milliseconds,
+which the session cut-off needs (`iat` is whole seconds).
 
 ```json
 {
@@ -610,13 +620,18 @@ same claims — there is no `type` or `sessionId` claim:
   "email": "user@example.com",
   "emailVerified": false,
   "iat": 1791307343,
+  "iatMs": 1791307343025,
   "exp": 1791308243,
   "aud": "cell-segmentation-app",
   "iss": "cell-segmentation-api"
 }
 ```
 
-They live in httpOnly cookies, so a client never needs to decode one. This is
+The refresh token is opaque to clients: a JWT (with a random `jti`) straight
+after login, a 64-character hex string after the first rotation. The server
+looks it up by hash and never decodes it.
+
+Both live in httpOnly cookies, so a client never needs to decode one. This is
 recorded for whoever debugs the server.
 
 ## Using it from a page
@@ -647,25 +662,25 @@ The web app also refreshes on a 13-minute timer rather than waiting for the
 
 ## Known gaps
 
-- **Refresh rotation is not atomic.** See [Refresh](#refresh): two requests
-  with the same cookie at the same instant can both succeed.
 - **`/register` reveals whether an address is taken** (`409`), although
   `forgot-password` no longer does.
-- **A WebSocket that is already connected survives a password change.** The
-  session cut-off is checked when a socket connects and on every HTTP
-  request, not on an open socket; it ends when the socket next reconnects.
-- **A token issued in the same second as a password change is not revoked.**
-  The cut-off is whole seconds, because that is the resolution of a JWT's
-  `iat`.
+- **A session ended for reuse is ended for its real owner too** — see
+  [Refresh](#refresh). That is the point, and it is also what a user will
+  report as "I was signed out for no reason" if a copy of their cookie exists
+  somewhere.
 
-Fixed on 2026-10-07, and listed here because the previous version of this page
+Fixed on 2026-10-07, and listed here because earlier versions of this page
 documented them as open: the missing account-deletion route; the
 `/api/users/change-password` and `DELETE /api/users/account` stubs that
 answered success and did nothing (removed — they are `404` now);
 `forgot-password` answering `404` for an unknown address; sessions surviving a
-password change or reset; `/register` signing in an unverified user when
-verification is required; and `rememberMe: false` turning into 30 days at the
-first refresh.
+password change or reset, including already-open WebSockets, which are now
+closed; a token issued in the same second as a password change surviving it
+(access tokens carry a millisecond issue time, `iatMs`); `/register` signing
+in an unverified user when verification is required; `rememberMe: false`
+turning into 30 days at the first refresh; refresh rotation that let two
+simultaneous requests fork a session; and two logins in the same second
+receiving the identical refresh token.
 
 ## Password storage
 

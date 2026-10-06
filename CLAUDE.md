@@ -210,7 +210,8 @@ If the change is going to production, **build the production bundle locally and 
 
 ## Test Suite Reality
 
-Measured 2026-09-04 after a 15-PR audit that rewrote most of this section. The
+Measured 2026-09-04 after a 15-PR audit that rewrote most of this section; the
+counts in the table were re-measured 2026-10-06. The
 headline number is not the interesting part — **the interesting part is that a
 suite can be green, red, or wired to nothing, and this repo has all three.**
 
@@ -218,9 +219,9 @@ suite can be green, red, or wired to nothing, and this repo has all three.**
 
 | Suite                   | State                                                                                                                               |
 | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| Vitest (frontend)       | **4915 pass**, 267 files, **~150 s**. `npx vitest run`. (Was 5037/275/~702 s — it got 4.7x faster by DELETING tests.)               |
-| Vitest (backend)        | **3735 pass / 0 skipped**, 180 files, ~27 s. Not Jest. Must run in the container — see **Backend tests** below.                     |
-| Python (`make test-py`) | **540 pass / 1 skipped**. Step 7 of `make ci`; pytest is NOT in the ml image, `make ci` pip-installs it into a throwaway container. |
+| Vitest (frontend)       | **5424 pass**, 295 files, **~117 s** (re-measured 2026-10-06). `npx vitest run`.                                                    |
+| Vitest (backend)        | **4443 pass / 6 skipped**, 222 files, ~35 s. Not Jest. Must run in the container — see **Backend tests** below.                     |
+| Python (`make test-py`) | **731 pass / 3 skipped**. Step 7 of `make ci`; pytest is NOT in the ml image, `make ci` pip-installs it into a throwaway container. |
 
 The old "400 pass / 401" figure was wrong, not stale: `make test-py` ran three
 of the four paths CI runs and silently omitted the 112 `focus_qc` tests.
@@ -496,8 +497,8 @@ make shell-fe / shell-be / shell-ml  # Container shells
 ### Code quality (runs on host)
 
 ```bash
-make ci                          # Full local CI gate: TS + ESLint(0) + i18n. ~30 s.
-make ci-test                     # Vitest run (currently 31% broken — informational only)
+make ci                          # Full local CI gate, 9 steps: TS (FE+BE) + ESLint (FE+BE) + i18n + doc links + Python suites + model-id parity + shared constants. ~80 s (measured 2026-10-06), not the ~30 s this line used to claim.
+make ci-test                     # Frontend Vitest — the same suite the required CI job runs
 npx tsc --noEmit                 # Frontend type check
 make lint                        # ESLint in Docker
 npm run lint:backend             # backend/src ESLint baseline gate (step 4 of `make ci`)
@@ -617,7 +618,17 @@ only a bare ML-status dot.
 - **`DEFAULT_MODEL_BY_PROJECT_TYPE`** in BOTH registry SSOTs picks the most
   ACCURATE compatible model, not the fastest: `spheroid` → `segformer` on
   93 % IoU. Parity between the two copies is enforced by
-  `scripts/verify-shared-types.cjs`, NOT by either side's own unit test.
+  `scripts/verify-shared-types.cjs`, NOT by either side's own unit test. It
+  runs as step 9 of `make ci`, in the `frontend` job of `ci.yml`, and from
+  lint-staged when either `modelRegistry.ts` is staged. **Until 2026-10-06 it
+  ran only from lint-staged and only for files under `types/`**, so editing
+  the registry — where the map lives — triggered nothing; and
+  `scripts/check-model-parity.cjs` (model-id sets across both TS registries,
+  Python `AVAILABLE_MODELS` and the `ModelType` enum; ids only) was run by
+  nothing at all while three documents said it guarded them. It is now step 8
+  of `make ci` and a step of the same CI job. Both gates were mutation-tested
+  on a scratch copy: dropping an id from any one of the four sources, or
+  changing one default in either copy, exits 1.
 - **Only `spheroid` (5 models) and `sperm` (2: `sperm`, the default, and
   `sperm_2part` — head + tail, no midpiece; PR #566) have a real choice**; the
   other five project types have exactly one each, so their picker is a single
@@ -666,25 +677,59 @@ Controllers → Services → Prisma ORM → Storage (local FS / S3)
 ### Sessions, and ending them (2026-10-07)
 
 - **A session is a Redis refresh record, keyed by SHA-256 of the token.** They
-  cannot be listed per user. The `sessions` TABLE is legacy and unused —
-  password change used to set `isValid = false` on its rows, which revoked
-  nothing, for as long as that code existed.
+  cannot be listed per user. The `sessions` TABLE is gone (dropped by
+  `20261007_drop_legacy_sessions`): nothing read it, password change used to
+  set `isValid = false` on its rows — which revoked nothing — and it held
+  registration refresh tokens in the clear.
 - **"Sign out everywhere" is `users.sessionsValidAfter`** (`auth/sessionCutoff.ts`).
   It is checked in FOUR places and a new way of authenticating a user needs a
   fifth: `authenticate`, `optionalAuthenticate`, the WebSocket handshake (all
-  by the access token's `iat`) and `authService.refreshToken` (by the refresh
-  record's `createdAt`, BEFORE rotating — a rotation writes a record dated now
-  and would launder the session). An impersonated session is exempt everywhere.
-- **The cut-off is floored to the second**, because `iat` is whole seconds: a
-  millisecond cut-off revokes the replacement session minted a moment later.
+  by the access token's `iatMs`) and `authService.refreshToken` (by the
+  PRESENTED refresh record's `createdAt`, judged AFTER the rotation against
+  the user row read after it — a check made before the rotation can be stale
+  by the time the successor is written). An impersonated session is exempt
+  everywhere. Open sockets are closed too (`services/liveConnections.ts`); the
+  frontend already reconnects on `io server disconnect`.
+- **The cut-off is exact to the millisecond**, which is why access tokens
+  carry `iatMs` beside the standard whole-second `iat`: a password change and
+  the replacement session it issues share a second. A token without `iatMs`
+  falls back to the START of its second — revoked too eagerly, never kept too
+  long.
+- **Refresh rotation is idempotent, not exclusive** (`sessionService.rotateRefreshToken`).
+  The successor is `HMAC(JWT_REFRESH_SECRET, 'rotate:' + oldToken)`, so any
+  number of concurrent rotations of one token agree on one successor and the
+  session cannot fork — and the grace-period replay (30 s, Okta's default)
+  can hand the same token out again without it ever being stored. A replay
+  AFTER the grace period is reuse and revokes the whole session by setting a
+  `refresh-revoked:<family>` FLAG that every verify and rotate checks — not a
+  pointer to "the family's current token", which was the first design and
+  races (a delayed A→B rotation can write its pointer after B→C has, so the
+  revocation deletes a key that is already gone and C lives on). The used
+  marker lives as long as the session can (7 / 30 days), not 24 h: a copy
+  replayed on day two must still be recognised. Do not "improve" this with a `SET NX` claim: it
+  was tried, mutation testing showed it changed no outcome, and after a crash
+  between claim and store it reads the owner's retry as theft.
+- **A login refresh token carries a random `jti`.** Without it the JWT is a
+  function of (user, second, lifetime): two logins in one second got the
+  identical string and shared a session, and the session re-issued by a
+  password change could be the very token of one it was ending. Found only
+  over real HTTP — a fake clock in a unit test either always or never
+  collides.
 - **`rememberMe` lives on the refresh record** and is carried across rotation
   like `family`. The refresh controller used to pass `true`, which made every
   session a 30-day one 13 minutes after login.
 - **Account deletion removes files by PROJECT, never by folder**
   (`services/accountFiles.ts`). An upload is stored under
   `<uploaderId>/<projectId>/`, and projects are shared, so `rm -r <userId>/`
-  would destroy other people's images. Note that deleting a single PROJECT
-  still leaves its still images on disk — only the rows cascade.
+  would destroy other people's images. Deleting a single PROJECT goes through
+  the same module (`collectProjectFiles`) — until 2026-10-07 it removed the
+  rows and left every still image on disk. The file list is written to
+  `<UPLOAD_DIR>/.pending-cleanup/` BEFORE the rows are deleted and removed
+  only when every file went; `sweepPendingCleanups` (start-up and every 10
+  min) finishes what a restart interrupted. **The sweeper acts on a list only
+  when its owner ROW is gone** — a list can exist for a live project if the
+  process died between writing it and deleting the rows, and acting on the
+  list alone would delete that project's images.
 - **`AuthContext.deleteAccount` must not touch the global `loading` flag.**
   `ProtectedRoute` renders a spinner in place of the page while it is set, which
   unmounted Settings and took the dialog and its error message with it. Found
@@ -808,7 +853,7 @@ Bearer sseg_…` only. A key in the query string is refused with 400 rather
   model could evict a loaded one first), and does NOT decode at open: the
   route is `async def`, so `image.load()` there would stall `/health` on a
   498 Mpx frame and let four requests each hold a decoded frame.
-- **The microtubule model is IRM-only, and its threshold is NOT a user setting.** The `/segment` route deliberately passes no threshold for `microtubule`; the model applies `prob_thr` from `params_sparse35.json` (0.98 — SPARSE35's own optimum on the roi303 validation block; v5H used 0.97). Do not "fix" a low detection count by lowering it. **Verify a model swap with `docker exec spheroseg-ml python scripts/verify_microtubule_model.py`**: it runs the committed fixture through the container's own forward pass and compares the map and the polylines with what the research harness measured (identity on the harness's own torch 2.5.1 + A5000; a different torch or GPU may move a few probabilities by thousandths, which `reference_check.CUDA_TOL` absorbs). The evidence below was measured on v5H at 0.97 and is kept as the record of WHY the cut is not a setting; re-measure before moving it. Measured 2026-08-17 by sampling background-flattened image contrast along every detected centerline against the same curve translated elsewhere (a real MT in IRM is darker than its surround): on a pure IRM frame, 0.97 gives 128 MTs at **−1.73 SD** separation, and dropping to 0.35 gives 155 at only −1.44 SD — more detections, worse evidence. On a **TIRF** frame separation is ~**−0.02 SD at every threshold**, i.e. the output does not track image content at all, so lowering the threshold there manufactures hundreds of false positives. Symptom of feeding it TIRF: plenty of confident-looking polylines with no contrast under them. Check the project's `channels` JSON. IRM detection now requires POSITIVE evidence — a label-free name (IRM/BF/DIC/TL) or an explicitly **zero** emission wavelength; the old "unknown wavelength ⇒ irm" fallback was removed because multi-page TIFFs carry no wavelength at all and so had every channel typed `irm` (the 3-frame `DNA_origami` fixture is exactly that). The failure mode is now the opposite one: a stack whose channels cannot be identified gets **no** segmentation source, and must be set by hand.
+- **The microtubule model is IRM-only, and its threshold is NOT a user setting.** The `/segment` route deliberately passes no threshold for `microtubule`; the model applies `prob_thr` from `params_sparse35.json` (0.98 — SPARSE35's own optimum on the roi303 validation block; v5H used 0.97). Do not "fix" a low detection count by lowering it. **Verify a model swap with `docker exec spheroseg-ml python scripts/verify_microtubule_model.py`**: it runs the committed fixture through the container's own forward pass and compares the map and the polylines with what the research harness measured (identity on the harness's own torch 2.5.1 + A5000; a different torch or GPU may move a few probabilities by thousandths, which `reference_check.CUDA_TOL` absorbs). The evidence below was measured on v5H at 0.97 and is kept as the record of WHY the cut is not a setting; re-measure before moving it. Measured 2026-08-17 by sampling background-flattened image contrast along every detected centerline against the same curve translated elsewhere (a real MT in IRM is darker than its surround): on a pure IRM frame, 0.97 gives 128 MTs at **−1.73 SD** separation, and dropping to 0.35 gives 155 at only −1.44 SD — more detections, worse evidence. On a **TIRF** frame separation is ~**−0.02 SD at every threshold**, i.e. the output does not track image content at all, so lowering the threshold there manufactures hundreds of false positives. Symptom of feeding it TIRF: plenty of confident-looking polylines with no contrast under them. Check the project's `channels` JSON. IRM detection now requires POSITIVE evidence — a label-free name (IRM/BF/DIC/TL) or an explicitly **zero** emission wavelength; the old "unknown wavelength ⇒ irm" fallback was removed because multi-page TIFFs carry no wavelength at all and so had every channel typed `irm` (the 3-frame `DNA_origami` fixture is exactly that). The failure mode is now a QUIETER version of the same one, not the opposite one — this sentence used to say such a stack "gets **no** segmentation source, and must be set by hand", and neither half was true. What the code does (traced 2026-10-06): no channel is MARKED (`buildChannelMeta`, `pythonExtractor.ts:206-237`), but `resolveSegmentationSource` (`backend/src/services/video/types.ts:75-79`) is `find(isSegmentationSource) ?? channels[0]`, and every frame's `originalPath` is written from it at upload (`videoUploadService.ts:417-442`), so a segmentation request that names no channel reads **channel 0** (`resolveChannelPath`, `segmentationService.ts:842`). **Known hazard, stated plainly: the IRM-only model can run on an unidentified first channel — TIRF on seven production containers, per the comment at `pythonExtractor.ts:441-444` — and nothing warns.** In the UI a multi-channel container always passes through `SegmentChannelDialog`, and since 2026-10-07 both pickers (project page and the editor's Resegment) preselect ONLY a channel the container marks as its segmentation source and otherwise NOTHING, leaving Confirm disabled (`src/lib/segmentationChannelDefault.ts`) — until then the project page preselected the alphabetically first channel name and ignored the mark, so `488_nm` was offered ahead of a correctly identified `IRM`, and both fell back to the first channel. With NO dialog at all: a single-channel container, and any direct call to `POST /api/queue/batch`, `/api/segmentation/batch` or `/api/queue/images/:id` (the last has no `channel` field) that omits the channel. Also taken from channel 0 without anyone choosing: stage-drift correction at upload (`videoUploadService.ts:321`), the thumbnail, the static-share projection and the kymograph export's fallback. And it cannot be "set by hand" in the app: no component writes `isSegmentationSource` — `ChannelOverlayList` only renders the "● src" badge and renames — so the mark changes only via `PATCH /api/images/:id/channels` or by adding an IRM-named channel to a container with no source (`addChannelService.ts:737-780`); the dialog's choice is per batch and is not stored on the container.
 - Cross-frame routes: `/api/v1/track` (Hungarian matching on **geometry** — symmetric curve distance + overlap gate, with common-mode stage drift removed via normal-flow least squares; see `api/mt_geometry_cost.py`) + `/api/v1/kymograph` (line-profile + viridis) in `api/tracker_kymograph.py`. `/api/v1/kymograph/batch` takes N of those bodies in one call and decodes each frame ONCE for all of them — the MT export builds one kymograph per (microtubule x channel) over the same frames, and the sampled-row cache never hits for it because every job has a different polyline. Same bodies, byte-identical per-item results; **deploy ml before the backend that calls it**, the route 404s on an older container.
 - **Kymograph column counts from before 2026-09-01 are not comparable with later ones.** The **column cap is gone**: a kymograph is now one column per pixel of the seed polyline's arc length, unclamped, where it used to be capped at 200 (`target_width`). Measured over all 146 216 production MT polylines the median arc is 118 px (unaffected) but **33 % exceed 200** — p95 625, p99 985, max 2076 — so a third of real kymographs change width, the p95 by 3.1x. It is not cosmetic: on a real 299-frame kymograph of a 1250 px MT, 200 columns yielded 5 trajectories and 1251 yielded 13, because 6.3 image pixels per column merges neighbouring tracks. `px_per_column` is therefore 1.0 to within rounding now; it stays on the wire and Node still multiplies by it. `target_width` is **accepted-and-ignored** on the ML model (same pattern as `/track`'s `embedding` — `extra="forbid"` would 422 an un-recreated Node) and no longer sent. Because the response is now O(frames x columns) and no longer O(items), the batch endpoint is bounded by `_BATCH_MAX_OUTPUT_PIXELS` (3 840 000 = the old 64 x 300 x 200 envelope) as well as by item count, and `buildKymographBatch` splits a batch that would exceed it — 2 of the 60 production MT containers do.
 - **Every kymograph pixel moved on 2026-09-01: sampling is BILINEAR now, not nearest-neighbour.** `_sample_line_profile` in `api/tracker_kymograph.py` passes `order=1` to `map_coordinates`. The old `order=0` was justified by a comment claiming it matched "ImageJ's `getInterpolatedValue` zero-fill" — only the zero-fill half was true; `getInterpolatedValue` (`ij/process/ImageProcessor.java` L2005-2013) is bilinear, and so is every ImageJ polyline path (`ProfilePlot`, `Straightener`) and KymoResliceWide. Nearest was the outlier, used only by KymographBuilder. Measured on a real 299 x 1251 kymograph (container `4972cad8`, `polyline_39`, 488 nm): **99.7 % of cells change**, by a mean of 0.99 % of the frame's range, p95 2.7 %, **max 39 %** — the max lands on punctate spots, exactly where a kymograph is read, because nearest snaps to whichever pixel centre is closest and makes a particle's intensity flicker with sub-pixel position. Frame-to-frame noise drops from 24.7 to 20.7 counts. Also corrected in the same change: `_arc_length_resample_polyline`'s docstring cited `Roi.getInterpolatedPolygon` (a chord walk that DROPS an open polyline's endpoint); the code has always implemented `PolygonRoi.getEquidistantPoints` (`round(L)+1` points, endpoint forced). The **code was right and the citation was wrong** — do not "fix" the code to match the old comment.
@@ -884,11 +929,12 @@ The i18n validator only checks that keys exist in every file. It cannot tell you
 
 GitHub Actions is intentionally minimal (4 chronically-broken workflows were removed in PR #161):
 
+- `ci.yml` — the merge gate: jobs `frontend`, `backend`, `pins`, `python-tests`. The `frontend` job also runs the two parity scripts (`check-model-parity.cjs`, `verify-shared-types.cjs`) since 2026-10-06 — they read every source as text, Python included, so they need Node only
 - `codeql.yml` — passive security scanning (Security tab)
 - `nightly-drift.yml` — daily TS/ESLint/i18n + npm audit on `main`; opens labelled issue on failure, doesn't block PRs
 - GitGuardian App — secret leak detection
 
-The real PR gate is local: pre-commit hook + `make ci` + Playwright verification + manual review.
+`frontend` and `backend` are REQUIRED checks (ruleset `main-protection`, strict), so a red run blocks the merge. They are a gate for what they cover and nothing more: the pre-commit hook, `make ci`, a real browser and a real request are still what catch the rest — see every "found only on the wire" note in this file.
 
 ---
 

@@ -1964,7 +1964,7 @@ export default {
         step3:
           'Sélectionnez les images puis cliquez sur Segmenter ; le modèle du projet est utilisé',
         step4:
-          'Chaque modèle porte son propre seuil de détection, fixé lors de sa validation : il n’y a rien à régler à chaque exécution',
+          'Le seuil de détection est fixe pour chaque modèle, et deux modèles n’en ont aucun car ils décident par argmax : il n’y a rien à régler à chaque exécution',
         step5:
           'Sur une vidéo multicanale, choisissez le canal que le modèle doit lire',
         step6:
@@ -1972,7 +1972,7 @@ export default {
       },
       thresholdNote: 'Les seuils de détection sont fixes pour chaque modèle.',
       thresholdNoteText:
-        'Il n’existe aucun réglage de seuil dans l’interface : chaque modèle applique la coupure avec laquelle il a été validé, celle des microtubules étant 0,98. Abaisser un seuil ne trouve pas davantage d’objets réels : il en trouve davantage avec des indices plus faibles, et sur un canal non IRM la sortie microtubules ne suit l’image à aucun réglage. S’il manque des détections, vérifiez plutôt le canal d’entrée.',
+        'Il n’existe aucun réglage de seuil dans l’interface : chaque modèle qui utilise un seuil applique la coupure avec laquelle il a été validé — celle des microtubules étant 0,98 — et deux modèles (Désagrégation des sphéroïdes, Neurite / soma) n’en ont aucun : ils décident par argmax. Abaisser un seuil ne trouve pas davantage d’objets réels : il en trouve davantage avec des indices plus faibles, et sur un canal non IRM la sortie microtubules ne suit l’image à aucun réglage. S’il manque des détections, vérifiez plutôt le canal d’entrée.',
       tip: 'Astuce :',
       tipText:
         'Commencez par le modèle par défaut. Passez à CBAM-ResUNet quand les contours comptent plus que la vitesse, et à Mamba-UNet quand vos images ne ressemblent au jeu d’entraînement de personne.',

@@ -113,6 +113,26 @@ describe('authenticate and the session cut-off', () => {
     expect(ResponseHelper.unauthorized).not.toHaveBeenCalled();
   });
 
+  it('orders by the millisecond claim, so two tokens of the SAME second fall on opposite sides', async () => {
+    // Cut-off at .500 of a second; both tokens share that second's `iat`.
+    const cutoff = new Date(CUTOFF.getTime() + 500);
+
+    const before = await run(
+      authenticate,
+      { iat: cutoffSeconds, iatMs: CUTOFF.getTime() + 400 },
+      cutoff
+    );
+    expect(before.next).not.toHaveBeenCalled();
+
+    vi.clearAllMocks();
+    const after = await run(
+      authenticate,
+      { iat: cutoffSeconds, iatMs: CUTOFF.getTime() + 600 },
+      cutoff
+    );
+    expect(after.next).toHaveBeenCalledTimes(1);
+  });
+
   it('accepts any token when the user has never been cut off', async () => {
     const { next } = await run(authenticate, { iat: 1 }, null);
 

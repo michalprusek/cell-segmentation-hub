@@ -29,6 +29,10 @@ import {
 } from './middleware/monitoring';
 import { isPublicApiPath } from './api/v1';
 import { startJobWorker, stopJobWorker } from './api/v1/jobs/worker';
+import {
+  startCleanupSweeper,
+  stopCleanupSweeper,
+} from './services/accountFiles';
 import { WebSocketService } from './services/websocketService';
 import { initializeStorageDirectories } from './utils/initializeStorage';
 import { initializeRedis, closeRedis, redisHealthCheck } from './config/redis';
@@ -421,6 +425,11 @@ const startServer = async (): Promise<void> => {
       // The public API's own job worker (/api/v1/jobs). Not awaited and not
       // able to throw: nothing about it may stop the app from starting.
       startJobWorker();
+
+      // Finish file clean-ups a previous run left behind (a project or
+      // account deleted while the process was going down). Same rule as the
+      // job worker: cannot throw, does not block the start.
+      startCleanupSweeper();
     } catch (error) {
       logger.error('Failed to initialize critical services:', error as Error);
       logger.error('Server cannot start without required services. Exiting...');
@@ -448,6 +457,7 @@ const startServer = async (): Promise<void> => {
       // Stop taking new API job images. One in flight is left `processing`
       // and is re-queued by `recoverInterrupted` on the next start.
       stopJobWorker();
+      stopCleanupSweeper();
 
       // Stop health check service
       try {

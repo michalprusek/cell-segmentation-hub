@@ -1930,14 +1930,14 @@ export default {
         step3:
           'Vyberte snímky a klikněte na Segmentovat; použije se model daného projektu',
         step4:
-          'Každý model má vlastní práh detekce, pevně daný při jeho validaci — pro jednotlivý běh není co nastavovat',
+          'Práh detekce je u každého modelu pevně daný — a dva modely žádný nemají, rozhoduje u nich argmax — takže pro jednotlivý běh není co nastavovat',
         step5: 'U vícekanálového videa zvolte, který kanál má model číst',
         step6:
           'Model může měnit jen vlastník projektu; spolupracovníci segmentují jeho volbou',
       },
       thresholdNote: 'Prahy detekce jsou pevně dané pro každý model.',
       thresholdNoteText:
-        'V rozhraní žádné nastavení prahu není: každý model používá řez, se kterým byl validován, u mikrotubulů je to 0,98. Snížení prahu nenajde více skutečných objektů — najde jich více se slabším důkazem, a na jiném než IRM kanálu výstup mikrotubulového modelu nesleduje obraz při žádném nastavení. Pokud detekce chybí, zkontrolujte raději vstupní kanál.',
+        'V rozhraní žádné nastavení prahu není: každý model, který práh používá, pracuje s řezem, se kterým byl validován — u mikrotubulů je to 0,98 — a dva modely (Rozpad sferoidů, Neurit / soma) žádný práh nemají: rozhodují argmaxem. Snížení prahu nenajde více skutečných objektů — najde jich více se slabším důkazem, a na jiném než IRM kanálu výstup mikrotubulového modelu nesleduje obraz při žádném nastavení. Pokud detekce chybí, zkontrolujte raději vstupní kanál.',
       tip: 'Tip:',
       tipText:
         'Začněte výchozím modelem. Po CBAM-ResUNetu sáhněte, když jsou hranice důležitější než rychlost, a po Mamba-UNetu, když vaše snímky nevypadají jako ničí trénovací data.',

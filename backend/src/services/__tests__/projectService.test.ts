@@ -61,6 +61,19 @@ vi.mock('../../db', () => ({
   prisma: prismaMock,
 }));
 vi.mock('../../utils/logger');
+// deleteProject hands the project's files to this module. What it does with
+// the disk has its own suite; here it must only not touch a real one.
+const { accountFilesMock } = vi.hoisted(() => ({
+  accountFilesMock: {
+    collectProjectFiles: vi.fn(),
+    recordPendingCleanup: vi.fn(),
+    discardPendingCleanup: vi.fn(),
+    completeCleanup: vi.fn(),
+    // Still exported by the module, no longer called by projectService.
+    deleteUserFiles: vi.fn(),
+  },
+}));
+vi.mock('../accountFiles', () => accountFilesMock);
 vi.mock('../sharingService', () => ({
   hasProjectAccess: vi.fn(),
 }));
@@ -468,6 +481,17 @@ describe('ProjectService', () => {
       };
       prismaMock.project.findFirst.mockResolvedValueOnce(existingProject);
       prismaMock.project.delete.mockResolvedValueOnce({ id: projectId });
+      const files = { fileKeys: ['user-id/project-id/a.png'], dirKeys: [] };
+      accountFilesMock.collectProjectFiles.mockResolvedValue(files);
+      accountFilesMock.recordPendingCleanup.mockResolvedValue(
+        '/tmp/manifest.json'
+      );
+      accountFilesMock.discardPendingCleanup.mockResolvedValue(undefined);
+      accountFilesMock.completeCleanup.mockResolvedValue({
+        removed: 0,
+        failed: 0,
+        refused: 0,
+      });
 
       const result = await projectService.deleteProject(projectId, userId);
 
@@ -477,6 +501,34 @@ describe('ProjectService', () => {
           id: projectId,
         },
       });
+      // collect -> record -> row delete -> complete. The list is written
+      // down before the rows that are the list go, and no file is touched
+      // until the project is really deleted.
+      expect(accountFilesMock.collectProjectFiles).toHaveBeenCalledWith(
+        projectId,
+        userId
+      );
+      expect(accountFilesMock.recordPendingCleanup).toHaveBeenCalledWith(
+        { kind: 'project', id: projectId },
+        files
+      );
+      expect(accountFilesMock.completeCleanup).toHaveBeenCalledWith(
+        '/tmp/manifest.json',
+        files
+      );
+      const order = (fn: { mock: { invocationCallOrder: number[] } }) =>
+        fn.mock.invocationCallOrder[0];
+      expect(order(accountFilesMock.collectProjectFiles)).toBeLessThan(
+        order(accountFilesMock.recordPendingCleanup)
+      );
+      expect(order(accountFilesMock.recordPendingCleanup)).toBeLessThan(
+        order(prismaMock.project.delete)
+      );
+      expect(order(prismaMock.project.delete)).toBeLessThan(
+        order(accountFilesMock.completeCleanup)
+      );
+      expect(accountFilesMock.discardPendingCleanup).not.toHaveBeenCalled();
+      expect(accountFilesMock.deleteUserFiles).not.toHaveBeenCalled();
     });
 
     it('should return null when project not found', async () => {
@@ -488,6 +540,12 @@ describe('ProjectService', () => {
       const result = await projectService.deleteProject(projectId, userId);
 
       expect(result).toBeNull();
+      // Not found, or not this user's: no row and no file is touched.
+      expect(prismaMock.project.delete).not.toHaveBeenCalled();
+      expect(accountFilesMock.collectProjectFiles).not.toHaveBeenCalled();
+      expect(accountFilesMock.recordPendingCleanup).not.toHaveBeenCalled();
+      expect(accountFilesMock.discardPendingCleanup).not.toHaveBeenCalled();
+      expect(accountFilesMock.completeCleanup).not.toHaveBeenCalled();
     });
   });
 

@@ -6,6 +6,7 @@ import {
 } from '../auth/password';
 import { generateTokenPair, JwtPayload } from '../auth/jwt';
 import { cutoffForNow, isIssuedBeforeCutoff } from '../auth/sessionCutoff';
+import { disconnectUserSockets } from './liveConnections';
 import { logger } from '../utils/logger';
 import { ApiError } from '../middleware/error';
 import * as EmailService from './emailService';
@@ -13,7 +14,12 @@ import { getStorageProvider } from '../storage/index';
 import { v4 as uuidv4 } from 'uuid';
 import sharp from 'sharp';
 import { sessionService } from './sessionService';
-import { collectUserFiles, deleteUserFiles } from './accountFiles';
+import {
+  collectUserFiles,
+  completeCleanup,
+  discardPendingCleanup,
+  recordPendingCleanup,
+} from './accountFiles';
 import type {
   LoginData,
   RegisterData,
@@ -299,23 +305,6 @@ export async function refreshToken(
   data: RefreshTokenData
 ): Promise<{ accessToken: string; refreshToken: string; rememberMe: boolean }> {
   try {
-    // Checked BEFORE rotating: a rotation would write a fresh record, dated
-    // now, and so launder a session the password change had just ended.
-    const record = await sessionService.verifyRefreshToken(data.refreshToken);
-    if (record && !record.impersonatorId) {
-      const owner = await prisma.user.findUnique({
-        where: { id: record.userId },
-        select: { sessionsValidAfter: true },
-      });
-      const issuedAt = record.createdAt
-        ? Date.parse(record.createdAt)
-        : undefined;
-      if (isIssuedBeforeCutoff(issuedAt, owner?.sessionsValidAfter)) {
-        await sessionService.deleteRefreshToken(data.refreshToken);
-        throw ApiError.unauthorized('Neplatný nebo vypršený refresh token');
-      }
-    }
-
     const rotated = await sessionService.rotateRefreshToken(data.refreshToken);
     if (!rotated) {
       throw ApiError.unauthorized('Neplatný nebo vypršený refresh token');
@@ -326,17 +315,19 @@ export async function refreshToken(
       throw ApiError.unauthorized('Uživatel nenalezen');
     }
 
-    // ...and checked AGAIN, against the row read after the rotation. The
-    // check above and the rotation are not one step: a password change that
-    // lands between them finds the old record still valid, and the rotation
-    // then writes a successor dated now - newer than the cut-off, so it would
-    // pass every later check. The record that was PRESENTED is what gets
-    // judged, and its successor is withdrawn.
+    // The session cut-off, judged AFTER the rotation and against the user
+    // row read after it - never before. A check made first and a rotation
+    // made second are two steps: a password change landing between them
+    // finds the old record still valid, and the rotation then writes a
+    // successor dated now, newer than the cut-off, which would pass every
+    // later check. What is judged is the record that was PRESENTED; its
+    // successor is withdrawn.
     if (
-      record &&
-      !record.impersonatorId &&
+      !rotated.impersonatorId &&
       isIssuedBeforeCutoff(
-        record.createdAt ? Date.parse(record.createdAt) : undefined,
+        rotated.presentedCreatedAt
+          ? Date.parse(rotated.presentedCreatedAt)
+          : undefined,
         user.sessionsValidAfter
       )
     ) {
@@ -608,6 +599,7 @@ export async function resetPasswordWithToken(
         sessionsValidAfter: cutoffForNow(),
       },
     });
+    disconnectUserSockets(matchedUser.id);
 
     logger.info('Password reset completed successfully', 'AuthService', {
       userId: matchedUser.id,
@@ -854,7 +846,16 @@ export async function deleteAccount(
     // audit tables that must outlive the account), so this one statement
     // removes the projects, images, segmentations, queue items, shares,
     // folders, API keys and jobs with it.
-    await prisma.user.delete({ where: { id: userId } });
+    const manifest = await recordPendingCleanup(
+      { kind: 'user', id: userId },
+      files
+    );
+    try {
+      await prisma.user.delete({ where: { id: userId } });
+    } catch (error) {
+      await discardPendingCleanup(manifest);
+      throw error;
+    }
 
     logger.info('Account and all related rows deleted', 'AuthService', {
       userId,
@@ -863,7 +864,7 @@ export async function deleteAccount(
     // After the commit, and never fatal: the account is gone either way, and
     // a file that could not be removed is logged for an operator rather than
     // reported to a user who no longer exists.
-    const result = await deleteUserFiles(files);
+    const result = await completeCleanup(manifest, files);
     logger.info('Account files removed', 'AuthService', { userId, ...result });
   } catch (error) {
     if (error instanceof ApiError) {

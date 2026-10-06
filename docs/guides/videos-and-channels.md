@@ -80,14 +80,21 @@ with no segmentation source set.
 A channel is auto-typed `irm` if its recorded wavelength is **exactly 0**, or if
 its name contains any of the whole words **IRM, BF, DIC, TL, BRIGHTFIELD,
 TRANSMITTED** (underscores count as word separators, so `IRM_WIDEFIELD`
-matches). The first such channel is pre-selected as the segmentation source.
+matches). The first such channel is marked as the segmentation source.
 
 > **When nothing matches, no channel is marked as the source** and every
-> consumer silently falls back to **channel 0**. For a microtubule project that
-> is a real hazard: the model is IRM-only, so pointing it at a TIRF channel
-> produces plenty of confident-looking polylines with no contrast underneath
-> them. **Set the segmentation source explicitly** in the channels list, or in
-> the channel picker that appears before Segment All.
+> consumer silently falls back to **channel 0**: the frames' stored image, the
+> thumbnail, stage-drift correction at upload, and any segmentation request
+> that names no channel. For a microtubule project that is a real hazard: the
+> model is IRM-only, so pointing it at a TIRF channel produces plenty of
+> confident-looking polylines with no contrast underneath them.
+>
+> **There is no control that sets the source.** The channel list in the editor
+> shows which channel carries the mark and cannot change it. The only place you
+> choose is the channel picker before **Segment** / **Resegment**, and that
+> choice covers one batch — so **pick the right channel there every time**. See
+> [Segmenting a multi-channel video](#segmenting-a-multi-channel-video) for what
+> the picker preselects.
 
 ### Renaming, colouring and toggling channels
 
@@ -275,9 +282,27 @@ added, unshifted.
 
 ## Segmenting a multi-channel video
 
-**Segment All** (and **Resegment** in the editor) first opens a **channel
-picker** on multi-channel containers. Your choice is stored per queue item and
-the worker reads that channel's PNG.
+**Segment** on the project page (and **Resegment** in the editor) first opens a
+**channel picker** on multi-channel containers. Your choice is stored per queue
+item and the worker reads that channel's PNG. It is not remembered for the next
+batch.
+
+**What is preselected** (the same rule in both places, since 2026-10-07):
+
+| Where                 | Picker opens when                                    | Preselected channel                                                    |
+| --------------------- | ---------------------------------------------------- | ---------------------------------------------------------------------- |
+| Project page, Segment | the project's videos have more than one channel name | the channel marked as the segmentation source; if none is, **nothing** |
+| Editor, Resegment     | the open video has more than one channel             | the channel marked as the segmentation source; if none is, **nothing** |
+
+With nothing preselected the **Segment** button stays disabled until you pick a
+channel. (Before that date the project page preselected the _alphabetically
+first_ channel name and ignored the mark — `488_nm` ahead of a correctly
+identified `IRM` — and both pickers fell back to the first channel when
+nothing was marked.)
+
+When the picker does not open — a single-channel video, or a request made
+through the API without a `channel` — the frame is segmented on the marked
+source, or on channel 0 when nothing is marked, with no prompt.
 
 For microtubule projects, cross-frame tracking runs automatically once **all**
 frames of a container reach a final state. It is fire-and-forget: an ML timeout

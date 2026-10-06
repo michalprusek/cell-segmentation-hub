@@ -74,6 +74,28 @@ describe('generateAccessToken', () => {
     expect(decoded.emailVerified).toBe(true);
   });
 
+  it('stamps a signed and verified token with a millisecond issue time, iatMs', () => {
+    // `iat` is whole seconds; the session cut-off has to order a password
+    // change and the session issued right after it, which share a second.
+    const before = Date.now();
+    const result = verifyAccessToken(generateAccessToken(PAYLOAD));
+    const after = Date.now();
+
+    expect(typeof result.iatMs).toBe('number');
+    expect(result.iatMs).toBeGreaterThanOrEqual(before);
+    expect(result.iatMs).toBeLessThanOrEqual(after);
+    // The same instant as the standard claim, just not rounded.
+    expect(Math.floor(result.iatMs! / 1000) - result.iat!).toBeLessThanOrEqual(
+      1
+    );
+    expect(Math.abs(result.iatMs! - result.iat! * 1000)).toBeLessThan(2000);
+  });
+
+  it('does not let a caller-supplied iatMs survive into the token', () => {
+    const token = generateAccessToken({ ...PAYLOAD, iatMs: 1 });
+    expect(verifyAccessToken(token).iatMs).toBeGreaterThan(1);
+  });
+
   it('sets issuer to cell-segmentation-api', () => {
     const token = generateAccessToken(PAYLOAD);
     const decoded = jwt.decode(token) as jwt.JwtPayload;
@@ -245,6 +267,35 @@ describe('verifyAccessToken', () => {
 // ── verifyRefreshToken ────────────────────────────────────────────────────────
 
 describe('verifyRefreshToken', () => {
+  it('carries the payload, the standard claims and a unique jti — no iatMs', () => {
+    // Only access tokens are judged by issue time; a refresh token's age is
+    // its Redis record's `createdAt`.
+    const result = verifyRefreshToken(generateRefreshToken(PAYLOAD));
+    expect(result).toEqual({
+      ...PAYLOAD,
+      iat: expect.any(Number),
+      exp: expect.any(Number),
+      iss: 'cell-segmentation-api',
+      aud: 'cell-segmentation-app',
+      jti: expect.stringMatching(/^[0-9a-f-]{36}$/),
+    });
+    expect(result).not.toHaveProperty('iatMs');
+  });
+
+  it('never issues the same refresh token twice, even within one second', () => {
+    // Without `jti` the token is a pure function of (user, second,
+    // lifetime): two logins in one second shared a session record.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      vi.setSystemTime(new Date('2026-10-07T12:00:00.000Z'));
+      const first = generateRefreshToken(PAYLOAD);
+      const second = generateRefreshToken(PAYLOAD);
+      expect(second).not.toBe(first);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('returns the payload for a valid refresh token', () => {
     const token = generateRefreshToken(PAYLOAD);
     const result = verifyRefreshToken(token);

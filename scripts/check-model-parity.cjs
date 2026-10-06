@@ -5,12 +5,20 @@
  * The model set is a single source of truth WITHIN each language
  * (backend/src/constants/modelRegistry.ts, src/lib/models/modelRegistry.ts) but
  * the Python ML service cannot import a TS literal, so its model list lives in
- * `backend/segmentation/ml/model_loader.py` (`AVAILABLE_MODELS`). This script
- * asserts the three id sets are identical, catching the one drift the
- * per-language registries cannot structurally prevent.
+ * `backend/segmentation/ml/model_loader.py` (`AVAILABLE_MODELS`), and the
+ * request schema has a fourth copy, the `ModelType` enum in
+ * `backend/segmentation/api/models.py`. This script asserts the FOUR id sets
+ * are identical, catching the one drift the per-language registries cannot
+ * structurally prevent.
  *
- * Run manually or in CI: `node scripts/check-model-parity.cjs`
- * (intentionally NOT wired into the pre-commit hook — a parser hiccup must
+ * It compares model IDS only — not thresholds, display names or anything else
+ * a registry entry carries.
+ *
+ * Run by `make ci` (step 8) and by the `frontend` job of
+ * `.github/workflows/ci.yml`. Until 2026-10-06 it was run by NOTHING, while
+ * three documents said it guarded the registries. It reads all four files as
+ * text, so it needs Node and nothing else — no Python, no torch.
+ * (Intentionally NOT wired into the pre-commit hook — a parser hiccup must
  *  never block an unrelated commit.)
  *
  * Exit 0 = in sync, exit 1 = drift (prints a diff).

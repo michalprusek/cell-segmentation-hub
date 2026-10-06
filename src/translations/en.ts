@@ -1958,7 +1958,7 @@ export default {
         step3:
           "Select the images you want and click Segment; the project's model is used",
         step4:
-          'Each model carries its own detection threshold, fixed when it was validated — there is nothing to tune per run',
+          'The detection threshold is fixed per model — and two models have none at all, deciding by argmax — so there is nothing to tune per run',
         step5:
           'On a multi-channel video, choose which channel the model should read',
         step6:
@@ -1966,7 +1966,7 @@ export default {
       },
       thresholdNote: 'Detection thresholds are fixed per model.',
       thresholdNoteText:
-        'There is no threshold control in the interface: each model applies the cut it was validated with, and the microtubule model’s is 0.98. Lowering a threshold does not find more real objects — it finds more with weaker evidence, and on a non-IRM channel the microtubule output does not follow the image at any setting. If detections are missing, check the input channel instead.',
+        'There is no threshold control in the interface: each model that uses a threshold applies the cut it was validated with — the microtubule model’s is 0.98 — and two models (Spheroid Disintegration, Neurite / Soma) have none at all: they decide by argmax. Lowering a threshold does not find more real objects — it finds more with weaker evidence, and on a non-IRM channel the microtubule output does not follow the image at any setting. If detections are missing, check the input channel instead.',
       tip: 'Tip:',
       tipText:
         'Start with the default model. Reach for CBAM-ResUNet when boundaries matter more than speed, and for Mamba-UNet when your images do not look like anyone’s training set.',

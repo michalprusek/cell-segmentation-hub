@@ -50,6 +50,25 @@ vi.mock('../../../utils/logger', () => ({
 vi.mock('../../../services/authService');
 vi.mock('../../../services/userService');
 
+// The real one reaches for the WebSocket server. Here what matters is whether
+// the controller asks for a user's sockets to be closed, and WHEN: the mock
+// notes whether the response had already been fully sent at that moment.
+const { liveMock, live } = vi.hoisted(() => {
+  const live = {
+    response: undefined as { writableFinished: boolean } | undefined,
+    finishedAtCall: [] as Array<boolean | undefined>,
+  };
+  return {
+    live,
+    liveMock: {
+      disconnectUserSockets: vi.fn((_userId: string) => {
+        live.finishedAtCall.push(live.response?.writableFinished);
+      }),
+    },
+  };
+});
+vi.mock('../../../services/liveConnections', () => liveMock);
+
 vi.mock('../../../db', () => ({
   prisma: {
     image: { findMany: vi.fn() },
@@ -110,6 +129,10 @@ function buildApp(
   app.use(express.json());
   // The same parser server.ts mounts: changePassword reads the refresh cookie.
   app.use(cookieParser());
+  app.use((_req, res, next) => {
+    live.response = res;
+    next();
+  });
   if (authenticated) {
     app.use(
       (
@@ -152,6 +175,8 @@ function buildApp(
 describe('AuthController — extended behavioral', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    live.response = undefined;
+    live.finishedAtCall = [];
   });
 
   // ── requestPasswordReset ─────────────────────────────────────────────────
@@ -363,7 +388,63 @@ describe('AuthController — extended behavioral', () => {
       );
     });
 
-    it('re-issues nothing and sets no cookie when the password change is refused', async () => {
+    it("closes the user's sockets once — and only after the response has been sent", async () => {
+      // The browser making the change reconnects by itself a moment after
+      // its socket drops. Dropped before the replacement cookies have
+      // arrived, its handshake would present the session this request just
+      // ended and be refused.
+      mockServices();
+
+      const app = buildApp(changePassword, true);
+      await request(app)
+        .post('/')
+        .set('Cookie', 'refresh_token=current-refresh-token')
+        .send(passwordChange())
+        .expect(200);
+
+      await vi.waitFor(() =>
+        expect(liveMock.disconnectUserSockets).toHaveBeenCalledTimes(1)
+      );
+      expect(liveMock.disconnectUserSockets).toHaveBeenCalledWith(USER.id);
+      expect(live.finishedAtCall).toEqual([true]);
+    });
+
+    it("still closes the other browsers' sockets when the session cannot be re-issued", async () => {
+      // The password HAS changed and every session is void; a failed
+      // re-issue costs this browser its sign-in, not the others their
+      // sign-out.
+      const { ApiError } = await import('../../../middleware/error');
+      mockServices();
+      MockedAuthService.reissueSession = vi
+        .fn()
+        .mockRejectedValue(ApiError.serviceUnavailable('Redis je nedostupný'));
+
+      const app = buildApp(changePassword, true);
+      const res = await request(app)
+        .post('/')
+        .set('Cookie', 'refresh_token=current-refresh-token')
+        .send(passwordChange())
+        .expect(503);
+
+      expect(setCookies(res)).toEqual([]);
+      await vi.waitFor(() =>
+        expect(liveMock.disconnectUserSockets).toHaveBeenCalledTimes(1)
+      );
+      expect(liveMock.disconnectUserSockets).toHaveBeenCalledWith(USER.id);
+      expect(live.finishedAtCall).toEqual([true]);
+    });
+
+    // A response that has finished and still produced no call will not
+    // produce one later: `finish` is the only trigger.
+    const expectNoSocketsClosed = async () => {
+      await vi.waitFor(() =>
+        expect(live.response?.writableFinished).toBe(true)
+      );
+      await new Promise(resolve => setImmediate(resolve));
+      expect(liveMock.disconnectUserSockets).not.toHaveBeenCalled();
+    };
+
+    it('re-issues nothing, sets no cookie and closes no socket when the password change is refused', async () => {
       const { ApiError } = await import('../../../middleware/error');
       mockServices();
       MockedAuthService.changePassword = vi
@@ -380,9 +461,10 @@ describe('AuthController — extended behavioral', () => {
       expect(res.body.success).toBe(false);
       expect(MockedAuthService.reissueSession).not.toHaveBeenCalled();
       expect(setCookies(res)).toEqual([]);
+      await expectNoSocketsClosed();
     });
 
-    it('answers 403 FORBIDDEN while impersonating, without calling either service', async () => {
+    it('answers 403 FORBIDDEN while impersonating, without calling either service or closing a socket', async () => {
       mockServices();
 
       const app = buildApp(changePassword, true, undefined, {
@@ -399,6 +481,7 @@ describe('AuthController — extended behavioral', () => {
       expect(MockedAuthService.changePassword).not.toHaveBeenCalled();
       expect(MockedAuthService.reissueSession).not.toHaveBeenCalled();
       expect(setCookies(res)).toEqual([]);
+      await expectNoSocketsClosed();
     });
   });
 

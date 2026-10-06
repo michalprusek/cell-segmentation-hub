@@ -1,8 +1,12 @@
+import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import { config } from '../utils/config';
 import { logger } from '../utils/logger';
 
 export interface JwtPayload {
+  /** Set by jsonwebtoken (seconds) and by `generateAccessToken` (ms). */
+  iat?: number;
+  iatMs?: number;
   userId: string;
   email: string;
   emailVerified: boolean;
@@ -39,11 +43,18 @@ export const generateAccessToken = (payload: JwtPayload): string => {
     if (!config.JWT_ACCESS_SECRET) {
       throw new Error('JWT_ACCESS_SECRET is not configured');
     }
-    return jwt.sign(payload, config.JWT_ACCESS_SECRET, {
+    // `iatMs` beside the standard whole-second `iat`: the session cut-off
+    // needs to order a password change and the session issued right after
+    // it, which share a second. See `auth/sessionCutoff.ts`.
+    return jwt.sign(
+      { ...payload, iatMs: Date.now() },
+      config.JWT_ACCESS_SECRET,
+      {
       expiresIn: config.JWT_ACCESS_EXPIRY,
       issuer: 'cell-segmentation-api',
       audience: 'cell-segmentation-app',
-    } as jwt.SignOptions);
+      } as jwt.SignOptions
+    );
   } catch (error) {
     logger.error('Failed to generate access token:', error as Error, 'JWT');
     throw new Error('Token generation failed');
@@ -85,10 +96,17 @@ export const generateRefreshToken = (
       );
     }
 
+    // `jwtid` makes every refresh token unique. Without it the token is a
+    // pure function of (user, second, lifetime): two logins of one user in
+    // the same second received the IDENTICAL string and therefore shared a
+    // session record - one logging out ended both - and the session
+    // re-issued by a password change could be byte-for-byte the token of a
+    // session that change was meant to end. Found on the wire, 2026-10-07.
     return jwt.sign(payload, config.JWT_REFRESH_SECRET, {
       expiresIn,
       issuer: 'cell-segmentation-api',
       audience: 'cell-segmentation-app',
+      jwtid: crypto.randomUUID(),
     } as jwt.SignOptions);
   } catch (error) {
     logger.error('Failed to generate refresh token:', error as Error, 'JWT');

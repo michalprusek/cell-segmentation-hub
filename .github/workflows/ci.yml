@@ -65,6 +65,15 @@ jobs:
         run: npx eslint --max-warnings=0 src/
       - name: i18n completeness (6 locales)
         run: node scripts/check-i18n.cjs
+      # The two cross-copy parity checks. Both read their sources as TEXT —
+      # including backend/segmentation/ml/model_loader.py and api/models.py —
+      # so they need Node and the checkout and nothing else: no Python, no
+      # torch, no GPU. They live in this job because it is a REQUIRED context
+      # and already runs from the repository root; neither depends on `npm ci`.
+      - name: Model-id parity (TS registries + Python AVAILABLE_MODELS + ModelType)
+        run: node scripts/check-model-parity.cjs
+      - name: Shared constants (frontend/backend copies)
+        run: node scripts/verify-shared-types.cjs
       - name: Vitest + coverage (enforces threshold)
         run: npx vitest run --coverage --pool=forks --poolOptions.forks.maxForks=2
         env:

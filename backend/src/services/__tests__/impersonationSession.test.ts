@@ -224,6 +224,10 @@ describe('an impersonated session survives token rotation', () => {
   it('leaves an ORDINARY session on the full 30-day TTL', async () => {
     rows(TARGET);
     await sessionService.storeRefreshToken(TARGET.id, 'plain-token');
+    // The record and nothing else, on the full 30 days.
+    expect([...ttls.keys()].map(k => k.slice(0, k.indexOf(':') + 1))).toEqual([
+      'refresh:',
+    ]);
     expect([...ttls.values()]).toEqual([60 * 60 * 24 * 30]);
   });
 
