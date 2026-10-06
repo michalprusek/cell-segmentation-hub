@@ -1659,6 +1659,7 @@ export default {
       automatedEssays: 'Automated Essays',
       segmenter: 'Segmenter',
       sharedProjects: 'Sharing',
+      publicApi: 'Public API',
       troubleshooting: 'Troubleshooting',
     },
 
@@ -2268,6 +2269,50 @@ export default {
       permissionsNote: 'Sharing is collaborative, not read-only.',
       permissionsNoteText:
         'Collaborators can change annotations, and on a video their edits carry the same cross-frame consequences as yours. Only the owner can rename a project, change its type, share it further or delete it.',
+    },
+
+    // Public API
+    publicApi: {
+      title: 'Public API',
+      intro:
+        'Everything the models do in the app is also available to scripts and other programs through a versioned HTTP API. You send one image and get the segmentation back in the format you choose. Nothing is stored: no project is created, and the image is discarded once the response is sent.',
+      keyHeading: 'Get a key',
+      keyStep1: 'Open Settings → API.',
+      keyStep2: 'Name the key, optionally give it an expiry, and create it.',
+      keyStep3:
+        'Copy it straight away. Only a hash of the key is stored, so it cannot be shown again.',
+      keyNoteLabel: 'Keep the key out of URLs',
+      keyNoteText:
+        'Send the key only in the Authorization header. A key placed in a URL is refused, and you should revoke it, because URLs end up in logs.',
+      requestHeading: 'Your first request',
+      requestText: 'List the models, then segment an image:',
+      formatsHeading: 'Output formats',
+      formatsText: 'Choose one with the output_format field:',
+      formatCol: 'Format',
+      formatWhatCol: 'What you get',
+      formatJson:
+        'The objects as JSON: polygons with their holes, or polylines, in image pixels. The default.',
+      formatCoco: 'COCO instance annotations.',
+      formatMask:
+        'A 16-bit label image: every object has its own pixel value and 0 is background.',
+      formatImagej: 'A RoiSet.zip for ImageJ / Fiji.',
+      formatYolo: 'YOLO segmentation labels in a zip. Polygon models only.',
+      modelsHeading: 'Models and their parameters',
+      modelsText:
+        'All twelve models are available. Not every model reads every parameter: threshold and detect_holes apply to some models and are refused for the others, so ask GET /api/v1/models what each one accepts and returns.',
+      depthNoteLabel: '16-bit images',
+      depthNoteText:
+        'The microtubule and neurite/soma models use a 16-bit image at full depth. For every other model a 16-bit image is first stretched to 8 bits, and the response says so in a warning.',
+      limitsHeading: 'Limits',
+      limit1: 'Images up to 4096 × 4096 pixels and 64 MiB.',
+      limit2: '120 requests per minute and 2 running segmentations per key.',
+      limit3:
+        'One image per request. Videos, ND2 files and tracking are available in the app only.',
+      referenceHeading: 'Full reference',
+      referenceText:
+        'Every field, error and example is in the interactive reference; the OpenAPI document describes the same contract for code generators.',
+      referenceDocs: 'Interactive reference',
+      referenceOpenApi: 'OpenAPI document',
     },
 
     // Troubleshooting

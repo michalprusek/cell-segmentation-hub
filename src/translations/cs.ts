@@ -1632,6 +1632,7 @@ export default {
       automatedEssays: 'Automatizované eseje',
       segmenter: 'Segmenter',
       sharedProjects: 'Sdílení',
+      publicApi: 'Veřejné API',
       troubleshooting: 'Řešení potíží',
     },
 
@@ -2240,6 +2241,52 @@ export default {
       permissionsNote: 'Sdílení je pro spolupráci, ne jen pro čtení.',
       permissionsNoteText:
         'Spolupracovníci mohou anotace měnit a u videa mají jejich úpravy stejné důsledky napříč snímky jako ty vaše. Přejmenovat projekt, změnit jeho typ, sdílet jej dál nebo jej smazat může jen vlastník.',
+    },
+
+    // Public API
+    publicApi: {
+      title: 'Veřejné API',
+      intro:
+        'Vše, co modely umějí v aplikaci, je dostupné také skriptům a dalším programům přes verzované HTTP API. Pošlete jeden obrázek a dostanete segmentaci ve formátu, který si zvolíte. Nic se neukládá: nevzniká žádný projekt a obrázek je po odeslání odpovědi zahozen.',
+      keyHeading: 'Získání klíče',
+      keyStep1: 'Otevřete Nastavení → API.',
+      keyStep2:
+        'Klíč pojmenujte, případně mu nastavte platnost, a vytvořte ho.',
+      keyStep3:
+        'Hned si ho zkopírujte. Ukládá se pouze otisk klíče, takže ho už nebude možné zobrazit.',
+      keyNoteLabel: 'Klíč nepatří do URL',
+      keyNoteText:
+        'Klíč posílejte pouze v hlavičce Authorization. Klíč vložený do URL je odmítnut a měli byste ho zrušit, protože URL končí v lozích.',
+      requestHeading: 'První požadavek',
+      requestText: 'Vypište modely a pak segmentujte obrázek:',
+      formatsHeading: 'Výstupní formáty',
+      formatsText: 'Formát zvolíte polem output_format:',
+      formatCol: 'Formát',
+      formatWhatCol: 'Co dostanete',
+      formatJson:
+        'Objekty jako JSON: polygony s jejich dírami, nebo polyline, v pixelech obrázku. Výchozí.',
+      formatCoco: 'Anotace instancí ve formátu COCO.',
+      formatMask:
+        '16bitový obraz popisků: každý objekt má vlastní hodnotu pixelu a 0 je pozadí.',
+      formatImagej: 'RoiSet.zip pro ImageJ / Fiji.',
+      formatYolo:
+        'Segmentační popisky YOLO v archivu zip. Jen pro modely s polygony.',
+      modelsHeading: 'Modely a jejich parametry',
+      modelsText:
+        'K dispozici je všech dvanáct modelů. Ne každý model čte každý parametr: threshold a detect_holes platí jen pro některé a u ostatních jsou odmítnuty, proto se zeptejte GET /api/v1/models, co který model přijímá a vrací.',
+      depthNoteLabel: '16bitové obrázky',
+      depthNoteText:
+        'Modely pro mikrotubuly a neurity/somata používají 16bitový obrázek v plné hloubce. Pro všechny ostatní modely se 16bitový obrázek nejprve převede na 8 bitů a odpověď to uvede ve varování.',
+      limitsHeading: 'Limity',
+      limit1: 'Obrázky do 4096 × 4096 pixelů a 64 MiB.',
+      limit2: '120 požadavků za minutu a 2 běžící segmentace na klíč.',
+      limit3:
+        'Jeden obrázek na požadavek. Videa, soubory ND2 a tracking jsou dostupné jen v aplikaci.',
+      referenceHeading: 'Úplná reference',
+      referenceText:
+        'Každé pole, chybu a příklad najdete v interaktivní referenci; dokument OpenAPI popisuje tutéž smlouvu pro generátory kódu.',
+      referenceDocs: 'Interaktivní reference',
+      referenceOpenApi: 'Dokument OpenAPI',
     },
 
     // Řešení potíží

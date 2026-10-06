@@ -25,9 +25,23 @@ import {
   PenTool,
   Shapes,
   Users,
+  Terminal,
   Video,
   type LucideIcon,
 } from 'lucide-react';
+
+/**
+ * The request shown in the Public API section. Code, so it is the same in
+ * every locale; the origin is the server the page was loaded from.
+ */
+const PUBLIC_API_EXAMPLE = [
+  'curl -H "Authorization: Bearer $SPHEROSEG_KEY" \\',
+  `  ${typeof window === 'undefined' ? '' : window.location.origin}/api/v1/models`,
+  '',
+  'curl -H "Authorization: Bearer $SPHEROSEG_KEY" \\',
+  '  -F image=@spheroid.tif -F model=segformer \\',
+  `  ${typeof window === 'undefined' ? '' : window.location.origin}/api/v1/segment`,
+].join('\n');
 
 /** Visual tone shared by notes and card grids. */
 export type DocsTone = 'info' | 'warning' | 'success' | 'neutral';
@@ -47,6 +61,9 @@ export type DocsBlock =
       items: { title: string; lines: string[]; tone?: DocsTone }[];
     }
   | { kind: 'table'; headers: string[]; rows: string[][] }
+  /** A literal snippet. Never translated, never search-highlighted. */
+  | { kind: 'code'; text: string }
+  | { kind: 'links'; items: { label: string; href: string }[] }
   | {
       kind: 'shortcuts';
       groups: { title: string; items: { keys: string; label: string }[] }[];
@@ -793,6 +810,69 @@ export function buildDocsSections(t: Translate): DocsSection[] {
     },
 
     {
+      id: 'public-api',
+      icon: Terminal,
+      navLabel: s('docs.nav.publicApi'),
+      title: s('docs.publicApi.title'),
+      blocks: [
+        { kind: 'paragraph', text: s('docs.publicApi.intro') },
+        { kind: 'heading', text: s('docs.publicApi.keyHeading') },
+        {
+          kind: 'list',
+          ordered: true,
+          items: list('docs.publicApi', ['keyStep1', 'keyStep2', 'keyStep3']),
+        },
+        {
+          kind: 'note',
+          tone: 'warning',
+          label: s('docs.publicApi.keyNoteLabel'),
+          text: s('docs.publicApi.keyNoteText'),
+        },
+        { kind: 'heading', text: s('docs.publicApi.requestHeading') },
+        { kind: 'paragraph', text: s('docs.publicApi.requestText') },
+        { kind: 'code', text: PUBLIC_API_EXAMPLE },
+        { kind: 'heading', text: s('docs.publicApi.formatsHeading') },
+        { kind: 'paragraph', text: s('docs.publicApi.formatsText') },
+        {
+          kind: 'table',
+          headers: list('docs.publicApi', ['formatCol', 'formatWhatCol']),
+          rows: [
+            ['json', s('docs.publicApi.formatJson')],
+            ['coco', s('docs.publicApi.formatCoco')],
+            ['mask_png, mask_tiff', s('docs.publicApi.formatMask')],
+            ['imagej_roi', s('docs.publicApi.formatImagej')],
+            ['yolo', s('docs.publicApi.formatYolo')],
+          ],
+        },
+        { kind: 'heading', text: s('docs.publicApi.modelsHeading') },
+        { kind: 'paragraph', text: s('docs.publicApi.modelsText') },
+        {
+          kind: 'note',
+          tone: 'info',
+          label: s('docs.publicApi.depthNoteLabel'),
+          text: s('docs.publicApi.depthNoteText'),
+        },
+        { kind: 'heading', text: s('docs.publicApi.limitsHeading') },
+        {
+          kind: 'list',
+          items: list('docs.publicApi', ['limit1', 'limit2', 'limit3']),
+        },
+        { kind: 'heading', text: s('docs.publicApi.referenceHeading') },
+        { kind: 'paragraph', text: s('docs.publicApi.referenceText') },
+        {
+          kind: 'links',
+          items: [
+            { label: s('docs.publicApi.referenceDocs'), href: '/api/v1/docs' },
+            {
+              label: s('docs.publicApi.referenceOpenApi'),
+              href: '/api/v1/openapi.json',
+            },
+          ],
+        },
+      ],
+    },
+
+    {
       id: 'troubleshooting',
       icon: HelpCircle,
       navLabel: s('docs.nav.troubleshooting'),
@@ -848,6 +928,12 @@ export function sectionSearchText(section: DocsSection): string {
         for (const item of block.items) {
           parts.push(item.title, ...item.lines);
         }
+        break;
+      case 'code':
+        parts.push(block.text);
+        break;
+      case 'links':
+        parts.push(...block.items.map(item => item.label));
         break;
       case 'table':
         parts.push(...block.headers);
