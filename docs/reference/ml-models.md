@@ -14,9 +14,11 @@ incompatible pair with a 400 even if you post it directly.
 > `ModelLoader.AVAILABLE_MODELS` in `backend/segmentation/ml/model_loader.py`
 > (Python, checkpoint paths) and the `ModelType` enum in
 > `backend/segmentation/api/models.py`. `scripts/check-model-parity.cjs`
-> compares those four id sets — but nothing runs it: it is in neither
-> `make ci`, the GitHub workflows nor the pre-commit hook, so **run it by
-> hand** (`node scripts/check-model-parity.cjs`).
+> compares those four id sets — the ids only, nothing else an entry carries —
+> and is step 8 of `make ci` and a step of the required `frontend` job in
+> `.github/workflows/ci.yml`. It is deliberately **not** in the pre-commit
+> hook. (Until 2026-10-06 nothing ran it at all, while this page and two
+> other places said it guarded the registries.)
 >
 > The fifth is `backend/src/api/v1/models.ts`, the public API's per-model
 > table: output geometry, classes, and whether the model reads `threshold` and
@@ -30,27 +32,37 @@ incompatible pair with a 400 even if you post it directly.
 > `scripts/verify-shared-types.cjs` is a different guard: it compares the
 > frontend and backend copies of `DEFAULT_MODEL_BY_PROJECT_TYPE` and
 > `PROJECT_TYPES_WITH_HOLE_DETECTION` (among other shared declarations), not
-> the model set, and lint-staged runs it only when a file under `src/types/` or
-> `backend/src/types/` is staged.
+> the model set. It is step 9 of `make ci`, a step of the same `frontend` CI
+> job, and lint-staged runs it at commit time when one of the files it reads
+> is staged — both `modelRegistry.ts` files included. (Until 2026-10-06 only
+> lint-staged ran it, and only for `src/types/` and `backend/src/types/`, so
+> an edit to either registry — where those two constants live — triggered
+> nothing.)
 
 ---
 
 ## The catalogue at a glance
 
-| Model id                  | Display name                       | Project type        | Output          | Default threshold | Typical time / image          | Size bucket |
-| ------------------------- | ---------------------------------- | ------------------- | --------------- | ----------------- | ----------------------------- | ----------- |
-| `hrnet`                   | HRNet (Balanced)                   | `spheroid`          | Closed polygons | 0.5               | ~0.20 s (p95 0.31 s)          | small       |
-| `cbam_resunet`            | CBAM-ResUNet (Precise)             | `spheroid`          | Closed polygons | 0.5               | ~0.38 s (p95 0.48 s)          | medium      |
-| `unet_spherohq`           | UNet (Fastest)                     | `spheroid`          | Closed polygons | 0.5               | ~0.18 s (p95 0.29 s)          | small       |
-| `segformer`               | SegFormer                          | `spheroid`          | Closed polygons | 0.5               | ~0.20 s                       | small       |
-| `mamba_unet`              | Mamba-UNet                         | `spheroid`          | Closed polygons | 0.5               | ~0.24 s                       | large       |
-| `spheroid_disintegration` | Spheroid Disintegration            | `spheroid_invasive` | Core + corona   | none (argmax)     | ~0.70 s                       | medium      |
-| `wound`                   | Wound Healing (Scratch Assay)      | `wound`             | Closed polygons | 0.5               | ~0.03 s                       | medium      |
-| `sperm`                   | Sperm Morphology                   | `sperm`             | Part polylines  | 0.5               | ~0.30 s                       | medium      |
-| `sperm_2part`             | Sperm Morphology (head + tail)     | `sperm`             | Part polylines  | 0.5               | ~0.30 s (copied from `sperm`) | medium      |
-| `microtubule`             | Microtubule (ResEnc-M + instancer) | `microtubules`      | **Polylines**   | 0.98 (fixed)      | ~0.6 s (p95 ~2 s)             | large       |
-| `microcapsule`            | Microcapsule                       | `microcapsule`      | Closed polygons | 0.5               | ~0.30 s                       | small       |
-| `neurite_soma`            | Neurite / Soma                     | `neurite`           | Closed polygons | n/a (argmax)      | ~12 s at 2048²                | large       |
+| Model id                  | Display name                       | Project type        | Output          | Threshold (registry value)                                  | Typical time / image          | Size bucket |
+| ------------------------- | ---------------------------------- | ------------------- | --------------- | ----------------------------------------------------------- | ----------------------------- | ----------- |
+| `hrnet`                   | HRNet (Balanced)                   | `spheroid`          | Closed polygons | 0.5                                                         | ~0.20 s (p95 0.31 s)          | small       |
+| `cbam_resunet`            | CBAM-ResUNet (Precise)             | `spheroid`          | Closed polygons | 0.5                                                         | ~0.38 s (p95 0.48 s)          | medium      |
+| `unet_spherohq`           | UNet (Fastest)                     | `spheroid`          | Closed polygons | 0.5                                                         | ~0.18 s (p95 0.29 s)          | small       |
+| `segformer`               | SegFormer                          | `spheroid`          | Closed polygons | 0.5                                                         | ~0.20 s                       | small       |
+| `mamba_unet`              | Mamba-UNet                         | `spheroid`          | Closed polygons | 0.5                                                         | ~0.24 s                       | large       |
+| `spheroid_disintegration` | Spheroid Disintegration            | `spheroid_invasive` | Core + corona   | 0.5, **not read** (argmax)                                  | ~0.70 s                       | medium      |
+| `wound`                   | Wound Healing (Scratch Assay)      | `wound`             | Closed polygons | 0.5                                                         | ~0.03 s                       | medium      |
+| `sperm`                   | Sperm Morphology                   | `sperm`             | Part polylines  | 0.5, **not read** (own cut-offs: mask 0.3, score 0.95)      | ~0.30 s                       | medium      |
+| `sperm_2part`             | Sperm Morphology (head + tail)     | `sperm`             | Part polylines  | 0.5, **not read** (own cut-offs: mask 0.3, score 0.95)      | ~0.30 s (copied from `sperm`) | medium      |
+| `microtubule`             | Microtubule (ResEnc-M + instancer) | `microtubules`      | **Polylines**   | 0.98, **not read** (`prob_thr` 0.98 in its own params file) | ~0.6 s (p95 ~2 s)             | large       |
+| `microcapsule`            | Microcapsule                       | `microcapsule`      | Closed polygons | 0.5                                                         | ~0.30 s                       | small       |
+| `neurite_soma`            | Neurite / Soma                     | `neurite`           | Closed polygons | 0.5, **not read** (argmax)                                  | ~12 s at 2048²                | large       |
+
+The threshold column is `defaultThreshold` from the frontend registry — the
+value the request carries. **Five models never read it** (`threshold: null` in
+`backend/src/api/v1/models.ts`, mirroring
+`backend/segmentation/api/routes.py::_dispatch_inference`): for those the
+registry number changes nothing, and the cell says what decides instead.
 
 Timings are the registry's recorded measurements on an NVIDIA A5000 and are
 end-to-end (pre-process → inference → post-process → polygon extraction), not
@@ -342,12 +354,38 @@ is exactly that: many plausible polylines with no contrast underneath them.
 Check the project's channel configuration. A channel is typed `irm` only on
 positive evidence — a label-free name (`IRM`, `BF`, `DIC`, `TL`, `BRIGHTFIELD`,
 `TRANSMITTED`) or an emission wavelength of exactly zero — and is `fluorescent`
-otherwise; an unknown wavelength is no longer taken as evidence. When no channel
-qualifies, none is marked as the segmentation source and the **first channel**
-is used by default. That is the normal outcome for a multi-page TIFF, which
-carries no wavelength and often no meaningful channel names, so a stack whose
-first channel is TIRF is still segmented on TIRF unless you pick the channel
-yourself in the segmentation dialog.
+otherwise; an unknown wavelength is no longer taken as evidence.
+
+**Known hazard: when no channel qualifies, nothing stops the model running on
+the wrong one.** No channel is _marked_ as the segmentation source, but every
+consumer resolves the source as "the marked channel, else **channel 0**"
+(`resolveSegmentationSource` in `backend/src/services/video/types.ts`), and each
+frame's stored path already points at channel 0. That is the normal outcome for
+a multi-page TIFF, which carries no wavelength and often no meaningful channel
+names. What follows from it:
+
+- **In the interface a multi-channel video always goes through the channel
+  picker**, so the user does click a channel — but the picker opens with an
+  unidentified channel already selected, and one click on **Segment** accepts
+  it. In the editor's **Resegment** dialog the preselection is channel 0. In the
+  project page's **Segment** dialog it is the **alphabetically first channel
+  name in the project** — and that is true even when an IRM channel _was_
+  identified, so `488_nm` is preselected ahead of `IRM`.
+- **A request that names no channel is segmented on channel 0 with no prompt
+  at all**: any direct call to `POST /api/queue/batch`, `/api/segmentation/batch`
+  or `/api/queue/images/:id` (which has no `channel` field), and any
+  single-channel container, where the picker never opens.
+- **Nothing in the interface can mark a source.** The editor's channel list
+  shows the "● src" badge but offers no control to set it; only
+  `PATCH /api/images/:id/channels` can, or adding a channel whose name is
+  recognisably label-free to a container that has no source yet. The picker's
+  choice is per batch and is not remembered.
+- **Upload-time steps take channel 0 without asking**: stage-drift correction
+  and the container thumbnail both run on the resolved source before any user
+  has chosen anything.
+
+So a stack whose first channel is TIRF is segmented on TIRF unless someone
+deliberately picks another channel in the dialog, every time.
 
 ### Its threshold is not a user setting
 
@@ -471,7 +509,7 @@ More in [Neurite and soma projects](../guides/project-types/neurite.md).
 ## How a model gets chosen at run time
 
 Rewritten 2026-09-20 (PRs #553/#554). It used to start from a per-user
-a per-user `Profile.preferredModel` chosen in Settings; that column, that
+`Profile.preferredModel` chosen in Settings; that column, that
 setting and its screen are all gone, because one global model had no relationship to the project being
 segmented and was wrong by construction on six of the seven project types.
 
@@ -482,7 +520,8 @@ segmented and was wrong by construction on six of the seven project types.
    `DEFAULT_MODEL_BY_PROJECT_TYPE[type]` otherwise. The default is the most
    ACCURATE compatible model, not the fastest: `spheroid` → `segformer`
    (93 % IoU). The same function exists on both sides, and the default map's
-   two copies are kept in step by `scripts/verify-shared-types.cjs`.
+   two copies are kept in step by `scripts/verify-shared-types.cjs` (`make ci`
+   step 9, the `frontend` CI job, and lint-staged).
 3. **Who may change it** — the project's owner only. A shared annotator sees a
    read-only label, and a `model` in their request body is ignored in favour of
    the project's.
@@ -508,9 +547,13 @@ segmented and was wrong by construction on six of the seven project types.
 Adding one touches files across the whole stack — the five places listed at
 the top of this page, the Python wrapper and its `ModelLoader` entry, the weights download
 script, and the `settings.modelSelection.models.<key>.{name,description}`
-translation keys in all six locales. `scripts/check-model-parity.cjs` (run it
-by hand), the backend type check and `scripts/check-i18n.cjs` will tell you
-what you missed.
+translation keys in all six locales. `scripts/check-model-parity.cjs`, the
+backend type check and `scripts/check-i18n.cjs` will tell you what you missed —
+all three run in `make ci` and in the required CI jobs. The parity script
+compares model **ids** across the four lists and nothing else: a wrong
+threshold, checkpoint path or compatibility entry passes it. If the new model
+changes a project type's default, `scripts/verify-shared-types.cjs` fails until
+both copies of `DEFAULT_MODEL_BY_PROJECT_TYPE` agree.
 
 Neither script covers the documentation, which is how `sperm_2part` shipped
 undescribed. By hand: this page (count, catalogue, compatibility matrix, a

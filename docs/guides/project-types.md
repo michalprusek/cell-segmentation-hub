@@ -53,9 +53,24 @@ model stay on disk but cannot be re-run.
 ## Thresholds are not a setting
 
 The threshold row above lists a **per-model constant**, not something you can
-dial. It is derived read-only from the model registry by `useProjectModel`, and
-no screen renders a control for it. To change a threshold you change the model,
-or the registry.
+dial. The value a request carries is derived read-only from the model registry
+by `useProjectModel`, and no screen renders a control for it.
+
+Whether that value does anything depends on the model. Seven models read it
+(the five spheroid models, `wound` and `microcapsule`), so for those the
+registry's `defaultThreshold` is the cut. **Five never read it**, and editing
+the registry changes nothing for them:
+
+- `microtubule` applies `prob_thr` from
+  `backend/segmentation/models/microtubule/params_sparse35.json` (0.98);
+- `sperm` and `sperm_2part` apply their own cut-offs inside the model wrapper
+  (mask 0.3, score 0.95);
+- `spheroid_disintegration` and `neurite_soma` decide by argmax and have no
+  threshold to change.
+
+The authoritative list is the `threshold` field of each entry in
+`backend/src/api/v1/models.ts`, which mirrors
+`backend/segmentation/api/routes.py::_dispatch_inference`.
 
 The **model** itself is a property of the project (see below), and **hole
 detection** is offered only on standard spheroid and wound-healing projects —
