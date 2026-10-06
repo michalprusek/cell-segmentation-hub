@@ -685,6 +685,29 @@ Bearer sseg_…` only. A key in the query string is refused with 400 rather
   (`v1/openapi.ts`) and `docs/api/public-v1.md` is checked against them by
   `docs.test.ts`, which is SKIPPED when only `backend/` is mounted — it needs
   the repo root.
+- **Jobs (`/api/v1/jobs`, table `api_jobs`, files under
+  `<UPLOAD_DIR>/api-jobs/<id>/`) are a separate mechanism from
+  `SegmentationQueue`**, which has hard foreign keys to `Image` and `Project`
+  and cannot hold a stateless job. `jobs/worker.ts` runs in the backend
+  process, ONE image per tick, through the same single-slot `mlClient` as
+  `/segment` — so jobs add no parallelism. Fairness is `ORDER BY updatedAt`:
+  processing an image touches its job, so waiting jobs take turns.
+- **A job stores the model's result, not a rendering.** `output_format` is
+  chosen at `GET /jobs/:id/results/:index`; it is not a field of `POST /jobs`.
+- **The worker is the only writer of `items`.** A request never rewrites it:
+  cancel sets `cancelRequested` (its own column) and the next tick acts on
+  it; DELETE removes the row and the worker notices its save found nothing.
+- **Idempotency is decided by the unique index** `(userId, idempotencyKey)`,
+  in the `P2002` handler — there is no look-up-first step, so a retry and two
+  racing requests take the same path. "Same request" includes a SHA-256 of
+  every uploaded file.
+- **`spheroid_disintegration` keeps the synchronous pixel ceiling in a job**
+  (`jobMaxPixels`): it runs at native resolution with no tiling, so a larger
+  frame costs GPU memory, not just time. Every other model may take 8192².
+- Admission to `POST /jobs` (active-job limit, storage budget) runs BEFORE the
+  upload is read, like the slot reservation on `/segment`.
+- Results expire 24 h after a job finishes (`sweep`, every 10 min); the row
+  stays as `expired` for 7 days. Inputs are deleted as each image is used.
 - **The ML service's routes are also called `/api/v1/*`** on its own port.
   Unrelated. Never add an nginx `location /api/v1/` pointing at `ml_service`,
   which has no authentication at all.

@@ -3,12 +3,7 @@ import path from 'path';
 import type { ApiJob } from '@prisma/client';
 import { prisma } from '../../../db';
 import { config } from '../../../utils/config';
-import { SYNC_MAX_PIXELS } from '../limits';
-import {
-  ACTIVE_STATUSES,
-  JOB_MAX_PIXELS,
-  type JobStatus,
-} from './limits';
+import { ACTIVE_STATUSES, type JobStatus } from './limits';
 
 export * from './limits';
 import { V1_MODELS, type V1Model } from '../models';
@@ -35,17 +30,6 @@ import type { KnownModelId } from '../../../constants/modelRegistry';
  *  - Results are kept JOB_RESULT_TTL_MS after a job finishes; inputs are
  *    deleted as soon as each image has been processed.
  */
-/** Models whose memory grows with the frame keep the synchronous ceiling. */
-const NATIVE_RESOLUTION_MODELS: ReadonlySet<string> = new Set([
-  'spheroid_disintegration',
-]);
-
-export function jobMaxPixels(modelId: string): number {
-  return NATIVE_RESOLUTION_MODELS.has(modelId)
-    ? SYNC_MAX_PIXELS
-    : JOB_MAX_PIXELS;
-}
-
 export type ItemStatus =
   | 'queued'
   | 'processing'

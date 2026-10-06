@@ -2304,6 +2304,9 @@ export default {
       depthNoteLabel: 'Imágenes de 16 bits',
       depthNoteText:
         'Los modelos de microtúbulos y de neuritas/somas usan la imagen de 16 bits con toda su profundidad. Para los demás modelos, una imagen de 16 bits se convierte primero a 8 bits y la respuesta lo indica con una advertencia.',
+      jobsHeading: 'Imágenes grandes y lotes',
+      jobsText:
+        'Una solicitud a /segment mantiene la conexión abierta hasta que el modelo termina. Para una imagen de más de 4096 × 4096 píxeles, o para muchas imágenes, crea un trabajo con POST /api/v1/jobs: la subida responde de inmediato, consultas el estado del trabajo y recoges el resultado de cada imagen cuando está listo, eligiendo entonces el formato de salida. Un trabajo admite hasta 20 imágenes de hasta 8192 × 8192 píxeles y sus resultados se conservan 24 horas.',
       limitsHeading: 'Límites',
       limit1: 'Imágenes de hasta 4096 × 4096 píxeles y 64 MiB.',
       limit2:
