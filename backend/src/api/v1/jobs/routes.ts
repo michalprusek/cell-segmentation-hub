@@ -74,21 +74,42 @@ const upload = multer({
   defParamCharset: 'utf8',
 }).array('images', JOB_MAX_ITEMS);
 
-/** Refuse BEFORE the body is read, so a refused upload is never written. */
+class AdmissionError extends Error {
+  constructor(public readonly code: 'too-many-jobs' | 'server-busy') {
+    super(code);
+  }
+}
+
+function refuseAdmission(
+  res: Response,
+  code: 'too-many-jobs' | 'server-busy'
+): void {
+  if (code === 'too-many-jobs') {
+    sendProblem(res, 'too-many-jobs', {
+      detail: `At most ${MAX_ACTIVE_JOBS_PER_USER} jobs may be queued or running per account.`,
+      headers: { 'Retry-After': '30' },
+    });
+  } else {
+    sendProblem(res, 'server-busy', {
+      detail: 'Job storage is full. Retry when running jobs have finished.',
+      headers: { 'Retry-After': '60' },
+    });
+  }
+}
+
+/**
+ * Refuse BEFORE the body is read, so a refused upload is never written. This
+ * is the fast path, not the guarantee: `create` checks both limits again,
+ * under a lock, at the moment the job is inserted.
+ */
 const admit: RequestHandler = async (req, res, next) => {
   try {
     if ((await countActiveJobs(userId(req))) >= MAX_ACTIVE_JOBS_PER_USER) {
-      sendProblem(res, 'too-many-jobs', {
-        detail: `At most ${MAX_ACTIVE_JOBS_PER_USER} jobs may be queued or running per account.`,
-        headers: { 'Retry-After': '30' },
-      });
+      refuseAdmission(res, 'too-many-jobs');
       return;
     }
     if ((await activeInputBytes()) >= JOB_STORAGE_BUDGET_BYTES) {
-      sendProblem(res, 'server-busy', {
-        detail: 'Job storage is full. Retry when running jobs have finished.',
-        headers: { 'Retry-After': '60' },
-      });
+      refuseAdmission(res, 'server-busy');
       return;
     }
     next();
@@ -267,25 +288,48 @@ const create = async (
       for (const [index, file] of files.entries()) {
         await fs.rename(file.path, inputPath(id, items[index]));
       }
-      const job = await prisma.apiJob.create({
-        data: {
-          id,
-          userId: owner,
-          apiKeyId: req.apiKey?.id ?? null,
-          model: request.modelId,
-          parameters,
-          page: request.page,
-          items: JSON.stringify(items),
-          inputBytes: BigInt(totalBytes),
-          idempotencyKey: idempotency.key,
-          requestHash,
-        },
+      // The limits are checked AGAIN here, under a lock, with the insert.
+      // `admit` checked them before the upload, which is what keeps a
+      // refused body off the disk — but many uploads later, so on its own it
+      // bounds nothing: ten simultaneous requests all passed it and left ten
+      // active jobs on an account limited to five (measured on production).
+      // One lock for all job creation: it is rare, and the storage budget is
+      // a total across every account.
+      const job = await prisma.$transaction(async tx => {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended('api_jobs:create', 0))`;
+        if ((await countActiveJobs(owner, tx)) >= MAX_ACTIVE_JOBS_PER_USER) {
+          throw new AdmissionError('too-many-jobs');
+        }
+        if (
+          (await activeInputBytes(tx)) + totalBytes >
+          JOB_STORAGE_BUDGET_BYTES
+        ) {
+          throw new AdmissionError('server-busy');
+        }
+        return tx.apiJob.create({
+          data: {
+            id,
+            userId: owner,
+            apiKeyId: req.apiKey?.id ?? null,
+            model: request.modelId,
+            parameters,
+            page: request.page,
+            items: JSON.stringify(items),
+            inputBytes: BigInt(totalBytes),
+            idempotencyKey: idempotency.key,
+            requestHash,
+          },
+        });
       });
       res.setHeader('Location', `${BASE}/jobs/${job.id}`);
       res.setHeader('Retry-After', String(POLL_AFTER_SECONDS));
       res.status(202).json(describeJob(job, BASE));
     } catch (error) {
       await removeQuietly(jobDir(id));
+      if (error instanceof AdmissionError) {
+        refuseAdmission(res, error.code);
+        return;
+      }
       // The key has been used before. This is the ONLY place that is
       // decided — there is no look-up-first step — so a retry and two
       // requests racing with the same new key take the same path, and the

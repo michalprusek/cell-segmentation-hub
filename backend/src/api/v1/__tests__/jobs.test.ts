@@ -127,6 +127,11 @@ vi.mock('../../../db', () => ({
     get apiJob() {
       return apiJob;
     },
+    $executeRaw: vi.fn(async () => 1),
+    // Runs the callback against the same table, as `tx`.
+    $transaction: vi.fn(async (run: (tx: unknown) => unknown) =>
+      run({ apiJob, $executeRaw: vi.fn(async () => 1) })
+    ),
   },
 }));
 
@@ -144,6 +149,7 @@ import {
   JOB_MAX_PIXELS,
   JOB_RESULT_TTL_MS,
   JOB_ROW_TTL_MS,
+  JOB_STORAGE_BUDGET_BYTES,
   MAX_ACTIVE_JOBS_PER_USER,
   inputPath,
   jobDir,
@@ -320,6 +326,57 @@ describe('creating a job', () => {
     expect((await createJob(keyFor('bob'))).status).toBe(202);
     await drain();
     expect((await createJob(alice)).status).toBe(202);
+  });
+
+  it('checks the limit again when the job is inserted: admission alone bounds nothing', async () => {
+    // Every request below passes `admit` — the account has no jobs yet when
+    // each one is admitted — exactly as ten simultaneous uploads did on the
+    // deployed service, leaving ten active jobs on an account limited to five.
+    const realCount = apiJob.count.getMockImplementation()!;
+    // Odd calls are `admit`, even calls the re-check; let only admit lie.
+    let call = 0;
+    apiJob.count.mockImplementation(async (args: any) =>
+      call++ % 2 === 0 ? 0 : realCount(args)
+    );
+    try {
+      const statuses: number[] = [];
+      for (let i = 0; i < MAX_ACTIVE_JOBS_PER_USER + 3; i++) {
+        statuses.push((await createJob(alice)).status);
+      }
+      expect(statuses).toEqual([
+        ...Array(MAX_ACTIVE_JOBS_PER_USER).fill(202),
+        429,
+        429,
+        429,
+      ]);
+      expect(rows.size).toBe(MAX_ACTIVE_JOBS_PER_USER);
+      // A job refused at the last step leaves nothing on disk.
+      expect(
+        readdirSync(path.join(UPLOADS, 'api-jobs')).filter(n => n !== '_incoming')
+      ).toHaveLength(MAX_ACTIVE_JOBS_PER_USER);
+    } finally {
+      apiJob.count.mockImplementation(realCount);
+    }
+  });
+
+  it('refuses a job that would take stored uploads over the budget', async () => {
+    const realAggregate = apiJob.aggregate.getMockImplementation()!;
+    let call = 0;
+    // `admit` sees room; by the time the job is inserted the budget is used.
+    apiJob.aggregate.mockImplementation(async () => ({
+      _sum: {
+        inputBytes: call++ === 0 ? BigInt(0) : BigInt(JOB_STORAGE_BUDGET_BYTES),
+      },
+    }));
+    try {
+      const res = await createJob(alice);
+      expect(res.status).toBe(503);
+      expect(res.body.code).toBe('server-busy');
+      expect(res.headers['retry-after']).toBe('60');
+      expect(rows.size).toBe(0);
+    } finally {
+      apiJob.aggregate.mockImplementation(realAggregate);
+    }
   });
 
   it('needs an API key', async () => {
@@ -765,9 +822,14 @@ describe('expiry', () => {
     const fresh = path.join(incomingDir(), 'fresh');
     await fs.writeFile(stale, 'x');
     await fs.writeFile(fresh, 'x');
-    const old = new Date(Date.now() - 2 * 60 * 60 * 1000);
-    await fs.utimes(stale, old, old);
+    // A request may legitimately stay open for 4 h (server.requestTimeout),
+    // with its early files untouched all that while: 4.5 h is still live.
+    const slow = path.join(incomingDir(), 'slow-upload');
+    await fs.writeFile(slow, 'x');
+    const hoursAgo = (h: number) => new Date(Date.now() - h * 60 * 60 * 1000);
+    await fs.utimes(stale, hoursAgo(6), hoursAgo(6));
+    await fs.utimes(slow, hoursAgo(4.5), hoursAgo(4.5));
     await sweep();
-    expect(readdirSync(incomingDir())).toEqual(['fresh']);
+    expect(readdirSync(incomingDir()).sort()).toEqual(['fresh', 'slow-upload']);
   });
 });

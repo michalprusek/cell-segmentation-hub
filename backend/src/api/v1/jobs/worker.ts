@@ -42,7 +42,14 @@ const TICK_MS = 1000;
 /** Pause after the ML queue was full, instead of retrying at once. */
 const BUSY_BACKOFF_MS = 5000;
 const SWEEP_EVERY_MS = 10 * 60 * 1000;
-const STALE_UPLOAD_MS = 60 * 60 * 1000;
+/**
+ * An upload in the staging directory older than this belongs to no live
+ * request. It MUST exceed `server.requestTimeout` (4 h, set in server.ts): a
+ * multipart body's files are written one after another, and a file finished
+ * early keeps its mtime while the later ones are still arriving — at one hour
+ * a slow 20-file upload could have had its first file swept from under it.
+ */
+const STALE_UPLOAD_MS = 5 * 60 * 60 * 1000;
 
 let timer: NodeJS.Timeout | null = null;
 let busy = false;

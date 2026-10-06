@@ -2319,7 +2319,7 @@ export default {
         "Les modèles microtubules et neurites/somas utilisent l'image 16 bits à pleine profondeur. Pour tous les autres modèles, une image 16 bits est d'abord ramenée à 8 bits, et la réponse le signale par un avertissement.",
       jobsHeading: 'Images plus grandes et lots',
       jobsText:
-        "Une requête vers /segment garde la connexion ouverte jusqu'à la fin du modèle. Pour une image de plus de 4096 × 4096 pixels, ou pour de nombreuses images, créez un job avec POST /api/v1/jobs : l'envoi répond immédiatement, vous interrogez le job et vous récupérez le résultat de chaque image lorsqu'il est prêt, en choisissant alors le format de sortie. Un job accepte jusqu'à 20 images de 8192 × 8192 pixels au plus, et ses résultats sont conservés 24 heures.",
+        "Une requête vers /segment garde la connexion ouverte jusqu'à la fin du modèle. Pour une image de plus de 4096 × 4096 pixels, ou pour de nombreuses images, créez un job avec POST /api/v1/jobs : l'envoi répond immédiatement, vous interrogez le job et vous récupérez le résultat de chaque image lorsqu'il est prêt, en choisissant alors le format de sortie. Un job accepte jusqu'à 20 images de 8192 × 8192 pixels au plus (4096 × 4096 pour le modèle spheroid_disintegration), et ses résultats sont conservés 24 heures.",
       limitsHeading: 'Limites',
       limit1: "Images jusqu'à 4096 × 4096 pixels et 64 Mio.",
       limit2: '120 requêtes par minute et 2 segmentations en cours par clé.',

@@ -2279,7 +2279,7 @@ export default {
         'Modely pro mikrotubuly a neurity/somata používají 16bitový obrázek v plné hloubce. Pro všechny ostatní modely se 16bitový obrázek nejprve převede na 8 bitů a odpověď to uvede ve varování.',
       jobsHeading: 'Větší snímky a dávky',
       jobsText:
-        'Požadavek na /segment drží spojení, dokud model nedoběhne. Pro snímek větší než 4096 × 4096 pixelů nebo pro mnoho snímků vytvořte job přes POST /api/v1/jobs: nahrání se vrátí okamžitě, stav jobu průběžně dotazujete a výsledek každého snímku si vyzvednete, až je hotový — výstupní formát volíte až tehdy. Job pojme až 20 snímků o velikosti až 8192 × 8192 pixelů a jeho výsledky se uchovávají 24 hodin.',
+        'Požadavek na /segment drží spojení, dokud model nedoběhne. Pro snímek větší než 4096 × 4096 pixelů nebo pro mnoho snímků vytvořte job přes POST /api/v1/jobs: nahrání se vrátí okamžitě, stav jobu průběžně dotazujete a výsledek každého snímku si vyzvednete, až je hotový — výstupní formát volíte až tehdy. Job pojme až 20 snímků o velikosti až 8192 × 8192 pixelů (u modelu spheroid_disintegration 4096 × 4096) a jeho výsledky se uchovávají 24 hodin.',
       limitsHeading: 'Limity',
       limit1: 'Obrázky do 4096 × 4096 pixelů a 64 MiB.',
       limit2: '120 požadavků za minutu a 2 běžící segmentace na klíč.',

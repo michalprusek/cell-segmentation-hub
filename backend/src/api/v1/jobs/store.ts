@@ -125,14 +125,20 @@ export function finalStatus(items: JobItem[]): JobStatus {
   return succeeded === 0 ? 'failed' : 'partially_succeeded';
 }
 
-export async function countActiveJobs(userId: string): Promise<number> {
-  return prisma.apiJob.count({
+/** `prisma`, or the transaction a caller is already inside. */
+type Db = Pick<typeof prisma, 'apiJob'>;
+
+export async function countActiveJobs(
+  userId: string,
+  db: Db = prisma
+): Promise<number> {
+  return db.apiJob.count({
     where: { userId, status: { in: [...ACTIVE_STATUSES] } },
   });
 }
 
-export async function activeInputBytes(): Promise<number> {
-  const sum = await prisma.apiJob.aggregate({
+export async function activeInputBytes(db: Db = prisma): Promise<number> {
+  const sum = await db.apiJob.aggregate({
     _sum: { inputBytes: true },
     where: { status: { in: [...ACTIVE_STATUSES] } },
   });
