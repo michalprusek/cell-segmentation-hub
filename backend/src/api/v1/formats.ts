@@ -265,6 +265,20 @@ export function toRoiEntries(
   return entries;
 }
 
+/**
+ * The media type each format is served as. Known before anything runs, so
+ * the endpoint can refuse an `Accept` that excludes it without spending an
+ * inference; `formats.test.ts` holds `render` to this table.
+ */
+export const MEDIA_TYPES: Readonly<Record<OutputFormat, string>> = {
+  json: 'application/json',
+  coco: 'application/json',
+  mask_png: 'image/png',
+  mask_tiff: 'image/tiff',
+  imagej_roi: 'application/zip',
+  yolo: 'application/zip',
+};
+
 // --- dispatch ---------------------------------------------------------------
 
 export class FormatNotRepresentableError extends Error {}
@@ -277,13 +291,13 @@ export async function render(
   switch (format) {
     case 'json':
       return {
-        contentType: 'application/json',
+        contentType: MEDIA_TYPES[format],
         filename: null,
         body: Buffer.from(JSON.stringify(toJson(result))),
       };
     case 'coco':
       return {
-        contentType: 'application/json',
+        contentType: MEDIA_TYPES[format],
         filename: `${name}.coco.json`,
         body: Buffer.from(JSON.stringify(toCoco(result))),
       };
@@ -298,25 +312,25 @@ export async function render(
       const labels = rasterizeLabels(result.objects, width, height);
       return format === 'mask_png'
         ? {
-            contentType: 'image/png',
+            contentType: MEDIA_TYPES.mask_png,
             filename: `${name}.labels.png`,
             body: encodePng16(labels, width, height),
           }
         : {
-            contentType: 'image/tiff',
+            contentType: MEDIA_TYPES.mask_tiff,
             filename: `${name}.labels.tif`,
             body: encodeTiff16(labels, width, height),
           };
     }
     case 'imagej_roi':
       return {
-        contentType: 'application/zip',
+        contentType: MEDIA_TYPES[format],
         filename: `${name}.RoiSet.zip`,
         body: await zip(toRoiEntries(result)),
       };
     case 'yolo':
       return {
-        contentType: 'application/zip',
+        contentType: MEDIA_TYPES[format],
         filename: `${name}.yolo.zip`,
         body: await zip([
           {

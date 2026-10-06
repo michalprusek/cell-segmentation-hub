@@ -7,6 +7,7 @@ vi.unmock('archiver');
 import sharp from 'sharp';
 import { inflateRawSync } from 'zlib';
 import {
+  MEDIA_TYPES,
   categoriesFor,
   render,
   rleOf,
@@ -15,7 +16,7 @@ import {
   toYoloLabels,
   type SegmentationResult,
 } from '../formats';
-import { V1_MODELS } from '../models';
+import { OUTPUT_FORMATS, V1_MODELS } from '../models';
 import type { V1Object } from '../objects';
 import { rasterizeLabels } from '../raster';
 
@@ -366,6 +367,20 @@ describe('json and coco through render', () => {
     const coco = await render(result, 'coco');
     expect(coco.filename).toBe('frame 01.coco.json');
     expect(JSON.parse(coco.body.toString())).toEqual(toCoco(result));
+  });
+});
+
+describe('MEDIA_TYPES', () => {
+  it.each(OUTPUT_FORMATS.map(f => [f]))(
+    'is what render actually serves for %s',
+    async format => {
+      const out = await render(resultOf('hrnet', [square(1, 2, 9)]), format);
+      expect(out.contentType).toBe(MEDIA_TYPES[format]);
+    }
+  );
+
+  it('covers every format', () => {
+    expect(Object.keys(MEDIA_TYPES).sort()).toEqual([...OUTPUT_FORMATS].sort());
   });
 });
 

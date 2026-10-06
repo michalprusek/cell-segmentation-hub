@@ -119,16 +119,7 @@ function convertToPostman(openApiSpec: any) {
       schema:
         'https://schema.getpostman.com/json/collection/v2.1.0/collection.json',
     },
-    auth: {
-      type: 'bearer',
-      bearer: [
-        {
-          key: 'token',
-          value: '{{accessToken}}',
-          type: 'string',
-        },
-      ],
-    },
+    // No collection-level auth: the app's routes use the session cookie.
     variable: [
       {
         key: 'baseUrl',
@@ -334,10 +325,12 @@ API**, which has its own document and UI at `/api/v1/openapi.json` and
 
 ### Postman Authentication
 
-The generated collection attaches bearer authentication only to operations
-whose security scheme is a bearer/JWT one. The app's routes now declare
-`cookieAuth`, so the collection carries **no** `Authorization` header for
-them — which is correct: they never read one. To call them from Postman, log
+The generated collection sets **no** collection-level authentication, and
+attaches bearer authentication to a request only if its operation declares a
+bearer/JWT security scheme. The app's routes declare `cookieAuth`, so no
+`Authorization` header is sent for them — which is correct: they never read
+one. (Until 2026-10-06 the generator set collection-level bearer
+`{{accessToken}}` on everything.) To call them from Postman, log
 in through `POST /api/auth/login` first and let Postman keep the cookies.
 
 For scripted access use the public API and an API key instead

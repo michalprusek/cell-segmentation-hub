@@ -71,14 +71,24 @@ async function withSlot<T>(run: () => Promise<T>): Promise<T> {
     if (waiting.length >= ML_QUEUE_LIMIT) {
       throw new MlBusyError('Too many segmentation requests are waiting');
     }
+    // The finishing request HANDS its slot over: `active` stays 1 across the
+    // hand-off and already counts us when we wake.
     await new Promise<void>(resolve => waiting.push(resolve));
+  } else {
+    active++;
   }
-  active++;
   try {
     return await run();
   } finally {
-    active--;
-    waiting.shift()?.();
+    // Not `active--` followed by waking a waiter: the waiter resumes a
+    // microtask later, and a call arriving in between would see the slot
+    // free, skip the queue and run alongside it.
+    const next = waiting.shift();
+    if (next) {
+      next();
+    } else {
+      active--;
+    }
   }
 }
 

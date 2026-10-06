@@ -123,6 +123,44 @@ describe('one inference at a time', () => {
     expect(mlQueueDepth()).toBe(0);
   });
 
+  it('never lets a newcomer slip in while a slot is being handed over', async () => {
+    // Calls arrive at many different microtask depths while others finish,
+    // which is where a release-then-wake hand-off leaves a gap.
+    let running = 0;
+    let maxRunning = 0;
+    post.mockImplementation(async () => {
+      running++;
+      maxRunning = Math.max(maxRunning, running);
+      await Promise.resolve();
+      running--;
+      return { data: {} };
+    });
+
+    const settle: Array<Promise<unknown>> = [];
+    const launch = (depth: number): void => {
+      let chain: Promise<unknown> = Promise.resolve();
+      for (let i = 0; i < depth; i++) {
+        chain = chain.then(() => undefined);
+      }
+      settle.push(
+        chain.then(() => segmentWithMl(request()).catch(() => undefined))
+      );
+    };
+    for (let round = 0; round < 40; round++) {
+      for (let depth = 0; depth < 8; depth++) {
+        launch(depth + round);
+      }
+      await Promise.resolve();
+    }
+    await Promise.all(settle);
+    for (let i = 0; i < 50; i++) {
+      await new Promise(r => setImmediate(r));
+    }
+
+    expect(maxRunning).toBe(1);
+    expect(mlQueueDepth()).toBe(0);
+  });
+
   it('frees the slot when a request fails', async () => {
     post.mockRejectedValueOnce({ code: 'ECONNREFUSED' });
     await expect(segmentWithMl(request())).rejects.toBeInstanceOf(

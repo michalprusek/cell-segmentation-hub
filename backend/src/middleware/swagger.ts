@@ -183,14 +183,6 @@ interface PostmanCollection {
     description: string;
     schema: string;
   };
-  auth: {
-    type: string;
-    bearer: Array<{
-      key: string;
-      value: string;
-      type: string;
-    }>;
-  };
   variable: Array<{
     key: string;
     value: string;
@@ -233,16 +225,11 @@ function convertToPostman(openApiSpec: OpenAPISpec): PostmanCollection {
       schema:
         'https://schema.getpostman.com/json/collection/v2.1.0/collection.json',
     },
-    auth: {
-      type: 'bearer',
-      bearer: [
-        {
-          key: 'token',
-          value: '{{accessToken}}',
-          type: 'string',
-        },
-      ],
-    },
+    // No collection-level auth. It used to be bearer `{{accessToken}}`, which
+    // put an Authorization header on EVERY request — including the app's own
+    // routes, which authenticate by session cookie and never read it. A
+    // request gets bearer auth below only if its operation declares a
+    // bearer/JWT scheme.
     variable: [
       {
         key: 'baseUrl',

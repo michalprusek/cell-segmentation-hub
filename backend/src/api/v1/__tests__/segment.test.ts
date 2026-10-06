@@ -40,6 +40,7 @@ import {
 } from '../mlClient';
 import {
   MAX_CONCURRENT_PER_KEY,
+  MAX_IN_FLIGHT_TOTAL,
   SYNC_MAX_PIXELS,
   contentDisposition,
   safeBasename,
@@ -271,6 +272,8 @@ describe('output formats', () => {
     expect(res.status).toBe(406);
     expect(res.headers['content-type']).toMatch(PROBLEM);
     expect(res.body).toMatchObject({ code: 'not-acceptable', content_type: 'image/png' });
+      // Decided from the format alone: no inference was spent on it.
+    expect(segmentWithMl).not.toHaveBeenCalled();
   });
 
   it.each(['image/png', 'image/*', '*/*'])('accepts Accept: %s for mask_png', async accept => {
@@ -463,6 +466,74 @@ describe('concurrency per key', () => {
     );
 
     segmentWithMl.mockResolvedValue(mlResult());
+    expect((await post()).status).toBe(200);
+  });
+
+  it('takes the slot BEFORE reading the body, so a refused upload is never buffered', async () => {
+    const release: Array<() => void> = [];
+    segmentWithMl.mockImplementation(
+      () => new Promise(resolve => release.push(() => resolve(mlResult())))
+    );
+    const running = Array.from({ length: MAX_CONCURRENT_PER_KEY }, () =>
+      post().then(r => r)
+    );
+    await vi.waitFor(() =>
+      expect(segmentWithMl).toHaveBeenCalledTimes(MAX_CONCURRENT_PER_KEY)
+    );
+
+    // A body the parser would reject outright (415). If the limit were
+    // checked after parsing, that is what would come back.
+    const refused = await request(app)
+      .post('/api/v1/segment')
+      .set('Authorization', auth)
+      .send({ model: 'segformer' });
+    expect(refused.status).toBe(429);
+
+    release.forEach(r => r());
+    await Promise.all(running);
+  });
+
+  it('caps in-flight segmentations across all keys', async () => {
+    const release: Array<() => void> = [];
+    segmentWithMl.mockImplementation(
+      () => new Promise(resolve => release.push(() => resolve(mlResult())))
+    );
+    const send = (authorization: string) =>
+      request(app)
+        .post('/api/v1/segment')
+        .set('Authorization', authorization)
+        .field('model', 'segformer')
+        .attach('image', PNG, 'a.png')
+        .then(r => r);
+
+    const keys = Array.from(
+      { length: MAX_IN_FLIGHT_TOTAL / MAX_CONCURRENT_PER_KEY },
+      () => newKey()
+    );
+    const running = keys.flatMap(key =>
+      Array.from({ length: MAX_CONCURRENT_PER_KEY }, () => send(key))
+    );
+    await vi.waitFor(() =>
+      expect(segmentWithMl).toHaveBeenCalledTimes(MAX_IN_FLIGHT_TOTAL)
+    );
+
+    const over = await send(newKey());
+    expect(over.status).toBe(503);
+    expect(over.body.code).toBe('server-busy');
+    expect(over.headers['retry-after']).toBe('10');
+    expect(segmentWithMl).toHaveBeenCalledTimes(MAX_IN_FLIGHT_TOTAL);
+
+    release.forEach(r => r());
+    expect((await Promise.all(running)).every(r => r.status === 200)).toBe(true);
+
+    segmentWithMl.mockResolvedValue(mlResult());
+    expect((await send(newKey())).status).toBe(200);
+  });
+
+  it('frees the slot after a request that never reached the model', async () => {
+    for (let i = 0; i < MAX_CONCURRENT_PER_KEY + 2; i++) {
+      expect((await post({ model: 'nope' })).status).toBe(422);
+    }
     expect((await post()).status).toBe(200);
   });
 

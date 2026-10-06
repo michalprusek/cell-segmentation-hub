@@ -63,6 +63,64 @@ def out_mode_of(frame):
     return Image.fromarray(frame).mode
 
 
+def _peak_bytes_per_pixel(array):
+    import tracemalloc
+
+    image = Image.fromarray(array)
+    tracemalloc.start()
+    stretch_to_uint8(image)
+    _, peak = tracemalloc.get_traced_memory()
+    tracemalloc.stop()
+    return peak / array.size
+
+
+def test_a_16_bit_frame_is_stretched_without_a_floating_point_copy_of_it():
+    # The app's queue sends frames up to 498 Mpx to the process that serves
+    # everyone. Measured on this 4.8 Mpx frame: 26.0 bytes per pixel at peak
+    # for the original float64 pipeline, 11.0 for one float32 copy, and what
+    # is asserted here for the lookup table - numpy's percentile scratch (a
+    # copy of the 2-byte source) plus the 1-byte result.
+    big = np.tile(_camera_frame(), (10, 10))
+    assert big.size == 4_800_000 and big.dtype == np.uint16
+    assert _peak_bytes_per_pixel(big) < 6
+
+
+def test_other_depths_use_one_float32_copy_not_several_float64_ones():
+    big = np.tile(_camera_frame(np.float32), (10, 10))
+    per_pixel = _peak_bytes_per_pixel(big)
+    # 11.0 measured for uint16 through this path; float32 input adds its own
+    # percentile scratch. The float64 pipeline was 26.0 on the smaller type.
+    assert per_pixel < 18, f"{per_pixel:.1f} bytes per pixel at peak"
+
+
+def test_the_lookup_table_and_the_direct_path_give_the_same_greys():
+    # A 16-bit frame goes through the table; the same values as int32 go
+    # through the float32 arithmetic. Same formula, so the same picture.
+    frame = _camera_frame(hot_pixel=60000)
+    through_table, a = stretch_to_uint8(Image.fromarray(frame))
+    direct, b = stretch_to_uint8(Image.fromarray(frame.astype(np.int32)))
+    assert (a["low"], a["high"]) == (b["low"], b["high"])
+    assert np.array_equal(np.asarray(through_table), np.asarray(direct))
+
+
+def test_float32_arithmetic_does_not_move_a_16_bit_result():
+    # Same input, the reference computed in float64 the long way.
+    frame = _camera_frame(hot_pixel=60000)
+    out, info = stretch_to_uint8(Image.fromarray(frame))
+    reference = np.clip(
+        (frame.astype(np.float64) - info["low"])
+        / (info["high"] - info["low"])
+        * 255.0
+        + 0.5,
+        0,
+        255,
+    ).astype(np.uint8)
+    difference = np.abs(np.asarray(out).astype(int) - reference.astype(int))
+    # Rounding at an exact .5 may fall either way; never more than one level.
+    assert difference.max() <= 1
+    assert (difference > 0).mean() < 0.001
+
+
 def test_one_hot_pixel_does_not_set_the_scale():
     # The reason this is a percentile stretch and not min-max: on a real
     # production frame the maximum was 51 586 against a p99.9 of 16 851.

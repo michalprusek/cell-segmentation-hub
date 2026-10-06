@@ -5,6 +5,7 @@ import type { KnownModelId } from '../../constants/modelRegistry';
 import { logger } from '../../utils/logger';
 import {
   FormatNotRepresentableError,
+  MEDIA_TYPES,
   render,
   type SegmentationResult,
 } from './formats';
@@ -45,6 +46,14 @@ export const SYNC_MAX_BYTES = 64 * 1024 * 1024;
 export const SYNC_TIMEOUT_MS = 180_000;
 /** In-flight segmentations one key may hold at once. */
 export const MAX_CONCURRENT_PER_KEY = 2;
+/**
+ * In-flight segmentations across ALL keys. Each one may hold a buffered
+ * upload of up to SYNC_MAX_BYTES in this process — the same process that
+ * serves the app — so this bounds that at 12 x 64 MiB. It sits just above
+ * what the ML queue can use (1 running + 8 waiting), so it is never the
+ * limit a well-behaved client meets first.
+ */
+export const MAX_IN_FLIGHT_TOTAL = 12;
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -131,6 +140,54 @@ const fieldsSchema = z.object({
 const KNOWN_FIELDS = Object.keys(fieldsSchema.shape);
 
 const inFlight = new Map<string, number>();
+let totalInFlight = 0;
+
+/**
+ * Take a slot BEFORE the body is read.
+ *
+ * This used to happen in the handler, i.e. after multer had buffered the
+ * whole upload — so the limit bounded inferences but not memory: one key
+ * could have as many 64 MiB bodies in the heap at once as the rate limiter
+ * let through (120 a minute). The slot is released when the response
+ * closes, which covers success, every error path and a client that hangs up
+ * mid-upload alike.
+ */
+const reserveSlot: RequestHandler = (req, res, next) => {
+  const keyId = req.apiKey?.id ?? 'anonymous';
+  const held = inFlight.get(keyId) ?? 0;
+  if (held >= MAX_CONCURRENT_PER_KEY) {
+    sendProblem(res, 'too-many-concurrent-requests', {
+      detail: `At most ${MAX_CONCURRENT_PER_KEY} segmentations may run at once per API key. Wait for one to finish.`,
+      headers: { 'Retry-After': '5' },
+    });
+    return;
+  }
+  if (totalInFlight >= MAX_IN_FLIGHT_TOTAL) {
+    sendProblem(res, 'server-busy', {
+      detail: 'Too many segmentations are in progress. Retry shortly.',
+      headers: { 'Retry-After': '10' },
+    });
+    return;
+  }
+
+  inFlight.set(keyId, held + 1);
+  totalInFlight++;
+  let released = false;
+  res.once('close', () => {
+    if (released) {
+      return;
+    }
+    released = true;
+    totalInFlight--;
+    const remaining = (inFlight.get(keyId) ?? 1) - 1;
+    if (remaining > 0) {
+      inFlight.set(keyId, remaining);
+    } else {
+      inFlight.delete(keyId);
+    }
+  });
+  next();
+};
 
 const parseUpload: RequestHandler = (req, res, next) => {
   if (!req.is('multipart/form-data')) {
@@ -248,6 +305,18 @@ export const segmentHandler = async (
     return;
   }
 
+  // `Accept` is a CHECK on the chosen format, not the way to choose it:
+  // three of the six formats share a media type (RFC 9110 §15.5.7). Done
+  // here, before the inference, because the answer does not depend on it.
+  const mediaType = MEDIA_TYPES[format];
+  if (req.headers.accept && !req.accepts(mediaType)) {
+    sendProblem(res, 'not-acceptable', {
+      detail: `output_format "${format}" is ${mediaType}, which the Accept header excludes.`,
+      extensions: { content_type: mediaType },
+    });
+    return;
+  }
+
   const extension = sniffImageExtension(file.buffer);
   if (!extension) {
     sendProblem(res, 'unsupported-image', {
@@ -255,17 +324,6 @@ export const segmentHandler = async (
     });
     return;
   }
-
-  const keyId = req.apiKey?.id ?? 'anonymous';
-  const held = inFlight.get(keyId) ?? 0;
-  if (held >= MAX_CONCURRENT_PER_KEY) {
-    sendProblem(res, 'too-many-concurrent-requests', {
-      detail: `At most ${MAX_CONCURRENT_PER_KEY} segmentations may run at once per API key. Wait for one to finish.`,
-      headers: { 'Retry-After': '5' },
-    });
-    return;
-  }
-  inFlight.set(keyId, held + 1);
 
   const page = fields.page ?? 0;
   const parameters: Record<string, unknown> = {};
@@ -347,16 +405,6 @@ export const segmentHandler = async (
 
     const output = await render(result, format);
 
-    // `Accept` is a CHECK on the chosen format, not the way to choose it:
-    // three of the six formats share a media type. RFC 9110 §15.5.7.
-    if (req.headers.accept && !req.accepts(output.contentType)) {
-      sendProblem(res, 'not-acceptable', {
-        detail: `output_format "${format}" is ${output.contentType}, which the Accept header excludes.`,
-        extensions: { content_type: output.contentType },
-      });
-      return;
-    }
-
     res.setHeader('SpheroSeg-Object-Count', String(objects.length));
     if (allWarnings.length > 0) {
       res.setHeader(
@@ -391,13 +439,6 @@ export const segmentHandler = async (
     } else {
       next(error);
     }
-  } finally {
-    const remaining = (inFlight.get(keyId) ?? 1) - 1;
-    if (remaining > 0) {
-      inFlight.set(keyId, remaining);
-    } else {
-      inFlight.delete(keyId);
-    }
   }
 };
 
@@ -429,4 +470,8 @@ function rejectedByMl(res: Response, error: MlRejectedError): void {
   });
 }
 
-export const segmentRoute: RequestHandler[] = [parseUpload, segmentHandler];
+export const segmentRoute: RequestHandler[] = [
+  reserveSlot,
+  parseUpload,
+  segmentHandler,
+];

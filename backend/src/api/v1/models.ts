@@ -15,7 +15,7 @@ import {
  * The `threshold` / `detectHoles` flags are not preferences. They record
  * what `backend/segmentation/api/routes.py::_dispatch_inference` does with
  * each parameter, model by model — five models never read `threshold` and
- * seven never read `detect_holes`. A parameter a model ignores is REFUSED by
+ * six never read `detect_holes`. A parameter a model ignores is REFUSED by
  * the API rather than accepted and dropped, so these must stay true; change
  * one only together with the dispatch.
  */
