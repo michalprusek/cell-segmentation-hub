@@ -89,6 +89,28 @@ def test_32_bit_and_float_frames_are_stretched_too(dtype, mode):
     assert len(np.unique(np.asarray(out))) > 100
 
 
+def test_a_big_endian_tiff_is_stretched_with_its_values_read_correctly():
+    # One of the three production frames is exactly this: a big-endian 16-bit
+    # TIFF, which Pillow opens as "I;16B". Reading it with the wrong byte
+    # order would still produce 256 levels - of noise - so compare with the
+    # little-endian result rather than counting levels.
+    import io
+
+    import tifffile
+
+    frame = _camera_frame()
+    buffer = io.BytesIO()
+    tifffile.imwrite(buffer, frame, byteorder=">")
+    big = Image.open(io.BytesIO(buffer.getvalue()))
+    assert big.mode == "I;16B"
+
+    out, info = stretch_to_uint8(big)
+    reference, _ = stretch_to_uint8(Image.fromarray(frame))
+
+    assert info["from_mode"] == "I;16B"
+    assert np.array_equal(np.asarray(out), np.asarray(reference))
+
+
 def test_non_finite_float_pixels_do_not_poison_the_stretch():
     frame = _camera_frame(np.float32)
     frame[0, 0], frame[0, 1], frame[0, 2] = np.nan, np.inf, -np.inf
