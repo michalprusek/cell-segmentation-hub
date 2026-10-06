@@ -659,6 +659,17 @@ Bearer sseg_…` only. A key in the query string is refused with 400 rather
 - **The ML service's routes are also called `/api/v1/*`** on its own port.
   Unrelated. Never add an nginx `location /api/v1/` pointing at `ml_service`,
   which has no authentication at all.
+- **Refusing a key in the URL is not the same as not logging it.** The first
+  version answered `?api_key=…` with 400 and then wrote the key to access.log
+  and stdout anyway, because both loggers record every URL — found by grepping
+  the logs after a real request, which no unit test did. `utils/redactUrl.ts`
+  is the one list of credential-bearing query parameters; `accessLogger` and
+  `createRequestLogger` redact through it and `authenticateApiKey` refuses by
+  it. nginx's own access log is out of its reach.
+- **`/api/v1` is exempt from the global limiter in `server.ts`** and has two
+  of its own: per IP before auth (no `RateLimit` headers), per key after.
+  With all three, every response carried two `RateLimit-Policy` headers in two
+  different syntaxes. Also only visible on a real response.
 - Swagger UI at `/api-docs` is mounted unconditionally and is **public in
   production**; this file and `docs/api/README.md` used to say development only.
 

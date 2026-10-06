@@ -129,8 +129,11 @@ The versioned surface for scripts and other programs. Everything under it:
 
 - authenticates with **`Authorization: Bearer <key>`** and nothing else. A key
   in the query string (`api_key`, `apikey`, `access_token`, `key`, `token`) is
-  refused with 400 `credentials-in-url` — the access log records full URLs —
-  and the session cookie is not consulted;
+  refused with 400 `credentials-in-url`, names matched case-insensitively,
+  and the session cookie is not consulted. The backend's own logs redact the
+  values of those parameters (on every route, so export `?token=` links too),
+  but the nginx access log in front of it does not — a key that has been in a
+  URL is leaked;
 - answers every error as an RFC 9457 problem document
   (`application/problem+json`, in English) with `type`, `title`, `status`,
   `detail` and a bare `code`. 401 carries a `WWW-Authenticate: Bearer`
@@ -138,7 +141,10 @@ The versioned surface for scripts and other programs. Everything under it:
   indistinguishable to the caller;
 - is limited to 120 requests per minute **per key**, announced in
   `RateLimit` / `RateLimit-Policy` (an IETF draft, not yet an RFC) with
-  `Retry-After` on the 429;
+  `Retry-After` on the 429. Ahead of authentication there is a second limit of
+  600 requests per minute **per IP**, which sends `Retry-After` but no
+  `RateLimit` headers. The backend's global limiter does not apply to
+  `/api/v1` — with it, every response carried two policies in two syntaxes;
 - changes only additively within `v1`.
 
 | Method | Path             | Purpose                                                      |
