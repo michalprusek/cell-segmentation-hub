@@ -39,6 +39,7 @@ model User {
   impersonationsMade ImpersonationLog[]  @relation("ImpersonationAdmin")
   impersonationsOfMe ImpersonationLog[]  @relation("ImpersonationTarget")
   apiKeys            ApiKey[]
+  apiJobs            ApiJob[]
 
   @@map("users")
 }
@@ -616,4 +617,43 @@ model ApiKey {
 
   @@index([userId, createdAt], map: "idx_apikey_user_created")
   @@map("api_keys")
+}
+
+// ---------------------------------------------------------------------------
+// Asynchronous segmentation jobs of the public API (/api/v1/jobs).
+//
+// One row per job; the per-image state lives in `items` (JSON) because the
+// worker is its only writer and always rewrites it whole. A request never
+// touches `items`: cancelling sets `cancelRequested`, a separate column, so a
+// route and the worker cannot overwrite each other.
+//
+// `apiKeyId` has no foreign key on purpose — revoking the key that created a
+// job must not delete the job. `inputBytes` is BigInt: a job may hold 2 GiB.
+// `(userId, idempotencyKey)` is unique, and Postgres lets any number of NULL
+// keys coexist, so jobs created without the header do not collide.
+// ---------------------------------------------------------------------------
+model ApiJob {
+  id              String    @id @default(uuid())
+  userId          String
+  apiKeyId        String?
+  status          String    @default("queued")
+  model           String
+  parameters      String
+  page            Int       @default(0)
+  items           String
+  inputBytes      BigInt    @default(0)
+  idempotencyKey  String?
+  requestHash     String?
+  cancelRequested Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  startedAt       DateTime?
+  completedAt     DateTime?
+  expiresAt       DateTime?
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, idempotencyKey], map: "api_jobs_user_idempotency_key")
+  @@index([userId, createdAt], map: "idx_apijob_user_created")
+  @@index([status, updatedAt], map: "idx_apijob_status_updated")
+  @@map("api_jobs")
 }

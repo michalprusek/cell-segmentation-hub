@@ -28,6 +28,7 @@ import {
   initializeMetricsCollection,
 } from './middleware/monitoring';
 import { isPublicApiPath } from './api/v1';
+import { startJobWorker, stopJobWorker } from './api/v1/jobs/worker';
 import { WebSocketService } from './services/websocketService';
 import { initializeStorageDirectories } from './utils/initializeStorage';
 import { initializeRedis, closeRedis, redisHealthCheck } from './config/redis';
@@ -416,6 +417,9 @@ const startServer = async (): Promise<void> => {
       const queueWorker = QueueWorker.getInstance(prisma);
       queueWorker.start();
       logger.info('🏃 Queue worker started');
+
+      // The public API's own job worker (/api/v1/jobs).
+      await startJobWorker();
     } catch (error) {
       logger.error('Failed to initialize critical services:', error as Error);
       logger.error('Server cannot start without required services. Exiting...');
@@ -439,6 +443,10 @@ const startServer = async (): Promise<void> => {
 
       // Shutdown WebSocket service first
       await websocketService.shutdown();
+
+      // Stop taking new API job images. One in flight is left `processing`
+      // and is re-queued by `recoverInterrupted` on the next start.
+      stopJobWorker();
 
       // Stop health check service
       try {

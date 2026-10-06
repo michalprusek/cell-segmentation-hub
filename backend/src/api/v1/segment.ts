@@ -7,7 +7,10 @@ import {
   runSegmentation,
   sendResult,
 } from './execute';
+import { SYNC_MAX_PIXELS } from './limits';
 import { sendProblem } from './problem';
+
+export { SYNC_MAX_PIXELS };
 
 export {
   contentDisposition,
@@ -20,17 +23,11 @@ export {
  *
  * LIMITS, and where each number comes from:
  *
- *  - SYNC_MAX_PIXELS: 4096 x 4096. A synchronous request holds a connection
- *    for the whole inference, and inference is serial across the entire
- *    deployment (one GPU, one lock). The slowest model here takes about 15 s
- *    at 2048^2 and about 150 s at 6657^2 (measured, A5000 — see the note in
- *    `backend/segmentation/api/routes.py`), so 4096^2 keeps the worst case
- *    near a minute. Larger frames belong to the asynchronous jobs endpoint.
+ *  - SYNC_MAX_PIXELS: 4096 x 4096 — reasoned in `limits.ts`.
  *  - SYNC_MAX_BYTES: 64 MiB, the size of a 4096^2 16-bit frame stored
  *    uncompressed (32 MiB) with room for RGB.
  *  - SYNC_TIMEOUT_MS: 180 s — comfortably under nginx's 600 s for `/api`.
  */
-export const SYNC_MAX_PIXELS = 4096 * 4096;
 export const SYNC_MAX_BYTES = 64 * 1024 * 1024;
 export const SYNC_TIMEOUT_MS = 180_000;
 /** In-flight segmentations one key may hold at once. */
