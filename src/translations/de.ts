@@ -2231,7 +2231,7 @@ export default {
       },
       results: 'Was Sie zurückbekommen',
       resultsList: {
-        csv: 'results.csv — eine Zeile je Mikrotubulus mit Länge, Intensität entlang des Filaments und dessen Hintergrund',
+        csv: 'results.csv — eine Zeile je Mikrotubulus mit Länge, Intensität entlang des Filaments und dessen Hintergrund. Ist der Fluoreszenzkanal eine kurze Zeitreihe, hat jeder Mikrotubulus eine Zeile je Bild (Spalte tirf_frame)',
         failures:
           'failures.csv — jede Vertiefung oder Position, die nicht erzeugt werden konnte, und warum. Sie wird immer geschrieben, auch wenn sie leer ist',
         focus:
@@ -2247,7 +2247,7 @@ export default {
         'Sie misst, wie viel eines Bildes von Struktur eingenommen wird, die deutlich über dem Rauschen liegt; ein dicht bedecktes Feld kann daher auch unscharf bestehen. Sie irrt zugunsten des Behaltens, nicht des Verwerfens. Die Schwellen wurden an einer einzigen Aufnahme angepasst, daher wird eine andere Belichtung oder Kamera in der Spalte reason als out_of_calibration gemeldet — das ist eine Aussage über die Schwelle, nicht über Ihr Bild.',
       channelNote: 'IRM wird segmentiert, Fluoreszenz wird gemessen.',
       channelNoteText:
-        'Das Modell wurde auf IRM trainiert, daher werden die Filamente dort verfolgt und der Fluoreszenzkanal nur entlang dieser Spuren gelesen. Eine Datei ohne IRM-Kanal wird als Fehler gemeldet statt aus etwas anderem segmentiert.',
+        'Das Modell wurde auf IRM trainiert, daher werden die Filamente dort verfolgt und der Fluoreszenzkanal nur entlang dieser Spuren gelesen. Ein Well ohne IRM-Kanal wird als Fehler gemeldet statt aus etwas anderem segmentiert. Ein Well kann eine Datei mit allen drei Kanälen sein oder eine Datei je Kanal — diese werden anhand der Well-Bezeichnung im Dateinamen zusammengeführt.',
       retentionNote: 'Uploads werden aufgeräumt, Ergebnisse nicht.',
       retentionNoteText:
         'Eingabedateien werden entfernt, sobald ein Lauf sauber durchläuft, und eine Woche aufbewahrt, wenn nicht — genau der Lauf, den Sie wiederholen möchten. Das Ergebnis bleibt, bis Sie den Auftrag löschen.',

@@ -1,8 +1,19 @@
 """Reading Nikon ND2 well recordings.
 
-Each ND2 file is one well with several positions (fields of view) and three
-channels (IRM, the 488-in-solution channel, and the TIRF 488 channel). This
-module opens a file, locates channels **by name** (robust to channel-order
+A well is several positions (fields of view) recorded in three channels (IRM,
+the 488-in-solution channel, and the TIRF 488 channel). It arrives in one of
+two layouts, and :func:`group_wells` tells them apart:
+
+* **one file per well** holding all three channels
+  (``WellD03_ChannelIRM_TIRF_488_Seq0000.nd2``) - every run until 2026-10;
+* **one file per channel** (``WellD04_ChannelIRM_Seq0000.nd2``,
+  ``WellD04_ChannelTIRF_488_Seq0001.nd2``,
+  ``WellD04_Channel488_InSol_Seq0002.nd2``), where the TIRF file may also carry
+  a short time series per position. First seen 2026-10-06, when a 330-file
+  folder produced 330 failures and no rows: each file was read as a whole well
+  and none of them had "the other" channels.
+
+Either way this module locates channels **by name** (robust to channel-order
 changes between acquisitions), reads the pixel calibration and the acquisition
 timestamp, and yields one :class:`Position` per field of view.
 
@@ -25,10 +36,12 @@ import json
 import os
 import re
 import sys
+from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import ExitStack
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterator, NamedTuple
+from typing import Iterator, NamedTuple, Sequence
 
 import numpy as np
 import nd2
@@ -468,6 +481,24 @@ class Position:
     #: MEASURED out-of-focus verdict for the IRM and TIRF frames above. Never
     #: gates anything — see :func:`judge_focus`.
     focus: "FocusQuality | None" = None
+    #: Every TIRF frame of this position, ``(T, Y, X)``. ``tirf`` above is its
+    #: frame 0, which is what the two diagnostics are measured on. None means
+    #: "exactly the one frame in ``tirf``" - the only case until the
+    #: per-channel layout brought a time series with it.
+    tirf_stack: "np.ndarray | None" = None
+    #: Seconds from this position's first TIRF frame to each frame, or None
+    #: where the file does not say.
+    tirf_times_s: "tuple[float | None, ...]" = ()
+    #: Which file each role was read from. Three different names in the
+    #: per-channel layout, one name three times in the single-file one.
+    irm_file: str = ""
+    tirf_file: str = ""
+    solution_file: str = ""
+
+    @property
+    def tirf_frames(self) -> np.ndarray:
+        """Every TIRF frame as ``(T, Y, X)`` - one frame when there is no stack."""
+        return self.tirf[None] if self.tirf_stack is None else self.tirf_stack
 
 
 def parse_well_id(path: Path) -> str:
@@ -490,6 +521,199 @@ def _find_channel(names: list[str], *substrings: str) -> int:
             if s in n:
                 return i
     raise KeyError(f"no channel matching {substrings!r} in {names!r}")
+
+
+@dataclass(frozen=True)
+class WellSource:
+    """The file, or files, that make up ONE well.
+
+    ``problem`` is set when the files of a well cannot be put together
+    unambiguously. It is carried rather than raised so the well reaches
+    :func:`iter_positions` like any other and fails THERE, where the caller
+    already records a failed well - grouping never loses a file silently.
+    """
+
+    well_id: str
+    files: "tuple[Path, ...]"
+    problem: "str | None" = None
+
+    @property
+    def name(self) -> str:
+        """What ``source_file`` says for the well as a whole."""
+        return ";".join(p.name for p in self.files)
+
+    def __fspath__(self) -> str:
+        """The well's first file, so a well can stand where a path stood.
+
+        Everything that took "the well's ND2 file" - a log line, a caller
+        written before wells could be several files - still gets one.
+        """
+        return str(self.files[0])
+
+
+def _channel_names(path: Path) -> "list[str]":
+    with nd2.ND2File(str(path)) as f:
+        return [c.channel.name for c in f.metadata.channels]
+
+
+def _has_channel(names: "list[str]", substrings: "Sequence[str]") -> bool:
+    try:
+        _find_channel(names, *substrings)
+    except KeyError:
+        return False
+    return True
+
+
+def group_wells(files: "Sequence[Path]", *, irm_match=("irm",),
+                tirf_match=("tirf",),
+                solution_match=("insol", "in sol", "solution"),
+                ) -> "list[WellSource]":
+    """Turn a list of ND2 files into a list of wells.
+
+    A well whose name appears on ONE file is that file, and is not even
+    opened here - which keeps every folder recorded before 2026-10 on exactly
+    the path it always took.
+
+    Only when several files name the same well are they opened, to read their
+    channel names:
+
+    * a file that carries all three roles by itself is a well by itself (the
+      same well recorded twice is two wells, as it always was);
+    * the rest are the per-channel layout and are assembled into one well,
+      PROVIDED each role is carried by exactly one of them. Two IRM files for
+      one well, or none, is not something to guess about: the well is handed
+      on with ``problem`` set and fails with that message.
+
+    Output order follows the first file of each well, so the run's progress
+    still walks the folder in name order.
+    """
+    roles = (("IRM", tuple(irm_match)), ("TIRF", tuple(tirf_match)),
+             ("solution", tuple(solution_match)))
+
+    by_well: "dict[str, list[Path]]" = defaultdict(list)
+    for path in files:
+        by_well[parse_well_id(Path(path))].append(Path(path))
+
+    wells: "list[tuple[Path, WellSource]]" = []
+    for well_id, paths in by_well.items():
+        if len(paths) == 1:
+            wells.append((paths[0], WellSource(well_id, (paths[0],))))
+            continue
+
+        names: "dict[Path, list[str]]" = {}
+        partial: "list[Path]" = []
+        for path in paths:
+            try:
+                names[path] = _channel_names(path)
+            except Exception:  # noqa: BLE001 - reported where wells are read
+                # Unreadable: let it fail on its own, by name, in the read
+                # stage, rather than take its siblings down with it here.
+                wells.append((path, WellSource(well_id, (path,))))
+                continue
+            if all(_has_channel(names[path], subs) for _role, subs in roles):
+                wells.append((path, WellSource(well_id, (path,))))
+            else:
+                partial.append(path)
+
+        if not partial:
+            continue
+        problems = []
+        for role, subs in roles:
+            carriers = [p.name for p in partial if _has_channel(names[p], subs)]
+            if not carriers:
+                problems.append(f"no file with a {role} channel")
+            elif len(carriers) > 1:
+                problems.append(f"{len(carriers)} files with a {role} channel "
+                                f"({', '.join(carriers)})")
+        wells.append((partial[0], WellSource(
+            well_id, tuple(partial),
+            problem=(f"well {well_id}: cannot assemble its per-channel files - "
+                     + "; ".join(problems)) if problems else None)))
+
+    order = {Path(p): i for i, p in enumerate(files)}
+    wells.sort(key=lambda item: order[item[0]])
+    return [source for _first, source in wells]
+
+
+#: Axes a well recording may have. Anything else of size > 1 (a z-stack, say)
+#: is refused by name rather than flattened into something that looks like
+#: positions.
+_KNOWN_AXES = ("P", "T", "C", "Y", "X")
+
+
+def _channel_frames(f: "nd2.ND2File", channel_index: int) -> np.ndarray:
+    """One channel of ``f`` as ``(P, T, Y, X)``, whatever axes the file has."""
+    axes = list(f.sizes.keys())
+    extra = [a for a in axes if a not in _KNOWN_AXES and f.sizes[a] > 1]
+    if extra:
+        raise ValueError(
+            f"unsupported ND2 axes {extra} (sizes {dict(f.sizes)}); a well "
+            "recording is positions x time x channels")
+    arr = np.asarray(f.asarray())
+    for axis in [a for a in axes if a not in _KNOWN_AXES]:
+        arr = np.take(arr, 0, axis=axes.index(axis))
+        axes.remove(axis)
+    if "C" in axes:
+        arr = np.take(arr, channel_index, axis=axes.index("C"))
+        axes.remove("C")
+    for axis in ("T", "P"):
+        if axis not in axes:
+            arr = arr[None]
+            axes.insert(0, axis)
+    return np.transpose(arr, [axes.index(a) for a in ("P", "T", "Y", "X")])
+
+
+def _stage_positions(f: "nd2.ND2File") -> "list[tuple[float, float]] | None":
+    """Stage XY of every position, in microns, or None if the file has none."""
+    try:
+        for loop in f.experiment:
+            if type(loop).__name__ == "XYPosLoop":
+                return [(float(p.stagePositionUm.x), float(p.stagePositionUm.y))
+                        for p in loop.parameters.points]
+    except Exception:  # noqa: BLE001 - optional metadata
+        pass
+    return None
+
+
+#: How far apart two files may place "the same" position. The stage reports
+#: what it was told to do, so files of one well agree to the micron; a field
+#: of view here is ~110 um wide, so 5 um can only be a different field.
+_SAME_POSITION_UM = 5.0
+
+
+def _check_same_positions(reference: "tuple[str, nd2.ND2File]",
+                          other: "tuple[str, nd2.ND2File]") -> None:
+    """Refuse to pair fields of view that are not the same fields."""
+    (ref_name, ref_file), (name, f) = reference, other
+    ref_xy, xy = _stage_positions(ref_file), _stage_positions(f)
+    if ref_xy is None or xy is None:
+        return  # Nothing to compare; the position COUNT is checked by shape.
+    if len(ref_xy) != len(xy):
+        # `zip` below would stop at the shorter list and call the rest "the
+        # same fields" without having looked at them.
+        raise ValueError(
+            f"{name} lists {len(xy)} stage position(s) but {ref_name} lists "
+            f"{len(ref_xy)}: the files do not show the same fields of view")
+    for index, ((x0, y0), (x1, y1)) in enumerate(zip(ref_xy, xy)):
+        if max(abs(x0 - x1), abs(y0 - y1)) > _SAME_POSITION_UM:
+            raise ValueError(
+                f"position {index} of {name} is at stage "
+                f"({x1:.1f}, {y1:.1f}) um but at ({x0:.1f}, {y0:.1f}) um in "
+                f"{ref_name}: the files do not show the same fields of view")
+
+
+def _frame_times_s(f: "nd2.ND2File", n_pos: int, n_t: int,
+                   ) -> "list[tuple[float | None, ...]]":
+    """Seconds from each position's first frame to each of its frames."""
+    try:
+        if f.attributes.sequenceCount != n_pos * n_t:
+            raise ValueError("unexpected frame count")
+        days = [f.frame_metadata(i).channels[0].time.absoluteJulianDayNumber
+                for i in range(n_pos * n_t)]
+        return [tuple(round((days[p * n_t + t] - days[p * n_t]) * 86400.0, 3)
+                      for t in range(n_t)) for p in range(n_pos)]
+    except Exception:  # noqa: BLE001 - optional metadata
+        return [tuple([None] * n_t) for _ in range(n_pos)]
 
 
 def read_acquisition_time(f: "nd2.ND2File") -> str | None:
@@ -536,52 +760,116 @@ def read_acquisition_time(f: "nd2.ND2File") -> str | None:
     return None
 
 
-def iter_positions(path: Path, *, irm_match=("irm",), tirf_match=("tirf",),
-                   solution_match=("insol", "in sol", "solution")) -> Iterator[Position]:
-    """Yield one :class:`Position` per field of view in ``path``.
+def iter_positions(source: "Path | WellSource", *, irm_match=("irm",),
+                   tirf_match=("tirf",),
+                   solution_match=("insol", "in sol", "solution"),
+                   ) -> Iterator[Position]:
+    """Yield one :class:`Position` per field of view of one well.
+
+    ``source`` is a :class:`WellSource` from :func:`group_wells`, or a bare
+    path (one file, one well).
 
     Channels are resolved by name so the pipeline does not depend on the
-    physical channel order inside the ND2. A file with no IRM channel raises
-    :class:`KeyError` rather than quietly segmenting something else — the caller
-    counts that as a failed well and says so.
+    physical channel order inside the ND2 - nor, now, on which FILE a channel
+    is in. A well with no IRM channel raises :class:`KeyError` rather than
+    quietly segmenting something else - the caller counts that as a failed
+    well and says so.
     """
-    path = Path(path)
-    well_id = parse_well_id(path)
-    with nd2.ND2File(str(path)) as f:
-        names = [c.channel.name for c in f.metadata.channels]
-        ci_irm = _find_channel(names, *irm_match)
-        ci_tirf = _find_channel(names, *tirf_match)
-        ci_sol = _find_channel(names, *solution_match)
-        if ci_irm == ci_tirf:
+    if not isinstance(source, WellSource):
+        path = Path(source)
+        source = WellSource(parse_well_id(path), (path,))
+    if source.problem:
+        raise ValueError(source.problem)
+
+    with ExitStack() as stack:
+        opened = [(path.name, stack.enter_context(nd2.ND2File(str(path))))
+                  for path in source.files]
+        channel_names = [[c.channel.name for c in f.metadata.channels]
+                         for _name, f in opened]
+
+        def locate(substrings):
+            """(file name, file, channel index, channel name) for one role."""
+            for (name, f), names in zip(opened, channel_names):
+                try:
+                    index = _find_channel(names, *substrings)
+                except KeyError:
+                    continue
+                return name, f, index, names[index]
+            # Every name the well has, so the message says what WAS there.
+            raise KeyError(f"no channel matching {tuple(substrings)!r} in "
+                           f"{[n for names in channel_names for n in names]!r}")
+
+        irm_name, irm_f, ci_irm, irm_channel = locate(irm_match)
+        tirf_name, tirf_f, ci_tirf, tirf_channel = locate(tirf_match)
+        sol_name, sol_f, ci_sol, _sol_channel = locate(solution_match)
+        if irm_f is tirf_f and ci_irm == ci_tirf:
             # Segmenting and measuring the same channel is exactly the defect
             # this signature exists to prevent. It stays legal (someone may
             # genuinely have one channel and know it), but never silent.
-            print(f"[warn] {path.name}: --irm-name and --tirf-name both resolve "
-                  f"to channel {names[ci_irm]!r}; segmentation and readout will "
+            print(f"[warn] {irm_name}: --irm-name and --tirf-name both resolve "
+                  f"to channel {irm_channel!r}; segmentation and readout will "
                   "use the same image", file=sys.stderr)
 
         try:
-            vox = f.voxel_size()
+            vox = irm_f.voxel_size()
             px_um = float(vox.x)
         except Exception:
             px_um = None
-        # Per file, not per position: positions within one well are seconds
-        # apart, and what identifies a run is when the well was recorded.
-        acquired_at = read_acquisition_time(f)
+        # Per well, not per position: positions within one well are seconds
+        # apart, and what identifies a run is when the well was recorded. Read
+        # off the IRM file - the one that is segmented, and in the per-channel
+        # layout the one recorded first.
+        acquired_at = read_acquisition_time(irm_f)
 
-        arr = np.asarray(f.asarray())          # (P, C, Y, X) or (C, Y, X)
-        if arr.ndim == 3:                       # single position -> add P axis
-            arr = arr[None]
-        n_pos = arr.shape[0]
+        irm_all = _channel_frames(irm_f, ci_irm)          # (P, T, Y, X)
+        tirf_all = (irm_all if (tirf_f is irm_f and ci_tirf == ci_irm)
+                    else _channel_frames(tirf_f, ci_tirf))
+        sol_all = _channel_frames(sol_f, ci_sol)
+
+        # Files of one well must show the same fields, in the same order and
+        # at the same size - or centerlines found in one would be laid over
+        # pixels of another.
+        for label, name, f, frames in (("TIRF", tirf_name, tirf_f, tirf_all),
+                                       ("solution", sol_name, sol_f, sol_all)):
+            if f is irm_f:
+                continue
+            if frames.shape[0] != irm_all.shape[0]:
+                raise ValueError(
+                    f"{name} has {frames.shape[0]} position(s) but {irm_name} "
+                    f"has {irm_all.shape[0]}")
+            # For TIRF this is what makes the centerlines land on the right
+            # pixels. For the solution channel only a median is taken, but a
+            # frame of another size is another acquisition all the same - and
+            # its median would be written into the row as this well's.
+            if frames.shape[2:] != irm_all.shape[2:]:
+                raise ValueError(
+                    f"{name} frames are {frames.shape[3]}x{frames.shape[2]} px "
+                    f"but {irm_name} frames are "
+                    f"{irm_all.shape[3]}x{irm_all.shape[2]} px")
+            _check_same_positions((irm_name, irm_f), (name, f))
+
+        # The model segments ONE IRM frame per position. A time series there
+        # (or in the solution channel) has no defined meaning yet, so the
+        # first frame is used and the run says so rather than averaging or
+        # picking silently.
+        for label, name, frames in (("IRM", irm_name, irm_all),
+                                    ("solution", sol_name, sol_all)):
+            if frames.shape[1] > 1:
+                print(f"[warn] {name}: the {label} channel has "
+                      f"{frames.shape[1]} frames per position; only the first "
+                      "is used", file=sys.stderr)
+
+        n_pos, n_t = tirf_all.shape[0], tirf_all.shape[1]
+        times = _frame_times_s(tirf_f, n_pos, n_t)
         for p in range(n_pos):
-            irm = np.asarray(arr[p, ci_irm])
-            tirf = np.asarray(arr[p, ci_tirf])
+            irm = np.asarray(irm_all[p, 0])
+            tirf = np.asarray(tirf_all[p, 0])
             yield Position(
-                well_id=well_id,
+                well_id=source.well_id,
                 position=p,
                 irm=irm,
                 tirf=tirf,
-                solution=np.asarray(arr[p, ci_sol]),
+                solution=np.asarray(sol_all[p, 0]),
                 px_um=px_um,
                 acquired_at=acquired_at,
                 # Measured here, where the channel roles are resolved, so the
@@ -592,8 +880,13 @@ def iter_positions(path: Path, *, irm_match=("irm",), tirf_match=("tirf",),
                 # RAW 16-bit frames. The focus descriptor thresholds at 5 sigma
                 # of the frame's own noise, which the 8-bit display PNGs do not
                 # preserve, so there is no later stage where this could be done.
-                focus=judge_focus(irm, tirf, irm_name=names[ci_irm],
-                                  tirf_name=names[ci_tirf]),
+                focus=judge_focus(irm, tirf, irm_name=irm_channel,
+                                  tirf_name=tirf_channel),
+                tirf_stack=(np.asarray(tirf_all[p]) if n_t > 1 else None),
+                tirf_times_s=times[p],
+                irm_file=irm_name,
+                tirf_file=tirf_name,
+                solution_file=sol_name,
             )
 
 

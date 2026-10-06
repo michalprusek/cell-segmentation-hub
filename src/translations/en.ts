@@ -2213,7 +2213,7 @@ export default {
       },
       results: 'What you get back',
       resultsList: {
-        csv: 'results.csv — one row per microtubule, with its length, the intensity along it and its background',
+        csv: 'results.csv — one row per microtubule, with its length, the intensity along it and its background. When the fluorescence channel is a short time series, each microtubule has one row per frame (column tirf_frame)',
         failures:
           'failures.csv — every well or position that could not be produced, and why. It is always written, even when empty',
         focus:
@@ -2228,7 +2228,7 @@ export default {
         'It measures how much of a frame is occupied by structure standing clear of the noise, so a densely covered field can still pass while defocused; it errs towards keeping data, not towards throwing it away. Its thresholds were fitted on one acquisition, so a different exposure or camera is reported as out_of_calibration in the reason column — that is a note about the threshold, not about your frame.',
       channelNote: 'IRM is segmented, fluorescence is measured.',
       channelNoteText:
-        'The model was trained on IRM, so the filaments are traced there and the fluorescence channel is only read along those traces. A file with no IRM channel is reported as a failure rather than segmented from something else.',
+        'The model was trained on IRM, so the filaments are traced there and the fluorescence channel is only read along those traces. A well with no IRM channel is reported as a failure rather than segmented from something else. A well may be one file holding all three channels, or one file per channel — those are paired by the well name in the file names.',
       retentionNote: 'Uploads are cleaned up, results are not.',
       retentionNoteText:
         'Input files are removed once a run finishes cleanly, and kept for a week if it did not — which is exactly the run you may want to repeat. The result stays until you delete the job.',

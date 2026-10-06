@@ -1,9 +1,11 @@
 # Automated Essays module
 
 **Automated microtubule analysis of ND2 well recordings.** Point this tool at a
-folder of `.nd2` files (one per well) and it detects every microtubule (MT) in
-every position and writes one table row per microtubule with its length and its
-on-MT vs. background fluorescence — plus the well's solution concentration.
+folder of `.nd2` files (one per well, or one per channel of each well) and it
+detects every microtubule (MT) in every position and writes one table row per
+microtubule — per TIRF frame, when that channel is a time series — with its
+length and its on-MT vs. background fluorescence, plus the well's solution
+concentration.
 
 It wraps a trained instance-segmentation model (**nnU-Net ResEnc-M → a
 curvature-bounded instancer**, "microtubule SPARSE35 ep040") that traces each microtubule
@@ -42,7 +44,9 @@ The two imaging channels have separate jobs and are **not** interchangeable:
 ## 1. What it measures
 
 For **every microtubule** in every position of every well, one row in
-`results.csv`:
+`results.csv` — or, when the TIRF channel is a time series, one row **per TIRF
+frame** (keep `tirf_frame == 0` for the one-row-per-microtubule table of
+earlier runs):
 
 | Column | Meaning |
 | ------ | ------- |
@@ -67,6 +71,10 @@ For **every microtubule** in every position of every well, one row in
 | `focus_irm_score`, `focus_tirf_score` | **measured** out-of-focus descriptor for this position's IRM and TIRF frames: the area occupied by structure standing more than 5σ above the local background, in **pixels per 10,000**. Higher is sharper |
 | `focus_flagged` | `1` if **either** channel scored below its threshold (7.640 for IRM, 0.184 for fluorescence), `0` if both cleared it. Advisory — nothing is excluded and no run fails because of it. Blank when nothing was measured |
 | `focus_reason` | `ok`, or a `;`-joined list of `oof:<channel>` (below threshold), `unscoreable:<channel>` (no noise floor could be measured — blank / saturated), and `out_of_calibration:<channel>` (the acquisition drifted outside the calibrated domain, so the absolute threshold may not apply). `detector_unavailable` / `error:<Type>` mean the check **could not run** |
+| `tirf_frame` | 0-based TIRF frame this row was measured on — `0` for a recording with a single TIRF frame |
+| `tirf_frames` | how many TIRF frames the position has (`1` for every run before 2026-10-07) |
+| `tirf_frame_time_s` | seconds from the position's first TIRF frame to this one, from the ND2's timestamps; blank when the file does not say |
+| `segmentation_source_file` | the file that was **segmented** (IRM). `source_file` is the file the intensities were read from; they differ only for a well recorded as one file per channel |
 
 `irm_tirf_dy` / `irm_tirf_dx` are blank whenever `irm_tirf_reason` is not `ok`:
 a refused estimate has no offset, and writing `0, 0` there would be
@@ -308,10 +316,25 @@ keeps its partial results.
 
 ## 7. Input: what the ND2 files must contain
 
-* **One `.nd2` file per well**; the file name should contain `Well<id>` (e.g.
-  `WellD04_Channel...nd2`) — `D04` becomes `well_id`. Files that don't match
-  fall back to the file stem.
-* Each file holds **several positions** (fields of view) and **three channels**,
+* The file name should contain `Well<id>` (e.g. `WellD04_Channel...nd2`) —
+  `D04` becomes `well_id`. Files that don't match fall back to the file stem.
+* A well is **one `.nd2` file** holding all three channels, **or one file per
+  channel** (`WellD04_ChannelIRM_Seq0000.nd2`,
+  `WellD04_ChannelTIRF_488_Seq0001.nd2`,
+  `WellD04_Channel488_InSol_Seq0002.nd2`); a folder may mix the two. Files
+  that share a `Well<id>` and none of which is a complete well by itself are
+  put together (`mt_pipeline.nd2_io.group_wells`), provided each role is
+  carried by exactly one of them — two IRM files for one well is reported as
+  a failed well, not guessed at. They must show the same positions: the same
+  count, the same frame size as IRM for TIRF, and stage coordinates within
+  5 µm (a field here is ~110 µm wide). Two **complete** files with the same
+  well id are two wells, as before.
+* The TIRF channel may carry a **time axis**. Each position is segmented once
+  (IRM) and measured on every TIRF frame, one row per microtubule per frame
+  (`tirf_frame`, `tirf_frames`, `tirf_frame_time_s`). A time axis in IRM or in
+  the solution channel has no defined meaning yet: the first frame is used,
+  with a warning.
+* A well holds **several positions** (fields of view) and **three channels**,
   all three of which are required. Channels are matched **by name**, not by
   order, so acquisition-order changes don't matter. By default it looks for:
   * the **IRM** channel — name contains `IRM` — which is **segmented**,
@@ -324,7 +347,31 @@ keeps its partial results.
   missing, `length_um` is left blank and `length_px` is still reported.
 * The acquisition timestamp is read from the ND2 and reported as `acquired_at`.
 
-A file with no IRM channel is **skipped with a warning** and counted as a
+**Are per-channel files registered to each other?** In that layout the
+channels are recorded in separate passes over the positions, so the stage
+leaves a field and comes back between the IRM frame and the TIRF frame.
+Measured 2026-10-07 on the first such folder (110 wells, 440 positions, 61 226
+microtubules, 1536² px at 72 nm/px) by sliding the IRM centerlines over the
+TIRF frame (±15 px) and finding where the signal under them peaks, on every
+eighth position (55):
+
+| Positions                                    | n   | Offset of the peak          | Contrast kept at zero shift |
+| -------------------------------------------- | --- | --------------------------- | --------------------------- |
+| with TIRF signal on the filaments (> 20 cts) | 17  | median 1.0 px, max 2.2 px   | median 99.9 %, min 84.3 %   |
+| weak signal (5–20 counts)                    | 2   | 0 px                        | 100 %                       |
+| no signal (< 5 counts above background)      | 36  | not measurable (noise peak) | —                           |
+
+Where there is signal the offset is at most a couple of pixels — most often a
+constant +1 px in x, i.e. optics, the same 0–1 px the single-file layout shows
+— and the same in all five TIRF frames (15 of 17). So nothing is shifted, the
+same rule as the alignment diagnostic above. Two things to keep in mind when
+repeating this: a position with no fluorescence on its filaments has no peak
+to find, and its "offset" is a random one that changes from frame to frame
+(1 of 36 agreed across frames) — **classify by contrast before reading a
+shift**; and this is one folder from one microscope. A stage with worse
+repeatability would show up as a clear, consistent, non-zero peak.
+
+A well with no IRM channel is **skipped with a warning** and counted as a
 failure, rather than segmented on some other channel: the checkpoint is
 trained on IRM, and running it on TIRF yields confident but wrong centerlines
 (this was the behaviour up to 2026-08 — see §12).

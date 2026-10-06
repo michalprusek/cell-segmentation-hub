@@ -2222,7 +2222,7 @@ export default {
       },
       results: 'Ce que vous recevez',
       resultsList: {
-        csv: 'results.csv — une ligne par microtubule, avec sa longueur, l’intensité le long de celui-ci et son fond',
+        csv: 'results.csv — une ligne par microtubule, avec sa longueur, l’intensité le long de celui-ci et son fond. Si le canal de fluorescence est une courte série temporelle, chaque microtubule a une ligne par image (colonne tirf_frame)',
         failures:
           'failures.csv — chaque puits ou position qui n’a pas pu être produit, et pourquoi. Il est toujours écrit, même vide',
         focus:
@@ -2237,7 +2237,7 @@ export default {
         'Il mesure quelle part de l’image est occupée par de la structure se détachant nettement du bruit : un champ densément couvert peut donc passer même flou. Il penche du côté de la conservation des données, jamais de leur rejet. Ses seuils ont été ajustés sur une seule acquisition ; une autre exposition ou une autre caméra est donc signalée out_of_calibration dans la colonne reason — c’est une remarque sur le seuil, pas sur votre image.',
       channelNote: 'L’IRM est segmentée, la fluorescence est mesurée.',
       channelNoteText:
-        'Le modèle a été entraîné sur de l’IRM : les filaments y sont tracés et le canal de fluorescence n’est lu que le long de ces tracés. Un fichier dépourvu de canal IRM est signalé comme un échec plutôt que segmenté à partir d’autre chose.',
+        'Le modèle a été entraîné sur de l’IRM : les filaments y sont tracés et le canal de fluorescence n’est lu que le long de ces tracés. Un puits dépourvu de canal IRM est signalé comme un échec plutôt que segmenté à partir d’autre chose. Un puits peut être un fichier contenant les trois canaux, ou un fichier par canal — ceux-ci sont appariés d’après le nom du puits dans les noms de fichier.',
       retentionNote: 'Les fichiers importés sont nettoyés, pas les résultats.',
       retentionNoteText:
         'Les fichiers d’entrée sont supprimés dès qu’une exécution se termine proprement, et conservés une semaine dans le cas contraire — c’est précisément l’exécution que vous voudrez peut-être refaire. Le résultat, lui, reste jusqu’à ce que vous supprimiez la tâche.',

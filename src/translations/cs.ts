@@ -2183,7 +2183,7 @@ export default {
       },
       results: 'Co dostanete zpět',
       resultsList: {
-        csv: 'results.csv — jeden řádek na mikrotubulus s délkou, intenzitou podél něj a jeho pozadím',
+        csv: 'results.csv — jeden řádek na mikrotubulus s délkou, intenzitou podél něj a jeho pozadím. Je-li fluorescenční kanál krátká časová série, má každý mikrotubulus jeden řádek na snímek (sloupec tirf_frame)',
         failures:
           'failures.csv — každá jamka či pozice, kterou nešlo zpracovat, a proč. Zapisuje se vždy, i když je prázdný',
         focus:
@@ -2199,7 +2199,7 @@ export default {
         'Měří, jakou část snímku zabírá struktura zřetelně nad šumem, takže hustě pokryté pole může projít i rozostřené; chybuje směrem k zachování dat, ne k jejich zahození. Prahy byly odvozeny z jediného snímání, takže jiná expozice či kamera se ve sloupci reason ohlásí jako out_of_calibration — to je poznámka o prahu, ne o vašem snímku.',
       channelNote: 'Segmentuje se IRM, měří se fluorescence.',
       channelNoteText:
-        'Model byl trénován na IRM, takže vlákna se trasují tam a fluorescenční kanál se čte jen podél těchto tras. Soubor bez kanálu IRM se ohlásí jako chyba, místo aby se segmentoval z něčeho jiného.',
+        'Model byl trénován na IRM, takže vlákna se trasují tam a fluorescenční kanál se čte jen podél těchto tras. Jamka bez kanálu IRM se ohlásí jako chyba, místo aby se segmentovala z něčeho jiného. Jamka může být jeden soubor se všemi třemi kanály, nebo jeden soubor na kanál — ty se spárují podle označení jamky v názvech souborů.',
       retentionNote: 'Nahrané soubory se uklidí, výsledky ne.',
       retentionNoteText:
         'Vstupní soubory se smažou, jakmile běh čistě doběhne, a při potížích se drží týden — což je právě ten běh, který budete chtít zopakovat. Výsledek zůstává, dokud úlohu nesmažete.',
