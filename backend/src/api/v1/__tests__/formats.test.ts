@@ -252,6 +252,21 @@ describe('yolo', () => {
   });
 });
 
+describe('names inside a zip', () => {
+  it('are ASCII, because the archive carries no UTF-8 flag', async () => {
+    const result = resultOf('hrnet', [square(1, 2, 9)]);
+    result.image.filename = 'демо snímek.tif';
+    const out = await render(result, 'yolo');
+    // The download keeps its real name; the entry inside does not.
+    expect(out.filename).toBe('демо snímek.yolo.zip');
+    const names = Object.keys(unzip(out.body)).sort();
+    expect(names).toEqual(['classes.txt', 'labels/____ sn_mek.txt']);
+    for (const name of names) {
+      expect(name).toMatch(/^[\x20-\x7e]+$/);
+    }
+  });
+});
+
 describe('imagej_roi', () => {
   it('zips one .roi per object plus one per hole, with ImageJ headers', async () => {
     const out = await render(

@@ -405,3 +405,23 @@ def test_the_route_refuses_an_image_over_the_callers_pixel_ceiling():
     # Exactly at the ceiling is allowed, and so is no ceiling at all.
     assert _segment(loader, frame, max_pixels=1200)["success"] is True
     assert _segment(loader, frame)["success"] is True
+
+
+def test_the_route_answers_400_for_a_file_truncated_after_its_header():
+    # It opens (the header is intact) and fails only when decoded. That used
+    # to happen inside a model's preprocessing and surface as a 500.
+    from fastapi import HTTPException
+
+    rng = np.random.default_rng(0)
+    whole = _png(rng.integers(0, 255, (300, 300), dtype=np.uint8))
+    loader = _RouteLoader()
+
+    with pytest.raises(HTTPException) as caught:
+        _segment(loader, whole[: len(whole) // 2])
+
+    assert caught.value.status_code == 400
+    assert "could not be decoded" in caught.value.detail
+    assert loader.seen == {}
+    # The lock is not left held by the failure.
+    assert not routes._inference_lock.locked()
+    assert _segment(loader, whole)["success"] is True

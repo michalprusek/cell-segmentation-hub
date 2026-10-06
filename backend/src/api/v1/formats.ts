@@ -38,6 +38,19 @@ const stem = (filename: string): string =>
   filename.replace(/\.[^.]*$/, '') || 'image';
 
 /**
+ * The stem as it may appear INSIDE a zip: printable ASCII only.
+ *
+ * A zip entry name is only read as UTF-8 when the archive sets the language
+ * encoding flag, and `archiver` does not: a client's `snímek.tif` came back
+ * from the deployed API as `snÃ\u00admek.txt` in Python's `zipfile`, and
+ * Windows Explorer does the same. The download's own name (the
+ * `Content-Disposition` header) keeps the real characters — that header has
+ * a proper UTF-8 form.
+ */
+const zipStem = (filename: string): string =>
+  stem(filename).replace(/[^\x20-\x7e]/g, '_');
+
+/**
  * The category an object is filed under in class-indexed formats: the part
  * for models whose objects are parts of an instance (sperm), else the class.
  */
@@ -306,7 +319,10 @@ export async function render(
         contentType: 'application/zip',
         filename: `${name}.yolo.zip`,
         body: await zip([
-          { name: `labels/${name}.txt`, data: toYoloLabels(result) },
+          {
+            name: `labels/${zipStem(result.image.filename)}.txt`,
+            data: toYoloLabels(result),
+          },
           {
             name: 'classes.txt',
             data: categoriesFor(result.modelInfo).map(c => `${c}\n`).join(''),

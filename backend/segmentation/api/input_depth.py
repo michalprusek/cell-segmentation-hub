@@ -143,3 +143,25 @@ def open_image_page(data: bytes, page: int = 0) -> tuple[Image.Image, int]:
             detail=f"The file could not be decoded as an image: {type(error).__name__}",
         ) from error
     return image, page_count
+
+
+def decode_or_400(image) -> None:
+    """Force the pixels to decode; a file that cannot is the caller's error.
+
+    `open_image_page` only reads the header, so a file truncated after it gets
+    this far. Decoding HERE - at the top of `_dispatch_inference`, on the
+    single-slot executor - keeps that off the event loop, and turns what used
+    to surface from inside a model's preprocessing as a 500 ("the service
+    broke") into a 400 ("your file is damaged"). The public API answered 502
+    for a truncated PNG before this.
+    """
+    load = getattr(image, "load", None)
+    if load is None:
+        return
+    try:
+        load()
+    except (OSError, ValueError, EOFError, SyntaxError) as error:
+        raise HTTPException(
+            status_code=400,
+            detail=f"The file could not be decoded as an image: {type(error).__name__}",
+        ) from error

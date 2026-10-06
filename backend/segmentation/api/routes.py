@@ -11,7 +11,7 @@ from fastapi import APIRouter, HTTPException, UploadFile, File, Depends, Form
 import torch
 
 from ._errors import internal_error
-from .input_depth import open_image_page, prepare_for_model
+from .input_depth import decode_or_400, open_image_page, prepare_for_model
 from PIL import Image
 import io
 
@@ -171,6 +171,7 @@ def _dispatch_inference(loader, model, image, threshold, detect_holes):
     """
     # Before the lock: this is CPU work on the caller's own image and needs
     # nothing the lock protects. See `input_depth` for why it exists at all.
+    decode_or_400(image)
     image, input_conversion = prepare_for_model(image, model)
     with _inference_lock:
         if model in ('sperm', 'sperm_2part'):
