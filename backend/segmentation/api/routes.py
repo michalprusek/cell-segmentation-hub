@@ -10,6 +10,7 @@ from fastapi import APIRouter, HTTPException, UploadFile, File, Depends, Form
 import torch
 
 from ._errors import internal_error
+from .input_depth import prepare_for_model
 from PIL import Image
 import io
 
@@ -167,6 +168,9 @@ def _dispatch_inference(loader, model, image, threshold, detect_holes):
     `_INFERENCE_EXECUTOR` instead of running it on the event loop. The branch
     bodies are unchanged; only their residence is.
     """
+    # Before the lock: this is CPU work on the caller's own image and needs
+    # nothing the lock protects. See `input_depth` for why it exists at all.
+    image, input_conversion = prepare_for_model(image, model)
     with _inference_lock:
         if model in ('sperm', 'sperm_2part'):
             # Sperm models use their own mask_threshold (0.3) and score_threshold (0.95)
@@ -259,6 +263,9 @@ def _dispatch_inference(loader, model, image, threshold, detect_holes):
             result = loader.predict_disintegration(image, threshold, detect_holes)
         else:
             result = loader.predict(image, model, threshold, detect_holes)
+    if input_conversion is not None and isinstance(result, dict):
+        # Said out loud, because it changes what the model was shown.
+        result["input_conversion"] = input_conversion
     return result
 
 
