@@ -1,6 +1,7 @@
 """API routes for segmentation microservice"""
 
 import time
+from typing import Optional
 import logging
 import asyncio
 import threading
@@ -303,6 +304,12 @@ async def segment_image(
         ge=0,
         description="Zero-based page of a multi-page image (TIFF) to segment",
     ),
+    max_pixels: Optional[int] = Form(
+        None,
+        ge=1,
+        description="Refuse (413) an image with more pixels than this. "
+        "Read from the header, before anything is decoded.",
+    ),
     loader = Depends(get_model_loader)
 ):
     """Main segmentation endpoint"""
@@ -326,6 +333,22 @@ async def segment_image(
         # Read image data and convert to PIL Image
         image_data = await file.read()
         image, page_count = open_image_page(image_data, page)
+
+        # A caller-supplied ceiling, checked on the header alone. The app's
+        # own queue sends none and is unaffected; the public API sends one so
+        # that a synchronous request cannot ask for minutes of GPU time.
+        width, height = image.size
+        if max_pixels is not None and width * height > max_pixels:
+            raise HTTPException(
+                status_code=413,
+                detail={
+                    "error": "image_too_large",
+                    "width": width,
+                    "height": height,
+                    "pixels": width * height,
+                    "max_pixels": max_pixels,
+                },
+            )
 
         logger.info(f"Processing image: {file.filename}, Model: {model}, Threshold: {threshold}, Detect holes: {detect_holes}")
         

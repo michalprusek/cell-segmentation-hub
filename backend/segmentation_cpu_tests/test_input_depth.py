@@ -317,7 +317,13 @@ class _RouteLoader(_RecordingLoader):
 def _segment(loader, data, **form):
     import asyncio
 
-    params = {"model": "hrnet", "threshold": 0.5, "detect_holes": True, "page": 0}
+    params = {
+        "model": "hrnet",
+        "threshold": 0.5,
+        "detect_holes": True,
+        "page": 0,
+        "max_pixels": None,
+    }
     params.update(form)
     return asyncio.run(
         routes.segment_image(file=_Upload(data), loader=loader, **params)
@@ -376,3 +382,26 @@ def test_the_route_answers_400_for_bytes_that_are_not_an_image():
         _segment(loader, b"plain text with a .tif name")
     assert caught.value.status_code == 400
     assert loader.seen == {}
+
+
+def test_the_route_refuses_an_image_over_the_callers_pixel_ceiling():
+    from fastapi import HTTPException
+
+    loader = _RouteLoader()
+    frame = _png(np.zeros((30, 40), np.uint8))  # 1200 px
+
+    with pytest.raises(HTTPException) as caught:
+        _segment(loader, frame, max_pixels=1199)
+    assert caught.value.status_code == 413
+    assert caught.value.detail == {
+        "error": "image_too_large",
+        "width": 40,
+        "height": 30,
+        "pixels": 1200,
+        "max_pixels": 1199,
+    }
+    assert loader.seen == {}
+
+    # Exactly at the ceiling is allowed, and so is no ceiling at all.
+    assert _segment(loader, frame, max_pixels=1200)["success"] is True
+    assert _segment(loader, frame)["success"] is True
