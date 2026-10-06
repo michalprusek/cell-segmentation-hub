@@ -183,6 +183,10 @@ vi.mock('@/components/settings/AppearanceSection', () => ({
   default: () => <div data-testid="appearance-section" />,
 }));
 
+vi.mock('@/components/settings/ApiKeysSection', () => ({
+  default: () => <div data-testid="api-keys-section" />,
+}));
+
 vi.mock('@/components/DashboardHeader', () => ({
   default: () => <div data-testid="dashboard-header" />,
 }));
@@ -296,9 +300,10 @@ describe('Profile loaded state — tabs visible', () => {
     });
     expect(screen.getByTestId('tab-account')).toBeInTheDocument();
     expect(screen.getByTestId('tab-appearance')).toBeInTheDocument();
-    // Three, not four: the Models tab was removed with the global model
-    // selector. Asserting its ABSENCE here is what would catch a revert that
-    // re-added the tab without re-adding the section behind it.
+    expect(screen.getByTestId('tab-api')).toBeInTheDocument();
+    // The Models tab was removed with the global model selector. Asserting
+    // its ABSENCE here is what would catch a revert that re-added the tab
+    // without re-adding the section behind it.
     expect(screen.queryByTestId('tab-models')).not.toBeInTheDocument();
   });
 
@@ -453,6 +458,18 @@ describe('UserProfileSection conditional render', () => {
     });
 
     expect(screen.getByTestId('appearance-section')).toBeInTheDocument();
+  });
+
+  it('renders ApiKeysSection on the api tab, and only there', async () => {
+    mockSearchParamsGet.mockReturnValue('api');
+
+    renderSettings();
+    await waitFor(() => {
+      expect(screen.queryByText('common.loading')).not.toBeInTheDocument();
+    });
+
+    expect(screen.getByTestId('api-keys-section')).toBeInTheDocument();
+    expect(screen.queryByTestId('account-section')).not.toBeInTheDocument();
   });
 });
 

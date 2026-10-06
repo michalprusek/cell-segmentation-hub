@@ -6,9 +6,17 @@ older doc disagrees, this page and the code are right.
 
 - **Base URL**: `https://spherosegapp.utia.cas.cz/api` in production,
   `http://localhost:3001/api` in development.
-- **Interactive spec**: Swagger UI at `http://localhost:3001/api-docs` in
-  development. See [Swagger / OpenAPI](swagger-openapi.md).
-- **Authentication**: [Authentication](authentication.md).
+- **Interactive spec**: Swagger UI at `/api-docs`
+  (`http://localhost:3001/api-docs` in development). It is mounted
+  unconditionally, so it is **public in production too**:
+  `https://spherosegapp.utia.cas.cz/api-docs`. See
+  [Swagger / OpenAPI](swagger-openapi.md). That spec still declares a
+  `bearerAuth` JWT scheme for the app's own routes, which is wrong — they
+  authenticate by session cookie.
+- **Authentication**: the app's own routes use an httpOnly session cookie
+  ([Authentication](authentication.md)); the public API under `/api/v1` uses
+  API keys ([below](#public-api-apiv1)). The two never mix: a key is refused
+  on app routes and the cookie is ignored on `/api/v1`.
 - **Real-time**: [WebSocket events](websocket.md).
 - **ML service** (a separate FastAPI process, not usually called directly):
   [ML service API](ml-service.md).
@@ -95,6 +103,58 @@ A second surface over the same data, used by the settings pages.
 > held the placeholder `'model1'`, which is not a model id.
 
 ---
+
+## API keys
+
+Managed from **Settings → API** with the session cookie. These three routes
+cannot be called with an API key — a leaked key must not be able to mint its
+own replacements — and creating or revoking is refused (403
+`API_KEY_IMPERSONATION_FORBIDDEN`) while an admin is impersonating the account.
+
+| Method | Path                | Purpose                                                                                                                                                   |
+| ------ | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `/api/api-keys`     | The caller's keys: `id`, `name`, `prefix`, `createdAt`, `lastUsedAt`, `expiresAt`. Never the key or its hash                                              |
+| POST   | `/api/api-keys`     | Create a key (`name` 1–64 chars, `expiresInDays?` 1–365 or null). 201 with the same fields **plus `key`, the only time it is ever returned**. 20 per hour |
+| DELETE | `/api/api-keys/:id` | Revoke (delete) a key. 404 when it does not exist or is not the caller's                                                                                  |
+
+An account holds at most 10 keys (409 `API_KEY_LIMIT_REACHED`). `lastUsedAt`
+is written at most once a minute per key, so it is accurate to the minute.
+
+A key is `sseg_` + 43 base62 characters (256 random bits) + 6 base62
+characters of CRC-32 over the random part. Only its SHA-256 is stored.
+
+## Public API (`/api/v1`)
+
+The versioned surface for scripts and other programs. Everything under it:
+
+- authenticates with **`Authorization: Bearer <key>`** and nothing else. A key
+  in the query string (`api_key`, `apikey`, `access_token`, `key`, `token`) is
+  refused with 400 `credentials-in-url`, names matched case-insensitively,
+  and the session cookie is not consulted. The backend's own logs redact the
+  values of those parameters (on every route, so export `?token=` links too),
+  but the nginx access log in front of it does not — a key that has been in a
+  URL is leaked;
+- answers every error as an RFC 9457 problem document
+  (`application/problem+json`, in English) with `type`, `title`, `status`,
+  `detail` and a bare `code`. 401 carries a `WWW-Authenticate: Bearer`
+  challenge (RFC 6750 §3); unknown, expired and malformed keys are
+  indistinguishable to the caller;
+- is limited to 120 requests per minute **per key**, announced in
+  `RateLimit` / `RateLimit-Policy` (an IETF draft, not yet an RFC) with
+  `Retry-After` on the 429. Ahead of authentication there is a second limit of
+  600 requests per minute **per IP**, which sends `Retry-After` but no
+  `RateLimit` headers. The backend's global limiter does not apply to
+  `/api/v1` — with it, every response carried two policies in two syntaxes;
+- changes only additively within `v1`.
+
+| Method | Path             | Purpose                                                      |
+| ------ | ---------------- | ------------------------------------------------------------ |
+| GET    | `/api/v1/models` | The segmentation models: `id` and compatible `project_types` |
+
+The segmentation endpoints themselves are not there yet.
+
+> The ML service's own routes are also `/api/v1/*`, on its own port. They are
+> unrelated to this surface and are not reachable from outside.
 
 ## Projects
 

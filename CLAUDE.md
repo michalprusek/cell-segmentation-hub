@@ -632,6 +632,47 @@ Controllers → Services → Prisma ORM → Storage (local FS / S3)
   - **The migration grants the flag to NOBODY**, deliberately — sign-up is open, so pinning an e-mail would hand admin to whoever registers it first. Granting is an explicit operator action: `docker exec -e ADMIN_EMAIL=... spheroseg-backend npx tsx src/db/grantAdmin.ts`.
   - `accessLogger` writes `admin@x(as:user@y)`; during impersonation `req.user` IS the target, so without this the security log attributes admin actions to the wrong person.
 
+### Public API (`/api/v1`) and API keys (2026-10-06)
+
+`backend/src/api/v1/` is a second, self-contained surface for scripts. It
+shares nothing with the app's routes except the database:
+
+- **Auth is `authenticateApiKey`, never `authenticate`.** `Authorization:
+Bearer sseg_…` only. A key in the query string is refused with 400 rather
+  than ignored, because `accessLogger` writes full URLs; the session cookie is
+  not consulted, because cookie auth here has no CSRF token. Conversely
+  `/api/api-keys` (create / list / revoke, used by Settings → API) takes the
+  cookie and must **not** accept a key — a leaked key could then mint its own
+  replacements. Minting and revoking are also refused to an impersonated
+  session, or support could leave behind a credential that outlives it.
+- **Errors are RFC 9457 `application/problem+json`, via `sendProblem`.** Never
+  `ResponseHelper` — its defaults are Czech and its envelope is the app's. And
+  never `res.json` for a problem: `server.ts` wraps `res.json` to force
+  `application/json`, which silently replaces the media type. The router ends
+  in its own 404 and error handler so nothing falls through to the global ones.
+- **The key is never stored.** `api_keys.keyHash` is an unsalted SHA-256 (the
+  key is 256 random bits; same reasoning as the refresh-token key). The CRC-32
+  suffix only lets a mistyped key be refused without a database read — it is
+  not a security control. Revoking deletes the row.
+- **A key-authenticated `req.user` has `isAdmin: false` whatever the account
+  is**, and `req.apiKey` set. `accessLogger` writes `user@x(key:sseg_AbCd)`.
+- **The ML service's routes are also called `/api/v1/*`** on its own port.
+  Unrelated. Never add an nginx `location /api/v1/` pointing at `ml_service`,
+  which has no authentication at all.
+- **Refusing a key in the URL is not the same as not logging it.** The first
+  version answered `?api_key=…` with 400 and then wrote the key to access.log
+  and stdout anyway, because both loggers record every URL — found by grepping
+  the logs after a real request, which no unit test did. `utils/redactUrl.ts`
+  is the one list of credential-bearing query parameters; `accessLogger` and
+  `createRequestLogger` redact through it and `authenticateApiKey` refuses by
+  it. nginx's own access log is out of its reach.
+- **`/api/v1` is exempt from the global limiter in `server.ts`** and has two
+  of its own: per IP before auth (no `RateLimit` headers), per key after.
+  With all three, every response carried two `RateLimit-Policy` headers in two
+  different syntaxes. Also only visible on a real response.
+- Swagger UI at `/api-docs` is mounted unconditionally and is **public in
+  production**; this file and `docs/api/README.md` used to say development only.
+
 ### ML service (`/backend/segmentation/`)
 
 - FastAPI + PyTorch, CUDA with CPU fallback

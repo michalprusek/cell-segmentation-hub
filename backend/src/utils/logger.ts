@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { redactUrlCredentials } from './redactUrl';
 
 // Check environment directly to avoid circular dependency
 const isDevelopment = process.env.NODE_ENV === 'development';
@@ -247,7 +248,8 @@ export const createRequestLogger = (
 
     res.on('finish', () => {
       const duration = Date.now() - start;
-      const { method, url, ip } = req;
+      const { method, ip } = req;
+      const url = redactUrlCredentials(req.url);
       const { statusCode } = res;
 
       const message = `${method} ${url} ${statusCode} ${duration}ms`;

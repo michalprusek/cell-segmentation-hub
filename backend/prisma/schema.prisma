@@ -38,6 +38,7 @@ model User {
   exportLogs         ExportLog[]
   impersonationsMade ImpersonationLog[]  @relation("ImpersonationAdmin")
   impersonationsOfMe ImpersonationLog[]  @relation("ImpersonationTarget")
+  apiKeys            ApiKey[]
 
   @@map("users")
 }
@@ -587,4 +588,32 @@ model ImpersonationLog {
   @@index([targetId, createdAt], map: "idx_impersonationlog_target_created")
   @@index([sessionId], map: "idx_impersonationlog_session")
   @@map("impersonation_logs")
+}
+
+// ---------------------------------------------------------------------------
+// Public API keys (`Authorization: Bearer sseg_...` on /api/v1).
+//
+// The key itself is never stored. `keyHash` is an unsalted SHA-256 of it —
+// the same primitive, for the same reason, as the refresh-token key in
+// sessionService: the input is 256 bits of CSPRNG output, so there is nothing
+// for a slow KDF to protect, and the lookup runs on every API request.
+// `prefix` is the first few characters, kept only so the owner can tell their
+// keys apart in the UI.
+//
+// Revoking a key DELETES the row. There is no soft-delete flag to forget to
+// check on the hot path.
+// ---------------------------------------------------------------------------
+model ApiKey {
+  id         String    @id @default(uuid())
+  userId     String
+  name       String
+  keyHash    String    @unique
+  prefix     String
+  lastUsedAt DateTime?
+  expiresAt  DateTime?
+  createdAt  DateTime  @default(now())
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt], map: "idx_apikey_user_created")
+  @@map("api_keys")
 }

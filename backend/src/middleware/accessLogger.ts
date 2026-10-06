@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { AuthRequest } from '../types/auth';
 import { logger } from '../utils/logger';
+import { redactUrlCredentials } from '../utils/redactUrl';
 
 /**
  * Access Log Middleware
@@ -200,6 +201,11 @@ function getUsername(req: AuthRequest): string {
   if (impersonatorEmail && req.user?.email) {
     return `${impersonatorEmail}(as:${req.user.email})`;
   }
+  // A request made with an API key is the account's, but not the person at
+  // the keyboard — and WHICH key matters when one has to be revoked.
+  if (req.apiKey && req.user?.email) {
+    return `${req.user.email}(key:${req.apiKey.prefix})`;
+  }
   if (req.user?.email) {
     return req.user.email;
   }
@@ -260,7 +266,8 @@ export const accessLogger = (
     ensureLogDirectory();
   }
 
-  const url = req.originalUrl || req.url;
+  // Redacted HERE, at capture: this is the copy that reaches the file.
+  const url = redactUrlCredentials(req.originalUrl || req.url);
 
   // Skip health check endpoints to reduce log verbosity
   if (SKIP_ENDPOINTS.includes(url)) {

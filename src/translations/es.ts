@@ -513,6 +513,53 @@ export default {
   settings: {
     manageSettings: 'Administra las preferencias de tu cuenta',
     appearance: 'Apariencia',
+    api: 'API',
+    apiKeys: {
+      title: 'Claves de API',
+      description:
+        'Las claves de API permiten que scripts y otros programas usen SpheroSeg en tu nombre a través de la API pública. Una clave solo sirve para la API: no permite iniciar sesión en la aplicación, cambiar tu cuenta ni gestionar otras claves.',
+      createTitle: 'Crear una clave',
+      nameLabel: 'Nombre',
+      namePlaceholder: 'p. ej. Pipeline de análisis',
+      expiryLabel: 'Caduca',
+      expiryNever: 'Nunca',
+      expiryDays: 'En {{days}} días',
+      create: 'Crear clave',
+      creating: 'Creando…',
+      createdTitle: 'Tu nueva clave de API',
+      createdWarning:
+        'Cópiala ahora. Solo se guarda un hash de la clave, por lo que no se puede volver a mostrar.',
+      copy: 'Copiar',
+      copied: 'Copiado al portapapeles',
+      copyFailed:
+        'No se pudo copiar. Selecciona la clave y cópiala manualmente.',
+      done: 'Ya la he guardado',
+      listTitle: 'Tus claves',
+      empty: 'Aún no tienes claves de API.',
+      colName: 'Nombre',
+      colKey: 'Clave',
+      colCreated: 'Creada',
+      colLastUsed: 'Último uso',
+      colExpires: 'Caduca',
+      neverUsed: 'Nunca',
+      noExpiry: 'Nunca',
+      expired: 'Caducada',
+      revoke: 'Revocar',
+      revokeTitle: '¿Revocar esta clave?',
+      revokeDescription:
+        'Todo lo que use la clave «{{name}}» dejará de funcionar de inmediato. Esta acción no se puede deshacer.',
+      revoked: 'Clave de API revocada',
+      loadFailed: 'No se pudieron cargar tus claves de API',
+      createFailed: 'No se pudo crear la clave de API',
+      revokeFailed: 'No se pudo revocar la clave de API',
+      limitReached:
+        'Has alcanzado el límite de {{max}} claves. Revoca alguna que ya no uses.',
+      impersonationForbidden:
+        'No se pueden crear ni revocar claves de API mientras se suplanta a un usuario.',
+      usageTitle: 'Uso de una clave',
+      usageDescription:
+        'Envía la clave en la cabecera Authorization de cada solicitud:',
+    },
     themeSettings: 'Configuración del tema',
     systemDefault: 'Predeterminado del sistema',
     languageSettings: 'Configuración de idioma',

@@ -602,6 +602,26 @@ export type FolderItemsData = z.infer<typeof folderItemsSchema>;
 export type FolderIdParams = z.infer<typeof folderIdSchema>;
 
 // ============================================================================
+// API keys
+// ============================================================================
+
+export const createApiKeySchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(1, 'Name is required')
+    .max(64, 'Name must be at most 64 characters'),
+  // Absent or null: the key does not expire.
+  expiresInDays: z.number().int().min(1).max(365).nullable().optional(),
+});
+
+export const apiKeyIdSchema = z.object({
+  id: z.string().uuid('Invalid API key id'),
+});
+
+export type CreateApiKeyData = z.infer<typeof createApiKeySchema>;
+
+// ============================================================================
 // Feedback (bug reports + feature requests)
 // ============================================================================
 

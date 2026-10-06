@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
 import AccountSection from '@/components/settings/AccountSection';
 import AppearanceSection from '@/components/settings/AppearanceSection';
+import ApiKeysSection from '@/components/settings/ApiKeysSection';
 import UserProfileSection from '@/components/settings/UserProfileSection';
 import { useLanguage, useAuth } from '@/contexts/exports';
 import { motion } from 'framer-motion';
@@ -27,9 +28,9 @@ const Settings = () => {
   // until the model moved onto the project page — the header's model badge
   // linked to it — so bookmarks and history entries for it exist. Radix
   // renders no content for a value with no trigger, which would leave those
-  // users on a Settings page with three tabs, none active and nothing below
+  // users on a Settings page with its tabs, none active and nothing below
   // them. An unknown value falls back to the same place an absent one does.
-  const SETTINGS_TABS = ['profile', 'account', 'appearance'];
+  const SETTINGS_TABS = ['profile', 'account', 'appearance', 'api'];
   const tabParam = searchParams.get('tab');
   const activeTab =
     tabParam && SETTINGS_TABS.includes(tabParam) ? tabParam : 'profile';
@@ -102,12 +103,13 @@ const Settings = () => {
             onValueChange={handleTabChange}
             className="w-full"
           >
-            <TabsList className="mb-8 grid w-full grid-cols-3">
+            <TabsList className="mb-8 grid w-full grid-cols-4">
               <TabsTrigger value="profile">{t('settings.profile')}</TabsTrigger>
               <TabsTrigger value="account">{t('settings.account')}</TabsTrigger>
               <TabsTrigger value="appearance">
                 {t('settings.appearance')}
               </TabsTrigger>
+              <TabsTrigger value="api">{t('settings.api')}</TabsTrigger>
             </TabsList>
 
             <TabsContent value="profile">
@@ -122,6 +124,10 @@ const Settings = () => {
 
             <TabsContent value="appearance">
               <AppearanceSection />
+            </TabsContent>
+
+            <TabsContent value="api">
+              <ApiKeysSection />
             </TabsContent>
           </Tabs>
         )}

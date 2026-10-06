@@ -186,6 +186,17 @@ export const feedbackRateLimiter = createRateLimiter({
   message: 'Too many feedback submissions, please wait a minute',
 });
 
+/**
+ * Minting API keys. Each success writes a credential, so this is far tighter
+ * than the general budget; the per-account cap in `apiKeyService` bounds how
+ * many can exist, this bounds how fast they can be churned.
+ */
+export const apiKeyCreateLimiter = createRateLimiter({
+  windowMs: 60 * 60 * 1000,
+  max: 20,
+  message: 'Too many API keys created, please try again later',
+});
+
 // Export all rate limiters
 export default {
   createRateLimiter,
