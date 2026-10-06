@@ -45,10 +45,10 @@ export function rasterizeLabels(
       drawPath(labels, width, height, object.points, value, false);
       continue;
     }
-    fillRing(labels, width, height, object.points, value, true);
+    fillInterior(labels, width, height, object.points, value);
     drawPath(labels, width, height, object.points, value, true);
     for (const hole of object.holes ?? []) {
-      fillRing(labels, width, height, hole, 0, false);
+      fillInterior(labels, width, height, hole, 0);
       // The hole's outline is foreground; restore whatever the strict-interior
       // fill may have touched along it.
       drawPath(labels, width, height, hole, value, true);
@@ -58,17 +58,21 @@ export function rasterizeLabels(
 }
 
 /**
- * Scanline fill at integer rows. `inclusive` paints the span's end pixels
- * (an object's interior and outline); otherwise only pixels strictly between
- * the crossings (a hole's interior).
+ * Scanline fill of a ring's STRICT interior, at integer rows.
+ *
+ * There is no "inclusive" variant, on purpose. Every caller draws the ring's
+ * outline as well, and a crossing that falls exactly on a pixel is a lattice
+ * point of that edge, which Bresenham always visits — so whether this fill
+ * includes its end pixels cannot change the result. (Both variants once
+ * existed behind a flag; mutating either into the other left all 104 OpenCV
+ * fixture contours reproducing their masks exactly.)
  */
-function fillRing(
+function fillInterior(
   labels: Uint16Array,
   width: number,
   height: number,
   ring: Point[],
   value: number,
-  inclusive: boolean
 ): void {
   const n = ring.length;
   if (n < 3) {
@@ -101,17 +105,8 @@ function fillRing(
     }
     crossings.sort((a, b) => a - b);
     for (let k = 0; k + 1 < crossings.length; k += 2) {
-      let from: number;
-      let to: number;
-      if (inclusive) {
-        from = Math.ceil(crossings[k]);
-        to = Math.floor(crossings[k + 1]);
-      } else {
-        from = Math.floor(crossings[k]) + 1;
-        to = Math.ceil(crossings[k + 1]) - 1;
-      }
-      from = Math.max(0, from);
-      to = Math.min(width - 1, to);
+      const from = Math.max(0, Math.floor(crossings[k]) + 1);
+      const to = Math.min(width - 1, Math.ceil(crossings[k + 1]) - 1);
       const row = y * width;
       for (let x = from; x <= to; x++) {
         labels[row + x] = value;
