@@ -12,6 +12,7 @@ import {
   MlBusyError,
   MlRejectedError,
   MlTimeoutError,
+  MlUnavailableError,
   segmentWithMl,
 } from './mlClient';
 import {
@@ -195,11 +196,15 @@ export const segmentHandler = async (
     errors.push({ field: 'image', detail: 'A non-empty file part named "image" is required.' });
   }
 
-  const requested = fields?.model;
+  // Read from the raw body, not from `fields`: that is undefined whenever
+  // ANY field failed to parse, and an unknown model must still be reported
+  // alongside the others.
+  const rawModel: unknown = req.body?.model;
+  const requested = typeof rawModel === 'string' ? rawModel : undefined;
   const modelId: KnownModelId | undefined =
     requested && isKnownModel(requested) ? requested : undefined;
   const model = modelId ? V1_MODELS[modelId] : undefined;
-  if (fields && !model) {
+  if (requested !== undefined && !model) {
     errors.push({
       field: 'model',
       detail: `Unknown model. Available: ${Object.keys(V1_MODELS).join(', ')}.`,
@@ -373,7 +378,7 @@ export const segmentHandler = async (
       rejectedByMl(res, error);
     } else if (error instanceof FormatNotRepresentableError) {
       sendProblem(res, 'output-not-representable', { detail: error.message });
-    } else if (error instanceof Error && error.name === 'MlUnavailableError') {
+    } else if (error instanceof MlUnavailableError) {
       logger.error('ML service failed a v1 segmentation', error, 'V1');
       sendProblem(res, 'segmentation-failed', {
         detail: 'The segmentation service could not process the image.',
