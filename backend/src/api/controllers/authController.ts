@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import path from 'path';
 import { promises as fs } from 'fs';
+import { disconnectUserSockets } from '../../services/liveConnections';
 import * as AuthService from '../../services/authService';
 import * as UserService from '../../services/userService';
 import { ResponseHelper, asyncHandler } from '../../utils/response';
@@ -490,6 +491,15 @@ export const changePassword = asyncHandler(
 
     const userId = req.user.id;
     const { message } = await AuthService.changePassword(userId, data);
+
+    // Close the user's open sockets - but only once this response has left.
+    // The browser making the change reconnects by itself about a second
+    // after its socket drops; if that happened before the replacement
+    // cookies below had arrived, its handshake would present the session
+    // this request just ended and be refused, leaving the tab without live
+    // events until a reload. Registered before anything can throw, so a
+    // failed re-issue still ends the other browsers' sockets.
+    res.once('finish', () => disconnectUserSockets(userId));
 
     // Every session of this user has just been ended, this one included; it
     // is replaced, so the person who made the change stays signed in.

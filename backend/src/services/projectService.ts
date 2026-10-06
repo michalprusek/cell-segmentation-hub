@@ -1,4 +1,9 @@
-import { collectProjectFiles, deleteUserFiles } from './accountFiles';
+import {
+  collectProjectFiles,
+  completeCleanup,
+  discardPendingCleanup,
+  recordPendingCleanup,
+} from './accountFiles';
 import { prisma } from '../db';
 import {
   CreateProjectData,
@@ -618,18 +623,29 @@ export async function deleteProject(
     // The file list is read BEFORE the rows go - afterwards nothing records
     // which files were this project's.
     const files = await collectProjectFiles(projectId, userId);
+    // ...and written to disk, so the clean-up survives a restart or a file
+    // that will not go on the first attempt (`sweepPendingCleanups`).
+    const manifest = await recordPendingCleanup(
+      { kind: 'project', id: projectId },
+      files
+    );
 
     // Delete the project (the cascade removes its images and segmentations)
-    await prisma.project.delete({
-      where: {
-        id: projectId,
-      },
-    });
+    try {
+      await prisma.project.delete({
+        where: {
+          id: projectId,
+        },
+      });
+    } catch (error) {
+      await discardPendingCleanup(manifest);
+      throw error;
+    }
 
     // The cascade only reaches the database. Without this every still image
     // of a deleted project stayed on disk for good. After the commit and
     // never fatal: the project is gone either way.
-    const removed = await deleteUserFiles(files);
+    const removed = await completeCleanup(manifest, files);
     logger.info('Project files removed', 'ProjectService', {
       projectId,
       ...removed,

@@ -1937,7 +1937,7 @@ export default {
       },
       thresholdNote: 'Prahy detekce jsou pevně dané pro každý model.',
       thresholdNoteText:
-        'V rozhraní žádné nastavení prahu není: každý model používá řez, se kterým byl validován, u mikrotubulů je to 0,98. Snížení prahu nenajde více skutečných objektů — najde jich více se slabším důkazem, a na jiném než IRM kanálu výstup mikrotubulového modelu nesleduje obraz při žádném nastavení. Pokud detekce chybí, zkontrolujte raději vstupní kanál.',
+        'V rozhraní žádné nastavení prahu není: každý model, který práh používá, pracuje s řezem, se kterým byl validován — u mikrotubulů je to 0,98 — a dva modely (Rozpad sferoidů, Neurit / soma) žádný práh nemají: rozhodují argmaxem. Snížení prahu nenajde více skutečných objektů — najde jich více se slabším důkazem, a na jiném než IRM kanálu výstup mikrotubulového modelu nesleduje obraz při žádném nastavení. Pokud detekce chybí, zkontrolujte raději vstupní kanál.',
       tip: 'Tip:',
       tipText:
         'Začněte výchozím modelem. Po CBAM-ResUNetu sáhněte, když jsou hranice důležitější než rychlost, a po Mamba-UNetu, když vaše snímky nevypadají jako ničí trénovací data.',

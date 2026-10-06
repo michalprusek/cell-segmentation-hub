@@ -187,6 +187,83 @@ describe('two requests with the same token', () => {
   });
 });
 
+describe('reuse detection lasts as long as the session can', () => {
+  it('still catches a copy replayed on day two of a 30-day session', async () => {
+    await sessionService.storeRefreshToken(USER, 'copied');
+    const legit = await sessionService.rotateRefreshToken('copied');
+
+    // A used token was remembered for 24 h at first. On day two a replay
+    // was merely "unknown", while the session it was copied from lived on.
+    vi.advanceTimersByTime(25 * 60 * 60 * 1000);
+    expect(await sessionService.rotateRefreshToken('copied')).toBeNull();
+
+    expect(await isLive(legit!.token)).toBe(false);
+  });
+
+  it.each([
+    ['a remembered session', { rememberMe: true }, 30 * 24 * 60 * 60],
+    ['a short session', { rememberMe: false }, 7 * 24 * 60 * 60],
+    [
+      'an impersonated session',
+      {
+        impersonation: {
+          impersonatorId: 'admin-1',
+          impersonationSessionId: 's-1',
+        },
+      },
+      24 * 60 * 60,
+    ],
+  ])('remembers the used token of %s for that session’s lifetime', async (_n, options, ttl) => {
+    await sessionService.storeRefreshToken(USER, 'tok', options);
+    await sessionService.rotateRefreshToken('tok');
+
+    expect(store.get(`refresh-used:${recordKey('tok')}`)?.ttl).toBe(ttl);
+  });
+});
+
+describe('a revoked session stays revoked', () => {
+  const reuse = async (token: string) => {
+    await sessionService.rotateRefreshToken(token);
+    vi.advanceTimersByTime(31_000);
+    await sessionService.rotateRefreshToken(token);
+  };
+
+  it('whatever order its records were written in', async () => {
+    // The race a "pointer to the family's current token" loses: a delayed
+    // A->B rotation finishes AFTER B->C, the pointer ends on B (deleted), and
+    // revoking through it leaves C alive. Here C is written after the
+    // revocation - the worst ordering there is - and is dead all the same.
+    await sessionService.storeRefreshToken(USER, 'A', { family: 'fam' });
+    await reuse('A');
+
+    await sessionService.storeRefreshToken(USER, 'C', { family: 'fam' });
+    await sessionService.storeRefreshToken(USER, 'D', { family: 'fam' });
+
+    expect(await isLive('C')).toBe(false);
+    // 'D' goes straight to a rotation, with no verification before it to
+    // have cleared the record away: the rotation must refuse by itself, and
+    // must not leave a successor behind.
+    const before = liveRecordKeys().length;
+    expect(await sessionService.rotateRefreshToken('D')).toBeNull();
+    // D's own record is gone and nothing was written in its place. (Other
+    // records of the dead family may still sit in the store until something
+    // asks for them; the flag is what makes them void.)
+    expect(store.has(recordKey('D'))).toBe(false);
+    expect(liveRecordKeys()).toHaveLength(before - 1);
+  });
+
+  it('and does not take the user’s other sessions with it', async () => {
+    await sessionService.storeRefreshToken(USER, 'A', { family: 'fam' });
+    await sessionService.storeRefreshToken(USER, 'other', { family: 'fam-2' });
+    await reuse('A');
+
+    expect(await isLive('other')).toBe(true);
+    expect((await sessionService.rotateRefreshToken('other'))?.userId).toBe(
+      USER
+    );
+  });
+});
+
 describe('what a rotation carries over', () => {
   it('keeps the session in its family, with its lifetime', async () => {
     await sessionService.storeRefreshToken(USER, 'short', {

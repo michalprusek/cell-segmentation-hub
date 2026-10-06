@@ -12,7 +12,9 @@ const { prismaMock, filesMock } = vi.hoisted(() => ({
   },
   filesMock: {
     collectProjectFiles: vi.fn(),
-    deleteUserFiles: vi.fn(),
+    recordPendingCleanup: vi.fn(),
+    discardPendingCleanup: vi.fn(),
+    completeCleanup: vi.fn(),
   },
 }));
 
@@ -28,7 +30,9 @@ const FILES = { fileKeys: ['u/p/originals/a.png'], dirKeys: ['projects/p'] };
 beforeEach(() => {
   vi.clearAllMocks();
   filesMock.collectProjectFiles.mockResolvedValue(FILES);
-  filesMock.deleteUserFiles.mockResolvedValue({
+  filesMock.recordPendingCleanup.mockResolvedValue('/up/.pending/p.json');
+  filesMock.discardPendingCleanup.mockResolvedValue(undefined);
+  filesMock.completeCleanup.mockResolvedValue({
     removed: 2,
     failed: 0,
     refused: 0,
@@ -36,7 +40,7 @@ beforeEach(() => {
 });
 
 describe('deleteProject and the project’s files', () => {
-  it('reads the file list before the rows go, and removes the files after', async () => {
+  it('lists the files, writes the list down, deletes the rows, then removes the files', async () => {
     prismaMock.project.findFirst.mockResolvedValue({
       id: 'p',
       userId: 'owner',
@@ -47,15 +51,25 @@ describe('deleteProject and the project’s files', () => {
     await projectService.deleteProject('p', 'owner');
 
     expect(filesMock.collectProjectFiles).toHaveBeenCalledWith('p', 'owner');
-    expect(filesMock.deleteUserFiles).toHaveBeenCalledWith(FILES);
-    const collected =
-      filesMock.collectProjectFiles.mock.invocationCallOrder[0];
-    const rowDeleted = prismaMock.project.delete.mock.invocationCallOrder[0];
-    const filesDeleted = filesMock.deleteUserFiles.mock.invocationCallOrder[0];
-    // Afterwards nothing records which files were the project's...
-    expect(collected).toBeLessThan(rowDeleted);
-    // ...and a file must not go while its row still says it exists.
-    expect(rowDeleted).toBeLessThan(filesDeleted);
+    expect(filesMock.recordPendingCleanup).toHaveBeenCalledWith(
+      { kind: 'project', id: 'p' },
+      FILES
+    );
+    expect(filesMock.completeCleanup).toHaveBeenCalledWith(
+      '/up/.pending/p.json',
+      FILES
+    );
+    const order = [
+      filesMock.collectProjectFiles,
+      filesMock.recordPendingCleanup,
+      prismaMock.project.delete,
+      filesMock.completeCleanup,
+    ].map(mock => mock.mock.invocationCallOrder[0]);
+    // The list must exist on disk BEFORE the rows go - afterwards nothing
+    // records which files were the project's - and no file may go while its
+    // row still says it exists.
+    expect(order).toEqual([...order].sort((a, b) => a - b));
+    expect(filesMock.discardPendingCleanup).not.toHaveBeenCalled();
   });
 
   it('touches no file when the project is not the caller’s', async () => {
@@ -66,11 +80,12 @@ describe('deleteProject and the project’s files', () => {
 
     expect(result).toBeNull();
     expect(filesMock.collectProjectFiles).not.toHaveBeenCalled();
+    expect(filesMock.recordPendingCleanup).not.toHaveBeenCalled();
     expect(prismaMock.project.delete).not.toHaveBeenCalled();
-    expect(filesMock.deleteUserFiles).not.toHaveBeenCalled();
+    expect(filesMock.completeCleanup).not.toHaveBeenCalled();
   });
 
-  it('leaves the files alone when the row could not be deleted', async () => {
+  it('withdraws the list and leaves the files alone when the row could not be deleted', async () => {
     prismaMock.project.findFirst.mockResolvedValue({
       id: 'p',
       userId: 'owner',
@@ -82,6 +97,10 @@ describe('deleteProject and the project’s files', () => {
       'db down'
     );
 
-    expect(filesMock.deleteUserFiles).not.toHaveBeenCalled();
+    expect(filesMock.completeCleanup).not.toHaveBeenCalled();
+    // Or the sweeper would later find a list for a project that still exists.
+    expect(filesMock.discardPendingCleanup).toHaveBeenCalledWith(
+      '/up/.pending/p.json'
+    );
   });
 });

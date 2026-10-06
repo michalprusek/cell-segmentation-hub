@@ -60,14 +60,17 @@ no contrast underneath them.
 
 **So: make sure the model reads the IRM channel — and check it yourself, because
 the platform will not.** If no channel name is recognisable and no zero
-wavelength is recorded, _no_ channel is marked as the source and everything
-falls back to **channel 0**, which may well be TIRF. Nothing warns you:
+wavelength is recorded, _no_ channel is marked as the source. Outside the
+channel picker everything then falls back to **channel 0**, which may well be
+TIRF, and nothing warns you:
 
 - The channel picker that opens before **Segment** / **Resegment** on a
-  multi-channel video already has a channel selected. In the editor that is
-  channel 0. On the project page it is the **alphabetically first channel name**
-  — even when an IRM channel was recognised, so `488_nm` is offered ahead of
-  `IRM`. Clicking **Segment** without looking accepts it.
+  multi-channel video preselects the channel marked as the segmentation
+  source. When none is marked it preselects **nothing**, and **Segment** stays
+  disabled until you choose — so in the interface an unidentified channel is
+  never one click away. The silent fall-back to channel 0 remains only where
+  there is no picker: a single-channel video, and requests made straight to
+  the API without a `channel`.
 - **Pick the IRM channel in that picker every time.** The choice applies to that
   batch only; it is not remembered.
 - There is no control in the interface that marks a channel as the source. The

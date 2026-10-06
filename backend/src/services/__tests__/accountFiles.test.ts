@@ -12,7 +12,8 @@ vi.mock('../../db', () => ({
   __esModule: true,
   prisma: {
     image: { findMany: vi.fn() },
-    project: { findMany: vi.fn() },
+    project: { findMany: vi.fn(), findUnique: vi.fn() },
+    user: { findUnique: vi.fn() },
     essayJob: { findMany: vi.fn() },
     apiJob: { findMany: vi.fn() },
   },
@@ -32,7 +33,11 @@ import { prisma } from '../../db';
 import {
   collectProjectFiles,
   collectUserFiles,
+  completeCleanup,
   deleteUserFiles,
+  discardPendingCleanup,
+  recordPendingCleanup,
+  sweepPendingCleanups,
 } from '../accountFiles';
 
 const OWNER = '11111111-1111-4111-8111-111111111111';
@@ -287,5 +292,154 @@ describe('deleteUserFiles', () => {
     );
 
     expect(result).toEqual({ removed: 2, failed: 0, refused: 0 });
+  });
+});
+
+describe('pending clean-ups survive a restart', () => {
+  let root: string;
+
+  const write = async (key: string): Promise<string> => {
+    const target = path.join(root, key);
+    await fs.mkdir(path.dirname(target), { recursive: true });
+    await fs.writeFile(target, 'x');
+    return target;
+  };
+  const exists = (p: string): Promise<boolean> =>
+    fs.access(p).then(
+      () => true,
+      () => false
+    );
+  const FILES = {
+    fileKeys: [`${SHAREE}/${OWN_PROJECT}/originals/b.png`],
+    dirKeys: [`${OWNER}/${OWN_PROJECT}`],
+  };
+  const OWNER_REF = { kind: 'project' as const, id: OWN_PROJECT };
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    const base = await fs.mkdtemp(path.join(os.tmpdir(), 'pending-cleanup-'));
+    root = path.join(base, 'uploads');
+    await fs.mkdir(root, { recursive: true });
+  });
+
+  afterEach(async () => {
+    await fs.rm(path.dirname(root), { recursive: true, force: true });
+  });
+
+  it('the process dies after the rows are deleted: the next sweep removes the files', async () => {
+    const mine = await write(`${OWNER}/${OWN_PROJECT}/originals/a.png`);
+    const bySharee = await write(`${SHAREE}/${OWN_PROJECT}/originals/b.png`);
+    const manifest = await recordPendingCleanup(OWNER_REF, FILES, root);
+    // ...rows deleted, then the process is gone. completeCleanup never ran.
+    vi.mocked(prisma.project.findUnique).mockResolvedValue(null as never);
+
+    const result = await sweepPendingCleanups(root);
+
+    expect(result).toEqual({ completed: 1, kept: 0, discarded: 0 });
+    expect(await exists(mine)).toBe(false);
+    expect(await exists(bySharee)).toBe(false);
+    expect(await exists(manifest!)).toBe(false);
+  });
+
+  it('the process dies BEFORE the rows are deleted: a live project’s files are not touched', async () => {
+    const mine = await write(`${OWNER}/${OWN_PROJECT}/originals/a.png`);
+    const manifest = await recordPendingCleanup(OWNER_REF, FILES, root);
+    vi.mocked(prisma.project.findUnique).mockResolvedValue({
+      id: OWN_PROJECT,
+    } as never);
+
+    const result = await sweepPendingCleanups(root);
+
+    // The list exists; the project does too. Acting on the list alone would
+    // delete the images of a project nobody deleted.
+    expect(result).toEqual({ completed: 0, kept: 1, discarded: 0 });
+    expect(await exists(mine)).toBe(true);
+    expect(await exists(manifest!)).toBe(true);
+  });
+
+  it('gives up on a list whose project still exists an hour later - and still touches no file', async () => {
+    const mine = await write(`${OWNER}/${OWN_PROJECT}/originals/a.png`);
+    const manifest = await recordPendingCleanup(OWNER_REF, FILES, root);
+    vi.mocked(prisma.project.findUnique).mockResolvedValue({
+      id: OWN_PROJECT,
+    } as never);
+
+    const later = Date.now() + 61 * 60 * 1000;
+    const result = await sweepPendingCleanups(root, later);
+
+    expect(result).toEqual({ completed: 0, kept: 0, discarded: 1 });
+    expect(await exists(manifest!)).toBe(false);
+    expect(await exists(mine)).toBe(true);
+  });
+
+  it('looks the owner up in the right table', async () => {
+    await recordPendingCleanup({ kind: 'user', id: OWNER }, FILES, root);
+    vi.mocked(prisma.user.findUnique).mockResolvedValue(null as never);
+
+    await sweepPendingCleanups(root);
+
+    expect(prisma.user.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: OWNER } })
+    );
+    expect(prisma.project.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('keeps the list when a file could not be removed, so the next sweep tries again', async () => {
+    const manifest = await recordPendingCleanup(OWNER_REF, FILES, root);
+    const spy = vi
+      .spyOn(fs, 'rm')
+      .mockRejectedValueOnce(new Error('EBUSY: resource busy'));
+
+    const result = await completeCleanup(manifest, FILES, root);
+    spy.mockRestore();
+
+    expect(result.failed).toBe(1);
+    expect(await exists(manifest!)).toBe(true);
+
+    // Second attempt, nothing in the way: the list goes with the files.
+    const retry = await completeCleanup(manifest, FILES, root);
+    expect(retry.failed).toBe(0);
+    expect(await exists(manifest!)).toBe(false);
+  });
+
+  it('withdraws the list when the deletion itself failed', async () => {
+    const manifest = await recordPendingCleanup(OWNER_REF, FILES, root);
+
+    await discardPendingCleanup(manifest);
+
+    expect(await exists(manifest!)).toBe(false);
+    expect(await sweepPendingCleanups(root)).toEqual({
+      completed: 0,
+      kept: 0,
+      discarded: 0,
+    });
+  });
+
+  it('does not refuse a deletion because the list could not be written', async () => {
+    // A full disk is exactly when someone needs to delete a project.
+    const notADirectory = await write('blocker');
+
+    const manifest = await recordPendingCleanup(
+      OWNER_REF,
+      FILES,
+      notADirectory
+    );
+
+    expect(manifest).toBeNull();
+    await expect(completeCleanup(null, FILES, root)).resolves.toMatchObject({
+      failed: 0,
+    });
+  });
+
+  it('one unreadable list does not stop the others', async () => {
+    const mine = await write(`${OWNER}/${OWN_PROJECT}/originals/a.png`);
+    await recordPendingCleanup(OWNER_REF, FILES, root);
+    await write('.pending-cleanup/aaa-broken.json');
+    vi.mocked(prisma.project.findUnique).mockResolvedValue(null as never);
+
+    const result = await sweepPendingCleanups(root);
+
+    expect(result).toEqual({ completed: 1, kept: 1, discarded: 0 });
+    expect(await exists(mine)).toBe(false);
   });
 });

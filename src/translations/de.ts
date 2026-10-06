@@ -1981,7 +1981,7 @@ export default {
       },
       thresholdNote: 'Erkennungsschwellwerte sind je Modell fest.',
       thresholdNoteText:
-        'Es gibt keine Schwellwert-Einstellung in der Oberfläche: Jedes Modell verwendet den Schnitt, mit dem es validiert wurde, beim Mikrotubuli-Modell 0,98. Ein niedrigerer Schwellwert findet nicht mehr echte Objekte — er findet mehr mit schwächerer Evidenz, und auf einem Nicht-IRM-Kanal folgt die Mikrotubuli-Ausgabe bei keiner Einstellung dem Bild. Fehlen Detektionen, prüfen Sie stattdessen den Eingangskanal.',
+        'Es gibt keine Schwellwert-Einstellung in der Oberfläche: Jedes Modell, das einen Schwellwert nutzt, verwendet den Schnitt, mit dem es validiert wurde — beim Mikrotubuli-Modell 0,98 —, und zwei Modelle (Sphäroid-Zerfall, Neurit / Soma) haben gar keinen: Sie entscheiden per Argmax. Ein niedrigerer Schwellwert findet nicht mehr echte Objekte — er findet mehr mit schwächerer Evidenz, und auf einem Nicht-IRM-Kanal folgt die Mikrotubuli-Ausgabe bei keiner Einstellung dem Bild. Fehlen Detektionen, prüfen Sie stattdessen den Eingangskanal.',
       tip: 'Tipp:',
       tipText:
         'Beginnen Sie mit dem Standardmodell. Greifen Sie zu CBAM-ResUNet, wenn Ränder wichtiger sind als Geschwindigkeit, und zu Mamba-UNet, wenn Ihre Bilder niemandes Trainingsdaten ähneln.',

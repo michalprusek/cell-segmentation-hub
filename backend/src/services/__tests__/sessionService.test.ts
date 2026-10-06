@@ -62,9 +62,10 @@ describe('SessionService', () => {
   });
 
   // Every write, by the kind of key it went to. A stored session is its
-  // record (`refresh:<sha256>`) plus a `refresh-family:<family>` pointer to
-  // it; an impersonated one adds `impersonation:<sessionId>`; a rotation
-  // first writes a `refresh-used:<old key>` marker.
+  // record (`refresh:<sha256>`) and nothing else; an impersonated one adds
+  // `impersonation:<sessionId>`; a rotation first writes a
+  // `refresh-used:<old key>` marker; a detected reuse writes
+  // `refresh-revoked:<family>`.
   const writes = (prefix: string) =>
     (mockSetEx.mock.calls as Array<[string, number, string]>)
       .filter(([key]) => key.startsWith(prefix))
@@ -117,22 +118,14 @@ describe('SessionService', () => {
       return { key, ttl, record: JSON.parse(value) };
     };
 
-    it('points the family at its one live record, for as long as the record lives', async () => {
-      // How a detected reuse finds the session's current token without ever
-      // holding a token.
+    it('writes the record and nothing else', async () => {
       await sessionService.storeRefreshToken(TEST_UUID, 'rt_abc', {
         family: 'fam_given',
         rememberMe: false,
       });
 
-      expect(mockSetEx).toHaveBeenCalledTimes(2);
-      expect(writes('refresh-family:')).toEqual([
-        {
-          key: 'refresh-family:fam_given',
-          ttl: 7 * DAY,
-          value: keyOf('rt_abc'),
-        },
-      ]);
+      expect(mockSetEx).toHaveBeenCalledTimes(1);
+      expect(stored().key).toBe(keyOf('rt_abc'));
     });
 
     it('defaults to a rememberMe record on the 30-day TTL', async () => {
@@ -172,9 +165,8 @@ describe('SessionService', () => {
       const { key, ttl, record } = stored();
       expect(ttl).toBe(DAY);
       expect(record).toMatchObject(IMPERSONATION);
-      // Record, family pointer, impersonation index: all on the same bound.
-      expect(mockSetEx).toHaveBeenCalledTimes(3);
-      expect(writes('refresh-family:').map(w => w.ttl)).toEqual([DAY]);
+      // The record and the impersonation index, on the same bound.
+      expect(mockSetEx).toHaveBeenCalledTimes(2);
       expect(writes('impersonation:')).toEqual([
         { key: 'impersonation:imp-session-1', ttl: DAY, value: key },
       ]);
@@ -245,6 +237,38 @@ describe('SessionService', () => {
       const got = await sessionService.verifyRefreshToken('rt_nope');
       expect(got).toBeNull();
     });
+
+    const live = (family: string) =>
+      JSON.stringify({
+        userId: TEST_UUID,
+        expiresAt: new Date(Date.now() + 86400_000).toISOString(),
+        family,
+      });
+
+    it('returns null and deletes the record when its family has been revoked', async () => {
+      // A reuse was detected somewhere in this session's chain: every token
+      // of the family is dead, whichever one is presented.
+      mockGet
+        .mockResolvedValueOnce(live('fam_xyz')) // the record
+        .mockResolvedValueOnce('1759838400000'); // refresh-revoked:fam_xyz
+
+      const got = await sessionService.verifyRefreshToken('rt_abc');
+
+      expect(got).toBeNull();
+      expect(mockGet).toHaveBeenNthCalledWith(2, 'refresh-revoked:fam_xyz');
+      expect(mockDel).toHaveBeenCalledTimes(1);
+      expect(mockDel).toHaveBeenCalledWith(keyOf('rt_abc'));
+    });
+
+    it('asks about the family of THIS record, and keeps a record whose family is not revoked', async () => {
+      mockGet.mockResolvedValueOnce(live('fam_other')); // then null: no flag
+
+      const got = await sessionService.verifyRefreshToken('rt_abc');
+
+      expect(got).toMatchObject({ userId: TEST_UUID, family: 'fam_other' });
+      expect(mockGet).toHaveBeenNthCalledWith(2, 'refresh-revoked:fam_other');
+      expect(mockDel).not.toHaveBeenCalled();
+    });
   });
 
   describe('rotateRefreshToken', () => {
@@ -258,10 +282,10 @@ describe('SessionService', () => {
       });
     const usedKeyOf = (token: string) => `refresh-used:${keyOf(token)}`;
     // What a successful rotation writes: the "used" marker for the old
-    // token, then the successor's record and its family pointer (plus, for an
-    // impersonated session, its index entry).
+    // token, then the successor's record (plus, for an impersonated session,
+    // its index entry).
     const rotatedWrite = (impersonated = false) => {
-      expect(mockSetEx).toHaveBeenCalledTimes(impersonated ? 4 : 3);
+      expect(mockSetEx).toHaveBeenCalledTimes(impersonated ? 3 : 2);
       const records = writes('refresh:');
       expect(records).toHaveLength(1);
       const [{ key, ttl, value }] = records;
@@ -318,9 +342,8 @@ describe('SessionService', () => {
 
         await sessionService.rotateRefreshToken('rt_old');
 
-        const { key, ttl, value } = usedMarker();
+        const { key, value } = usedMarker();
         expect(key).toBe(usedKeyOf('rt_old'));
-        expect(ttl).toBe(60 * 60 * 24);
         expect(JSON.parse(value)).toEqual({
           family: 'fam_xyz',
           userId: TEST_UUID,
@@ -334,6 +357,34 @@ describe('SessionService', () => {
       }
     });
 
+    it.each([
+      ['a rememberMe session: 30 days', { rememberMe: true }, 2592000],
+      ['a legacy record without the field: 30 days', {}, 2592000],
+      ['a session without rememberMe: 7 days', { rememberMe: false }, 604800],
+      [
+        'an impersonated session: 24 hours',
+        {
+          rememberMe: true,
+          impersonatorId: 'admin-1',
+          impersonationSessionId: 'imp-session-1',
+        },
+        86400,
+      ],
+    ])(
+      'remembers a used token for as long as its session lives — %s',
+      async (_label, extra, seconds) => {
+        // A fixed day would let a token of a 30-day session be replayed on
+        // day two as merely "unknown" rather than as reuse.
+        mockGet.mockResolvedValueOnce(liveRecord(extra));
+
+        await sessionService.rotateRefreshToken('rt_old');
+
+        expect(usedMarker().ttl).toBe(seconds);
+        // The marker never outlives or undercuts the session it describes.
+        expect(writes('refresh:')[0].ttl).toBe(seconds);
+      }
+    );
+
     it('marks first, stores the successor second, deletes the old record last', async () => {
       mockGet.mockResolvedValueOnce(liveRecord());
 
@@ -344,11 +395,7 @@ describe('SessionService', () => {
       const prefixes = (mockSetEx.mock.calls as Array<[string]>).map(([k]) =>
         k.slice(0, k.indexOf(':') + 1)
       );
-      expect(prefixes).toEqual([
-        'refresh-used:',
-        'refresh:',
-        'refresh-family:',
-      ]);
+      expect(prefixes).toEqual(['refresh-used:', 'refresh:']);
       // The old record goes only once its successor is safely stored - and it
       // is the only thing deleted.
       expect(mockDel).toHaveBeenCalledTimes(1);
@@ -379,6 +426,54 @@ describe('SessionService', () => {
       expect(result).toBeNull();
       expect(mockDel).toHaveBeenCalledWith(keyOf('rt_old'));
       expect(mockSetEx).not.toHaveBeenCalled();
+    });
+
+    it('refuses a record whose family has been revoked: deletes it, stores nothing', async () => {
+      mockGet
+        .mockResolvedValueOnce(liveRecord()) // the old record
+        .mockResolvedValueOnce('1759838400000'); // refresh-revoked:fam_xyz
+
+      const result = await sessionService.rotateRefreshToken('rt_old');
+
+      expect(result).toBeNull();
+      expect(mockGet).toHaveBeenNthCalledWith(2, 'refresh-revoked:fam_xyz');
+      expect(mockDel).toHaveBeenCalledTimes(1);
+      expect(mockDel).toHaveBeenCalledWith(keyOf('rt_old'));
+      // No marker, no successor.
+      expect(mockSetEx).not.toHaveBeenCalled();
+    });
+
+    it('revokes the whole family when a used token comes back after the grace period', async () => {
+      // A token used twice, more than 30 s apart, has two holders. Which of
+      // them is the thief cannot be known, so the session ends for both.
+      vi.useFakeTimers({ toFake: ['Date'] });
+      try {
+        const now = Date.parse('2026-10-07T12:00:00.000Z');
+        vi.setSystemTime(new Date(now));
+        mockGet
+          .mockResolvedValueOnce(null) // the record is gone: already rotated
+          .mockResolvedValueOnce(
+            JSON.stringify({
+              family: 'fam_xyz',
+              userId: TEST_UUID,
+              rotatedAt: now - 30_001,
+              rememberMe: true,
+            })
+          );
+
+        const result = await sessionService.rotateRefreshToken('rt_old');
+
+        expect(result).toBeNull();
+        expect(mockGet).toHaveBeenNthCalledWith(2, usedKeyOf('rt_old'));
+        // A flag, for as long as any token of the family could still live -
+        // not a hunt for the current token.
+        expect(mockSetEx.mock.calls).toEqual([
+          ['refresh-revoked:fam_xyz', 2592000, String(now)],
+        ]);
+        expect(mockDel).not.toHaveBeenCalled();
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it('carries rememberMe=false to the new record, on the 7-day TTL', async () => {
@@ -460,7 +555,7 @@ describe('SessionService', () => {
       // the replay branch) and simply overwrites the marker.
       expect(mockDel).not.toHaveBeenCalled();
       expect(usedMarker().key).toBe(usedKeyOf('rt_old'));
-      // The marker and the one failed write; no family pointer after it.
+      // The marker and the one failed write.
       expect(mockSetEx).toHaveBeenCalledTimes(2);
     });
   });

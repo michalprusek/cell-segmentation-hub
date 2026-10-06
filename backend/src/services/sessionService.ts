@@ -88,17 +88,29 @@ class SessionService {
    */
   private readonly ROTATION_GRACE_MS = 30_000;
   /**
-   * How long a used token is REMEMBERED as used. Presenting one after the
-   * grace period is the signature of a copied token - one of the two holders
-   * is not the user - and ends the whole session. After this TTL an old
-   * token is merely unknown.
+   * A used token is REMEMBERED as used for as long as its session can live -
+   * the same TTL as the record it replaces (see `ttlFor`). Presenting one
+   * after the grace period is the signature of a copied token: one of the
+   * two holders is not the user, and the whole session ends. A shorter
+   * memory (this was 24 h at first) is a window: a copy replayed on day two
+   * of a 30-day session would have been merely "unknown" while the session
+   * it was stolen from carried on.
    */
-  private readonly USED_TOKEN_TTL = 60 * 60 * 24;
   private readonly USED_TOKEN_PREFIX = 'refresh-used:';
   /** How long a replay waits for the claiming rotation to finish: 10 x 25 ms. */
   private readonly SUCCESSOR_WAIT_ATTEMPTS = 10;
   private readonly SUCCESSOR_WAIT_MS = 25;
-  private readonly FAMILY_PREFIX = 'refresh-family:';
+  /**
+   * `refresh-revoked:<family>` - set when a reuse is detected. Every record
+   * of that family is void from then on, whenever it was or will be written.
+   *
+   * A flag on the family, deliberately not a pointer to "the family's current
+   * token". The pointer was the first design, and it races: a delayed A->B
+   * rotation can write its pointer AFTER B->C has written its own, leaving
+   * the pointer on B (already deleted) - and the revocation then deletes
+   * nothing while C lives on. A flag has no ordering to lose.
+   */
+  private readonly REVOKED_FAMILY_PREFIX = 'refresh-revoked:';
   /**
    * Server-side lifetime of an IMPERSONATED session, in seconds.
    *
@@ -155,6 +167,21 @@ class SessionService {
     return this.IMPERSONATION_INDEX_PREFIX + sessionId;
   }
 
+  /** Server-side lifetime of a session's records, in seconds. */
+  private ttlFor(rememberMe: boolean, impersonated: boolean): number {
+    if (impersonated) {
+      return this.IMPERSONATION_TOKEN_TTL;
+    }
+    return rememberMe ? this.REFRESH_TOKEN_TTL : this.REFRESH_TOKEN_TTL_SHORT;
+  }
+
+  private async isFamilyRevoked(family: string): Promise<boolean> {
+    const flag = await executeRedisCommand(async client =>
+      client.get(this.REVOKED_FAMILY_PREFIX + family)
+    );
+    return Boolean(flag);
+  }
+
   async storeRefreshToken(
     userId: string,
     token: string,
@@ -166,11 +193,7 @@ class SessionService {
     // An impersonated session gets the short TTL, and it survives rotation
     // because `rotateRefreshToken` passes the impersonation back in — so a
     // refresh cannot quietly promote a debugging session to a 30-day one.
-    const ttl = impersonation
-      ? this.IMPERSONATION_TOKEN_TTL
-      : rememberMe
-        ? this.REFRESH_TOKEN_TTL
-        : this.REFRESH_TOKEN_TTL_SHORT;
+    const ttl = this.ttlFor(rememberMe, Boolean(impersonation));
     const now = Date.now();
     const tokenData: RefreshToken = {
       userId,
@@ -188,10 +211,6 @@ class SessionService {
 
     const result = await executeRedisCommand(async client => {
       await client.setEx(key, ttl, JSON.stringify(tokenData));
-      // Where this session's ONE live token is. A rotation is linear, so a
-      // family has a single current record; this is how a detected reuse
-      // finds it without holding any token.
-      await client.setEx(this.FAMILY_PREFIX + tokenData.family, ttl, key);
       if (impersonation) {
         // Same TTL and same write, so the index cannot outlive or lag behind
         // the token it points at. See `impersonationKeyFor`.
@@ -228,6 +247,12 @@ class SessionService {
     // Redis TTL handles expiry, but double-check the embedded field
     // in case clocks drift or a manually-inserted token slipped in.
     if (new Date(tokenData.expiresAt) < new Date()) {
+      await this.deleteRefreshToken(token);
+      return null;
+    }
+
+    // The session this record belongs to was ended for reuse.
+    if (await this.isFamilyRevoked(tokenData.family)) {
       await this.deleteRefreshToken(token);
       return null;
     }
@@ -336,7 +361,10 @@ class SessionService {
     }
 
     const tokenData = JSON.parse(raw) as RefreshToken;
-    if (new Date(tokenData.expiresAt) < new Date()) {
+    if (
+      new Date(tokenData.expiresAt) < new Date() ||
+      (await this.isFamilyRevoked(tokenData.family))
+    ) {
       await this.deleteRefreshToken(oldToken);
       return null;
     }
@@ -365,7 +393,11 @@ class SessionService {
       ...(impersonation ?? {}),
     };
     await executeRedisCommand(async client =>
-      client.setEx(usedKey, this.USED_TOKEN_TTL, JSON.stringify(used))
+      client.setEx(
+        usedKey,
+        this.ttlFor(rememberMe, Boolean(impersonation)),
+        JSON.stringify(used)
+      )
     );
 
     try {
@@ -454,16 +486,18 @@ class SessionService {
     return null;
   }
 
-  /** Delete a session's current token, found through its family pointer. */
+  /**
+   * End a session: every record of the family is void from now on. Kept for
+   * the longest a record can live, so no member of the family outlasts it.
+   */
   private async revokeFamily(family: string): Promise<void> {
-    await executeRedisCommand(async client => {
-      const currentKey = await client.get(this.FAMILY_PREFIX + family);
-      if (currentKey) {
-        await client.del(currentKey);
-      }
-      await client.del(this.FAMILY_PREFIX + family);
-      return true;
-    });
+    await executeRedisCommand(async client =>
+      client.setEx(
+        this.REVOKED_FAMILY_PREFIX + family,
+        this.REFRESH_TOKEN_TTL,
+        String(Date.now())
+      )
+    );
   }
 }
 

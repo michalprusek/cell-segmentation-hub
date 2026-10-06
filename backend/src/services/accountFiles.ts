@@ -215,3 +215,216 @@ export async function deleteUserFiles(
   // other people's projects.
   return result;
 }
+
+// ---------------------------------------------------------------------------
+// Durable clean-up
+// ---------------------------------------------------------------------------
+
+/**
+ * Whose rows a pending clean-up is waiting on. The manifest is acted on only
+ * once that row is GONE - see `sweepPendingCleanups`.
+ */
+export interface CleanupOwner {
+  kind: 'project' | 'user';
+  id: string;
+}
+
+interface CleanupManifest {
+  owner: CleanupOwner;
+  createdAt: string;
+  files: UserFiles;
+}
+
+const PENDING_DIR = '.pending-cleanup';
+/**
+ * A manifest whose owner row still exists after this long was written by a
+ * deletion that never happened (the process died between the two steps, or
+ * the row delete failed and the discard did too). It is thrown away.
+ */
+const ABANDONED_AFTER_MS = 60 * 60 * 1000;
+const SWEEP_INTERVAL_MS = 10 * 60 * 1000;
+
+const pendingDir = (uploadDir: string): string =>
+  path.join(path.resolve(uploadDir), PENDING_DIR);
+
+/**
+ * Write down what is about to be deleted, BEFORE the rows go.
+ *
+ * The rows are the only record of which files belong to a project, and
+ * removing a 200-frame video's directory takes long enough for a deploy to
+ * land in the middle of it. Without this, a restart between "rows deleted"
+ * and "files removed" - or a file that could not be removed - leaves bytes on
+ * disk that nothing will ever point at again.
+ *
+ * @returns the manifest path, or null when it could not be written. That is
+ * NOT a reason to refuse the deletion - a full disk is exactly when someone
+ * needs to delete a project - so the caller carries on, best-effort.
+ */
+export async function recordPendingCleanup(
+  owner: CleanupOwner,
+  files: UserFiles,
+  uploadDir: string = config.UPLOAD_DIR
+): Promise<string | null> {
+  try {
+    const dir = pendingDir(uploadDir);
+    await fs.mkdir(dir, { recursive: true });
+    const manifest: CleanupManifest = {
+      owner: { kind: owner.kind, id: assertSafeStorageSegment(owner.id, 'id') },
+      createdAt: new Date().toISOString(),
+      files,
+    };
+    const target = path.join(dir, `${owner.kind}-${manifest.owner.id}.json`);
+    await fs.writeFile(target, JSON.stringify(manifest), 'utf8');
+    return target;
+  } catch (error) {
+    logger.error(
+      'Could not record a pending file clean-up; continuing without one',
+      error as Error,
+      'AccountFiles',
+      { owner }
+    );
+    return null;
+  }
+}
+
+/** The row delete failed: nothing is to be removed after all. */
+export async function discardPendingCleanup(
+  manifestPath: string | null
+): Promise<void> {
+  if (manifestPath) {
+    await fs.rm(manifestPath, { force: true }).catch(() => undefined);
+  }
+}
+
+/**
+ * Remove the files, and the manifest with them - but only when every one
+ * went. A manifest that survives is retried by the sweeper.
+ */
+export async function completeCleanup(
+  manifestPath: string | null,
+  files: UserFiles,
+  uploadDir: string = config.UPLOAD_DIR
+): Promise<DeleteUserFilesResult> {
+  const result = await deleteUserFiles(files, uploadDir);
+  if (manifestPath && result.failed === 0) {
+    await fs.rm(manifestPath, { force: true }).catch(() => undefined);
+  }
+  return result;
+}
+
+async function ownerStillExists(owner: CleanupOwner): Promise<boolean> {
+  const where = { where: { id: owner.id }, select: { id: true } } as const;
+  const row =
+    owner.kind === 'project'
+      ? await prisma.project.findUnique(where)
+      : await prisma.user.findUnique(where);
+  return row !== null;
+}
+
+export interface SweepResult {
+  completed: number;
+  kept: number;
+  discarded: number;
+}
+
+/**
+ * Finish clean-ups an earlier run left behind.
+ *
+ * THE OWNER ROW DECIDES. A manifest is written before the rows are deleted,
+ * so one can exist for a project that is still alive - the process died
+ * between the two steps. Acting on it would delete a live project's images.
+ * So: row gone -> remove the files; row present -> leave it, and after an
+ * hour conclude the deletion never happened and throw the manifest away.
+ */
+export async function sweepPendingCleanups(
+  uploadDir: string = config.UPLOAD_DIR,
+  now: number = Date.now()
+): Promise<SweepResult> {
+  const result: SweepResult = { completed: 0, kept: 0, discarded: 0 };
+  const dir = pendingDir(uploadDir);
+
+  let names: string[];
+  try {
+    names = (await fs.readdir(dir)).filter(name => name.endsWith('.json'));
+  } catch {
+    return result; // No directory: nothing has ever been pending.
+  }
+
+  for (const name of names) {
+    const manifestPath = path.join(dir, name);
+    try {
+      const manifest = JSON.parse(
+        await fs.readFile(manifestPath, 'utf8')
+      ) as CleanupManifest;
+
+      if (await ownerStillExists(manifest.owner)) {
+        const age = now - Date.parse(manifest.createdAt);
+        if (!(age <= ABANDONED_AFTER_MS)) {
+          await fs.rm(manifestPath, { force: true });
+          result.discarded += 1;
+        } else {
+          result.kept += 1;
+        }
+        continue;
+      }
+
+      const removed = await completeCleanup(
+        manifestPath,
+        manifest.files,
+        uploadDir
+      );
+      if (removed.failed === 0) {
+        result.completed += 1;
+      } else {
+        result.kept += 1;
+      }
+    } catch (error) {
+      // An unreadable manifest is left for a person to look at; it is never
+      // a reason to stop sweeping the others.
+      result.kept += 1;
+      logger.error(
+        'Could not process a pending file clean-up',
+        error as Error,
+        'AccountFiles',
+        { manifest: name }
+      );
+    }
+  }
+
+  if (result.completed + result.discarded > 0) {
+    logger.info('Pending file clean-ups swept', 'AccountFiles', { ...result });
+  }
+  return result;
+}
+
+let sweepTimer: NodeJS.Timeout | null = null;
+
+/**
+ * Sweep now and every ten minutes. Never throws and never blocks start-up:
+ * it is called from the server's start path, where an exception takes the
+ * whole app down (CLAUDE.md, failure pattern 23).
+ */
+export function startCleanupSweeper(): void {
+  if (sweepTimer) {
+    return;
+  }
+  const run = (): void => {
+    sweepPendingCleanups().catch(error => {
+      logger.error(
+        'Pending clean-up sweep failed',
+        error as Error,
+        'AccountFiles'
+      );
+    });
+  };
+  sweepTimer = setInterval(run, SWEEP_INTERVAL_MS);
+  sweepTimer.unref();
+  setImmediate(run);
+}
+
+export function stopCleanupSweeper(): void {
+  if (sweepTimer) {
+    clearInterval(sweepTimer);
+    sweepTimer = null;
+  }
+}

@@ -57,6 +57,10 @@ const { prismaMock, sessionServiceMock, accountFilesMock, liveMock } =
   },
   accountFilesMock: {
     collectUserFiles: vi.fn() as ReturnType<typeof vi.fn>,
+    recordPendingCleanup: vi.fn() as ReturnType<typeof vi.fn>,
+    discardPendingCleanup: vi.fn() as ReturnType<typeof vi.fn>,
+    completeCleanup: vi.fn() as ReturnType<typeof vi.fn>,
+    // Still exported by the module, no longer called by authService.
     deleteUserFiles: vi.fn() as ReturnType<typeof vi.fn>,
   },
   prismaMock: {
@@ -239,7 +243,11 @@ describe('AuthService', () => {
       fileKeys: [],
       dirKeys: [],
     });
-    accountFilesMock.deleteUserFiles.mockResolvedValue({
+    accountFilesMock.recordPendingCleanup.mockResolvedValue(
+      '/tmp/manifest.json'
+    );
+    accountFilesMock.discardPendingCleanup.mockResolvedValue(undefined);
+    accountFilesMock.completeCleanup.mockResolvedValue({
       removed: 0,
       failed: 0,
       refused: 0,
@@ -1079,11 +1087,10 @@ describe('AuthService', () => {
       expect(sessionsValidAfter.toISOString()).toBe(
         '2026-10-06T12:00:00.789Z'
       );
-      expect(liveMock.disconnectUserSockets).toHaveBeenCalledTimes(1);
-      expect(liveMock.disconnectUserSockets).toHaveBeenCalledWith('user-1');
-      expect(prismaMock.user.update.mock.invocationCallOrder[0]).toBeLessThan(
-        liveMock.disconnectUserSockets.mock.invocationCallOrder[0]
-      );
+      // Closing the user's sockets is the CONTROLLER's job here, once the
+      // response carrying the replacement cookies has gone out - done from
+      // the service it would race the caller's own reconnect.
+      expect(liveMock.disconnectUserSockets).not.toHaveBeenCalled();
     });
 
     it('returns only the message, and leaves every session to reissueSession', async () => {
@@ -1596,13 +1603,17 @@ describe('AuthService', () => {
       password: baseUser.password,
     };
 
+    const MANIFEST = '/tmp/manifest.json';
+
     const expectNothingDeleted = () => {
       expect(accountFilesMock.collectUserFiles).not.toHaveBeenCalled();
+      expect(accountFilesMock.recordPendingCleanup).not.toHaveBeenCalled();
       expect(prismaMock.user.delete).not.toHaveBeenCalled();
-      expect(accountFilesMock.deleteUserFiles).not.toHaveBeenCalled();
+      expect(accountFilesMock.discardPendingCleanup).not.toHaveBeenCalled();
+      expect(accountFilesMock.completeCleanup).not.toHaveBeenCalled();
     };
 
-    it('collects the files, deletes the user row, then removes the files — in that order', async () => {
+    it('collects the files, records the clean-up, deletes the user row, then completes it — in that order', async () => {
       prismaMock.user.findUnique.mockResolvedValueOnce(account);
       accountFilesMock.collectUserFiles.mockResolvedValueOnce(FILES);
       prismaMock.user.delete.mockResolvedValueOnce(account);
@@ -1620,22 +1631,38 @@ describe('AuthService', () => {
         account.password
       );
       expect(accountFilesMock.collectUserFiles).toHaveBeenCalledWith('user-1');
+      // The list is written down before the rows that ARE the list go, so a
+      // restart between the delete and the clean-up loses nothing.
+      expect(accountFilesMock.recordPendingCleanup).toHaveBeenCalledTimes(1);
+      expect(accountFilesMock.recordPendingCleanup).toHaveBeenCalledWith(
+        { kind: 'user', id: 'user-1' },
+        FILES
+      );
       expect(prismaMock.user.delete).toHaveBeenCalledTimes(1);
       expect(prismaMock.user.delete).toHaveBeenCalledWith({
         where: { id: 'user-1' },
       });
-      // Exactly the list read while the rows still existed.
-      expect(accountFilesMock.deleteUserFiles).toHaveBeenCalledWith(FILES);
+      // Exactly the manifest that was recorded, and exactly the list read
+      // while the rows still existed.
+      expect(accountFilesMock.completeCleanup).toHaveBeenCalledTimes(1);
+      expect(accountFilesMock.completeCleanup).toHaveBeenCalledWith(
+        MANIFEST,
+        FILES
+      );
+      expect(accountFilesMock.discardPendingCleanup).not.toHaveBeenCalled();
+      // The service no longer removes files itself.
+      expect(accountFilesMock.deleteUserFiles).not.toHaveBeenCalled();
 
-      // The rows ARE the file list: read it first, or it is gone. And no file
-      // is touched until the account is really deleted.
-      const collected =
-        accountFilesMock.collectUserFiles.mock.invocationCallOrder[0];
-      const rowDeleted = prismaMock.user.delete.mock.invocationCallOrder[0];
-      const filesRemoved =
-        accountFilesMock.deleteUserFiles.mock.invocationCallOrder[0];
-      expect(collected).toBeLessThan(rowDeleted);
-      expect(rowDeleted).toBeLessThan(filesRemoved);
+      const order = (fn: ReturnType<typeof vi.fn>) =>
+        fn.mock.invocationCallOrder[0];
+      const collected = order(accountFilesMock.collectUserFiles);
+      const recorded = order(accountFilesMock.recordPendingCleanup);
+      const rowDeleted = order(prismaMock.user.delete);
+      const completed = order(accountFilesMock.completeCleanup);
+      expect(collected).toBeLessThan(recorded);
+      expect(recorded).toBeLessThan(rowDeleted);
+      // No file is touched until the account is really deleted.
+      expect(rowDeleted).toBeLessThan(completed);
     });
 
     it('leaves the cascade to the database — no manual walk, no transaction', async () => {
@@ -1708,7 +1735,7 @@ describe('AuthService', () => {
       expectNothingDeleted();
     });
 
-    it('removes no file when the row could not be deleted', async () => {
+    it('withdraws the recorded clean-up, and removes no file, when the row could not be deleted', async () => {
       prismaMock.user.findUnique.mockResolvedValueOnce(account);
       accountFilesMock.collectUserFiles.mockResolvedValueOnce(FILES);
       prismaMock.user.delete.mockRejectedValueOnce(new Error('FK violation'));
@@ -1717,7 +1744,13 @@ describe('AuthService', () => {
         authService.deleteAccount('user-1', CONFIRMATION)
       ).rejects.toMatchObject({ statusCode: 500 });
 
-      // The account still exists, so its files must too.
+      // The account still exists, so its files must too: the recorded
+      // clean-up is withdrawn, or the next sweep would carry it out.
+      expect(accountFilesMock.discardPendingCleanup).toHaveBeenCalledTimes(1);
+      expect(accountFilesMock.discardPendingCleanup).toHaveBeenCalledWith(
+        MANIFEST
+      );
+      expect(accountFilesMock.completeCleanup).not.toHaveBeenCalled();
       expect(accountFilesMock.deleteUserFiles).not.toHaveBeenCalled();
     });
 

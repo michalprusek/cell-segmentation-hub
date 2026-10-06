@@ -14,7 +14,12 @@ import { getStorageProvider } from '../storage/index';
 import { v4 as uuidv4 } from 'uuid';
 import sharp from 'sharp';
 import { sessionService } from './sessionService';
-import { collectUserFiles, deleteUserFiles } from './accountFiles';
+import {
+  collectUserFiles,
+  completeCleanup,
+  discardPendingCleanup,
+  recordPendingCleanup,
+} from './accountFiles';
 import type {
   LoginData,
   RegisterData,
@@ -651,7 +656,6 @@ export async function changePassword(
       where: { id: userId },
       data: { password: hashedPassword, sessionsValidAfter: cutoffForNow() },
     });
-    disconnectUserSockets(userId);
 
     logger.info('Password changed successfully', 'AuthService', { userId });
 
@@ -842,7 +846,16 @@ export async function deleteAccount(
     // audit tables that must outlive the account), so this one statement
     // removes the projects, images, segmentations, queue items, shares,
     // folders, API keys and jobs with it.
-    await prisma.user.delete({ where: { id: userId } });
+    const manifest = await recordPendingCleanup(
+      { kind: 'user', id: userId },
+      files
+    );
+    try {
+      await prisma.user.delete({ where: { id: userId } });
+    } catch (error) {
+      await discardPendingCleanup(manifest);
+      throw error;
+    }
 
     logger.info('Account and all related rows deleted', 'AuthService', {
       userId,
@@ -851,7 +864,7 @@ export async function deleteAccount(
     // After the commit, and never fatal: the account is gone either way, and
     // a file that could not be removed is logged for an operator rather than
     // reported to a user who no longer exists.
-    const result = await deleteUserFiles(files);
+    const result = await completeCleanup(manifest, files);
     logger.info('Account files removed', 'AuthService', { userId, ...result });
   } catch (error) {
     if (error instanceof ApiError) {

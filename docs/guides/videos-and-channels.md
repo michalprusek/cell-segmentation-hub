@@ -287,13 +287,18 @@ added, unshifted.
 item and the worker reads that channel's PNG. It is not remembered for the next
 batch.
 
-**Look at what is preselected before you confirm — it is not necessarily the
-segmentation source:**
+**What is preselected** (the same rule in both places, since 2026-10-07):
 
-| Where                 | Picker opens when                                    | Preselected channel                                                                                        |
-| --------------------- | ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| Project page, Segment | the project's videos have more than one channel name | the **alphabetically first** channel name in the project — the "source" mark is ignored (`488_nm` < `IRM`) |
-| Editor, Resegment     | the open video has more than one channel             | the marked source; if none is marked, **channel 0**                                                        |
+| Where                 | Picker opens when                                    | Preselected channel                                                    |
+| --------------------- | ---------------------------------------------------- | ---------------------------------------------------------------------- |
+| Project page, Segment | the project's videos have more than one channel name | the channel marked as the segmentation source; if none is, **nothing** |
+| Editor, Resegment     | the open video has more than one channel             | the channel marked as the segmentation source; if none is, **nothing** |
+
+With nothing preselected the **Segment** button stays disabled until you pick a
+channel. (Before that date the project page preselected the _alphabetically
+first_ channel name and ignored the mark — `488_nm` ahead of a correctly
+identified `IRM` — and both pickers fell back to the first channel when
+nothing was marked.)
 
 When the picker does not open — a single-channel video, or a request made
 through the API without a `channel` — the frame is segmented on the marked

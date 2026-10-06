@@ -365,12 +365,13 @@ a multi-page TIFF, which carries no wavelength and often no meaningful channel
 names. What follows from it:
 
 - **In the interface a multi-channel video always goes through the channel
-  picker**, so the user does click a channel — but the picker opens with an
-  unidentified channel already selected, and one click on **Segment** accepts
-  it. In the editor's **Resegment** dialog the preselection is channel 0. In the
-  project page's **Segment** dialog it is the **alphabetically first channel
-  name in the project** — and that is true even when an IRM channel _was_
-  identified, so `488_nm` is preselected ahead of `IRM`.
+  picker**, on the project page (**Segment**) and in the editor
+  (**Resegment**) alike. It preselects the channel marked as the segmentation
+  source; when none is marked it preselects nothing and its confirm button
+  stays disabled until the user chooses
+  (`src/lib/segmentationChannelDefault.ts`). Until 2026-10-07 the project page
+  preselected the alphabetically first channel name and ignored the mark, and
+  both pickers fell back to the first channel.
 - **A request that names no channel is segmented on channel 0 with no prompt
   at all**: any direct call to `POST /api/queue/batch`, `/api/segmentation/batch`
   or `/api/queue/images/:id` (which has no `channel` field), and any

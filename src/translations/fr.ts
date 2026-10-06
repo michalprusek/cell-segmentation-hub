@@ -1972,7 +1972,7 @@ export default {
       },
       thresholdNote: 'Les seuils de détection sont fixes pour chaque modèle.',
       thresholdNoteText:
-        'Il n’existe aucun réglage de seuil dans l’interface : chaque modèle applique la coupure avec laquelle il a été validé, celle des microtubules étant 0,98. Abaisser un seuil ne trouve pas davantage d’objets réels : il en trouve davantage avec des indices plus faibles, et sur un canal non IRM la sortie microtubules ne suit l’image à aucun réglage. S’il manque des détections, vérifiez plutôt le canal d’entrée.',
+        'Il n’existe aucun réglage de seuil dans l’interface : chaque modèle qui utilise un seuil applique la coupure avec laquelle il a été validé — celle des microtubules étant 0,98 — et deux modèles (Désagrégation des sphéroïdes, Neurite / soma) n’en ont aucun : ils décident par argmax. Abaisser un seuil ne trouve pas davantage d’objets réels : il en trouve davantage avec des indices plus faibles, et sur un canal non IRM la sortie microtubules ne suit l’image à aucun réglage. S’il manque des détections, vérifiez plutôt le canal d’entrée.',
       tip: 'Astuce :',
       tipText:
         'Commencez par le modèle par défaut. Passez à CBAM-ResUNet quand les contours comptent plus que la vitesse, et à Mamba-UNet quand vos images ne ressemblent au jeu d’entraînement de personne.',

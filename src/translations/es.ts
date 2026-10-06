@@ -1964,7 +1964,7 @@ export default {
       },
       thresholdNote: 'Los umbrales de detección son fijos para cada modelo.',
       thresholdNoteText:
-        'No hay ningún control de umbral en la interfaz: cada modelo aplica el corte con el que fue validado, y el de microtúbulos es 0,98. Bajar un umbral no encuentra más objetos reales: encuentra más con evidencia más débil, y en un canal que no sea IRM la salida de microtúbulos no sigue la imagen con ningún ajuste. Si faltan detecciones, revise el canal de entrada.',
+        'No hay ningún control de umbral en la interfaz: cada modelo que usa un umbral aplica el corte con el que fue validado —el de microtúbulos es 0,98— y dos modelos (Disgregación de esferoides, Neurita / soma) no tienen ninguno: deciden por argmax. Bajar un umbral no encuentra más objetos reales: encuentra más con evidencia más débil, y en un canal que no sea IRM la salida de microtúbulos no sigue la imagen con ningún ajuste. Si faltan detecciones, revise el canal de entrada.',
       tip: 'Consejo:',
       tipText:
         'Empiece con el modelo predeterminado. Recurra a CBAM-ResUNet cuando los bordes importen más que la velocidad, y a Mamba-UNet cuando sus imágenes no se parezcan al conjunto de entrenamiento de nadie.',
