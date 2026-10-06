@@ -244,6 +244,18 @@ describe('output formats', () => {
     expect((res.body as Buffer).length).toBeGreaterThan(50);
   });
 
+  it('keeps a non-ASCII upload name intact in the download name', async () => {
+    const res = await post(
+      { model: 'segformer', output_format: 'mask_png' },
+      PNG,
+      'snímek ž.tif'
+    );
+    expect(res.status).toBe(200);
+    expect(res.headers['content-disposition']).toBe(
+      'attachment; filename="sn_mek _.labels.png"; filename*=UTF-8\'\'sn%C3%ADmek%20%C5%BE.labels.png'
+    );
+  });
+
   it('refuses yolo for a polyline model before running anything', async () => {
     const res = await post({ model: 'sperm', output_format: 'yolo' });
     expect(res.status).toBe(422);

@@ -49,6 +49,11 @@ export const MAX_CONCURRENT_PER_KEY = 2;
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: SYNC_MAX_BYTES, files: 1, fields: 16 },
+  // The part's filename is UTF-8 on the wire for every current client (curl,
+  // requests, fetch). The parser's default is Latin-1, which turned
+  // `snímek.tif` into `snÃ­mek.tif` — and that mis-decoded name into the
+  // download's Content-Disposition. Seen on the deployed API.
+  defParamCharset: 'utf8',
 }).single('image');
 
 type FieldError = { field: string; detail: string };
