@@ -363,6 +363,15 @@ type-check:
 # because backend/src still carries pre-existing problems that would
 # otherwise block every commit. Regenerate with `npm run lint:backend:update`.
 #
+# Steps 8 and 9 are the two cross-copy parity scripts. Until 2026-10-06 neither
+# was run by this target or by CI: check-model-parity.cjs was run by nothing at
+# all, and verify-shared-types.cjs only by lint-staged, and only when a file
+# under src/types/ or backend/src/types/ was staged — not the two
+# modelRegistry.ts files that hold most of what it compares. Both read their
+# sources as TEXT (the Python files included), so they need Node and a checkout
+# and nothing else. They sit after the Python suites only so that "step 4" and
+# "step 7", which other documents cite by number, keep their numbers.
+#
 # Vitest is intentionally NOT in this target — it is minutes, not seconds,
 # and `make ci` exists to be the fast pre-PR gate. That does NOT make it
 # optional: .github/workflows/ci.yml runs it with a coverage floor in both
@@ -370,25 +379,29 @@ type-check:
 # requires both contexts. Run `make ci-test` (frontend) and the container
 # invocation in docs/testing-guide.md (backend) before pushing.
 ci:
-	@echo "🔍 [1/7] TypeScript (frontend — baseline gate)"
+	@echo "🔍 [1/9] TypeScript (frontend — baseline gate)"
 	@npm run type-check
-	@echo "🔍 [2/7] TypeScript (backend)"
+	@echo "🔍 [2/9] TypeScript (backend)"
 	@cd backend && npm run type-check
-	@echo "🔍 [3/7] ESLint (frontend, strict — 0 warnings)"
+	@echo "🔍 [3/9] ESLint (frontend, strict — 0 warnings)"
 	@npx eslint --max-warnings=0 src/
-	@echo "🔍 [4/7] ESLint (backend — baseline gate)"
+	@echo "🔍 [4/9] ESLint (backend — baseline gate)"
 	@npm run --silent lint:backend
-	@echo "🔍 [5/7] i18n completeness (6 locales)"
+	@echo "🔍 [5/9] i18n completeness (6 locales)"
 	@node scripts/check-i18n.cjs
-	@echo "🔍 [6/7] Documentation link integrity"
+	@echo "🔍 [6/9] Documentation link integrity"
 	@node scripts/check-doc-links.cjs
-	@echo "🔍 [7/7] Python suites (the same ones CI runs)"
+	@echo "🔍 [7/9] Python suites (the same ones CI runs)"
 	@$(MAKE) --no-print-directory test-py
+	@echo "🔍 [8/9] Model-id parity (2 TS registries + Python AVAILABLE_MODELS + ModelType)"
+	@node scripts/check-model-parity.cjs
+	@echo "🔍 [9/9] Shared constants (frontend ↔ backend copies)"
+	@node scripts/verify-shared-types.cjs
 	@echo "✅ All local CI checks passed"
 
 # Documentation link integrity on its own — every relative link under docs/
 # and in the root Markdown files must resolve. Run after renaming or deleting
-# a page; it is also step 5 of `make ci`.
+# a page; it is also step 6 of `make ci`.
 docs-links:
 	@node scripts/check-doc-links.cjs
 

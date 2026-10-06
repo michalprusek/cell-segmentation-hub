@@ -7,11 +7,18 @@
  * separate files and just verify they match. Cheaper than wiring a
  * monorepo / shared package, sufficient because drift is rare.
  *
- * Runs in pre-commit (via lint-staged) and in CI. Fails with a clear
- * diff if any pair drifts.
+ * Runs in `make ci` (step 9), in the `frontend` job of
+ * `.github/workflows/ci.yml`, and in pre-commit via lint-staged when one of
+ * the files below is staged. Fails with a clear diff if any pair drifts.
+ *
+ * (This header claimed "and in CI" for a long time while only lint-staged ran
+ * it, and lint-staged matched just `src/types/**` and `backend/src/types/**` —
+ * so the two `modelRegistry.ts` files, which hold two of the four constants,
+ * never triggered it. Wired in for real on 2026-10-06.)
  *
  * To register a new shared constant, append an entry to `SHARED_CONSTS`
- * below — the rest is generic.
+ * below — the rest is generic. If it lives in a file not yet listed there,
+ * ADD THAT FILE to the matching pattern in `.lintstagedrc.json` too.
  */
 
 const fs = require('fs');
