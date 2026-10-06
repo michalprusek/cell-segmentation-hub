@@ -10,7 +10,7 @@ from fastapi import APIRouter, HTTPException, UploadFile, File, Depends, Form
 import torch
 
 from ._errors import internal_error
-from .input_depth import prepare_for_model
+from .input_depth import open_image_page, prepare_for_model
 from PIL import Image
 import io
 
@@ -298,6 +298,11 @@ async def segment_image(
         description="Segmentation threshold",
     ),
     detect_holes: bool = Form(True, description="Whether to detect holes in segmentation"),
+    page: int = Form(
+        0,
+        ge=0,
+        description="Zero-based page of a multi-page image (TIFF) to segment",
+    ),
     loader = Depends(get_model_loader)
 ):
     """Main segmentation endpoint"""
@@ -311,10 +316,17 @@ async def segment_image(
                 detail="Invalid image file. Supported formats: PNG, JPG, JPEG, TIFF, TIF, BMP"
             )
         
+        # Refuse an unknown model HERE. Further down it reached
+        # `loader.get_model`, which runs `_auto_unload_if_needed` BEFORE it
+        # notices the id is unknown - so a typo could evict a loaded model
+        # under memory pressure, and then answered 500.
+        if model not in loader.AVAILABLE_MODELS:
+            raise HTTPException(status_code=400, detail=f"Unknown model: {model!r}")
+
         # Read image data and convert to PIL Image
         image_data = await file.read()
-        image = Image.open(io.BytesIO(image_data))
-        
+        image, page_count = open_image_page(image_data, page)
+
         logger.info(f"Processing image: {file.filename}, Model: {model}, Threshold: {threshold}, Detect holes: {detect_holes}")
         
         # Perform segmentation with timing
@@ -341,6 +353,10 @@ async def segment_image(
         result["gpu_enabled"] = torch.cuda.is_available()
         result["batch_size_used"] = getattr(loader, 'last_batch_size', 1)
         result["success"] = True
+        # Only page `page` was segmented; a caller that sent a stack needs to
+        # be able to tell that the rest was not looked at.
+        result["page"] = page
+        result["page_count"] = page_count
         
         # Add warning metadata if no detections found (check both polygons and polylines)
         polygon_count = len(result.get('polygons', []))

@@ -39,10 +39,12 @@ An 8-bit image is returned untouched — the same object — so every result on
 
 from __future__ import annotations
 
+import io
 from typing import Optional
 
 import numpy as np
-from PIL import Image
+from fastapi import HTTPException
+from PIL import Image, UnidentifiedImageError
 
 #: Models that consume the native bit depth and must not be pre-converted.
 NATIVE_DEPTH_MODELS = frozenset({"microtubule", "neurite_soma"})
@@ -101,3 +103,43 @@ def prepare_for_model(
     if model in NATIVE_DEPTH_MODELS:
         return image, None
     return stretch_to_uint8(image)
+
+
+
+def open_image_page(data: bytes, page: int = 0) -> tuple[Image.Image, int]:
+    """Open `data` positioned on `page`; return the image and its page count.
+
+    Bytes that are not an image answer 400 here. It used to be a 500: the
+    route validated the filename's extension and nothing else, so anything
+    else surfaced as an unhandled `UnidentifiedImageError` with a correlation
+    id, as if the service had broken.
+
+    A multi-page TIFF used to be segmented on page 0, silently, whatever was
+    in the rest of it. Page 0 is still the default, but it is now a choice the
+    caller can make and the page count comes back with the result.
+    """
+    try:
+        image = Image.open(io.BytesIO(data))
+        page_count = int(getattr(image, "n_frames", 1) or 1)
+        if page >= page_count:
+            raise HTTPException(
+                status_code=400,
+                detail=f"page {page} is out of range: the image has {page_count} page(s)",
+            )
+        if page:
+            image.seek(page)
+        # Deliberately NOT `image.load()`. This runs on the event loop of an
+        # `async def` route; the pixels are decoded later, inside the model's
+        # preprocessing, which is on the single-slot executor and under the
+        # inference lock. Decoding here would stall /health for the duration
+        # on a 498 Mpx frame and let four concurrent requests each hold a
+        # decoded frame at once. The price is that a file TRUNCATED after a
+        # valid header is still found late.
+    except HTTPException:
+        raise
+    except (UnidentifiedImageError, OSError, ValueError, EOFError) as error:
+        raise HTTPException(
+            status_code=400,
+            detail=f"The file could not be decoded as an image: {type(error).__name__}",
+        ) from error
+    return image, page_count

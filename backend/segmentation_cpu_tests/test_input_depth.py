@@ -14,7 +14,7 @@ from PIL import Image
 from test_inference_serialisation import routes  # the real module, torch-safe
 
 from api import input_depth
-from api.input_depth import prepare_for_model, stretch_to_uint8
+from api.input_depth import open_image_page, prepare_for_model, stretch_to_uint8
 
 
 def _camera_frame(dtype=np.uint16, hot_pixel=None):
@@ -229,3 +229,150 @@ def test_the_real_dispatch_does_not_touch_8_bit_input(model):
 
     assert loader.seen[model] is source
     assert "input_conversion" not in result
+
+
+
+# --- opening the upload ----------------------------------------------------
+
+
+def _tiff_stack(pages):
+    import io
+
+    import tifffile
+
+    buffer = io.BytesIO()
+    tifffile.imwrite(buffer, np.stack(pages), photometric="minisblack")
+    return buffer.getvalue()
+
+
+def _png(array):
+    import io
+
+    buffer = io.BytesIO()
+    Image.fromarray(array).save(buffer, "PNG")
+    return buffer.getvalue()
+
+
+def test_a_single_image_is_page_0_of_1():
+    image, pages = open_image_page(_png(np.zeros((6, 5), np.uint8)))
+    assert pages == 1 and image.size == (5, 6)
+
+
+def test_each_page_of_a_stack_can_be_selected():
+    stack = _tiff_stack([np.full((6, 5), 1000 * (i + 1), np.uint16) for i in range(3)])
+    for page in range(3):
+        image, pages = open_image_page(stack, page)
+        assert pages == 3
+        assert np.unique(np.asarray(image)).tolist() == [1000 * (page + 1)]
+
+
+def test_a_page_past_the_end_is_the_callers_error():
+    from fastapi import HTTPException
+
+    stack = _tiff_stack([np.zeros((4, 4), np.uint16)] * 2)
+    with pytest.raises(HTTPException) as caught:
+        open_image_page(stack, 2)
+    assert caught.value.status_code == 400
+    assert "2 page(s)" in caught.value.detail
+
+
+@pytest.mark.parametrize(
+    "data",
+    [b"", b"this is not an image", b"\x89PNG\r\n\x1a\n" + b"\x00" * 16],
+    ids=["empty", "text", "png-magic-then-garbage"],
+)
+def test_bytes_that_are_not_an_image_are_a_400_not_a_500(data):
+    from fastapi import HTTPException
+
+    with pytest.raises(HTTPException) as caught:
+        open_image_page(data)
+    assert caught.value.status_code == 400
+
+
+def test_opening_does_not_decode_the_pixels():
+    # See the note in `open_image_page`: decoding belongs on the executor.
+    # A PNG truncated AFTER its header therefore still opens here.
+    rng = np.random.default_rng(0)
+    whole = _png(rng.integers(0, 255, (300, 300), dtype=np.uint8))
+    image, pages = open_image_page(whole[: len(whole) // 2])
+    assert pages == 1 and image.size == (300, 300)
+
+
+# --- the real route --------------------------------------------------------
+
+
+class _Upload:
+    def __init__(self, data, filename="frame.tif"):
+        self._data, self.filename, self.content_type = data, filename, None
+
+    async def read(self):
+        return self._data
+
+
+class _RouteLoader(_RecordingLoader):
+    AVAILABLE_MODELS = {name: {} for name in EIGHT_BIT_MODELS}
+    device = "cpu"
+
+
+def _segment(loader, data, **form):
+    import asyncio
+
+    params = {"model": "hrnet", "threshold": 0.5, "detect_holes": True, "page": 0}
+    params.update(form)
+    return asyncio.run(
+        routes.segment_image(file=_Upload(data), loader=loader, **params)
+    )
+
+
+def test_the_route_segments_the_requested_page_and_reports_the_count():
+    stack = _tiff_stack(
+        [_camera_frame(), _camera_frame()[::-1].copy(), _camera_frame()]
+    )
+    loader = _RouteLoader()
+
+    result = _segment(loader, stack, page=1)
+
+    assert (result["page"], result["page_count"]) == (1, 3)
+    expected, _ = stretch_to_uint8(Image.fromarray(_camera_frame()[::-1].copy()))
+    assert np.array_equal(np.asarray(loader.seen["hrnet"]), np.asarray(expected))
+
+
+def test_the_route_defaults_to_page_0():
+    stack = _tiff_stack([_camera_frame(), _camera_frame()[::-1].copy()])
+    loader = _RouteLoader()
+    result = _segment(loader, stack)
+    assert (result["page"], result["page_count"]) == (0, 2)
+    expected, _ = stretch_to_uint8(Image.fromarray(_camera_frame()))
+    assert np.array_equal(np.asarray(loader.seen["hrnet"]), np.asarray(expected))
+
+
+def test_the_route_refuses_an_unknown_model_before_reading_the_image():
+    from fastapi import HTTPException
+
+    loader = _RouteLoader()
+    with pytest.raises(HTTPException) as caught:
+        _segment(loader, b"not even an image", model="no_such_model")
+    assert caught.value.status_code == 400
+    assert "no_such_model" in caught.value.detail
+    assert loader.seen == {}
+
+
+@pytest.mark.parametrize("page", [2, 99])
+def test_the_route_refuses_a_page_past_the_end(page):
+    from fastapi import HTTPException
+
+    loader = _RouteLoader()
+    with pytest.raises(HTTPException) as caught:
+        _segment(loader, _tiff_stack([_camera_frame()] * 2), page=page)
+    assert caught.value.status_code == 400
+    assert loader.seen == {}
+
+
+def test_the_route_answers_400_for_bytes_that_are_not_an_image():
+    from fastapi import HTTPException
+
+    loader = _RouteLoader()
+    with pytest.raises(HTTPException) as caught:
+        _segment(loader, b"plain text with a .tif name")
+    assert caught.value.status_code == 400
+    assert loader.seen == {}
