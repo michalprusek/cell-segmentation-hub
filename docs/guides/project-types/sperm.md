@@ -2,19 +2,41 @@
 
 **Type in the dialog:** _Sperm_ · internal key `sperm`
 
-For spermatozoa morphology, where each cell is measured as **three parts** —
-head, midpiece and tail — with per-part lengths.
+For spermatozoa morphology, where each cell is measured part by part with
+per-part lengths: as **three parts** — head, midpiece and tail — with the
+default model, or as **two parts** — head and tail — with the two-part model.
 
 ---
 
 ## Model
 
-One model, forced: **Sperm Morphology**. It performs multi-class instance
-segmentation and emits **polylines natively** — skeleton extraction, breadth-first
-ordering, then Douglas–Peucker simplification — rather than thresholded blobs.
+Two models; the project's owner picks one next to the project type at the top
+of the project page.
 
-Default threshold 0.5. See
-[ML models](../../reference/ml-models.md#sperm--sperm-morphology).
+| Model                              | Parts per cell       | Use it when                                                                |
+| ---------------------------------- | -------------------- | -------------------------------------------------------------------------- |
+| **Sperm Morphology** (default)     | head, midpiece, tail | you measure the midpiece separately                                        |
+| **Sperm Morphology (head + tail)** | head, tail           | your material is annotated and measured as head and tail only, no midpiece |
+
+Both are the same architecture and pipeline — multi-class instance segmentation
+emitting **polylines natively** (skeleton extraction, breadth-first ordering,
+then Douglas–Peucker simplification) rather than thresholded blobs. The
+two-part model is fine-tuned from the three-part one on sperm annotated as head
+and tail only.
+
+The choice is not cosmetic. In the two-part convention the head is the whole
+helical part, which the three-part model divides between head and midpiece — so
+the two models place the head/tail boundary differently, and adding the
+three-part model's midpiece to its tail does not give the two-part
+measurement. Pick the model that matches how your lengths are defined, and do
+not mix the two within one comparison.
+
+A new sperm project starts on **Sperm Morphology**. Changing the model affects
+only later runs; resegment existing images to get the other model's parts.
+
+Registry threshold 0.5, which neither model reads — the pipeline applies its
+own. See [ML models](../../reference/ml-models.md#sperm--sperm-morphology) and
+[the two-part model](../../reference/ml-models.md#sperm_2part--sperm-morphology-head--tail).
 
 ---
 
@@ -22,7 +44,8 @@ Default threshold 0.5. See
 
 Open polylines. Each carries:
 
-- **`partClass`** — `head`, `midpiece` or `tail`;
+- **`partClass`** — `head`, `midpiece` or `tail` (the two-part model emits only
+  `head` and `tail`);
 - **`instanceId`** — `sperm_1`, `sperm_2`, … grouping the parts of one cell.
 
 Parts are colour-coded consistently everywhere in the interface:

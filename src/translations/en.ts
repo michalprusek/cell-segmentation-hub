@@ -1668,7 +1668,7 @@ export default {
       title: 'Introduction',
       whatIs: 'What is SpheroSeg?',
       description:
-        'SpheroSeg is a platform for AI-assisted segmentation and measurement of microscopy images and time-lapse videos. It ships seven project types backed by eleven segmentation models, a polygon and polyline editor, cross-frame microtubule tracking, and a batch export pipeline.',
+        'SpheroSeg is a platform for AI-assisted segmentation and measurement of microscopy images and time-lapse videos. It ships seven project types backed by twelve segmentation models, a polygon and polyline editor, cross-frame microtubule tracking, and a batch export pipeline.',
       developedBy:
         'The platform was developed by Bc. Michal Průšek at the Faculty of Nuclear Sciences and Physical Engineering, Czech Technical University in Prague, under the supervision of Ing. Adam Novozámský, Ph.D., in collaboration with researchers from the Institute of Biochemistry and Microbiology at UCT Prague.',
       addresses:
@@ -1729,7 +1729,7 @@ export default {
         sperm: {
           name: 'Sperm',
           bestFor:
-            'For: sperm morphology, measured as three parts per cell — head, midpiece and tail.',
+            'For: sperm morphology, measured part by part — head, midpiece and tail with the default model, or head and tail only with the two-part model.',
           output:
             'Output: open polylines carrying a part class and an instance id, colour-coded green, orange and cyan.',
         },
@@ -1845,9 +1845,9 @@ export default {
     modelSelection: {
       title: 'Models',
       description:
-        'Eleven models, each locked to the project types it was trained for. The picker only offers compatible models, and only standard spheroid projects have a real choice — every other type has exactly one.',
+        'Twelve models, each locked to the project types it was trained for. The picker only offers compatible models: standard spheroid projects choose among five, sperm projects between two, and every other type has exactly one.',
       spheroidModels: 'Spheroid models — choose one',
-      specialisedModels: 'Specialised models — one per project type',
+      specialisedModels: 'Specialised models — tied to one project type',
       models: {
         hrnet: {
           name: 'HRNet (Balanced)',
@@ -1906,9 +1906,19 @@ export default {
         sperm: {
           name: 'Sperm Morphology',
           inferenceTime: 'About 0.30 s per image',
-          bestFor: 'Used by: Sperm projects.',
+          bestFor:
+            'Used by: Sperm projects, as the default. Measures three parts per cell — head, midpiece and tail.',
           description:
             'Multi-class instance segmentation producing head, midpiece and tail as polylines natively, via skeleton extraction rather than thresholded blobs.',
+        },
+        spermTwoPart: {
+          name: 'Sperm Morphology (head + tail)',
+          inferenceTime:
+            'About 0.30 s per image — the same pipeline as Sperm Morphology',
+          bestFor:
+            'Used by: Sperm projects, when you pick it instead of the default. For material annotated and measured as head and tail only, with no separate midpiece.',
+          description:
+            'The same architecture as Sperm Morphology, fine-tuned from it on sperm annotated as head and tail only. Each cell comes back as two polylines — the head, which here covers the whole helical part, welded to the tail — so the head–tail boundary is learned rather than obtained by folding the midpiece into a neighbouring part.',
         },
         microtubule: {
           name: 'Microtubule (SPARSE35)',

@@ -1641,7 +1641,7 @@ export default {
       title: 'Úvod',
       whatIs: 'Co je SpheroSeg?',
       description:
-        'SpheroSeg je platforma pro segmentaci a měření mikroskopických snímků a časosběrných videí s pomocí umělé inteligence. Nabízí sedm typů projektů opřených o jedenáct segmentačních modelů, editor polygonů a polyline, sledování mikrotubulů napříč snímky a dávkový export.',
+        'SpheroSeg je platforma pro segmentaci a měření mikroskopických snímků a časosběrných videí s pomocí umělé inteligence. Nabízí sedm typů projektů opřených o dvanáct segmentačních modelů, editor polygonů a polyline, sledování mikrotubulů napříč snímky a dávkový export.',
       developedBy:
         'Platformu vyvinul Bc. Michal Průšek z Fakulty jaderné a fyzikálně inženýrské ČVUT v Praze pod vedením Ing. Adama Novozámského, Ph.D., ve spolupráci s výzkumníky z Ústavu biochemie a mikrobiologie VŠCHT Praha.',
       addresses:
@@ -1702,7 +1702,7 @@ export default {
         sperm: {
           name: 'Spermie',
           bestFor:
-            'Pro: morfologii spermií, měřenou po třech částech na buňku — hlavička, krček a bičík.',
+            'Pro: morfologii spermií, měřenou po částech buňky — s výchozím modelem hlavička, krček a bičík, s dvoudílným modelem jen hlavička a bičík.',
           output:
             'Výstup: otevřené polyline s třídou části a identifikátorem instance, barevně odlišené zeleně, oranžově a azurově.',
         },
@@ -1818,9 +1818,9 @@ export default {
     modelSelection: {
       title: 'Modely',
       description:
-        'Jedenáct modelů, každý svázaný s typy projektů, pro které byl trénován. Výběr nabízí jen kompatibilní modely a skutečnou volbu mají pouze standardní sferoidové projekty — ostatní typy mají právě jeden.',
+        'Dvanáct modelů, každý svázaný s typy projektů, pro které byl trénován. Výběr nabízí jen kompatibilní modely: standardní sferoidové projekty volí z pěti, projekty se spermiemi ze dvou a ostatní typy mají právě jeden.',
       spheroidModels: 'Sferoidové modely — vyberte si',
-      specialisedModels: 'Specializované modely — jeden na typ projektu',
+      specialisedModels: 'Specializované modely — vázané na jeden typ projektu',
       models: {
         hrnet: {
           name: 'HRNet (vyvážený)',
@@ -1879,9 +1879,19 @@ export default {
         sperm: {
           name: 'Morfologie spermií',
           inferenceTime: 'Přibližně 0,30 s na snímek',
-          bestFor: 'Používá: projekty se spermiemi.',
+          bestFor:
+            'Používá: projekty se spermiemi, jako výchozí. Měří tři části buňky — hlavičku, krček a bičík.',
           description:
             'Víceklasová instanční segmentace, která hlavičku, krček i bičík rovnou vytváří jako polyline pomocí extrakce kostry, nikoli prahovaných skvrn.',
+        },
+        spermTwoPart: {
+          name: 'Morfologie spermií (hlavička + bičík)',
+          inferenceTime:
+            'Přibližně 0,30 s na snímek — stejné zpracování jako Morfologie spermií',
+          bestFor:
+            'Používá: projekty se spermiemi, pokud jej zvolíte místo výchozího. Pro materiál anotovaný a měřený jen jako hlavička a bičík, bez samostatného krčku.',
+          description:
+            'Stejná architektura jako Morfologie spermií, doladěná z tohoto modelu na spermiích anotovaných jen jako hlavička a bičík. Každá buňka se vrací jako dvě polyline — hlavička, která zde zahrnuje celou šroubovicovou část, navázaná na bičík — takže hranici mezi hlavičkou a bičíkem se model naučil a nevzniká přičtením krčku k sousední části.',
         },
         microtubule: {
           name: 'Mikrotubuly (SPARSE35)',

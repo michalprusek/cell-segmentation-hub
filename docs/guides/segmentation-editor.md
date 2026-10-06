@@ -288,8 +288,8 @@ channel currently marked as the segmentation source. On single-channel data the
 run starts immediately.
 
 The model is **the project's**, shown next to the project type at the top of
-the project page. Only plain spheroid projects have a real choice among five;
-every other type has exactly one compatible model and is forced to it.
+the project page. Plain spheroid projects choose among five models and sperm projects between
+two; every other type has exactly one compatible model and is forced to it.
 
 > **Resegmenting replaces the frame's segmentation.** Manual edits to that frame
 > are overwritten by the new model output, and unsaved local edits are discarded

@@ -360,7 +360,10 @@ For scripted access use the public API and an API key instead
 | ------------------- | ------ | ------------------- |
 | `/api/auth/logout`  | POST   | User logout         |
 | `/api/auth/profile` | PUT    | Update user profile |
-| `/api/auth/profile` | DELETE | Delete user account |
+
+There is no `DELETE /api/auth/profile`: it answers 404, although the web app's
+"Delete account" dialog calls it. See
+[Authentication → Known gaps](authentication.md#known-gaps).
 
 ### 4. Project Management (🔒 Protected)
 
@@ -413,9 +416,10 @@ curl -o cell-segmentation-api.json http://localhost:3001/api-docs/postman.json
 
 1. Import collection from URL or file
 2. Set `baseUrl` variable: `http://localhost:3001/api`
-3. Login via `/auth/login` request
-4. Copy access token to `accessToken` variable
-5. Test protected endpoints
+3. Login via the `/auth/login` request. The session arrives as cookies, which
+   Postman keeps and re-sends; there is no token to copy (the `accessToken`
+   variable is unused by the app's own routes)
+4. Test protected endpoints
 
 ### 3. Generating Client SDKs
 

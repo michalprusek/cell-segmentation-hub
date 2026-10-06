@@ -1665,7 +1665,7 @@ export default {
       title: 'Introducción',
       whatIs: '¿Qué es SpheroSeg?',
       description:
-        'SpheroSeg es una plataforma para la segmentación y medición asistidas por IA de imágenes de microscopía y vídeos de lapso de tiempo. Ofrece siete tipos de proyecto respaldados por once modelos de segmentación, un editor de polígonos y polilíneas, seguimiento de microtúbulos entre fotogramas y una canalización de exportación por lotes.',
+        'SpheroSeg es una plataforma para la segmentación y medición asistidas por IA de imágenes de microscopía y vídeos de lapso de tiempo. Ofrece siete tipos de proyecto respaldados por doce modelos de segmentación, un editor de polígonos y polilíneas, seguimiento de microtúbulos entre fotogramas y una canalización de exportación por lotes.',
       developedBy:
         'La plataforma fue desarrollada por Bc. Michal Průšek en la Facultad de Ciencias Nucleares e Ingeniería Física de la Universidad Técnica Checa de Praga, bajo la supervisión del Ing. Adam Novozámský, Ph.D., en colaboración con investigadores del Instituto de Bioquímica y Microbiología de la UCT de Praga.',
       addresses:
@@ -1726,7 +1726,7 @@ export default {
         sperm: {
           name: 'Espermatozoides',
           bestFor:
-            'Para: morfología de espermatozoides, medida en tres partes por célula: cabeza, pieza intermedia y cola.',
+            'Para: morfología de espermatozoides, medida por partes de cada célula: cabeza, pieza intermedia y cola con el modelo predeterminado, o solo cabeza y cola con el modelo de dos partes.',
           output:
             'Resultado: polilíneas abiertas con clase de parte e identificador de instancia, en verde, naranja y cian.',
         },
@@ -1842,9 +1842,10 @@ export default {
     modelSelection: {
       title: 'Modelos',
       description:
-        'Once modelos, cada uno vinculado a los tipos de proyecto para los que fue entrenado. El selector solo ofrece modelos compatibles, y solo los proyectos de esferoides estándar tienen elección real: los demás tipos tienen exactamente uno.',
+        'Doce modelos, cada uno vinculado a los tipos de proyecto para los que fue entrenado. El selector solo ofrece modelos compatibles: los proyectos de esferoides estándar eligen entre cinco, los de espermatozoides entre dos y los demás tipos tienen exactamente uno.',
       spheroidModels: 'Modelos de esferoides: elija uno',
-      specialisedModels: 'Modelos especializados: uno por tipo de proyecto',
+      specialisedModels:
+        'Modelos especializados: ligados a un tipo de proyecto',
       models: {
         hrnet: {
           name: 'HRNet (equilibrado)',
@@ -1903,9 +1904,19 @@ export default {
         sperm: {
           name: 'Morfología de espermatozoides',
           inferenceTime: 'Unos 0,30 s por imagen',
-          bestFor: 'Lo usan: los proyectos de espermatozoides.',
+          bestFor:
+            'Lo usan: los proyectos de espermatozoides, por defecto. Mide tres partes por célula: cabeza, pieza intermedia y cola.',
           description:
             'Segmentación de instancias multiclase que produce cabeza, pieza intermedia y cola directamente como polilíneas, mediante extracción del esqueleto en vez de manchas umbralizadas.',
+        },
+        spermTwoPart: {
+          name: 'Morfología de espermatozoides (cabeza + cola)',
+          inferenceTime:
+            'Unos 0,30 s por imagen, el mismo proceso que Morfología de espermatozoides',
+          bestFor:
+            'Lo usan: los proyectos de espermatozoides, si lo elige en lugar del predeterminado. Para material anotado y medido solo como cabeza y cola, sin pieza intermedia separada.',
+          description:
+            'La misma arquitectura que Morfología de espermatozoides, ajustada a partir de ese modelo con espermatozoides anotados solo como cabeza y cola. Cada célula se devuelve como dos polilíneas —la cabeza, que aquí abarca toda la parte helicoidal, unida a la cola—, de modo que el límite entre cabeza y cola es aprendido y no el resultado de sumar la pieza intermedia a una parte vecina.',
         },
         microtubule: {
           name: 'Microtúbulos (SPARSE35)',

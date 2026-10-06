@@ -1673,7 +1673,7 @@ export default {
       title: 'Introduction',
       whatIs: 'Qu’est-ce que SpheroSeg ?',
       description:
-        'SpheroSeg est une plateforme de segmentation et de mesure assistées par IA d’images de microscopie et de vidéos accélérées. Elle propose sept types de projet appuyés sur onze modèles de segmentation, un éditeur de polygones et de polylignes, un suivi des microtubules d’une image à l’autre et une chaîne d’export par lots.',
+        'SpheroSeg est une plateforme de segmentation et de mesure assistées par IA d’images de microscopie et de vidéos accélérées. Elle propose sept types de projet appuyés sur douze modèles de segmentation, un éditeur de polygones et de polylignes, un suivi des microtubules d’une image à l’autre et une chaîne d’export par lots.',
       developedBy:
         'La plateforme a été développée par Bc. Michal Průšek à la Faculté des sciences nucléaires et de génie physique de l’Université technique tchèque de Prague, sous la direction de l’Ing. Adam Novozámský, Ph.D., en collaboration avec des chercheurs de l’Institut de biochimie et de microbiologie de l’UCT Prague.',
       addresses:
@@ -1734,7 +1734,7 @@ export default {
         sperm: {
           name: 'Spermatozoïdes',
           bestFor:
-            'Pour : morphologie des spermatozoïdes, mesurée en trois parties par cellule — tête, pièce intermédiaire et flagelle.',
+            'Pour : morphologie des spermatozoïdes, mesurée par parties de chaque cellule — tête, pièce intermédiaire et flagelle avec le modèle par défaut, ou seulement tête et flagelle avec le modèle en deux parties.',
           output:
             'Résultat : polylignes ouvertes portant une classe de partie et un identifiant d’instance, en vert, orange et cyan.',
         },
@@ -1851,9 +1851,9 @@ export default {
     modelSelection: {
       title: 'Modèles',
       description:
-        'Onze modèles, chacun rattaché aux types de projet pour lesquels il a été entraîné. Le sélecteur ne propose que des modèles compatibles, et seuls les projets sphéroïdes standard offrent un vrai choix : tous les autres types n’en ont qu’un.',
+        'Douze modèles, chacun rattaché aux types de projet pour lesquels il a été entraîné. Le sélecteur ne propose que des modèles compatibles : les projets sphéroïdes standard choisissent parmi cinq, les projets spermatozoïdes entre deux, et tous les autres types n’en ont qu’un.',
       spheroidModels: 'Modèles pour sphéroïdes — à vous de choisir',
-      specialisedModels: 'Modèles spécialisés — un par type de projet',
+      specialisedModels: 'Modèles spécialisés — liés à un type de projet',
       models: {
         hrnet: {
           name: 'HRNet (équilibré)',
@@ -1912,9 +1912,19 @@ export default {
         sperm: {
           name: 'Morphologie des spermatozoïdes',
           inferenceTime: 'Environ 0,30 s par image',
-          bestFor: 'Utilisé par : les projets spermatozoïdes.',
+          bestFor:
+            'Utilisé par : les projets spermatozoïdes, par défaut. Mesure trois parties par cellule — tête, pièce intermédiaire et flagelle.',
           description:
             'Segmentation d’instances multiclasse produisant tête, pièce intermédiaire et flagelle directement sous forme de polylignes, par extraction du squelette plutôt que par taches seuillées.',
+        },
+        spermTwoPart: {
+          name: 'Morphologie des spermatozoïdes (tête + flagelle)',
+          inferenceTime:
+            'Environ 0,30 s par image — le même traitement que Morphologie des spermatozoïdes',
+          bestFor:
+            'Utilisé par : les projets spermatozoïdes, si vous le choisissez à la place du modèle par défaut. Pour le matériel annoté et mesuré uniquement en tête et flagelle, sans pièce intermédiaire distincte.',
+          description:
+            'La même architecture que Morphologie des spermatozoïdes, affinée à partir de ce modèle sur des spermatozoïdes annotés uniquement en tête et flagelle. Chaque cellule est restituée sous forme de deux polylignes — la tête, qui couvre ici toute la partie hélicoïdale, raccordée au flagelle — si bien que la limite entre tête et flagelle est apprise, et non obtenue en rattachant la pièce intermédiaire à une partie voisine.',
         },
         microtubule: {
           name: 'Microtubules (SPARSE35)',
