@@ -11,8 +11,23 @@ and polyline JSON. No project, no editor, no manual annotation.
 
 ## What it does
 
-One `.nd2` file is one **well**. Each file contains several **positions** (fields
-of view) and three named channels:
+A **well** is several **positions** (fields of view) recorded in three named
+channels. It can arrive in either of two layouts, and a folder may mix them:
+
+- **one file per well** holding all three channels
+  (`WellD03_ChannelIRM_TIRF_488_Seq0000.nd2`);
+- **one file per channel** (`WellD04_ChannelIRM_Seq0000.nd2`,
+  `WellD04_ChannelTIRF_488_Seq0001.nd2`,
+  `WellD04_Channel488_InSol_Seq0002.nd2`). These are paired by the `Well<id>`
+  in their names — nothing else about the names matters — and must show the
+  same positions: the same number of them, at the same stage coordinates.
+
+The TIRF channel may be a short **time series** (several frames per position).
+The microtubules are still traced once, on IRM, and then measured on **every**
+TIRF frame: each microtubule gets one row per frame, told apart by the
+`tirf_frame` column.
+
+The three channels:
 
 | Channel role        | Used for                                                          |
 | ------------------- | ----------------------------------------------------------------- |
@@ -193,6 +208,21 @@ users index by position.
 | 21  | `irm_tirf_dx`               | The same, horizontally                                                                                                                                                                                                                                    |
 | 22  | `irm_tirf_quality`          | Peak dominance of that measurement (winning correlation peak over its best rival). Reported on a refusal too; blank only when nothing ran                                                                                                                 |
 | 23  | `irm_tirf_reason`           | `ok`, a refusal (`implausible_shift` / `low_confidence` — **expected on most rows**, since IRM and TIRF share no edges), or `estimator_unavailable` / `error:<Type>` meaning the measurement could not run at all                                         |
+| 24  | `focus_irm_score`           | Out-of-focus descriptor of the IRM frame: area occupied by structure more than 5 σ above the local background, in pixels per 10 000. **Advisory** — see `focus_qc.csv`                                                                                    |
+| 25  | `focus_tirf_score`          | The same for the TIRF frame (frame 0 of a time series)                                                                                                                                                                                                    |
+| 26  | `focus_flagged`             | `1` if either channel scored below its threshold, `0` if not, blank if nothing was measured. Nothing is excluded on it                                                                                                                                    |
+| 27  | `focus_reason`              | `ok`, or `;`-joined `oof:` / `unscoreable:` / `out_of_calibration:<channel>` tokens                                                                                                                                                                       |
+| 28  | `tirf_frame`                | 0-based TIRF frame this row was measured on. Always `0` for a recording with one TIRF frame                                                                                                                                                               |
+| 29  | `tirf_frames`               | How many TIRF frames the position has. `1` for every run before 2026-10-07                                                                                                                                                                                |
+| 30  | `tirf_frame_time_s`         | Seconds from the position's first TIRF frame to this one, from the ND2's own timestamps. Blank when the file does not say                                                                                                                                 |
+| 31  | `segmentation_source_file`  | The file that was **segmented** (IRM). `source_file` (16) is the file the intensities were read from; the two differ only for a well recorded as one file per channel                                                                                     |
+
+**With a TIRF time series the table is one row per microtubule _per frame_.**
+Columns 1–6, 14–17 and 20–27 describe the microtubule or its position and
+repeat unchanged across its rows; the intensities (7–13, 18, 19) are per
+frame. To get the one-row-per-microtubule table of earlier runs, keep the rows
+where `tirf_frame` is `0`. The alignment (20–23) and focus (24–27) diagnostics
+are measured against TIRF frame 0.
 
 Three distinctions worth pinning down:
 

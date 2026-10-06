@@ -2214,7 +2214,7 @@ export default {
       },
       results: 'Qué recibe',
       resultsList: {
-        csv: 'results.csv: una fila por microtúbulo, con su longitud, la intensidad a lo largo de él y su fondo',
+        csv: 'results.csv: una fila por microtúbulo, con su longitud, la intensidad a lo largo de él y su fondo. Si el canal de fluorescencia es una serie temporal corta, cada microtúbulo tiene una fila por fotograma (columna tirf_frame)',
         failures:
           'failures.csv: cada pocillo o posición que no pudo producirse, y por qué. Se escribe siempre, aunque esté vacío',
         focus:
@@ -2229,7 +2229,7 @@ export default {
         'Mide qué parte del fotograma ocupa estructura que sobresale claramente del ruido, así que un campo densamente cubierto puede pasar aun estando desenfocado; se equivoca del lado de conservar los datos, no de tirarlos. Sus umbrales se ajustaron sobre una única adquisición, de modo que otra exposición u otra cámara se informa como out_of_calibration en la columna reason: es una nota sobre el umbral, no sobre su fotograma.',
       channelNote: 'Se segmenta IRM, se mide la fluorescencia.',
       channelNoteText:
-        'El modelo se entrenó con IRM, así que los filamentos se trazan ahí y el canal de fluorescencia solo se lee a lo largo de esos trazos. Un archivo sin canal IRM se informa como fallo en lugar de segmentarse a partir de otra cosa.',
+        'El modelo se entrenó con IRM, así que los filamentos se trazan ahí y el canal de fluorescencia solo se lee a lo largo de esos trazos. Un pocillo sin canal IRM se informa como fallo en lugar de segmentarse a partir de otra cosa. Un pocillo puede ser un archivo con los tres canales o un archivo por canal; estos se emparejan por el nombre del pocillo en los nombres de archivo.',
       retentionNote: 'Las subidas se limpian, los resultados no.',
       retentionNoteText:
         'Los archivos de entrada se borran cuando una ejecución termina limpiamente, y se conservan una semana si no fue así, que es justo la ejecución que quizá quiera repetir. El resultado permanece hasta que borre el trabajo.',

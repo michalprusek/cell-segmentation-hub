@@ -867,6 +867,28 @@ Bearer sseg_…` only. A key in the query string is refused with 400 rather
 
 Batch microtubule assay of ND2 wells. `essays_api.py` is a thin FastAPI job runner that shells out to `module/evaluate.py`; the `essays` image is built `FROM` the ml image so it inherits the exact validated stack (torch 2.6.0+cu124, transformers 5.5.4 — see the pin warning in [Deploy Gotchas](#deploy-gotchas)).
 
+- **A well is one ND2 file OR one file per channel** (since 2026-10-07).
+  `mt_pipeline.nd2_io.group_wells` pairs files by the `Well<id>` in their
+  names: a well id on ONE file is that file and is not even opened (every
+  older folder takes its old path — proven byte-identical on a real well),
+  several files none of which is complete are assembled, and two files for
+  one role are a FAILED well, never a guess. The first per-channel folder
+  (330 files) had produced 330 failures and an empty table: each file was read
+  as a whole well lacking "the other" channels. Three things about it are easy
+  to get wrong:
+  - **The TIRF file may be a time series** (5 frames per position there).
+    Each position is segmented ONCE, on IRM, and measured on EVERY TIRF frame:
+    `results.csv` is then one row per microtubule PER FRAME (`tirf_frame`).
+    The run's `[ok] … N MT` lines and the `[done]` total count MICROTUBULES,
+    not rows — `essays_api.py` sums them into `mtCount`.
+  - **Per-channel files are separate passes over the positions**, so the stage
+    leaves each field and returns between the IRM and the TIRF frame. Do not
+    assume that registers: MEASURE it by sliding the IRM centerlines over the
+    TIRF frame and finding where the signal peaks. On the first folder the
+    offset was 0–1.4 px and zero shift kept a median 99.0 % of the peak
+    contrast, so nothing is shifted — but that is one microscope.
+  - **Files of one well are refused unless they show the same fields**: same
+    position count, same frame size, stage XY within 5 µm.
 - **The module is vendored at `backend/essays/module`** (it was a separate private repo cloned at image build until 2026-08-11 — no more git clone, build secret, or network at build time).
 - **The model code has ONE copy**, in `backend/segmentation/models/microtubule` (`wrapper.py`, `net.py`, `instance/`, `vendor/dynamic_network_architectures/`, `params_sparse35.json`). The essays module imports it via `_mt_package.ensure_on_path()` (`MT_PACKAGE_DIR=/app/models` in the image, populated by a `COPY` from the repo — _not_ inherited from the ml base image, so a stale ml image can never make the worker run older model code). Before this, the two copies drifted in opposite directions for months and neither side got the other's fix. **Do not re-introduce a second copy**; a change to `wrapper.py` or anything under `instance/` reaches both callers, so re-verify BOTH the essays batch run and interactive MT segmentation when touching them.
 - **The metrics have ONE copy too**, in `backend/segmentation/models/mt_measure.py` — band rasterisation (ImageJ `Roi.convertLineToArea`), the per-MT background ring, and the ImageJ statistics (histogram-tie median, `ddof=1`). `api/mt_metrics.py` (project export), `module/mt_pipeline/measure.py` (essays batch) and `api/kymograph_velocity.py` (kymograph trajectory intensities, since 2026-09-01) all import that one file; the essays adapter only swaps `(row,col)`→`(x,y)` and names CSV columns, and the kymograph one only swaps `(frame,x)`→`(x,y)`. Before 2026-08-13 they were separate implementations and had drifted: the export was aligned to ImageJ in 2026-07 (PRs #301, #304) while the essays module was still a private repo, so on one real frame with identical centerlines the two disagreed on band area by −7.8 %…+26.5 %, on ring area by 2.2×, and on the **net signal by a median of +9.9 % (max +33.2 %)** — only length agreed. **Do not re-introduce a local band/ring/statistic**; `test_metrics_match_export.py` asserts the adapter defines nothing but `measure_frame`, and `test_mt_metrics_band.py` asserts the export's helpers _are_ the shared objects. Note `mt_measure.py` sits BESIDE the `microtubule` package, not inside it: importing that package loads the model wrapper and therefore torch, which measuring pixels does not need (and which would make the export's tests skip on a driverless box). **`rasterize_band` and `vicinity_mask` were vectorised on 2026-09-01 and the result is deliberately harder to read than the loops it replaced — do not "simplify" either back.** `rasterize_band` builds every offset quadrilateral and joint triangle for the whole polyline at once and fills them in one flattened pixel pass (`_fill_convex_polygons`), because a fill's cost was ~80 µs of numpy CALL overhead regardless of whether it covered 30 pixels or 3 000; `vicinity_mask` finds the band's bounding box with two `any` reductions instead of `np.nonzero`, which on a 2048² frame was **1.190 s of that function's 1.220 s** for 162 MTs. Together: `frame_geometry` 1.977 s → 0.220 s per essays position and 0.676 s → 0.072 s per export frame, `tracks_intensity` 12.7 → 1.3 ms per trajectory. It is **bit-identical, not close**: 8 820 randomised + real-production `rasterize_band` cases and 10 965 `vicinity_mask` combinations compare equal under `np.array_equal`, and a real `/mt-metrics` export (7 200 rows) and a real essays well (162 MTs) byte-diff clean. The arithmetic is kept in the scalar form's exact groupings for that reason — the `_EPS` 1e-9 tie-breaker has only ~10× of headroom over the rounding noise of an algebraically-equal rewrite at 2048² coordinates, so an "obvious" hoist in `cross` is not safe. The docstrings carry the numbers.

@@ -304,10 +304,13 @@ def test_focus_columns_are_appended_never_inserted():
     siblings would read better and would silently shift every later column in
     every user's script.
     """
-    assert COLUMNS[-4:] == FOCUS_RESULT_COLUMNS
+    assert COLUMNS[23:27] == FOCUS_RESULT_COLUMNS
     assert COLUMNS.index("irm_tirf_reason") < COLUMNS.index("focus_irm_score")
-    # The 23 columns that existed before this change keep their indices.
-    assert len(COLUMNS) == 27
+    # The 23 columns that existed before this change keep their indices, and
+    # so do these four now that the TIRF time-series columns follow them.
+    assert len(COLUMNS) == 31
+    assert COLUMNS[27:] == ["tirf_frame", "tirf_frames", "tirf_frame_time_s",
+                            "segmentation_source_file"]
     assert COLUMNS[18] == "signal_minus_background"
     assert COLUMNS[19:23] == ["irm_tirf_dy", "irm_tirf_dx",
                               "irm_tirf_quality", "irm_tirf_reason"]
@@ -536,6 +539,11 @@ class _FakeND2:
 
     def frame_metadata(self, i):
         raise AttributeError("no timestamp")
+
+    @property
+    def sizes(self):
+        """Axis name -> length, in array order, as a real ND2File reports."""
+        return dict(zip("PCYX", self.data.shape))
 
     def asarray(self):
         return self.data

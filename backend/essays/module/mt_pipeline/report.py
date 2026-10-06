@@ -71,6 +71,27 @@ COLUMNS = [
     # where a reader goes to threshold it, and it is complete there — it covers
     # the zero-microtubule positions this table cannot represent at all.
     "focus_irm_score", "focus_tirf_score", "focus_flagged", "focus_reason",
+    # Added 2026-10-07 with the per-channel file layout, whose TIRF file holds
+    # a short time series per position (5 frames, 0.2 s apart, on the first
+    # folder that used it). Each microtubule is segmented ONCE, on IRM, and
+    # measured on EVERY TIRF frame, so it now has one row per frame:
+    # `tirf_frame` is the 0-based frame, `tirf_frames` how many the position
+    # has, `tirf_frame_time_s` the seconds since that position's first TIRF
+    # frame (blank when the file does not say).
+    #
+    # A recording with one TIRF frame - every run before this - still has
+    # exactly one row per microtubule, with `tirf_frame` 0 and `tirf_frames`
+    # 1. To get the old one-row-per-microtubule table out of a time series,
+    # keep the rows where `tirf_frame` is 0.
+    #
+    # Everything that describes the POSITION rather than the frame - length,
+    # the solution median, the alignment and focus diagnostics (both measured
+    # on TIRF frame 0) - repeats unchanged across a microtubule's rows.
+    "tirf_frame", "tirf_frames", "tirf_frame_time_s",
+    # Which file was segmented. `source_file` above is the file the
+    # intensities were read from; the two are the same name unless the well
+    # arrived as one file per channel.
+    "segmentation_source_file",
 ]
 
 

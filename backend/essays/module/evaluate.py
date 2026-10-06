@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 """Batch microtubule analysis of ND2 well recordings.
 
-Point this at a folder of ``.nd2`` well recordings (one file per well, several
-positions, channels IRM / 488-in-solution / TIRF 488). Microtubules are
+Point this at a folder of ``.nd2`` well recordings: several positions per
+well, channels IRM / 488-in-solution / TIRF 488, either as one file per well
+or as one file per channel (``WellD04_ChannelIRM_...``,
+``WellD04_ChannelTIRF_488_...``, ``WellD04_Channel488_InSol_...``), which the
+run pairs up by well name. Microtubules are
 **segmented on the IRM channel** — the one the checkpoint was trained on —
 and the intensities are then **read off the TIRF channel** along the resulting
 centerlines. Per microtubule it produces a row in ``results.csv`` with:
@@ -14,6 +17,9 @@ centerlines. Per microtubule it produces a row in ``results.csv`` with:
   * the acquisition timestamp of the recording (``acquired_at``, ISO-8601 UTC),
   * the position's out-of-focus verdict (``focus_*``), measured on the raw
     16-bit frames,
+
+and, when the TIRF channel is a time series, one such row per TIRF frame
+(``tirf_frame``) - the microtubule is segmented once and measured on each;
 
 plus QC overlay PNGs (one per channel), polyline annotation JSON, and
 ``focus_qc.csv`` — one row per position rather than per microtubule, because a
@@ -249,18 +255,28 @@ def main() -> int:
     # there is nothing to fetch and no token to supply. The --online-backbone
     # flag and the bundled DINOv3 config it guarded went with the v7 model.
 
-    from mt_pipeline import (iter_positions, find_nd2_files, measure_frame,
-                             CsvWriter, FailureLog, FocusLog, cell,
-                             focus_result_cells, parse_well_id, save_overlay,
+    from mt_pipeline import (iter_positions, find_nd2_files, group_wells,
+                             measure_frame, CsvWriter, FailureLog, FocusLog,
+                             cell, focus_result_cells, save_overlay,
                              save_annotation_json)
 
-    files = find_nd2_files(args.data)
-    if not files:
+    nd2_files = find_nd2_files(args.data)
+    if not nd2_files:
         print(f"[error] no .nd2 files found under {args.data}", file=sys.stderr)
         return 2
+    sol_match = tuple(s.strip() for s in args.solution_name.split(",") if s.strip())
+    # One entry per WELL. A well is usually one file; a well recorded as one
+    # file per channel is put back together here, by name.
+    files = group_wells(nd2_files, irm_match=(args.irm_name,),
+                        tirf_match=(args.tirf_name,), solution_match=sol_match)
     if args.limit_wells:
         files = files[:args.limit_wells]
+    # The job runner reads the total off this line ("N well file").
     print(f"[info] {len(files)} well file(s) to process from {args.data}")
+    n_split = sum(1 for w in files if len(w.files) > 1)
+    if n_split:
+        print(f"[info] {n_split} of them are recorded as one file per channel "
+              f"({len(nd2_files)} .nd2 files in the folder)")
 
     try:
         weights = ensure_weights(args.weights)
@@ -301,7 +317,6 @@ def main() -> int:
     # have nowhere to carry its verdict.
     focus_log = FocusLog(out / "focus_qc.csv")
     budget = _RetryBudget(RETRY_WAIT_BUDGET_S)
-    sol_match = tuple(s.strip() for s in args.solution_name.split(",") if s.strip())
 
     n_pos = n_mt = n_fail = 0
     t_start = time.time()
@@ -314,7 +329,7 @@ def main() -> int:
             n_fail += 1
             # No position list, so no per-position identity to record — the
             # whole well is gone, which is what a blank position column means.
-            failures.record(well_id=parse_well_id(f), position="",
+            failures.record(well_id=f.well_id, position="",
                             source_file=f.name, stage="read", attempts=1,
                             error_type=type(e).__name__, error_message=str(e))
             print(f"[warn] ({fi}/{len(files)}) failed to read {f.name}: {e}")
@@ -330,8 +345,13 @@ def main() -> int:
             # field with no microtubules, and a position whose segmentation
             # failed (failures.csv says the well was lost, this says the frame
             # was out of focus, which is often why).
+            # The names a row carries: the file that was segmented and the
+            # file whose pixels were measured. One name twice for a well that
+            # is a single file.
+            irm_file = pos.irm_file or f.name
+            tirf_file = pos.tirf_file or f.name
             focus_log.record(well_id=pos.well_id, position=pos.position,
-                             source_file=f.name, acquired_at=pos.acquired_at,
+                             source_file=irm_file, acquired_at=pos.acquired_at,
                              focus=pos.focus)
             # IRM, not TIRF: the checkpoint was trained and validated on IRM
             # frames (TIRF is architecturally supported but unvalidated).
@@ -342,7 +362,7 @@ def main() -> int:
             if attempt.error is not None:
                 n_fail += 1
                 failures.record(well_id=pos.well_id, position=pos.position,
-                                source_file=f.name, stage="segment",
+                                source_file=irm_file, stage="segment",
                                 attempts=attempt.attempts,
                                 error_type=attempt.error.type_name,
                                 error_message=attempt.error.message)
@@ -353,33 +373,47 @@ def main() -> int:
             centerlines = attempt.result["centerlines_rc"]
 
             # ...and TIRF for the readout: the centerlines come from IRM, the
-            # intensities integrated along them are the TIRF signal.
-            rows = measure_frame(pos.tirf, centerlines,
-                                 mt_width=args.mt_width,
-                                 bg_margin=args.bg_margin, px_um=pos.px_um)
+            # intensities integrated along them are the TIRF signal. Every
+            # TIRF frame the position has is measured against the SAME
+            # centerlines - one frame for a plain recording, several when the
+            # TIRF channel is a time series.
             # Per-POSITION, repeated on each of that position's MT rows:
-            # results.csv is one row per microtubule and the alignment belongs
-            # to the frame pair they were measured on.
+            # results.csv is one row per microtubule (per frame) and the
+            # alignment belongs to the frame pair they were measured on.
             align = pos.alignment
             focus_cells = focus_result_cells(pos.focus)
-            for r in rows:
-                r["well_id"] = pos.well_id
-                r["position"] = pos.position
-                r["solution_intensity_median"] = round(solution_median, 3)
-                r["source_file"] = f.name
-                r["acquired_at"] = pos.acquired_at
-                # None renders as a blank cell: an unmeasured offset must not
-                # read as a measured zero.
-                r["irm_tirf_dy"] = cell(align and align.dy)
-                r["irm_tirf_dx"] = cell(align and align.dx)
-                r["irm_tirf_quality"] = cell(
-                    None if not align or align.quality is None
-                    else round(align.quality, 3)
-                )
-                r["irm_tirf_reason"] = align.reason if align else ""
-                # Same per-position-repeated-per-row rule as the alignment
-                # above; the cells are built once outside this loop.
-                r.update(focus_cells)
+            tirf_frames = pos.tirf_frames
+            times = pos.tirf_times_s
+            rows: list[dict] = []
+            for t, tirf in enumerate(tirf_frames):
+                frame_rows = measure_frame(tirf, centerlines,
+                                           mt_width=args.mt_width,
+                                           bg_margin=args.bg_margin,
+                                           px_um=pos.px_um)
+                for r in frame_rows:
+                    r["well_id"] = pos.well_id
+                    r["position"] = pos.position
+                    r["solution_intensity_median"] = round(solution_median, 3)
+                    r["source_file"] = tirf_file
+                    r["segmentation_source_file"] = irm_file
+                    r["acquired_at"] = pos.acquired_at
+                    # None renders as a blank cell: an unmeasured offset must
+                    # not read as a measured zero.
+                    r["irm_tirf_dy"] = cell(align and align.dy)
+                    r["irm_tirf_dx"] = cell(align and align.dx)
+                    r["irm_tirf_quality"] = cell(
+                        None if not align or align.quality is None
+                        else round(align.quality, 3)
+                    )
+                    r["irm_tirf_reason"] = align.reason if align else ""
+                    # Same per-position-repeated-per-row rule as the alignment
+                    # above; the cells are built once outside this loop.
+                    r.update(focus_cells)
+                    r["tirf_frame"] = t
+                    r["tirf_frames"] = len(tirf_frames)
+                    r["tirf_frame_time_s"] = cell(
+                        times[t] if t < len(times) else None)
+                rows.extend(frame_rows)
             csvw.write_rows(rows)
 
             stem = f"{pos.well_id}_pos{pos.position}"
@@ -392,15 +426,23 @@ def main() -> int:
                 save_overlay(pos.tirf, centerlines,
                              out / "overlays" / f"{stem}_tirf.png")
             if not args.no_json:
-                save_annotation_json(pos.well_id, pos.position, f.name,
+                # Each polyline once. The writer pairs centerline i with
+                # row i and stops at the last centerline, so of a time
+                # series it reads exactly frame 0's rows - which come first -
+                # for the ids and lengths, and those do not depend on the
+                # frame anyway.
+                save_annotation_json(pos.well_id, pos.position, irm_file,
                                      pos.irm.shape, centerlines, rows,
                                      out / "annotations" / f"{stem}.json",
                                      acquired_at=pos.acquired_at,
                                      focus=pos.focus)
 
             n_pos += 1
-            n_mt += len(rows)
-            print(f"[ok] ({fi}/{len(files)}) {stem}: {len(rows)} MT  "
+            # Microtubules, not rows: with a TIRF time series each one has
+            # several rows, and the job runner adds this number up as the
+            # count of microtubules found.
+            n_mt += len(centerlines)
+            print(f"[ok] ({fi}/{len(files)}) {stem}: {len(centerlines)} MT  "
                   f"solution_median={solution_median:.1f}  ({time.time()-ti:.1f}s)")
 
     csvw.close()

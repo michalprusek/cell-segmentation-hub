@@ -257,6 +257,11 @@ class _FakeND2WithStructure:
     def frame_metadata(self, i):
         raise AttributeError("no timestamp")
 
+    @property
+    def sizes(self):
+        """Axis name -> length, in array order, as a real ND2File reports."""
+        return dict(zip("PCYX", self.data.shape))
+
     def asarray(self):
         return self.data
 

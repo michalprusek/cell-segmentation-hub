@@ -264,6 +264,11 @@ class _FakeND2File(_FakeND2):
     def voxel_size(self):
         return types.SimpleNamespace(x=0.0722, y=0.0722, z=1.0)
 
+    @property
+    def sizes(self):
+        """Axis name -> length, in array order, as a real ND2File reports."""
+        return dict(zip("PCYX", self.data.shape))
+
     def asarray(self):
         return self.data
 
