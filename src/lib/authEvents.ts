@@ -6,6 +6,7 @@ export interface AuthEvent {
   type:
     | 'signin_success'
     | 'signup_success'
+    | 'signup_verification_required'
     | 'signin_error'
     | 'signup_error'
     | 'logout_error'

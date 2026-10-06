@@ -21,12 +21,38 @@ interface RefreshToken {
   impersonatorId?: string;
   /** Correlates the impersonation's audit rows. See `ImpersonationLog`. */
   impersonationSessionId?: string;
+  /**
+   * When THIS record was written (ISO). Compared with the user's
+   * `sessionsValidAfter` on refresh - see `auth/sessionCutoff.ts`. Absent on
+   * records written before 2026-10-07.
+   */
+  createdAt?: string;
+  /**
+   * `false` for a login without "remember me": the short TTL, and the short
+   * cookie. Carried across rotation like `family`, because the refresh
+   * endpoint used to hand every session the 30-day lifetime on its first
+   * refresh - 13 minutes after login - which made the checkbox decorative.
+   * Absent on older records, which were all issued 30 days and stay so.
+   */
+  rememberMe?: boolean;
+}
+
+export interface StoreRefreshTokenOptions {
+  family?: string;
+  impersonation?: {
+    impersonatorId: string;
+    impersonationSessionId: string;
+  };
+  /** Defaults to true: registration and impersonation never ask. */
+  rememberMe?: boolean;
 }
 
 class SessionService {
   private readonly REFRESH_TOKEN_PREFIX = 'refresh:';
   private readonly IMPERSONATION_INDEX_PREFIX = 'impersonation:';
   private readonly REFRESH_TOKEN_TTL = 60 * 60 * 24 * 30; // 30 days in seconds
+  /** A login without "remember me". Matches JWT_REFRESH_EXPIRY's default. */
+  private readonly REFRESH_TOKEN_TTL_SHORT = 60 * 60 * 24 * 7;
   /**
    * Server-side lifetime of an IMPERSONATED session, in seconds.
    *
@@ -86,23 +112,26 @@ class SessionService {
   async storeRefreshToken(
     userId: string,
     token: string,
-    family?: string,
-    impersonation?: {
-      impersonatorId: string;
-      impersonationSessionId: string;
-    }
+    options: StoreRefreshTokenOptions = {}
   ): Promise<void> {
+    const { family, impersonation } = options;
+    const rememberMe = options.rememberMe ?? true;
     const key = this.keyFor(token);
     // An impersonated session gets the short TTL, and it survives rotation
     // because `rotateRefreshToken` passes the impersonation back in — so a
     // refresh cannot quietly promote a debugging session to a 30-day one.
     const ttl = impersonation
       ? this.IMPERSONATION_TOKEN_TTL
-      : this.REFRESH_TOKEN_TTL;
+      : rememberMe
+        ? this.REFRESH_TOKEN_TTL
+        : this.REFRESH_TOKEN_TTL_SHORT;
+    const now = Date.now();
     const tokenData: RefreshToken = {
       userId,
-      expiresAt: new Date(Date.now() + ttl * 1000).toISOString(),
+      expiresAt: new Date(now + ttl * 1000).toISOString(),
       family: family || crypto.randomBytes(16).toString('hex'),
+      createdAt: new Date(now).toISOString(),
+      rememberMe,
       ...(impersonation
         ? {
             impersonatorId: impersonation.impersonatorId,
@@ -208,6 +237,7 @@ class SessionService {
   async rotateRefreshToken(oldToken: string): Promise<{
     token: string;
     userId: string;
+    rememberMe: boolean;
     impersonatorId?: string;
     impersonationSessionId?: string;
   } | null> {
@@ -227,16 +257,19 @@ class SessionService {
           }
         : undefined;
 
+    // A record from before the field existed was issued for 30 days.
+    const rememberMe = tokenData.rememberMe ?? true;
+    const carried: StoreRefreshTokenOptions = {
+      family: tokenData.family,
+      impersonation,
+      rememberMe,
+    };
+
     await this.deleteRefreshToken(oldToken);
 
     const newToken = crypto.randomBytes(32).toString('hex');
     try {
-      await this.storeRefreshToken(
-        tokenData.userId,
-        newToken,
-        tokenData.family,
-        impersonation
-      );
+      await this.storeRefreshToken(tokenData.userId, newToken, carried);
     } catch (err) {
       logger.error(
         `Refresh token rotation failed mid-write for user ${tokenData.userId}; attempting rollback`,
@@ -248,12 +281,7 @@ class SessionService {
       // we surface null and the caller will reject as 401 — better than
       // silent partial state.
       try {
-        await this.storeRefreshToken(
-          tokenData.userId,
-          oldToken,
-          tokenData.family,
-          impersonation
-        );
+        await this.storeRefreshToken(tokenData.userId, oldToken, carried);
       } catch {
         // Both writes failed; nothing more we can do here.
       }
@@ -263,6 +291,7 @@ class SessionService {
     return {
       token: newToken,
       userId: tokenData.userId,
+      rememberMe,
       ...(impersonation ?? {}),
     };
   }

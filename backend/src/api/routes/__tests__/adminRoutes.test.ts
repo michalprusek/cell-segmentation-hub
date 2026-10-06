@@ -274,10 +274,20 @@ describe('admin routes — the real middleware chain', () => {
 
       // The durable copy is what survives the 13-minute refresh; without it
       // the admin is silently stranded in the target's account.
-      const call = vi.mocked(sessionService.storeRefreshToken).mock.calls[0];
-      expect(call[0]).toBe(USER.id);
-      expect(call[3]).toMatchObject({ impersonatorId: ADMIN.id });
-      expect(call[3]?.impersonationSessionId).toEqual(expect.any(String));
+      const calls = vi.mocked(sessionService.storeRefreshToken).mock.calls;
+      expect(calls).toHaveLength(1);
+      const [userId, token, options] = calls[0];
+      expect(userId).toBe(USER.id);
+      expect(token).toEqual(expect.any(String));
+      // ONE options object. The impersonation must sit under its own key:
+      // spread flat into the options it would be ignored, and the session
+      // would be stored as the target's own, on the 30-day TTL.
+      expect(options).toEqual({
+        impersonation: {
+          impersonatorId: ADMIN.id,
+          impersonationSessionId: expect.any(String),
+        },
+      });
     });
 
     it('refuses to impersonate another administrator, and records the refusal', async () => {

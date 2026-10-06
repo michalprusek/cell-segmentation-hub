@@ -749,6 +749,8 @@ export default {
       },
       confirmationLabel: 'Bitte tippen Sie {email} zur Bestätigung:',
       confirmationPlaceholder: '{email}',
+      passwordLabel: 'Geben Sie Ihr Passwort ein:',
+      wrongCredentials: 'E-Mail oder Passwort ist falsch',
     },
     fillAllFields: 'Bitte füllen Sie alle erforderlichen Felder aus',
     passwordsDoNotMatch: 'Passwörter stimmen nicht überein',
@@ -834,8 +836,9 @@ export default {
     sendNewPassword: 'Neues Passwort senden',
     emailSent: 'E-Mail gesendet',
     checkEmailForNewPassword:
-      'Überprüfen Sie Ihre E-Mail für den Passwort-Reset-Link',
-    resetPasswordEmailSent: 'Passwort-Reset-E-Mail gesendet',
+      'Falls für diese Adresse ein Konto existiert, ist ein Link zum Zurücksetzen unterwegs in Ihr Postfach. Die Zustellung kann einige Minuten dauern.',
+    resetPasswordEmailSent:
+      'Falls für diese Adresse ein Konto existiert, wurde ein Link zum Zurücksetzen des Passworts gesendet',
     resetPasswordError: 'Fehler beim Zurücksetzen des Passworts',
     backToSignIn: 'Zurück zur Anmeldung',
     didntReceiveEmail: 'E-Mail nicht erhalten?',
@@ -1906,7 +1909,8 @@ export default {
         },
         disintegration: {
           name: 'Sphäroid-Zerfall',
-          inferenceTime: 'Etwa 0,70 s pro Bild · Standardschwellwert 0,2',
+          inferenceTime:
+            'Etwa 0,70 s pro Bild · kein Schwellenwert — entschieden wird per Argmax',
           bestFor: 'Verwendet von: Projekten mit zerfallenden Sphäroiden.',
           description:
             'UNet++ mit EfficientNet-B5-Encoder, das drei Klassen vorhersagt — Hintergrund, Korona und dichter Kern. Der Kern wird direkt vorhergesagt statt abgeleitet, und erst das macht den Zerfallsindex belastbar.',

@@ -300,19 +300,26 @@ describe('ForgotPassword', () => {
       });
     });
 
-    it('shows 404 not-found message from API response', async () => {
+    it('never tells the visitor an address is not registered', async () => {
+      // The server answers 200 for every address. Should a 404 ever reach
+      // this page again, it must not be turned back into "not registered".
       const { toast } = await import('sonner');
       mockPost.mockRejectedValue({
         response: {
           status: 404,
-          data: { message: 'Email not found' },
+          data: { message: 'Email není registrován v systému.' },
         },
       });
       renderForgotPassword();
       submitEmail('notfound@example.com');
       await waitFor(() => {
-        expect(toast.error).toHaveBeenCalledWith('Email not found');
+        expect(toast.error).toHaveBeenCalledWith(
+          'errors.operations.resetPassword'
+        );
       });
+      expect(toast.error).not.toHaveBeenCalledWith(
+        'Email není registrován v systému.'
+      );
     });
 
     it('falls back to getLocalizedErrorMessage for generic errors', async () => {

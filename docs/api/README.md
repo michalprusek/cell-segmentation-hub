@@ -77,23 +77,25 @@ the handler reads, not just the one being checked.
 | GET    | `/api/auth/check`                  | cookie | Cheap "am I signed in?" probe                     |
 | GET    | `/api/auth/profile`                |  yes   | The signed-in user's profile                      |
 | PUT    | `/api/auth/profile`                |  yes   | Update the profile                                |
-| POST   | `/api/auth/change-password`        |  yes   | Change the password                               |
+| POST   | `/api/auth/change-password`        |  yes   | Change the password; ends every other session     |
+| DELETE | `/api/auth/profile`                |  yes   | Delete the account (needs e-mail + password)      |
 | POST   | `/api/auth/avatar`                 |  yes   | Upload an avatar image                            |
 | GET    | `/api/auth/storage-stats`          |  yes   | Storage used by this account                      |
 
 ## Users
 
-A second surface over the same data, used by the settings pages.
+A second surface over the same data, used by the settings pages. It has no
+password change and no account deletion: those are `POST
+/api/auth/change-password` and `DELETE /api/auth/profile`. (Both used to exist
+here as stubs that answered success and did nothing; removed 2026-10-07.)
 
-| Method | Path                         | Purpose                                 |
-| ------ | ---------------------------- | --------------------------------------- |
-| GET    | `/api/users/profile`         | Profile                                 |
-| PUT    | `/api/users/profile`         | Update profile                          |
-| POST   | `/api/users/change-password` | Change password                         |
-| GET    | `/api/users/settings`        | Preferences (language, theme, consents) |
-| GET    | `/api/users/storage-stats`   | Storage usage                           |
-| GET    | `/api/users/activity`        | Recent activity, `limit` + `offset`     |
-| DELETE | `/api/users/account`         | **Delete the account and all its data** |
+| Method | Path                       | Purpose                                 |
+| ------ | -------------------------- | --------------------------------------- |
+| GET    | `/api/users/profile`       | Profile                                 |
+| PUT    | `/api/users/profile`       | Update profile                          |
+| GET    | `/api/users/settings`      | Preferences (language, theme, consents) |
+| GET    | `/api/users/storage-stats` | Storage usage                           |
+| GET    | `/api/users/activity`      | Recent activity, `limit` + `offset`     |
 
 > `Profile.preferredModel` and `Profile.modelThreshold` were **dropped** on
 > 2026-09-20. Nothing read them: the model is a property of the project

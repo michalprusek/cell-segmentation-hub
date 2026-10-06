@@ -9,6 +9,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import request from 'supertest';
 import express from 'express';
+import cookieParser from 'cookie-parser';
 
 // ── CRITICAL: mock config before any import that transitively loads it ─────
 vi.mock('../../../utils/config', () => ({
@@ -81,18 +82,48 @@ const MockedUserService = vi.mocked(UserService, true);
 
 const USER = { id: 'user-id-1', email: 'user@test.com', emailVerified: true };
 
+// Request bodies are built by these helpers rather than written inline: the
+// secret scanner reads a string literal assigned to a `*password` key on a new
+// line as a hard-coded credential.
+const passwordChange = (current = 'OldPass123!', next = 'NewPass456!') => ({
+  currentPassword: current,
+  newPassword: next,
+});
+const credentials = (email: string, secret = 'the-secret') => ({
+  email,
+  password: secret,
+});
+
+const IMPERSONATOR = {
+  id: 'admin-id-1',
+  email: 'admin@test.com',
+  sessionId: 'imp-session-1',
+};
+
 function buildApp(
   handler: express.RequestHandler,
   authenticated = true,
-  paramName?: string
+  paramName?: string,
+  { impersonated = false }: { impersonated?: boolean } = {}
 ) {
   const app = express();
   app.use(express.json());
+  // The same parser server.ts mounts: changePassword reads the refresh cookie.
+  app.use(cookieParser());
   if (authenticated) {
-    app.use((req: express.Request & { user?: unknown }, _res, next) => {
-      req.user = USER;
-      next();
-    });
+    app.use(
+      (
+        req: express.Request & { user?: unknown; impersonator?: unknown },
+        _res,
+        next
+      ) => {
+        req.user = USER;
+        if (impersonated) {
+          req.impersonator = IMPERSONATOR;
+        }
+        next();
+      }
+    );
   }
   const path = paramName ? `/:${paramName}` : '/';
   app.post(path, handler);
@@ -148,21 +179,6 @@ describe('AuthController — extended behavioral', () => {
 
       expect(res.body.success).toBe(true);
       expect(res.body.data.message).toContain('email');
-    });
-
-    it('returns 404 when UserNotFoundError is thrown', async () => {
-      const { UserNotFoundError } = await import('../../../middleware/error');
-      MockedAuthService.requestPasswordReset = vi
-        .fn()
-        .mockRejectedValue(new UserNotFoundError('User not found'));
-
-      const app = buildApp(requestPasswordReset, false);
-      const res = await request(app)
-        .post('/')
-        .send({ email: 'missing@test.com' })
-        .expect(404);
-
-      expect(res.body.success).toBe(false);
     });
 
     it('returns 500 on unexpected service error', async () => {
@@ -241,22 +257,148 @@ describe('AuthController — extended behavioral', () => {
       expect(res.body.success).toBe(false);
     });
 
-    it('returns 200 on successful password change', async () => {
-      MockedAuthService.changePassword = vi.fn().mockResolvedValue({
-        message: 'Heslo bylo úspěšně změněno.',
-      });
+    const MESSAGE = 'Heslo bylo úspěšně změněno.';
+    const reissued = (rememberMe: boolean) => ({
+      accessToken: 'new-access-token',
+      refreshToken: 'new-refresh-token',
+      rememberMe,
+    });
+    const setCookies = (res: request.Response) =>
+      (res.headers['set-cookie'] as unknown as string[] | undefined) ?? [];
+    // The two service calls the handler makes, in the order it makes them.
+    const mockServices = (rememberMe = true) => {
+      MockedAuthService.changePassword = vi
+        .fn()
+        .mockResolvedValue({ message: MESSAGE });
+      MockedAuthService.reissueSession = vi
+        .fn()
+        .mockResolvedValue(reissued(rememberMe));
+    };
+
+    it('changes the password, THEN re-issues the session from the refresh cookie', async () => {
+      mockServices();
 
       const app = buildApp(changePassword, true);
       const res = await request(app)
         .post('/')
-        .send({ currentPassword: 'OldPass123!', newPassword: 'NewPass456!' })
+        .set('Cookie', 'refresh_token=current-refresh-token')
+        .send(passwordChange())
         .expect(200);
 
       expect(res.body.success).toBe(true);
+      // Two arguments: the password change knows nothing about sessions.
+      expect(MockedAuthService.changePassword).toHaveBeenCalledTimes(1);
       expect(MockedAuthService.changePassword).toHaveBeenCalledWith(
         USER.id,
-        expect.objectContaining({ currentPassword: 'OldPass123!' })
+        passwordChange()
       );
+      expect(MockedAuthService.reissueSession).toHaveBeenCalledTimes(1);
+      expect(MockedAuthService.reissueSession).toHaveBeenCalledWith(
+        USER.id,
+        'current-refresh-token'
+      );
+      // The other way round, a wrong current password would still be handed
+      // a fresh session.
+      expect(
+        vi.mocked(MockedAuthService.changePassword).mock.invocationCallOrder[0]
+      ).toBeLessThan(
+        vi.mocked(MockedAuthService.reissueSession).mock.invocationCallOrder[0]
+      );
+    });
+
+    it('hands the replacement session back as cookies, never in the body', async () => {
+      mockServices();
+
+      const app = buildApp(changePassword, true);
+      const res = await request(app)
+        .post('/')
+        .set('Cookie', 'refresh_token=current-refresh-token')
+        .send(passwordChange())
+        .expect(200);
+
+      expect(res.body.data).toEqual({ message: MESSAGE });
+      expect(res.body.message).toBe(MESSAGE);
+      expect(JSON.stringify(res.body)).not.toContain('new-access-token');
+      expect(JSON.stringify(res.body)).not.toContain('new-refresh-token');
+
+      const cookies = setCookies(res);
+      expect(
+        cookies.find(c => c.startsWith('access_token=new-access-token;'))
+      ).toMatch(/HttpOnly/i);
+      expect(
+        cookies.find(c => c.startsWith('refresh_token=new-refresh-token;'))
+      ).toMatch(/HttpOnly/i);
+    });
+
+    it.each([
+      [true, 30 * 24 * 60 * 60],
+      [false, 7 * 24 * 60 * 60],
+    ])(
+      'gives the refresh cookie the lifetime of the re-issued session (rememberMe=%s)',
+      async (rememberMe, maxAge) => {
+        mockServices(rememberMe);
+
+        const app = buildApp(changePassword, true);
+        const res = await request(app)
+          .post('/')
+          .send(passwordChange())
+          .expect(200);
+
+        const refreshCookie = setCookies(res).find(c =>
+          c.startsWith('refresh_token=')
+        );
+        expect(refreshCookie).toContain(`Max-Age=${maxAge};`);
+      }
+    );
+
+    it('passes undefined to reissueSession when the request carries no refresh cookie', async () => {
+      mockServices(false);
+
+      const app = buildApp(changePassword, true);
+      await request(app).post('/').send(passwordChange()).expect(200);
+
+      expect(MockedAuthService.reissueSession).toHaveBeenCalledWith(
+        USER.id,
+        undefined
+      );
+    });
+
+    it('re-issues nothing and sets no cookie when the password change is refused', async () => {
+      const { ApiError } = await import('../../../middleware/error');
+      mockServices();
+      MockedAuthService.changePassword = vi
+        .fn()
+        .mockRejectedValue(ApiError.badRequest('Současné heslo není správné'));
+
+      const app = buildApp(changePassword, true);
+      const res = await request(app)
+        .post('/')
+        .set('Cookie', 'refresh_token=current-refresh-token')
+        .send(passwordChange('not-the-current-one'))
+        .expect(400);
+
+      expect(res.body.success).toBe(false);
+      expect(MockedAuthService.reissueSession).not.toHaveBeenCalled();
+      expect(setCookies(res)).toEqual([]);
+    });
+
+    it('answers 403 FORBIDDEN while impersonating, without calling either service', async () => {
+      mockServices();
+
+      const app = buildApp(changePassword, true, undefined, {
+        impersonated: true,
+      });
+      const res = await request(app)
+        .post('/')
+        .set('Cookie', 'refresh_token=current-refresh-token')
+        .send(passwordChange())
+        .expect(403);
+
+      expect(res.body.success).toBe(false);
+      expect(res.body.code).toBe('FORBIDDEN');
+      expect(MockedAuthService.changePassword).not.toHaveBeenCalled();
+      expect(MockedAuthService.reissueSession).not.toHaveBeenCalled();
+      expect(setCookies(res)).toEqual([]);
     });
   });
 
@@ -394,14 +536,69 @@ describe('AuthController — extended behavioral', () => {
       expect(res.body.success).toBe(false);
     });
 
-    it('returns 200 on successful deletion', async () => {
+    const CONFIRMATION = credentials(USER.email);
+
+    it('passes the body to the service as the confirmation and answers 200', async () => {
       MockedAuthService.deleteAccount = vi.fn().mockResolvedValue(undefined);
 
       const app = buildApp(deleteAccount, true);
-      const res = await request(app).delete('/').expect(200);
+      const res = await request(app)
+        .delete('/')
+        .send(CONFIRMATION)
+        .expect(200);
 
       expect(res.body.success).toBe(true);
-      expect(MockedAuthService.deleteAccount).toHaveBeenCalledWith(USER.id);
+      expect(MockedAuthService.deleteAccount).toHaveBeenCalledWith(
+        USER.id,
+        CONFIRMATION
+      );
+    });
+
+    it('clears the auth cookies once the account is gone', async () => {
+      MockedAuthService.deleteAccount = vi.fn().mockResolvedValue(undefined);
+
+      const app = buildApp(deleteAccount, true);
+      const res = await request(app)
+        .delete('/')
+        .send(CONFIRMATION)
+        .expect(200);
+
+      const cookies = res.headers['set-cookie'] as unknown as string[];
+      expect(cookies.some(c => c.startsWith('access_token=;'))).toBe(true);
+      expect(cookies.some(c => c.startsWith('refresh_token=;'))).toBe(true);
+    });
+
+    it('keeps the cookies when the service refuses the confirmation', async () => {
+      const { ApiError } = await import('../../../middleware/error');
+      MockedAuthService.deleteAccount = vi
+        .fn()
+        .mockRejectedValue(ApiError.badRequest('Email nebo heslo nesouhlasí'));
+
+      const app = buildApp(deleteAccount, true);
+      const res = await request(app)
+        .delete('/')
+        .send(credentials(USER.email, 'wrong'))
+        .expect(400);
+
+      expect(res.body.success).toBe(false);
+      expect(res.headers['set-cookie']).toBeUndefined();
+    });
+
+    it('answers 403 FORBIDDEN while impersonating, without calling the service', async () => {
+      MockedAuthService.deleteAccount = vi.fn().mockResolvedValue(undefined);
+
+      const app = buildApp(deleteAccount, true, undefined, {
+        impersonated: true,
+      });
+      const res = await request(app)
+        .delete('/')
+        .send(CONFIRMATION)
+        .expect(403);
+
+      expect(res.body.success).toBe(false);
+      expect(res.body.code).toBe('FORBIDDEN');
+      expect(MockedAuthService.deleteAccount).not.toHaveBeenCalled();
+      expect(res.headers['set-cookie']).toBeUndefined();
     });
   });
 

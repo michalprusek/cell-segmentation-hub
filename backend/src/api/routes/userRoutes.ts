@@ -1,7 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { logger } from '../../utils/logger';
 import { authenticate } from '../../middleware/auth';
-import { apiLimiter, authLimiter } from '../../middleware/rateLimiter';
+import { apiLimiter } from '../../middleware/rateLimiter';
 import { validateBody } from '../../middleware/validation';
 import { z } from 'zod';
 import * as UserService from '../../services/userService';
@@ -31,17 +31,6 @@ const updateProfileSchema = z.object({
     })
     .optional(),
 });
-
-const changePasswordSchema = z
-  .object({
-    currentPassword: z.string().min(1),
-    newPassword: z.string().min(6),
-    confirmPassword: z.string().min(6),
-  })
-  .refine(data => data.newPassword === data.confirmPassword, {
-    message: "Passwords don't match",
-    path: ['confirmPassword'],
-  });
 
 router.get(
   '/profile',
@@ -102,26 +91,10 @@ router.put(
   }
 );
 
-router.post(
-  '/change-password',
-  authLimiter,
-  validateBody(changePasswordSchema),
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const userId = (req as Request & { user: { id: string } }).user.id;
-      logger.info(`🔐 User: Password change requested for user ${userId}`);
-
-      // TODO: Implement actual password change
-      res.json({
-        success: true,
-        message: 'Password changed successfully',
-      });
-    } catch (error) {
-      logger.error('❌ User: Error changing password:', error);
-      next(error);
-    }
-  }
-);
+// There is deliberately no password change and no account deletion here.
+// Both existed as stubs that answered `success: true` and did nothing - a
+// script calling them was told its password had changed. The real ones are
+// POST /api/auth/change-password and DELETE /api/auth/profile.
 
 router.get(
   '/settings',
@@ -213,27 +186,6 @@ router.get(
       });
     } catch (error) {
       logger.error('❌ User: Error fetching activity:', error);
-      next(error);
-    }
-  }
-);
-
-router.delete(
-  '/account',
-  authLimiter,
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const userId = (req as Request & { user: { id: string } }).user.id;
-      logger.warn(`🗑️ User: Account deletion requested for user ${userId}`);
-
-      // TODO: Implement proper account deletion with safeguards
-      res.json({
-        success: true,
-        message:
-          'Account deletion initiated. You will receive a confirmation email.',
-      });
-    } catch (error) {
-      logger.error('❌ User: Error deleting account:', error);
       next(error);
     }
   }

@@ -30,21 +30,33 @@ const DeleteAccountDialog: React.FC<DeleteAccountDialogProps> = ({
   const { t } = useLanguage();
   const { deleteAccount } = useAuth();
   const [confirmationText, setConfirmationText] = useState('');
+  const [password, setPassword] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const isConfirmationValid = confirmationText === userEmail;
+  // The server checks both again; this only keeps the button honest.
+  const isConfirmationValid =
+    confirmationText === userEmail && password.length > 0;
 
   const handleDelete = async () => {
     if (!isConfirmationValid) return;
 
     setIsDeleting(true);
     try {
-      await deleteAccount(confirmationText);
-      toast.success(t('settings.accountDeleted'));
-      onClose();
+      // On success the app reloads onto the home page, which announces the
+      // deletion - there is nothing left to do here.
+      await deleteAccount(confirmationText, password);
     } catch (error) {
       logger.error('Error deleting account:', error);
-      toast.error(t('settings.deleteAccountError'));
+      // 400 is the server refusing the e-mail or the password - by far the
+      // likeliest failure, and one the user can fix by retyping.
+      const status = (error as { response?: { status?: number } })?.response
+        ?.status;
+      toast.error(
+        status === 400
+          ? t('settings.deleteAccountDialog.wrongCredentials')
+          : t('settings.deleteAccountError')
+      );
+      setPassword('');
     } finally {
       setIsDeleting(false);
     }
@@ -53,6 +65,7 @@ const DeleteAccountDialog: React.FC<DeleteAccountDialogProps> = ({
   const handleClose = () => {
     if (!isDeleting) {
       setConfirmationText('');
+      setPassword('');
       onClose();
     }
   };
@@ -95,7 +108,7 @@ const DeleteAccountDialog: React.FC<DeleteAccountDialogProps> = ({
               className="text-sm font-medium break-words"
             >
               {t('settings.deleteAccountDialog.confirmationLabel').replace(
-                '{0}',
+                '{email}',
                 userEmail
               )}
             </Label>
@@ -106,6 +119,23 @@ const DeleteAccountDialog: React.FC<DeleteAccountDialogProps> = ({
               value={confirmationText}
               onChange={e => setConfirmationText(e.target.value)}
               className="font-mono"
+              disabled={isDeleting}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label
+              htmlFor="delete-account-password"
+              className="text-sm font-medium break-words"
+            >
+              {t('settings.deleteAccountDialog.passwordLabel')}
+            </Label>
+            <Input
+              id="delete-account-password"
+              type="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
               disabled={isDeleting}
             />
           </div>

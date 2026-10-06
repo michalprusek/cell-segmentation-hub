@@ -22,6 +22,13 @@ model User {
   verificationToken  String?
   resetToken         String?
   resetTokenExpiry   DateTime?
+  /// Every session of this user that began BEFORE this instant is void.
+  /// Set when the password is changed or reset. NULL means "never
+  /// revoked". Refresh records live in Redis under a hash of the token and
+  /// cannot be listed per user, so this cut-off - which `authenticate`
+  /// reads off the row it loads anyway - is what "sign out everywhere"
+  /// is made of. See `auth/sessionCutoff.ts`.
+  sessionsValidAfter DateTime?
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
   profile            Profile?

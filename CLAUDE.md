@@ -663,6 +663,36 @@ Controllers → Services → Prisma ORM → Storage (local FS / S3)
   - **The migration grants the flag to NOBODY**, deliberately — sign-up is open, so pinning an e-mail would hand admin to whoever registers it first. Granting is an explicit operator action: `docker exec -e ADMIN_EMAIL=... spheroseg-backend npx tsx src/db/grantAdmin.ts`.
   - `accessLogger` writes `admin@x(as:user@y)`; during impersonation `req.user` IS the target, so without this the security log attributes admin actions to the wrong person.
 
+### Sessions, and ending them (2026-10-07)
+
+- **A session is a Redis refresh record, keyed by SHA-256 of the token.** They
+  cannot be listed per user. The `sessions` TABLE is legacy and unused —
+  password change used to set `isValid = false` on its rows, which revoked
+  nothing, for as long as that code existed.
+- **"Sign out everywhere" is `users.sessionsValidAfter`** (`auth/sessionCutoff.ts`).
+  It is checked in FOUR places and a new way of authenticating a user needs a
+  fifth: `authenticate`, `optionalAuthenticate`, the WebSocket handshake (all
+  by the access token's `iat`) and `authService.refreshToken` (by the refresh
+  record's `createdAt`, BEFORE rotating — a rotation writes a record dated now
+  and would launder the session). An impersonated session is exempt everywhere.
+- **The cut-off is floored to the second**, because `iat` is whole seconds: a
+  millisecond cut-off revokes the replacement session minted a moment later.
+- **`rememberMe` lives on the refresh record** and is carried across rotation
+  like `family`. The refresh controller used to pass `true`, which made every
+  session a 30-day one 13 minutes after login.
+- **Account deletion removes files by PROJECT, never by folder**
+  (`services/accountFiles.ts`). An upload is stored under
+  `<uploaderId>/<projectId>/`, and projects are shared, so `rm -r <userId>/`
+  would destroy other people's images. Note that deleting a single PROJECT
+  still leaves its still images on disk — only the rows cascade.
+- **`AuthContext.deleteAccount` must not touch the global `loading` flag.**
+  `ProtectedRoute` renders a spinner in place of the page while it is set, which
+  unmounted Settings and took the dialog and its error message with it. Found
+  in a browser on the first run after the route existed; no unit test saw it
+  until one recorded every rendered value of `loading` rather than the last.
+- `DELETE /api/auth/profile` and `POST /api/auth/change-password` are refused
+  to an impersonated session, like minting API keys.
+
 ### Public API (`/api/v1`) and API keys (2026-10-06)
 
 `backend/src/api/v1/` is a second, self-contained surface for scripts. It

@@ -15,6 +15,11 @@ vi.mock('sonner', () => ({
   },
 }));
 
+vi.mock('@/lib/hardRedirect', () => ({
+  hardRedirect: vi.fn(),
+  ACCOUNT_DELETED_FLAG: 'spheroseg.accountDeleted',
+}));
+
 // Mock the router to capture navigation
 const mockNavigate = vi.fn();
 vi.mock('react-router-dom', async () => {
@@ -40,6 +45,26 @@ describe('DeleteAccountDialog', () => {
     document.cookie = 'authenticated=1';
     mockNavigate.mockReset();
   });
+
+  const typePassword = (value = 'hunter2!') =>
+    fireEvent.change(screen.getByLabelText('Enter your password:'), {
+      target: { value },
+    });
+
+  const signedInAs = async (email: string) => {
+    const apiModule = await import('@/lib/api');
+    const mockApiClient =
+      (apiModule as any).default || (apiModule as any).apiClient;
+    mockApiClient.isAuthenticated.mockReturnValue(true);
+    mockApiClient.getUserProfile.mockResolvedValue({
+      id: 'test-user-id',
+      email,
+      username: 'testuser',
+      preferred_theme: 'system',
+      preferredLang: 'en',
+    });
+    return mockApiClient;
+  };
 
   it('should render the dialog when open', () => {
     render(<DeleteAccountDialog {...defaultProps} />);
@@ -89,11 +114,35 @@ describe('DeleteAccountDialog', () => {
 
     const input = screen.getByPlaceholderText('test@example.com');
     fireEvent.change(input, { target: { value: 'test@example.com' } });
+    typePassword();
 
     const deleteButton = screen.getByRole('button', {
       name: /Delete Account/i,
     });
     expect(deleteButton).not.toBeDisabled();
+  });
+
+  it('keeps the button disabled until a password is typed too', () => {
+    render(<DeleteAccountDialog {...defaultProps} />);
+
+    fireEvent.change(screen.getByPlaceholderText('test@example.com'), {
+      target: { value: 'test@example.com' },
+    });
+
+    expect(
+      screen.getByRole('button', { name: /Delete Account/i })
+    ).toBeDisabled();
+  });
+
+  it('puts the address into the prompt instead of a literal placeholder', () => {
+    // The label used to replace '{0}' in a string that says '{email}', so
+    // the dialog asked the user to "type {email} to confirm".
+    render(<DeleteAccountDialog {...defaultProps} />);
+
+    expect(
+      screen.getByText('Please type test@example.com to confirm:')
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/\{email\}|\{0\}/)).not.toBeInTheDocument();
   });
 
   it('should require exact email match (case sensitive)', () => {
@@ -132,6 +181,7 @@ describe('DeleteAccountDialog', () => {
 
     const input = screen.getByPlaceholderText('test@example.com');
     fireEvent.change(input, { target: { value: 'test@example.com' } });
+    typePassword();
 
     const deleteButton = screen.getByRole('button', {
       name: /Delete Account/i,
@@ -139,12 +189,15 @@ describe('DeleteAccountDialog', () => {
     fireEvent.click(deleteButton);
 
     await waitFor(() => {
-      // AuthProvider.deleteAccount calls apiClient.deleteAccount
-      expect(mockApiClient.deleteAccount).toHaveBeenCalled();
+      // Both values travel to the server, which is where they are checked.
+      expect(mockApiClient.deleteAccount).toHaveBeenCalledWith({
+        email: 'test@example.com',
+        password: 'hunter2!',
+      });
     });
   });
 
-  it('should navigate to home after successful deletion', async () => {
+  it('reloads the app onto the home page after a successful deletion', async () => {
     // Setup: make AuthProvider believe user is authenticated with the test email
     const apiModule = await import('@/lib/api');
     const mockApiClient =
@@ -168,15 +221,19 @@ describe('DeleteAccountDialog', () => {
 
     const input = screen.getByPlaceholderText('test@example.com');
     fireEvent.change(input, { target: { value: 'test@example.com' } });
+    typePassword();
 
     const deleteButton = screen.getByRole('button', {
       name: /Delete Account/i,
     });
     fireEvent.click(deleteButton);
 
+    const { hardRedirect } = await import('@/lib/hardRedirect');
     await waitFor(() => {
-      expect(mockNavigate).toHaveBeenCalledWith('/');
+      expect(hardRedirect).toHaveBeenCalledWith('/');
     });
+    // Not an in-app navigation: that raced with ProtectedRoute and lost.
+    expect(mockNavigate).not.toHaveBeenCalled();
   });
 
   it('should show error toast on deletion failure', async () => {
@@ -192,6 +249,7 @@ describe('DeleteAccountDialog', () => {
 
     const input = screen.getByPlaceholderText('test@example.com');
     fireEvent.change(input, { target: { value: 'test@example.com' } });
+    typePassword();
 
     const deleteButton = screen.getByRole('button', {
       name: /Delete Account/i,
@@ -201,6 +259,45 @@ describe('DeleteAccountDialog', () => {
     await waitFor(() => {
       expect(toast.error).toHaveBeenCalled();
     });
+  });
+
+  it('says the credentials are wrong when the server answers 400, and clears the password', async () => {
+    const mockApiClient = await signedInAs('test@example.com');
+    mockApiClient.deleteAccount.mockRejectedValue({
+      response: { status: 400 },
+    });
+    const { toast } = await import('sonner');
+
+    render(<DeleteAccountDialog {...defaultProps} />);
+
+    // Let the provider hydrate the signed-in user first: a click before
+    // that is refused client-side and never reaches the server.
+    await waitFor(() =>
+      expect(mockApiClient.getUserProfile).toHaveBeenCalled()
+    );
+    await screen.findByPlaceholderText('test@example.com');
+
+    fireEvent.change(screen.getByPlaceholderText('test@example.com'), {
+      target: { value: 'test@example.com' },
+    });
+    typePassword('wrong-password');
+    fireEvent.click(screen.getByRole('button', { name: /Delete Account/i }));
+
+    await waitFor(() =>
+      expect(mockApiClient.deleteAccount).toHaveBeenCalledWith({
+        email: 'test@example.com',
+        password: 'wrong-password',
+      })
+    );
+
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith(
+        'The e-mail or password is incorrect'
+      )
+    );
+    expect(screen.getByLabelText('Enter your password:')).toHaveValue('');
+    expect(defaultProps.onClose).not.toHaveBeenCalled();
+    expect(mockNavigate).not.toHaveBeenCalled();
   });
 
   it('should disable input and button during deletion', async () => {
@@ -215,6 +312,7 @@ describe('DeleteAccountDialog', () => {
 
     const input = screen.getByPlaceholderText('test@example.com');
     fireEvent.change(input, { target: { value: 'test@example.com' } });
+    typePassword();
 
     const deleteButton = screen.getByRole('button', {
       name: /Delete Account/i,
@@ -240,6 +338,7 @@ describe('DeleteAccountDialog', () => {
 
     const input = screen.getByPlaceholderText('test@example.com');
     fireEvent.change(input, { target: { value: 'test@example.com' } });
+    typePassword();
 
     expect(input).toHaveValue('test@example.com');
 

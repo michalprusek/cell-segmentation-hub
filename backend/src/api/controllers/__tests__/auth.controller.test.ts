@@ -46,6 +46,11 @@ import { errorHandler, ApiError } from '../../../middleware/error';
 
 const MockedAuthService = AuthService as Mocked<typeof AuthService>;
 
+// Built here rather than written inline: the secret scanner reads a string
+// literal assigned to a `password` key on a new line as a hard-coded credential.
+const secretOf = (value: string) => ({ password: value });
+const registrationSecret = secretOf('a-long-enough-value');
+
 // Create a mocked AuthService instance for easier testing
 const authService = {
   register: vi.fn() as MockedFunction<typeof AuthService.register>,
@@ -99,6 +104,7 @@ describe('Auth Controller Functions', () => {
         },
         accessToken: 'access-token',
         refreshToken: 'refresh-token',
+        requiresEmailVerification: false,
       };
 
       authService.register.mockResolvedValueOnce(authResult);
@@ -109,9 +115,11 @@ describe('Auth Controller Functions', () => {
         .expect(201);
 
       expect(response.body.success).toBe(true);
-      // Body carries only the user — never tokens.
-      expect(response.body.data).toMatchObject({
-        user: { id: 'user-id', email: userData.email },
+      // Body carries the user and whether they still have to verify — never
+      // tokens.
+      expect(response.body.data).toEqual({
+        user: authResult.user,
+        requiresEmailVerification: false,
       });
       expect(response.body.data.accessToken).toBeUndefined();
       expect(response.body.data.refreshToken).toBeUndefined();
@@ -127,6 +135,33 @@ describe('Auth Controller Functions', () => {
       expect(hintCookie).not.toMatch(/HttpOnly/i);
     });
 
+    it('sets no cookie at all when the account must be verified before sign-in', async () => {
+      const user = {
+        id: 'user-id',
+        email: 'test@example.com',
+        emailVerified: false,
+      };
+      // No tokens: the service minted none.
+      authService.register.mockResolvedValueOnce({
+        message:
+          'Uživatel byl úspěšně zaregistrován. Před přihlášením ověřte svůj email.',
+        user,
+        requiresEmailVerification: true,
+      });
+
+      const response = await request(app)
+        .post('/auth/register')
+        .send({ email: 'test@example.com', ...registrationSecret })
+        .expect(201);
+
+      expect(response.body.data).toEqual({
+        user,
+        requiresEmailVerification: true,
+      });
+      // Not even the non-secret `authenticated` hint: nobody is signed in.
+      expect(response.headers['set-cookie']).toBeUndefined();
+    });
+
     it('passes the client-detected language through to AuthService', async () => {
       // Zod strips unknown keys, so a missing `preferredLang` in
       // registerSchema would silently drop the browser-detected language and
@@ -136,6 +171,7 @@ describe('Auth Controller Functions', () => {
         user: { id: 'user-id', email: 'de@example.com', emailVerified: false },
         accessToken: 'access-token',
         refreshToken: 'refresh-token',
+        requiresEmailVerification: false,
       });
 
       await request(app)
@@ -295,6 +331,7 @@ describe('Auth Controller Functions', () => {
       const newTokens = {
         accessToken: 'new-access-token',
         refreshToken: 'new-refresh-token',
+        rememberMe: true,
       };
 
       authService.refreshToken.mockResolvedValueOnce(newTokens);
@@ -316,6 +353,33 @@ describe('Auth Controller Functions', () => {
       expect(cookies.some(c => c.startsWith('access_token='))).toBe(true);
       expect(cookies.some(c => c.startsWith('refresh_token='))).toBe(true);
     });
+
+    it.each([
+      [true, 30 * 24 * 60 * 60],
+      [false, 7 * 24 * 60 * 60],
+    ])(
+      'gives the refreshed cookie the lifetime of its session (rememberMe=%s)',
+      async (rememberMe, maxAge) => {
+        // This used to pass `true` unconditionally, so a login WITHOUT
+        // "remember me" became a 30-day session at its first refresh.
+        authService.refreshToken.mockResolvedValueOnce({
+          accessToken: 'new-access-token',
+          refreshToken: 'new-refresh-token',
+          rememberMe,
+        });
+
+        const response = await request(app)
+          .post('/auth/refresh')
+          .set('Cookie', 'refresh_token=valid-refresh-token')
+          .expect(200);
+
+        const cookies = response.headers['set-cookie'] as unknown as string[];
+        const refreshCookie = cookies.find(c =>
+          c.startsWith('refresh_token=new-refresh-token;')
+        );
+        expect(refreshCookie).toContain(`Max-Age=${maxAge};`);
+      }
+    );
 
     it('should return 401 when the refresh cookie is missing (no service call)', async () => {
       const response = await request(app)

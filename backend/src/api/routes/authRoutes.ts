@@ -15,6 +15,7 @@ import {
   changePasswordSchema,
   resendVerificationSchema,
   updateProfileSchema,
+  deleteAccountSchema,
 } from '../../auth/validation';
 import { z } from 'zod';
 
@@ -55,9 +56,8 @@ router.post(
   authController.logout
 );
 
-// Note: Validation happens inside controller instead of middleware
-// This allows custom error handling to return 404 for unregistered emails
-// instead of generic 400 validation error
+// Validation happens inside the controller, not in middleware. The answer is
+// the same for a registered and an unregistered address.
 router.post(
   '/request-password-reset',
   passwordResetLimiter, // Strict rate limiting for password reset
@@ -101,6 +101,17 @@ router.put(
   '/profile',
   validateBody(updateProfileSchema),
   authController.updateProfile
+);
+
+// Delete the account and everything it owns. The web app has always called
+// this path; until 2026-10-07 nothing was mounted on it and the dialog's
+// button could only ever show an error. Rate limited with the other
+// credential-checking routes, because it verifies a password.
+router.delete(
+  '/profile',
+  authLimiter,
+  validateBody(deleteAccountSchema),
+  authController.deleteAccount
 );
 
 router.get('/storage-stats', authController.getStorageStats);

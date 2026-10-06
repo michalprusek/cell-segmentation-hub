@@ -724,6 +724,8 @@ export default {
       },
       confirmationLabel: 'Pro potvrzení prosím napište {email}:',
       confirmationPlaceholder: '{email}',
+      passwordLabel: 'Zadejte své heslo:',
+      wrongCredentials: 'E-mail nebo heslo nesouhlasí',
     },
     personal: 'Osobní informace',
     fullName: 'Celé jméno',
@@ -1132,9 +1134,9 @@ export default {
     sendNewPassword: 'Odeslat nové heslo',
     emailSent: 'Email odeslán',
     checkEmailForNewPassword:
-      'Zkontrolujte svůj email pro odkaz na reset hesla',
+      'Pokud pro tuto adresu existuje účet, je odkaz pro reset hesla na cestě do vaší schránky. Doručení může trvat několik minut.',
     resetPasswordEmailSent:
-      'Pokud email existuje, byl odeslán odkaz na reset hesla',
+      'Pokud pro tuto adresu existuje účet, byl na ni odeslán odkaz pro reset hesla',
     resetPasswordError: 'Nepodařilo se odeslat email s novým heslem',
     backToSignIn: 'Zpět na přihlášení',
     didntReceiveEmail: 'Nedostali jste email?',
@@ -1864,7 +1866,8 @@ export default {
         },
         disintegration: {
           name: 'Rozpad sferoidů',
-          inferenceTime: 'Přibližně 0,70 s na snímek · výchozí práh 0,2',
+          inferenceTime:
+            'Přibližně 0,70 s na snímek · bez prahu — rozhoduje argmax',
           bestFor: 'Používá: projekty s rozpadajícími se sferoidy.',
           description:
             'UNet++ s enkodérem EfficientNet-B5 predikující tři třídy — pozadí, koronu a husté jádro. Jádro je predikováno přímo, nikoli odvozeno, což teprve dělá index rozpadu důvěryhodným.',

@@ -15,8 +15,8 @@ profile, password reset and e-mail verification.
 >   you want; this page describes what the web app itself uses.
 
 **Every response example on this page was actually received**, from
-a backend built from `main` on 2026-10-06 running against an empty database,
-with a mail sink standing in for the SMTP server. Ids and timestamps are
+a backend built from this repository on 2026-10-06/07 running against an empty
+database, with a mail sink standing in for the SMTP server. Ids and timestamps are
 shortened; nothing else is edited. An earlier version of this page described
 tokens in response bodies, a `GET /me` endpoint, English messages and rate
 limits that the service has never had in this form — if you remember one of
@@ -40,7 +40,6 @@ translates by `code`. Switch on `code` and the HTTP status, never on the text.
 | `BAD_REQUEST`         | 400    | Wrong current password, or an invalid or used token    |
 | `UNAUTHORIZED`        | 401    | No session cookie, bad credentials, bad refresh token  |
 | `FORBIDDEN`           | 403    | E-mail not verified (only when verification is forced) |
-| `USER_NOT_FOUND`      | 404    | `forgot-password` for an address with no account       |
 | `NOT_FOUND`           | 404    | No such endpoint                                       |
 | `CONFLICT`            | 409    | The e-mail address is already registered               |
 | `RATE_LIMIT_EXCEEDED` | 429    | See [Rate limits](#rate-limits)                        |
@@ -48,11 +47,11 @@ translates by `code`. Switch on `code` and the HTTP status, never on the text.
 **The session is three cookies**, set by register, login and refresh and
 cleared by logout:
 
-| Cookie          | Path        | httpOnly | Lifetime                               |
-| --------------- | ----------- | -------- | -------------------------------------- |
-| `access_token`  | `/`         | yes      | 15 minutes                             |
-| `refresh_token` | `/api/auth` | yes      | 7 or 30 days — see [Refresh](#refresh) |
-| `authenticated` | `/`         | no       | same as `refresh_token`                |
+| Cookie          | Path        | httpOnly | Lifetime                        |
+| --------------- | ----------- | -------- | ------------------------------- |
+| `access_token`  | `/`         | yes      | 15 minutes                      |
+| `refresh_token` | `/api/auth` | yes      | 7 days, or 30 with `rememberMe` |
+| `authenticated` | `/`         | no       | same as `refresh_token`         |
 
 All three are `Secure; SameSite=Strict`. `authenticated` carries no secret; it
 exists so the page's JavaScript can tell whether a session is likely to exist
@@ -108,7 +107,8 @@ Two things worth knowing before you meet them:
 | `consentToMLTraining`, `consentToAlgorithmImprovement`, `consentToFeatureDevelopment` | optional booleans                                                          |
 
 `201` — **and the user is signed in**: the response sets the three session
-cookies, with the 30-day refresh lifetime.
+cookies, with the 30-day refresh lifetime. (Unless the server requires a
+verified e-mail first — see below.)
 
 ```json
 {
@@ -118,9 +118,29 @@ cookies, with the 30-day refresh lifetime.
       "id": "6d537076-…",
       "email": "user@example.com",
       "emailVerified": false
-    }
+    },
+    "requiresEmailVerification": false
   },
   "message": "Uživatel byl úspěšně zaregistrován a přihlášen."
+}
+```
+
+When the server runs with `REQUIRE_EMAIL_VERIFICATION=true` the account is
+created but **nobody is signed in**: the response sets no cookie, and the
+client should send the user to their inbox, then to the sign-in page.
+
+```json
+{
+  "success": true,
+  "data": {
+    "user": {
+      "id": "6addb510-…",
+      "email": "v@example.com",
+      "emailVerified": false
+    },
+    "requiresEmailVerification": true
+  },
+  "message": "Uživatel byl úspěšně zaregistrován. Před přihlášením ověřte svůj email."
 }
 ```
 
@@ -203,8 +223,9 @@ is sent in the language given by `preferredLang`.
 }
 ```
 
-`REQUIRE_EMAIL_VERIFICATION` is **off in production**. When it is on it gates
-`/login` only — see [Known gaps](#known-gaps).
+`REQUIRE_EMAIL_VERIFICATION` is **off in production**. When it is on,
+`/register` opens no session either (see above), so an unverified user cannot
+get in by either door.
 
 ### Refresh
 
@@ -225,9 +246,14 @@ and deletes the stored record in two steps, so two requests carrying the same
 cookie _at the same moment_ (two tabs waking together) can both succeed; only
 a replay after the first has completed is refused.
 
-A refreshed session always gets the **30-day** cookie, whatever `rememberMe`
-was at login. So `rememberMe: false` buys a 7-day refresh cookie only until
-the first refresh, which the web app performs every 13 minutes.
+A refreshed session keeps the lifetime it was opened with: **7 days** from
+each refresh for a plain login, **30** for `rememberMe: true` and for the
+session a registration opens. The lifetime is recorded on the server-side
+session, not taken from the request.
+
+A refresh is refused with the same `401` when the user's password has been
+changed or reset since the session began — see
+[Change the password](#change-the-password).
 
 ```json
 // 401 - no cookie
@@ -427,7 +453,13 @@ with `400 Neočekávané pole souboru: avatar`).
 }
 ```
 
-The session that made the change stays signed in.
+**Every other session of the user ends at once** — other browsers, other
+devices, and anyone holding a copied cookie: their next request is a `401`
+(`Token vypršel`) and so is their next refresh. The session that made the
+change stays signed in: the response replaces its three cookies with a fresh
+session of the same lifetime.
+
+Refused with `403 FORBIDDEN` to an administrator impersonating the user.
 
 ### Request a password reset
 
@@ -438,20 +470,23 @@ The session that made the change stays signed in.
 { "email": "user@example.com" }
 ```
 
+Always `200`, with the same body and after the same amount of work, whether
+or not the address has an account — so the endpoint cannot be used to find
+out who is registered. (Measured: 238–281 ms for a registered address,
+243–245 ms for an unknown one.) A reset link is e-mailed only if it does.
+
 ```json
-// 200 - the address has an account; a reset link was e-mailed
 {
   "success": true,
-  "data": { "message": "Pokud email existuje, byl odeslán odkaz pro reset hesla." },
+  "data": {
+    "message": "Pokud email existuje, byl odeslán odkaz pro reset hesla."
+  },
   "message": "Pokud email existuje, byl odeslán odkaz pro reset hesla."
 }
-
-// 404 - the address has no account
-{ "success": false, "error": "Email není registrován v systému.", "code": "USER_NOT_FOUND" }
 ```
 
-The success message says "if the address exists", but the endpoint does tell
-the two cases apart — see [Known gaps](#known-gaps).
+Note that `/register` still answers `409 CONFLICT` for an address that is
+taken, so registration does reveal it.
 
 The e-mailed link is `<FRONTEND_URL>/reset-password?token=<64 characters>`.
 
@@ -475,8 +510,49 @@ The e-mailed link is `<FRONTEND_URL>/reset-password?token=<64 characters>`.
 { "success": false, "error": "Neplatný nebo vypršený reset token", "code": "BAD_REQUEST" }
 ```
 
-A token works once. The old password stops working immediately. The response
-sets no cookies — the user signs in afterwards.
+A token works once. The old password stops working immediately, and **every
+session open at that moment ends** — whoever made the reset necessary may be
+holding one. The response sets no cookies: the user signs in afterwards.
+
+### Delete the account
+
+`DELETE /api/auth/profile` — session cookie required. Rate limited with
+`/login` and `/register`.
+
+```json
+{ "email": "user@example.com", "password": "…" }
+```
+
+Both are checked on the server: the e-mail must be the account's own
+(compared without regard to case) and the password its current one. A
+session alone is not enough to destroy an account.
+
+```json
+// 200 - and the three cookies are cleared
+{ "success": true, "data": null, "message": "Účet byl úspěšně smazán" }
+
+// 400 - the e-mail or the password is wrong; the two are not distinguished
+{ "success": false, "error": "Email nebo heslo nesouhlasí", "code": "BAD_REQUEST" }
+
+// 400 - a field is missing
+{
+  "success": false,
+  "error": "Validation error",
+  "code": "VALIDATION_ERROR",
+  "details": { "email": ["Required"], "password": ["Required"] }
+}
+```
+
+Irreversible. It removes the user, their profile, every project they own with
+its images and segmentations, their shares, folders, API keys and API jobs —
+and the files of all of those on disk. What it leaves:
+
+- images the user uploaded into **somebody else's** project (they belong to
+  that project);
+- rows the audit trail must keep — feedback, export logs and impersonation
+  logs — with the user reference set to null.
+
+Refused with `403 FORBIDDEN` to an administrator impersonating the user.
 
 ### Verify the e-mail address
 
@@ -571,26 +647,25 @@ The web app also refreshes on a 13-minute timer rather than waiting for the
 
 ## Known gaps
 
-Behaviour found while verifying this page that a reader should not be
-surprised by. Each was observed on the wire on 2026-10-06; none is fixed by the
-change that rewrote this page.
+- **Refresh rotation is not atomic.** See [Refresh](#refresh): two requests
+  with the same cookie at the same instant can both succeed.
+- **`/register` reveals whether an address is taken** (`409`), although
+  `forgot-password` no longer does.
+- **A WebSocket that is already connected survives a password change.** The
+  session cut-off is checked when a socket connects and on every HTTP
+  request, not on an open socket; it ends when the socket next reconnects.
+- **A token issued in the same second as a password change is not revoked.**
+  The cut-off is whole seconds, because that is the resolution of a JWT's
+  `iat`.
 
-- **There is no account-deletion endpoint.** The web app's "Delete account"
-  dialog calls `DELETE /api/auth/profile`, which answers `404 NOT_FOUND`. A
-  `deleteAccount` controller exists in `authController.ts`, but no route
-  mounts it.
-- **`/api/users/change-password` and `DELETE /api/users/account` are stubs.**
-  They answer `success: true` and do nothing (both are marked `TODO` in
-  `userRoutes.ts`). The working password change is the one on this page.
-- **`forgot-password` reveals whether an address is registered** (`200` vs
-  `404 USER_NOT_FOUND`), although its success message is worded as if it did
-  not. `resend-verification` does not have this problem.
-- **Changing or resetting a password does not end other sessions.** A session
-  opened before a password reset kept working, and kept refreshing, after it.
-- **`REQUIRE_EMAIL_VERIFICATION=true` does not stop an unverified user from
-  using the app**: `/register` signs the new user in directly, and only a
-  later `/login` is refused.
-- **`rememberMe: false` is effectively 30 days** — see [Refresh](#refresh).
+Fixed on 2026-10-07, and listed here because the previous version of this page
+documented them as open: the missing account-deletion route; the
+`/api/users/change-password` and `DELETE /api/users/account` stubs that
+answered success and did nothing (removed — they are `404` now);
+`forgot-password` answering `404` for an unknown address; sessions surviving a
+password change or reset; `/register` signing in an unverified user when
+verification is required; and `rememberMe: false` turning into 30 days at the
+first refresh.
 
 ## Password storage
 

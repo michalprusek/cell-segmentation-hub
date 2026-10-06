@@ -684,6 +684,8 @@ export default {
       },
       confirmationLabel: '请输入 {{email}} 以确认：',
       confirmationPlaceholder: '{email}',
+      passwordLabel: '请输入您的密码：',
+      wrongCredentials: '邮箱或密码不正确',
     },
     fillAllFields: '请填写所有必填字段',
     passwordsDoNotMatch: '密码不匹配',
@@ -768,8 +770,9 @@ export default {
     sending: '发送中...',
     sendNewPassword: '发送新密码',
     emailSent: '邮件已发送',
-    checkEmailForNewPassword: '请检查您的邮箱获取新密码',
-    resetPasswordEmailSent: '密码重置邮件已发送',
+    checkEmailForNewPassword:
+      '如果该地址对应的账户存在，重置链接正在发送到您的邮箱，可能需要几分钟才能送达。',
+    resetPasswordEmailSent: '如果该地址对应的账户存在，密码重置链接已发送',
     resetPasswordError: '重置密码时出错',
     backToSignIn: '返回登录',
     didntReceiveEmail: '没有收到邮件？',
@@ -1760,7 +1763,7 @@ export default {
         },
         disintegration: {
           name: '球体解体',
-          inferenceTime: '每幅约 0.70 秒 · 默认阈值 0.2',
+          inferenceTime: '每幅约 0.70 秒 · 没有阈值——判定由 argmax 决定',
           bestFor: '用于：解体球体项目。',
           description:
             '采用 EfficientNet-B5 编码器的 UNet++，预测三个类别 — 背景、外围晕圈与致密核心。核心是直接预测而非推断得出，这正是解体指数得以可信的原因。',

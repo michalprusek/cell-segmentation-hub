@@ -101,7 +101,7 @@ covers that route.
 | Database   | PostgreSQL (dev + prod, via Docker Compose)                              |
 | Real-time  | Socket.io with auto-reconnect + exponential backoff                      |
 | Auth       | JWT access + refresh tokens                                              |
-| i18n       | 6 languages via i18next (EN, CS, ES, DE, FR, ZH)                         |
+| i18n       | 6 languages (EN, CS, ES, DE, FR, ZH) via a hand-rolled `LanguageContext` |
 | Deployment | Docker + Docker Compose + Nginx                                          |
 
 ## AI Models

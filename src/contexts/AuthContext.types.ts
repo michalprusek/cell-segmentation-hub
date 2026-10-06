@@ -38,7 +38,7 @@ export interface AuthContextType {
     username?: string
   ) => Promise<void>;
   signOut: () => Promise<void>;
-  deleteAccount: () => Promise<void>;
+  deleteAccount: (confirmationEmail: string, password: string) => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
 

@@ -5,13 +5,15 @@ import {
   generateSecureToken,
 } from '../auth/password';
 import { generateTokenPair, JwtPayload } from '../auth/jwt';
+import { cutoffForNow, isIssuedBeforeCutoff } from '../auth/sessionCutoff';
 import { logger } from '../utils/logger';
-import { ApiError, UserNotFoundError } from '../middleware/error';
+import { ApiError } from '../middleware/error';
 import * as EmailService from './emailService';
 import { getStorageProvider } from '../storage/index';
 import { v4 as uuidv4 } from 'uuid';
 import sharp from 'sharp';
 import { sessionService } from './sessionService';
+import { collectUserFiles, deleteUserFiles } from './accountFiles';
 import type {
   LoginData,
   RegisterData,
@@ -19,6 +21,7 @@ import type {
   ResetPasswordConfirmData,
   ChangePasswordData,
   RefreshTokenData,
+  DeleteAccountData,
 } from '../auth/validation';
 import type { Profile } from '@prisma/client';
 import type { Express } from 'express';
@@ -66,12 +69,23 @@ export async function register(data: RegisterData): Promise<{
     username?: string;
     emailVerified: boolean;
   };
-  accessToken: string;
-  refreshToken: string;
+  /**
+   * Absent when the server requires a verified e-mail before sign-in: the
+   * account exists but nobody is logged in yet.
+   */
+  accessToken?: string;
+  refreshToken?: string;
+  requiresEmailVerification: boolean;
 }> {
   try {
     // Import transaction utility at the top of the function
     const { withTransaction } = await import('../utils/database');
+
+    // `login` refuses an unverified user when this is set. Registration used
+    // to sign the new user in regardless, so the requirement stopped nobody:
+    // register, never open the e-mail, use the app for 30 days.
+    const requiresEmailVerification =
+      process.env.REQUIRE_EMAIL_VERIFICATION === 'true';
 
     // Check if user already exists
     const existingUser = await prisma.user.findUnique({
@@ -129,33 +143,24 @@ export async function register(data: RegisterData): Promise<{
         include: { profile: true },
       });
 
-      // Generate tokens for immediate login (default rememberMe=true for registration)
-      const tokenPayload: JwtPayload = {
-        userId: newUser.id,
-        email: newUser.email,
-        emailVerified: newUser.emailVerified,
-      };
-
-      const { accessToken, refreshToken } = generateTokenPair(
-        tokenPayload,
-        true
-      );
-
-      // Create session with rememberMe=true for new registrations
-      await tx.session.create({
-        data: {
-          userId: newUser.id,
-          refreshToken,
-          rememberMe: true,
-          expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days for new registrations
-          isValid: true,
-        },
-      });
-
-      // Persist refresh token in Redis so subsequent /auth/refresh-token calls
-      // can validate + rotate it. Without this, a freshly-registered user gets
-      // logged out the moment their first access token expires.
-      await sessionService.storeRefreshToken(newUser.id, refreshToken);
+      // Sign the new user in - unless they must verify first. The refresh
+      // token goes to Redis so /auth/refresh can validate and rotate it;
+      // registrations get the long-lived session.
+      let tokens: { accessToken: string; refreshToken: string } | undefined;
+      if (!requiresEmailVerification) {
+        tokens = generateTokenPair(
+          {
+            userId: newUser.id,
+            email: newUser.email,
+            emailVerified: newUser.emailVerified,
+          },
+          true
+        );
+        await sessionService.storeRefreshToken(
+          newUser.id,
+          tokens.refreshToken
+        );
+      }
 
       logger.info('User registered successfully', 'AuthService', {
         email: data.email,
@@ -188,23 +193,22 @@ export async function register(data: RegisterData): Promise<{
         email: data.email,
       });
 
-      return {
-        user: newUser,
-        accessToken,
-        refreshToken,
-      };
+      return { user: newUser, tokens };
     });
 
     return {
-      message: 'Uživatel byl úspěšně zaregistrován a přihlášen.',
+      message: requiresEmailVerification
+        ? 'Uživatel byl úspěšně zaregistrován. Před přihlášením ověřte svůj email.'
+        : 'Uživatel byl úspěšně zaregistrován a přihlášen.',
       user: {
         id: result.user.id,
         email: result.user.email,
         username: result.user.profile?.username || undefined,
         emailVerified: result.user.emailVerified,
       },
-      accessToken: result.accessToken,
-      refreshToken: result.refreshToken,
+      accessToken: result.tokens?.accessToken,
+      refreshToken: result.tokens?.refreshToken,
+      requiresEmailVerification,
     };
   } catch (error) {
     if (error instanceof ApiError) {
@@ -260,7 +264,9 @@ export async function login(
       rememberMe
     );
 
-    await sessionService.storeRefreshToken(user.id, refreshToken);
+    await sessionService.storeRefreshToken(user.id, refreshToken, {
+      rememberMe,
+    });
 
     logger.info('User logged in successfully', 'AuthService', {
       email: user.email,
@@ -291,8 +297,25 @@ export async function login(
  */
 export async function refreshToken(
   data: RefreshTokenData
-): Promise<{ accessToken: string; refreshToken: string }> {
+): Promise<{ accessToken: string; refreshToken: string; rememberMe: boolean }> {
   try {
+    // Checked BEFORE rotating: a rotation would write a fresh record, dated
+    // now, and so launder a session the password change had just ended.
+    const record = await sessionService.verifyRefreshToken(data.refreshToken);
+    if (record && !record.impersonatorId) {
+      const owner = await prisma.user.findUnique({
+        where: { id: record.userId },
+        select: { sessionsValidAfter: true },
+      });
+      const issuedAt = record.createdAt
+        ? Date.parse(record.createdAt)
+        : undefined;
+      if (isIssuedBeforeCutoff(issuedAt, owner?.sessionsValidAfter)) {
+        await sessionService.deleteRefreshToken(data.refreshToken);
+        throw ApiError.unauthorized('Neplatný nebo vypršený refresh token');
+      }
+    }
+
     const rotated = await sessionService.rotateRefreshToken(data.refreshToken);
     if (!rotated) {
       throw ApiError.unauthorized('Neplatný nebo vypršený refresh token');
@@ -301,6 +324,24 @@ export async function refreshToken(
     const user = await prisma.user.findUnique({ where: { id: rotated.userId } });
     if (!user) {
       throw ApiError.unauthorized('Uživatel nenalezen');
+    }
+
+    // ...and checked AGAIN, against the row read after the rotation. The
+    // check above and the rotation are not one step: a password change that
+    // lands between them finds the old record still valid, and the rotation
+    // then writes a successor dated now - newer than the cut-off, so it would
+    // pass every later check. The record that was PRESENTED is what gets
+    // judged, and its successor is withdrawn.
+    if (
+      record &&
+      !record.impersonatorId &&
+      isIssuedBeforeCutoff(
+        record.createdAt ? Date.parse(record.createdAt) : undefined,
+        user.sessionsValidAfter
+      )
+    ) {
+      await sessionService.deleteRefreshToken(rotated.token);
+      throw ApiError.unauthorized('Neplatný nebo vypršený refresh token');
     }
 
     // The payload is rebuilt from the DB row, so anything that lives only in
@@ -347,7 +388,11 @@ export async function refreshToken(
       userId: user.id,
     });
 
-    return { accessToken, refreshToken: rotated.token };
+    return {
+      accessToken,
+      refreshToken: rotated.token,
+      rememberMe: rotated.rememberMe,
+    };
   } catch (error) {
     if (error instanceof ApiError) {
       throw error;
@@ -375,8 +420,13 @@ export async function logout(refreshToken: string): Promise<void> {
   }
 }
 
+const PASSWORD_RESET_REQUESTED =
+  'Pokud email existuje, byl odeslán odkaz pro reset hesla.';
+
 /**
- * Request password reset - generates secure token and sends reset link via email
+ * Request password reset - generates secure token and sends reset link via email.
+ *
+ * Answers identically whether or not the address has an account.
  */
 export async function requestPasswordReset(
   data: ResetPasswordRequestData
@@ -400,10 +450,11 @@ export async function requestPasswordReset(
     });
 
     if (!user) {
-      logger.info('User not found, throwing error', 'AuthService', {
-        email: data.email,
-      });
-      throw new UserNotFoundError('Email není registrován v systému.');
+      // Same answer as for a registered address, after the same work: the
+      // real path spends ~250 ms hashing the token, so an instant reply
+      // would say "not registered" as clearly as the 404 this used to send.
+      await hashPassword(generateSecureToken());
+      return { message: PASSWORD_RESET_REQUESTED };
     }
 
     // Generate secure reset token
@@ -477,7 +528,7 @@ export async function requestPasswordReset(
     }
 
     const response: { message: string; resetToken?: string } = {
-      message: 'Pokud email existuje, byl odeslán odkaz pro reset hesla.',
+      message: PASSWORD_RESET_REQUESTED,
     };
 
     // Only include token in non-production environments for testing
@@ -492,12 +543,6 @@ export async function requestPasswordReset(
 
     return response;
   } catch (error) {
-    // If it's a UserNotFoundError, re-throw it as-is so the controller can handle it
-    if (error instanceof UserNotFoundError) {
-      throw error; // Re-throw the original error for 404 handling in controller
-    }
-
-    // For other errors, log and wrap in ApiError
     logger.error(
       'Password reset request failed:',
       error as Error,
@@ -556,13 +601,12 @@ export async function resetPasswordWithToken(
         password: hashedPassword,
         resetToken: null,
         resetTokenExpiry: null,
+        // Every session open at this moment ends, in the same write as the
+        // password itself: whoever made the reset necessary may be holding
+        // one. (This used to flag rows of the legacy `sessions` table, which
+        // nothing reads - the sessions carried on.)
+        sessionsValidAfter: cutoffForNow(),
       },
-    });
-
-    // Invalidate all existing sessions to force re-login
-    await prisma.session.updateMany({
-      where: { userId: matchedUser.id },
-      data: { isValid: false },
     });
 
     logger.info('Password reset completed successfully', 'AuthService', {
@@ -611,20 +655,14 @@ export async function changePassword(
       throw ApiError.badRequest('Současné heslo není správné');
     }
 
-    // Hash new password
     const hashedPassword = await hashPassword(data.newPassword);
 
-    // Update password
+    // One write: the new password and the end of every session that
+    // predates it - including the one making this request, which the
+    // controller then replaces through `reissueSession`.
     await prisma.user.update({
       where: { id: userId },
-      data: { password: hashedPassword },
-    });
-
-    // Invalidate all sessions except current one (optional - could be implemented)
-    // For now, invalidate all sessions to force re-login
-    await prisma.session.updateMany({
-      where: { userId },
-      data: { isValid: false },
+      data: { password: hashedPassword, sessionsValidAfter: cutoffForNow() },
     });
 
     logger.info('Password changed successfully', 'AuthService', { userId });
@@ -636,6 +674,62 @@ export async function changePassword(
     }
     logger.error('Password change failed:', error as Error, 'AuthService');
     throw ApiError.internalError('Změna hesla se nezdařila');
+  }
+}
+
+/**
+ * Give the caller a fresh session in place of the one they hold.
+ *
+ * Called right after `changePassword`, which has just voided every session of
+ * the user: the person who proved they know the password stays signed in,
+ * while every other browser - and anyone holding a copied cookie - does not.
+ *
+ * Separate from `changePassword` on purpose. What this returns are session
+ * tokens, the same as login returns; a function that takes a password and
+ * returns them reads, to a reviewer and to a scanner alike, as if it handed
+ * back password material.
+ */
+export async function reissueSession(
+  userId: string,
+  /** The refresh token the caller presented, if any. */
+  presentedRefreshToken?: string
+): Promise<{ accessToken: string; refreshToken: string; rememberMe: boolean }> {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, email: true, emailVerified: true },
+    });
+    if (!user) {
+      throw ApiError.notFound('Uživatel nenalezen');
+    }
+
+    // Looked up unconditionally; an absent cookie is the empty string, which
+    // names no record. Only a record that is this user's OWN counts - for
+    // the lifetime it passes on, and for being deleted. The cookie is
+    // whatever the browser sent; it is not evidence of whose session it is.
+    const presented = presentedRefreshToken ?? '';
+    const current = await sessionService.verifyRefreshToken(presented);
+    const ownsCurrent = current?.userId === userId;
+    const rememberMe = ownsCurrent ? (current.rememberMe ?? true) : false;
+
+    if (ownsCurrent) {
+      await sessionService.deleteRefreshToken(presented);
+    }
+    const tokens = generateTokenPair(
+      { userId: user.id, email: user.email, emailVerified: user.emailVerified },
+      rememberMe
+    );
+    await sessionService.storeRefreshToken(user.id, tokens.refreshToken, {
+      rememberMe,
+    });
+
+    return { ...tokens, rememberMe };
+  } catch (error) {
+    if (error instanceof ApiError) {
+      throw error;
+    }
+    logger.error('Session re-issue failed:', error as Error, 'AuthService');
+    throw ApiError.internalError('Obnovení relace se nezdařilo');
   }
 }
 
@@ -725,93 +819,52 @@ export async function updateProfile(
 /**
  * Delete user account
  */
-export async function deleteAccount(userId: string): Promise<void> {
+export async function deleteAccount(
+  userId: string,
+  confirmation: DeleteAccountData
+): Promise<void> {
   try {
-    // Import transaction utility
-    const { withTransaction } = await import('../utils/database');
-
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      include: {
-        projects: {
-          include: {
-            images: true,
-          },
-        },
-      },
+      select: { id: true, email: true, password: true },
     });
 
     if (!user) {
       throw ApiError.notFound('Uživatel nenalezen');
     }
 
-    // Delete user and all related data in a transaction
-    await withTransaction(prisma, async tx => {
-      // First, delete all sessions to prevent any further access
-      await tx.session.deleteMany({
-        where: { userId },
-      });
+    // Both checks answer the same way. The e-mail is the "type it to
+    // confirm" guard against a slip; the password is what makes an unlocked
+    // browser, or a copied cookie, not enough to destroy an account.
+    const emailMatches =
+      confirmation.email.trim().toLowerCase() === user.email.toLowerCase();
+    const passwordMatches = await verifyPassword(
+      confirmation.password,
+      user.password
+    );
+    if (!emailMatches || !passwordMatches) {
+      throw ApiError.badRequest('Email nebo heslo nesouhlasí');
+    }
 
-      // Delete all project images and their files
-      for (const project of user.projects) {
-        for (const image of project.images) {
-          // Delete segmentation results first
-          await tx.segmentation.deleteMany({
-            where: { imageId: image.id },
-          });
+    // The file list is read BEFORE the rows go: afterwards nothing records
+    // which files were this user's.
+    const files = await collectUserFiles(userId);
 
-          // Delete queue items
-          await tx.segmentationQueue.deleteMany({
-            where: { imageId: image.id },
-          });
-        }
+    // Every relation from `users` is ON DELETE CASCADE (or SET NULL for the
+    // audit tables that must outlive the account), so this one statement
+    // removes the projects, images, segmentations, queue items, shares,
+    // folders, API keys and jobs with it.
+    await prisma.user.delete({ where: { id: userId } });
 
-        // Delete all project images
-        await tx.image.deleteMany({
-          where: { projectId: project.id },
-        });
-      }
-
-      // Delete all projects
-      await tx.project.deleteMany({
-        where: { userId },
-      });
-
-      // Delete profile
-      await tx.profile.deleteMany({
-        where: { userId },
-      });
-
-      // Finally, delete the user
-      await tx.user.delete({
-        where: { id: userId },
-      });
-
-      logger.info(
-        'Account and all related data deleted successfully',
-        'AuthService',
-        { userId }
-      );
+    logger.info('Account and all related rows deleted', 'AuthService', {
+      userId,
     });
 
-    // Clean up storage files after successful database deletion
-    try {
-      // TODO: Implement user file deletion
-      // const storage = getStorageProvider();
-      // Need to implement bulk user file deletion functionality
-      logger.info(
-        'User files cleanup skipped - not implemented yet',
-        'AuthService',
-        { userId }
-      );
-    } catch (storageError) {
-      logger.error(
-        'Failed to delete user files from storage',
-        storageError as Error,
-        'AuthService'
-      );
-      // Don't throw - database deletion was successful
-    }
+    // After the commit, and never fatal: the account is gone either way, and
+    // a file that could not be removed is logged for an operator rather than
+    // reported to a user who no longer exists.
+    const result = await deleteUserFiles(files);
+    logger.info('Account files removed', 'AuthService', { userId, ...result });
   } catch (error) {
     if (error instanceof ApiError) {
       throw error;

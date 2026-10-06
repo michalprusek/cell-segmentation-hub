@@ -11,12 +11,12 @@ import {
 } from '../../utils/authCookies';
 import { prisma } from '../../db';
 import { logger } from '../../utils/logger';
-import { UserNotFoundError } from '../../middleware/error';
 import {
   loginSchema,
   registerSchema,
   resetPasswordRequestSchema,
   resetPasswordConfirmSchema,
+  type DeleteAccountData,
   type LoginData,
   type RegisterData,
   type ResetPasswordRequestData,
@@ -119,14 +119,25 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
 
   const result = await AuthService.register(data);
 
-  // Registration logs the user in immediately. Tokens travel only in
-  // httpOnly cookies now — never the body. Registration creates a
-  // rememberMe session (see authService), so the refresh cookie is long-lived.
-  setAuthCookies(res, result.accessToken, result.refreshToken, {
-    rememberMe: true,
-  });
+  // Registration logs the user in immediately - unless the server requires a
+  // verified e-mail first, in which case there are no tokens to send. Tokens
+  // travel only in httpOnly cookies, never the body; a registration session
+  // is a rememberMe one (see authService).
+  if (result.accessToken && result.refreshToken) {
+    setAuthCookies(res, result.accessToken, result.refreshToken, {
+      rememberMe: true,
+    });
+  }
 
-  return ResponseHelper.success(res, { user: result.user }, result.message, 201);
+  return ResponseHelper.success(
+    res,
+    {
+      user: result.user,
+      requiresEmailVerification: result.requiresEmailVerification,
+    },
+    result.message,
+    201
+  );
 });
 
 /**
@@ -250,11 +261,13 @@ export const refreshToken = asyncHandler(
 
     const result = await AuthService.refreshToken({ refreshToken: token });
 
-    // The rotated refresh token lives for the full server-side Redis TTL
-    // (30d), so the refreshed cookie gets the long-lived Max-Age. The new
-    // tokens travel only in the cookies — the body carries no secrets.
+    // The cookie lives as long as the session it carries: 30 days for a
+    // "remember me" login, 7 otherwise, as recorded on the refresh record.
+    // (This used to pass `true` unconditionally, so every session became a
+    // 30-day one at its first refresh.) The new tokens travel only in the
+    // cookies - the body carries no secrets.
     setAuthCookies(res, result.accessToken, result.refreshToken, {
-      rememberMe: true,
+      rememberMe: result.rememberMe,
     });
 
     return ResponseHelper.success(res, null, 'Token byl úspěšně obnoven');
@@ -345,20 +358,12 @@ export const requestPasswordReset = async (req: Request, res: Response) => {
 
   const data: ResetPasswordRequestData = validationResult.data;
 
+  // There is no "no such user" branch: the service answers the same either
+  // way.
   try {
     const result = await AuthService.requestPasswordReset(data);
     return ResponseHelper.success(res, result, result.message);
   } catch (error) {
-    // Type-safe error handling using custom error class
-    if (error instanceof UserNotFoundError) {
-      const apiError = {
-        code: 'USER_NOT_FOUND' as const,
-        message: error.message,
-      };
-      return ResponseHelper.error(res, apiError, 404);
-    }
-
-    // For other errors, return 500
     logger.error(
       'Password reset request failed',
       error as Error,
@@ -469,10 +474,34 @@ export const changePassword = asyncHandler(
       return ResponseHelper.unauthorized(res, 'User not authenticated');
     }
 
-    const userId = req.user.id;
-    const result = await AuthService.changePassword(userId, data);
+    // A password is the account owner's to change. Support acting as the
+    // user would need the current password anyway, and the replacement
+    // session minted below would not be an impersonated one.
+    if (req.impersonator) {
+      return ResponseHelper.error(
+        res,
+        {
+          code: 'FORBIDDEN' as const,
+          message: 'The password cannot be changed while impersonating',
+        },
+        403
+      );
+    }
 
-    return ResponseHelper.success(res, result, result.message);
+    const userId = req.user.id;
+    const { message } = await AuthService.changePassword(userId, data);
+
+    // Every session of this user has just been ended, this one included; it
+    // is replaced, so the person who made the change stays signed in.
+    const session = await AuthService.reissueSession(
+      userId,
+      req.cookies?.[REFRESH_TOKEN_COOKIE]
+    );
+    setAuthCookies(res, session.accessToken, session.refreshToken, {
+      rememberMe: session.rememberMe,
+    });
+
+    return ResponseHelper.success(res, { message }, message);
   }
 );
 
@@ -705,8 +734,21 @@ export const deleteAccount = asyncHandler(
       return ResponseHelper.unauthorized(res, 'User not authenticated');
     }
 
-    const user = req.user;
-    await AuthService.deleteAccount(user.id);
+    // Irreversible, and it would destroy the evidence of the session doing
+    // it: never on someone else's behalf.
+    if (req.impersonator) {
+      return ResponseHelper.error(
+        res,
+        {
+          code: 'FORBIDDEN' as const,
+          message: 'An account cannot be deleted while impersonating',
+        },
+        403
+      );
+    }
+
+    const confirmation: DeleteAccountData = req.body;
+    await AuthService.deleteAccount(req.user.id, confirmation);
 
     // The session is gone — clear the auth cookies so the browser doesn't
     // keep sending dead tokens for the deleted user.

@@ -226,9 +226,11 @@ export async function startImpersonation(
   // Durable copy — see the module docstring. `storeRefreshToken` throws if
   // Redis is down, and it must: an impersonated session that cannot refresh
   // would silently revert to the target's own identity in 15 minutes.
-  await sessionService.storeRefreshToken(target.id, refreshToken, undefined, {
+  await sessionService.storeRefreshToken(target.id, refreshToken, {
+    impersonation: {
     impersonatorId: admin.id,
     impersonationSessionId: sessionId,
+    },
   });
 
   void recordImpersonationEvent({

@@ -74,15 +74,6 @@ const ForgotPassword = () => {
           toast.error(errorMsg);
           return;
         }
-
-        // Check if it's a 404 error (email not registered)
-        if (axiosError.response?.status === 404) {
-          const errorMsg =
-            axiosError.response.data?.message ||
-            'Email není registrován v systému.';
-          toast.error(errorMsg);
-          return;
-        }
       }
 
       // For other errors, use the general error handling

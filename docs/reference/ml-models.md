@@ -7,12 +7,31 @@ There are **twelve** models. Each one is locked to one or more project types —
 model picker only offers compatible models, and the backend rejects an
 incompatible pair with a 400 even if you post it directly.
 
-> **Single source of truth.** The model set lives in three mirrored registries:
+> **There is no single list — a model id is written down in five places.**
+> Four of them must hold the identical set of ids:
 > `src/lib/models/modelRegistry.ts` (frontend, plus display metadata),
-> `backend/src/constants/modelRegistry.ts` (backend, compatibility only), and
+> `backend/src/constants/modelRegistry.ts` (backend, compatibility only),
 > `ModelLoader.AVAILABLE_MODELS` in `backend/segmentation/ml/model_loader.py`
-> (Python, checkpoint paths). `scripts/check-model-parity.cjs` fails CI if they
-> drift. **Add or remove a model in all three.**
+> (Python, checkpoint paths) and the `ModelType` enum in
+> `backend/segmentation/api/models.py`. `scripts/check-model-parity.cjs`
+> compares those four id sets — but nothing runs it: it is in neither
+> `make ci`, the GitHub workflows nor the pre-commit hook, so **run it by
+> hand** (`node scripts/check-model-parity.cjs`).
+>
+> The fifth is `backend/src/api/v1/models.ts`, the public API's per-model
+> table: output geometry, classes, and whether the model reads `threshold` and
+> `detect_holes` at all. It is typed `Record<KnownModelId, V1Model>`, so the
+> backend type check fails on a model missing from it, and
+> `backend/src/api/v1/__tests__/openapi.test.ts` pins its key set, the count,
+> and both parameter lists. Those flags describe
+> `backend/segmentation/api/routes.py::_dispatch_inference`, which no check
+> reads — change them only together with the dispatch.
+>
+> `scripts/verify-shared-types.cjs` is a different guard: it compares the
+> frontend and backend copies of `DEFAULT_MODEL_BY_PROJECT_TYPE` and
+> `PROJECT_TYPES_WITH_HOLE_DETECTION` (among other shared declarations), not
+> the model set, and lint-staged runs it only when a file under `src/types/` or
+> `backend/src/types/` is staged.
 
 ---
 
@@ -113,10 +132,12 @@ all-MLP decoder). Highest reported accuracy on bright-field spheroids (93 % IoU)
 at ~13 ms of raw inference.
 
 - Checkpoint: `weights/segformer_b0_spheroseg.pth`
-- Loads through HuggingFace `transformers`; the ML container needs its
-  HuggingFace cache mount to be present (see
-  [deployment](../deployment/README.md)). Unavailable — the model simply does
-  not appear — if `transformers` is missing from the image.
+- Built with the HuggingFace `transformers` library, but **nothing is fetched
+  from the Hub**: the architecture comes from the vendored
+  `models/segformer_config.json` (`SegformerConfig.from_dict`) and every weight
+  from the checkpoint above. The ML container has no HuggingFace cache mount
+  and no `HF_TOKEN`. Unavailable — the model simply does not appear — if
+  `transformers` is missing from the image.
 
 ### `mamba_unet` — Mamba-UNet
 
@@ -318,9 +339,15 @@ real microtubule in IRM is _darker_ than its surround):
 More detections at a lower threshold means _worse_ evidence, and on TIRF the
 output does not correlate with the image at all. The symptom of feeding it TIRF
 is exactly that: many plausible polylines with no contrast underneath them.
-Check the project's channel configuration — IRM auto-detection defaults every
-channel to `type: "irm"`, so a TIRF-only recording can silently be marked as the
-segmentation source.
+Check the project's channel configuration. A channel is typed `irm` only on
+positive evidence — a label-free name (`IRM`, `BF`, `DIC`, `TL`, `BRIGHTFIELD`,
+`TRANSMITTED`) or an emission wavelength of exactly zero — and is `fluorescent`
+otherwise; an unknown wavelength is no longer taken as evidence. When no channel
+qualifies, none is marked as the segmentation source and the **first channel**
+is used by default. That is the normal outcome for a multi-page TIFF, which
+carries no wavelength and often no meaningful channel names, so a stack whose
+first channel is TIRF is still segmented on TIRF unless you pick the channel
+yourself in the segmentation dialog.
 
 ### Its threshold is not a user setting
 
@@ -460,9 +487,11 @@ segmented and was wrong by construction on six of the seven project types.
    read-only label, and a `model` in their request body is ignored in favour of
    the project's.
 4. **Threshold** — not a choice at all. It is derived read-only from the
-   registry entry for the resolved model, and the values differ by a factor of
-   five between models (`microtubule` 0.98, `spheroid_disintegration` 0.2, the
-   rest 0.5).
+   registry entry for the resolved model: 0.98 for `microtubule`, 0.5 for every
+   other model. Five models never read the value they are sent: `microtubule`
+   applies `prob_thr` from its own parameter file, `sperm` and `sperm_2part`
+   their own cut-offs, and `spheroid_disintegration` and `neurite_soma` decide
+   by argmax and have no threshold at all.
 5. **Hole detection** — offered only on `spheroid` and `wound`
    (`PROJECT_TYPES_WITH_HOLE_DETECTION`). Everywhere else the request carries
    the default `true`, normalised on both sides by `resolveDetectHoles`.
@@ -476,11 +505,12 @@ segmented and was wrong by construction on six of the seven project types.
 
 ## Adding a model
 
-Adding one touches roughly nine files across the stack — the three registries
-above, the Python wrapper and its `ModelLoader` entry, the weights download
+Adding one touches files across the whole stack — the five places listed at
+the top of this page, the Python wrapper and its `ModelLoader` entry, the weights download
 script, and the `settings.modelSelection.models.<key>.{name,description}`
-translation keys in all six locales. `scripts/check-model-parity.cjs` and
-`scripts/check-i18n.cjs` will tell you what you missed.
+translation keys in all six locales. `scripts/check-model-parity.cjs` (run it
+by hand), the backend type check and `scripts/check-i18n.cjs` will tell you
+what you missed.
 
 Neither script covers the documentation, which is how `sperm_2part` shipped
 undescribed. By hand: this page (count, catalogue, compatibility matrix, a

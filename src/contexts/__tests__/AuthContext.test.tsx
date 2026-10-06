@@ -5,6 +5,7 @@ import React, { ReactNode } from 'react';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { useAuth } from '@/contexts/exports';
 import apiClient from '@/lib/api';
+import { hardRedirect } from '@/lib/hardRedirect';
 
 // ── mocks ─────────────────────────────────────────────────────────────────────
 //
@@ -39,6 +40,11 @@ vi.mock('@/lib/api', () => {
 
 vi.mock('@/lib/authEvents', () => ({
   authEventEmitter: mockAuthEventEmitter,
+}));
+
+vi.mock('@/lib/hardRedirect', () => ({
+  hardRedirect: vi.fn(),
+  ACCOUNT_DELETED_FLAG: 'spheroseg.accountDeleted',
 }));
 
 vi.mock('@/lib/tokenRefresh', () => ({
@@ -408,10 +414,19 @@ describe('AuthContext – signOut', () => {
 // ── deleteAccount ──────────────────────────────────────────────────────────────
 
 describe('AuthContext – deleteAccount', () => {
-  const signInFirst = async () => {
+  /** @param onRender called with `loading` on EVERY render of the hook. */
+  const signInFirst = async (onRender?: (loading: boolean) => void) => {
     vi.mocked(apiClient.login).mockResolvedValueOnce(validAuthResponse);
     vi.mocked(apiClient.getUserProfile).mockResolvedValue(validProfile);
-    const result = await renderAuth();
+    const { result } = renderHook(
+      () => {
+        const auth = useAuth();
+        onRender?.(auth.loading);
+        return auth;
+      },
+      { wrapper }
+    );
+    await waitFor(() => expect(result.current.loading).toBe(false));
     await act(async () => {
       await result.current.signIn('user@example.com', 'pw');
     });
@@ -422,14 +437,23 @@ describe('AuthContext – deleteAccount', () => {
   it('deletes the account when the confirmation matches the email', async () => {
     vi.mocked(apiClient.deleteAccount).mockResolvedValueOnce(undefined);
     const result = await signInFirst();
+    // The test setup replaces sessionStorage with a mock, so watch the write.
+    const setItem = vi.spyOn(window.sessionStorage, 'setItem');
 
     await act(async () => {
-      await result.current.deleteAccount('user@example.com');
+      await result.current.deleteAccount('user@example.com', 'pw');
     });
 
-    expect(vi.mocked(apiClient.deleteAccount)).toHaveBeenCalled();
-    expect(result.current.isAuthenticated).toBe(false);
-    expect(result.current.user).toBeNull();
+    // Both reach the server, which is where they are actually checked.
+    expect(vi.mocked(apiClient.deleteAccount)).toHaveBeenCalledWith({
+      email: 'user@example.com',
+      password: 'pw',
+    });
+    // The app is reloaded onto the home page rather than navigated: see the
+    // comment in deleteAccount for the race the in-app navigation lost.
+    expect(vi.mocked(hardRedirect)).toHaveBeenCalledWith('/');
+    expect(setItem).toHaveBeenCalledWith('spheroseg.accountDeleted', '1');
+    expect(mockTokenRefreshManager.stopTokenRefreshManager).toHaveBeenCalled();
   });
 
   it('throws and stays authenticated when the confirmation does not match', async () => {
@@ -437,39 +461,61 @@ describe('AuthContext – deleteAccount', () => {
 
     await expect(
       act(async () => {
-        await result.current.deleteAccount('wrong-email@example.com');
+        await result.current.deleteAccount('wrong-email@example.com', 'pw');
       })
-    ).rejects.toThrow(
-      'Confirmation text is required and must match your email address'
-    );
+    ).rejects.toThrow(/must match your address/);
 
     expect(vi.mocked(apiClient.deleteAccount)).not.toHaveBeenCalled();
     expect(result.current.isAuthenticated).toBe(true);
   });
 
-  it('throws when the confirmation text is undefined', async () => {
+  it('does not call the server without a password', async () => {
     const result = await signInFirst();
 
     await expect(
       act(async () => {
-        await result.current.deleteAccount(undefined);
+        await result.current.deleteAccount('user@example.com', '');
       })
     ).rejects.toThrow();
+
+    expect(vi.mocked(apiClient.deleteAccount)).not.toHaveBeenCalled();
+    expect(result.current.isAuthenticated).toBe(true);
   });
 
-  it('rethrows and emits profile_error when the delete API throws', async () => {
+  it('rethrows, stays signed in and keeps refreshing when the server refuses', async () => {
     vi.mocked(apiClient.deleteAccount).mockRejectedValue(
       new Error('Delete failed')
     );
-    const result = await signInFirst();
+    // Every value of `loading` the tree is rendered with, not just the last:
+    // the bug was a TRANSIENT `true`, which swaps the page for a spinner and
+    // unmounts the dialog. A final-state assertion cannot see it.
+    const loadingRenders: boolean[] = [];
+    const result = await signInFirst(loading => loadingRenders.push(loading));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    mockTokenRefreshManager.stopTokenRefreshManager.mockClear();
+    loadingRenders.length = 0;
 
-    await expect(
-      act(async () => {
-        await result.current.deleteAccount('user@example.com');
-      })
-    ).rejects.toThrow('Delete failed');
+    let thrown: unknown;
+    await act(async () => {
+      try {
+        await result.current.deleteAccount('user@example.com', 'wrong');
+      } catch (error) {
+        thrown = error;
+      }
+    });
+    expect((thrown as Error)?.message).toBe('Delete failed');
 
-    await waitFor(() => expect(findEmitted('profile_error')).toBeDefined());
+    expect(loadingRenders).not.toContain(true);
+
+    // The account still exists, so the session must too: stopping the
+    // refresh timer here would sign the user out 15 minutes later.
+    expect(result.current.isAuthenticated).toBe(true);
+    expect(
+      mockTokenRefreshManager.stopTokenRefreshManager
+    ).not.toHaveBeenCalled();
+    // The dialog owns the (translated) toast; the context emits none.
+    expect(findEmitted('profile_error')).toBeUndefined();
+    expect(vi.mocked(hardRedirect)).not.toHaveBeenCalled();
   });
 });
 
