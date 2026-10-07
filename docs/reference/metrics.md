@@ -72,8 +72,11 @@ every core-anchored column it is `N/A` without a usable core.
 `spheroid_invasive` projects only. The paper's **core-anchored**,
 distance-weighted index — its **secondary** read-out, exported beside the
 outside-core fraction. For a mask that contains its core, `W1` below equals the
-mean of `d̃` minus 2/3: DI weights the outside-core fraction by how far the mass
-has travelled.
+mean of `d̃` minus 2/3 up to pixel discretisation: DI weights the outside-core
+fraction by how far the mass has travelled. The two agree to within 3 × 10⁻⁴ on
+the 528 expert masks of the released dataset and to within 10⁻⁶ on its
+dispersed spheroids; the gap sits in intact spheroids, where the mask is the
+core and `d̃` straddles the reference at pixel scale.
 
 Every foreground pixel's distance from the **core centroid** is normalised by the
 core's effective radius `R_C = √(N_core / π)`, giving `d̃ = d / R_C`. The

@@ -718,7 +718,8 @@ A scalar in \`[0, 1)\`: how far the foreground's radial distribution departs
 from a filled disk the size of the core. Core-anchored; **undefined without a
 usable core**. It is the secondary read-out: it weights the outside-core
 fraction by how far the mass has travelled, and for a mask that contains its
-core \`W₁\` below equals the mean of \`d̃\` minus 2/3.
+core \`W₁\` below equals the mean of \`d̃\` minus 2/3 up to pixel
+discretisation (a difference below 3 × 10⁻⁴ on the released expert masks).
 
 1. \`R_C = √(N_C / π)\` — effective radius of the core (\`N_C\` core pixels),
 anchored at the core centroid \`c_C\`.
