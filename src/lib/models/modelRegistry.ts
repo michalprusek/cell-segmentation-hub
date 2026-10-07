@@ -146,7 +146,7 @@ export const MODEL_REGISTRY = {
     name: 'Spheroid Disintegration',
     displayName: 'Spheroid Disintegration',
     description:
-      'UNet++ / EfficientNet-B5 3-class model (background / corona / core) for disintegrating spheroids; predicts the dense core directly for a correct Disintegration Index',
+      'UNet++ / EfficientNet-B5 3-class model (background / corona / core) for disintegrating spheroids; predicts the dense core directly, the anchor of the outside-core fraction and the Disintegration Index',
     i18nKey: 'spheroid_disintegration',
     compatibleProjectTypes: ['spheroid_invasive'],
   },

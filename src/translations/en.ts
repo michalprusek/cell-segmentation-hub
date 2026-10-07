@@ -119,7 +119,7 @@ export default {
       disintegration: {
         label: 'Disintegrating spheroid',
         detail:
-          'Bright-field, 2048 × 2048, 48 hours into a disintegration assay. The dense core is green; every cell that has broken away from it is red. The Disintegration Index is computed from exactly this split.',
+          'Bright-field, 2048 × 2048, 48 hours into a disintegration assay. The dense core is green; every cell that has broken away from it is red. The outside-core fraction and the Disintegration Index are computed from exactly this split.',
         alt: 'Bright-field micrograph of a spheroid breaking apart, its dense core outlined in green and each detached cell outlined in red.',
       },
       wound: {
@@ -616,7 +616,7 @@ export default {
         spheroid_disintegration: {
           name: 'Spheroid Disintegration',
           description:
-            'UNet++ with an EfficientNet-B5 encoder — 3-class segmentation (background / corona / dense core) of disintegrating spheroids; predicts the core directly for a correct Disintegration Index (~0.7s/image)',
+            'UNet++ with an EfficientNet-B5 encoder — 3-class segmentation (background / corona / dense core) of disintegrating spheroids; predicts the core directly, the anchor of the outside-core fraction and the Disintegration Index (~0.7s/image)',
         },
         segformer: {
           name: 'SegFormer',
@@ -678,7 +678,7 @@ export default {
       unet_spherohq:
         'Fastest model after optimizations! Excellent for real-time processing (E2E ~286ms, 5.5 img/s)',
       spheroid_disintegration:
-        'UNet++ / EfficientNet-B5 3-class model (background / corona / core) for disintegrating spheroids; predicts the dense core directly for a correct Disintegration Index (30.7M params)',
+        'UNet++ / EfficientNet-B5 3-class model (background / corona / core) for disintegrating spheroids; predicts the dense core directly, the anchor of the outside-core fraction and the Disintegration Index (30.7M params)',
       segformer:
         'Transformer-based SegFormer-B0 model trained on the SpheroMix dataset. Highest spheroid accuracy in the platform (93% IoU) while being the smallest and fastest model (~13 ms/image).',
       mamba_unet:
@@ -1718,7 +1718,7 @@ export default {
         spheroidInvasive: {
           name: 'Disintegrated spheroids',
           bestFor:
-            'For: spheroids dispersing into a matrix. The headline number is the core-anchored Disintegration Index.',
+            'For: spheroids dispersing into a matrix. The headline number is the outside-core fraction (Index B); the core-anchored Disintegration Index is exported beside it.',
           output:
             'Output: closed polygons, with the dense core predicted as its own class and drawn green.',
         },
@@ -1898,7 +1898,7 @@ export default {
             'About 0.70 s per image · no threshold — the decision is an argmax',
           bestFor: 'Used by: Disintegrated spheroid projects.',
           description:
-            'UNet++ with an EfficientNet-B5 encoder predicting three classes — background, corona and dense core. The core is predicted directly rather than inferred, which is what makes the Disintegration Index trustworthy.',
+            'UNet++ with an EfficientNet-B5 encoder predicting three classes — background, corona and dense core. The core is predicted directly rather than inferred, which is what makes the outside-core fraction and the Disintegration Index trustworthy.',
         },
         wound: {
           name: 'Wound Healing',
@@ -2117,7 +2117,7 @@ export default {
         sperm:
           'Sperm: an instance panel where you pick the active cell and part before drawing, plus reassignment from the right-click menu.',
         disintegration:
-          'Disintegrated spheroids: the dense core is drawn green. The Disintegration Index itself is computed at export time.',
+          'Disintegrated spheroids: the dense core is drawn green. The outside-core fraction and the Disintegration Index are computed at export time.',
       },
     },
 
@@ -2166,7 +2166,7 @@ export default {
         spheroid:
           'Polygon Metrics + Summary — area, perimeter, circularity, Feret diameters, solidity and more, one row per shape',
         spheroidInvasive:
-          'Image Metrics — one row per image with the Disintegration Index, core and invasion areas, and the dispersion panel',
+          'Image Metrics — one row per image with the outside-core fraction, the Disintegration Index, core and invasion areas, and the dispersion panel',
         wound:
           'Polygon Metrics + Summary + WoundTimeSeries — the closure curve, with the chart embedded',
         sperm:

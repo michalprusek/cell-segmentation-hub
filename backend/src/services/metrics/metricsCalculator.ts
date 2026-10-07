@@ -110,7 +110,7 @@ export interface ImageMetrics {
   invasionArea: number; // totalSpheroidArea − coreArea, clamped at 0
   // The paper's per-image panel (spheroid_seg/compute_di.py, same names in
   // snake_case). Every field is null unless referenceMode==='core'.
-  indexB: number | null; // Lim's Index B: outside-core fraction of the foreground
+  indexB: number | null; // outside-core fraction of the foreground (Lim's Index B); the primary read-out
   reachP90: number | null; // 90th pct of core-normalised distances (core radii)
   nFragments: number | null; // raw 4-connected corona components
   largestFragmentFrac: number | null; // largest corona component / corona
@@ -1428,15 +1428,17 @@ export class MetricsCalculator {
         key: 'invasionArea',
         width: 24,
       },
+      // The outside-core fraction (Lim's Index B, the dispersed-mass fraction)
+      // is the paper's primary read-out and comes first; the Disintegration
+      // Index, a distance-weighted secondary read-out, sits beside it. The rest
+      // is the paper's panel, compute_di.py's definitions. All N/A when no
+      // usable core anchored the computation.
+      { header: 'Outside-core Fraction (Index B)', key: 'indexB', width: 30 },
       {
         header: 'Disintegration Index',
         key: 'disintegrationIndex',
         width: 22,
       },
-      // Lim's Index B is a co-primary read-out beside DI (the dispersed-mass
-      // fraction); the rest is the paper's panel, compute_di.py's definitions.
-      // All N/A when no usable core anchored the computation.
-      { header: 'Index B (outside-core fraction)', key: 'indexB', width: 30 },
       { header: 'W1', key: 'wassersteinW1', width: 10 },
       { header: 'Reach p90 (R_core)', key: 'reachP90', width: 20 },
       { header: 'Corona Fragments', key: 'nFragments', width: 18 },

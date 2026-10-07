@@ -52,9 +52,28 @@ fallback to pixel units**. The unit is always in the column header — check it.
 
 ---
 
+## Outside-core fraction (Index B)
+
+`spheroid_invasive` projects only. **The paper's primary read-out.**
+
+```
+B = (N_FG − N_core) / N_FG
+```
+
+the share of the foreground (`FG = corona ∪ core`) that lies outside the dense
+core — Lim, Kang and Lee's Index B (Sci. Rep. 2020). It is `0` for a compact
+body and approaches `1` as the cell mass leaves the core. It needs no centroid
+and no distance, so a predicted core that splits into pieces does not move it.
+Exported as `Outside-core Fraction (Index B)`, the first read-out column; like
+every core-anchored column it is `N/A` without a usable core.
+
 ## Disintegration Index (DI)
 
-`spheroid_invasive` projects only. The paper's **core-anchored** index.
+`spheroid_invasive` projects only. The paper's **core-anchored**,
+distance-weighted index — its **secondary** read-out, exported beside the
+outside-core fraction. For a mask that contains its core, `W1` below equals the
+mean of `d̃` minus 2/3: DI weights the outside-core fraction by how far the mass
+has travelled.
 
 Every foreground pixel's distance from the **core centroid** is normalised by the
 core's effective radius `R_C = √(N_core / π)`, giving `d̃ = d / R_C`. The
@@ -89,7 +108,7 @@ undefined, like a missing one.
 
 | Column                            | Definition (compute_di.py)                                                     |
 | --------------------------------- | ------------------------------------------------------------------------------ |
-| `Index B (outside-core fraction)` | corona pixels / foreground pixels — Lim's Index B, co-primary with DI          |
+| `Outside-core Fraction (Index B)` | corona pixels / foreground pixels — Lim's Index B, the primary read-out        |
 | `W1`                              | the 1-Wasserstein distance before `tanh`                                       |
 | `Reach p90 (R_core)`              | 90th percentile of `d/R_C` over the foreground                                 |
 | `Corona Fragments`                | 4-connected components of the corona — no closing, no size floor               |

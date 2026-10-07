@@ -113,7 +113,7 @@ export default {
       disintegration: {
         label: 'Esferoide en desintegración',
         detail:
-          'Campo claro, 2048 × 2048, 48 horas de ensayo de desintegración. El núcleo denso está en verde y cada célula desprendida en rojo. El índice de desintegración se calcula exactamente a partir de esa separación.',
+          'Campo claro, 2048 × 2048, 48 horas de ensayo de desintegración. El núcleo denso está en verde y cada célula desprendida en rojo. La fracción fuera del núcleo y el índice de desintegración se calculan exactamente a partir de esa separación.',
         alt: 'Micrografía de campo claro de un esferoide desintegrándose, con el núcleo denso delineado en verde y cada célula desprendida en rojo.',
       },
       wound: {
@@ -600,7 +600,7 @@ export default {
         spheroid_disintegration: {
           name: 'Desintegración de esferoides',
           description:
-            'UNet++ con codificador EfficientNet-B5 — segmentación de 3 clases (fondo / corona / núcleo denso) de esferoides en desintegración; predice el núcleo directamente para un Índice de Desintegración correcto (~0.7s/imagen)',
+            'UNet++ con codificador EfficientNet-B5 — segmentación de 3 clases (fondo / corona / núcleo denso) de esferoides en desintegración; predice el núcleo directamente, la referencia de la fracción fuera del núcleo y del Índice de Desintegración (~0.7s/imagen)',
         },
         segformer: {
           name: 'SegFormer',
@@ -662,7 +662,7 @@ export default {
       unet_spherohq:
         '¡El modelo más rápido después de las optimizaciones! Excelente para procesamiento en tiempo real (E2E ~286ms, 5.5 img/s)',
       spheroid_disintegration:
-        'Modelo UNet++ / EfficientNet-B5 de 3 clases (fondo / corona / núcleo) para esferoides en desintegración; predice el núcleo denso directamente para un Índice de Desintegración correcto (30,7M parámetros)',
+        'Modelo UNet++ / EfficientNet-B5 de 3 clases (fondo / corona / núcleo) para esferoides en desintegración; predice el núcleo denso directamente, la referencia de la fracción fuera del núcleo y del Índice de Desintegración (30,7M parámetros)',
       segformer:
         'Modelo SegFormer-B0 basado en transformador, entrenado con el conjunto de datos SpheroMix. La mayor precisión de segmentación de esferoides de la plataforma (93% IoU), siendo además el modelo más pequeño y rápido (~13 ms/imagen).',
       mamba_unet:
@@ -1716,7 +1716,7 @@ export default {
         spheroidInvasive: {
           name: 'Esferoides en disgregación',
           bestFor:
-            'Para: esferoides que se dispersan en una matriz. La cifra principal es el índice de disgregación anclado al núcleo.',
+            'Para: esferoides que se dispersan en una matriz. La cifra principal es la fracción fuera del núcleo (Index B); el índice de disgregación anclado al núcleo se exporta junto a ella.',
           output:
             'Resultado: polígonos cerrados; el núcleo denso se predice como clase propia y se dibuja en verde.',
         },
@@ -1897,7 +1897,7 @@ export default {
             'Unos 0,70 s por imagen · sin umbral: la decisión es un argmax',
           bestFor: 'La usan: los proyectos de esferoides en disgregación.',
           description:
-            'UNet++ con codificador EfficientNet-B5 que predice tres clases: fondo, corona y núcleo denso. El núcleo se predice directamente en lugar de inferirse, y eso es lo que hace fiable el índice de disgregación.',
+            'UNet++ con codificador EfficientNet-B5 que predice tres clases: fondo, corona y núcleo denso. El núcleo se predice directamente en lugar de inferirse, y eso es lo que hace fiables la fracción fuera del núcleo y el índice de disgregación.',
         },
         wound: {
           name: 'Cicatrización de heridas',
@@ -2116,7 +2116,7 @@ export default {
         sperm:
           'Espermatozoides: un panel de instancias donde elige la célula y la parte activas antes de dibujar, además de reasignación desde el menú contextual.',
         disintegration:
-          'Esferoides en disgregación: el núcleo denso se dibuja en verde. El índice de disgregación se calcula al exportar.',
+          'Esferoides en disgregación: el núcleo denso se dibuja en verde. La fracción fuera del núcleo y el índice de disgregación se calculan al exportar.',
       },
     },
 
@@ -2165,7 +2165,7 @@ export default {
         spheroid:
           'Polygon Metrics + Summary: área, perímetro, circularidad, diámetros de Feret, solidez y más, una fila por forma',
         spheroidInvasive:
-          'Image Metrics: una fila por imagen con el índice de disgregación, las áreas de núcleo e invasión y el panel de dispersión',
+          'Image Metrics: una fila por imagen con la fracción fuera del núcleo, el índice de disgregación, las áreas de núcleo e invasión y el panel de dispersión',
         wound:
           'Polygon Metrics + Summary + WoundTimeSeries: la curva de cierre, con el gráfico incrustado',
         sperm:

@@ -97,7 +97,7 @@ const DETAILS: Record<KnownModelId, V1Model> = {
   spheroid_disintegration: {
     name: 'Spheroid Disintegration',
     description:
-      'Invasive spheroids: the whole spheroid footprint plus its compact core, with the Disintegration Index and related image-level metrics.',
+      'Invasive spheroids: the whole spheroid footprint plus its compact core, with the outside-core fraction, the Disintegration Index and related image-level metrics.',
     geometry: 'polygon',
     classes: ['spheroid', 'core'],
     threshold: null,

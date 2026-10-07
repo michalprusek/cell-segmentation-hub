@@ -180,7 +180,7 @@ closure chart embedded, and the same chart as
 property:
 
 `Image Name`, `Total Spheroid Area`, `Core Area`, `Invasion Area`,
-**`Disintegration Index`**, `Index B (outside-core fraction)`, `W1`,
+**`Outside-core Fraction (Index B)`**, `Disintegration Index`, `W1`,
 `Reach p90 (R_core)`, `Corona Fragments`, `Largest-Fragment Fraction`,
 `Solidity`, `Core Components`, `Largest Core Component Fraction`,
 `Core Centroid Shift (R_core)`, `Core Fragmented (0/1)`,

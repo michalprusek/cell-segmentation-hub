@@ -1107,9 +1107,20 @@ describe('MetricsCalculator — exportToExcel (spheroid_invasive)', () => {
     await calc.exportToExcel([], '/tmp/aspp.xlsx', 2.0, sampleImageMetrics);
     const headers = primaryColumns.map(c => c.header ?? '');
     expect(headers.some(h => h.includes('um^2'))).toBe(true);
-    expect(headers).toContain('Index B (outside-core fraction)');
+    expect(headers).toContain('Outside-core Fraction (Index B)');
     expect(headers).toContain('Reach p90 (R_core)');
     expect(headers.some(h => /q95|Hole Count|Equiv\. Diameter/.test(h))).toBe(false);
+  });
+
+  it('puts the outside-core fraction first, the Disintegration Index directly after it', async () => {
+    // The paper reports the outside-core fraction (Index B) as its primary
+    // read-out and DI as the secondary one; the sheet follows that order.
+    await calc.exportToExcel([], '/tmp/aspp.xlsx', 2.0, sampleImageMetrics);
+    const headers = primaryColumns.map(c => c.header ?? '');
+    const fraction = headers.indexOf('Outside-core Fraction (Index B)');
+    expect(fraction).toBeGreaterThan(-1);
+    expect(headers.indexOf('Disintegration Index')).toBe(fraction + 1);
+    expect(headers.indexOf('Invasion Area (um^2)')).toBe(fraction - 1);
   });
 
   it('adds no rows for empty imageMetrics', async () => {

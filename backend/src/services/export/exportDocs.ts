@@ -672,9 +672,11 @@ function buildSpheroidInvasiveGuide({ areaUnit, scaleInfo }: UnitContext): strin
   return `# Disintegration Analysis Metrics Guide
 ${scaleInfo}
 This export is one row per image: the three areas (${areaUnit}), the
-**Disintegration Index (DI)** and **Index B** (Lim, Kang, Lee 2020 — Sci. Rep.
-PMC6971071) as co-primary read-outs, and the panel of companion metrics and
-quality flags defined by the paper's released scoring script
+**outside-core fraction** (**Index B** of Lim, Kang, Lee 2020 — Sci. Rep.
+PMC6971071), which is the paper's primary read-out, the **Disintegration
+Index (DI)**, a distance-weighted secondary read-out, and the panel of
+companion metrics and quality flags defined by the paper's released scoring
+script
 (\`spheroid_seg/compute_di.py\` of the spheroid-disintegration paper; code DOI
 10.5281/zenodo.22295119). Every definition below is that script's, ported
 verbatim to \`backend/segmentation/api/disintegration_metrics.py\`.
@@ -714,7 +716,9 @@ row was scored from polygons.
 
 A scalar in \`[0, 1)\`: how far the foreground's radial distribution departs
 from a filled disk the size of the core. Core-anchored; **undefined without a
-usable core**.
+usable core**. It is the secondary read-out: it weights the outside-core
+fraction by how far the mass has travelled, and for a mask that contains its
+core \`W₁\` below equals the mean of \`d̃\` minus 2/3.
 
 1. \`R_C = √(N_C / π)\` — effective radius of the core (\`N_C\` core pixels),
 anchored at the core centroid \`c_C\`.
@@ -733,7 +737,7 @@ corona does.
 
 | Column | Definition | Reads as |
 | --- | --- | --- |
-| **Index B** | \`(N_FG − N_C) / N_FG\` | fraction of the cell mass outside the dense core (co-primary with DI) |
+| **Outside-core Fraction (Index B)** | \`(N_FG − N_C) / N_FG\` | fraction of the cell mass outside the dense core — the primary read-out |
 | **W1** | \`W₁\` above | DI before the \`tanh\` |
 | **Reach p90** | 90th percentile of \`d̃\` | how far, in core radii, the outer tenth of the mass has travelled |
 | **Corona Fragments** | 4-connected components of the corona, no closing, no size floor | how many pieces the dispersed mass is in |

@@ -205,7 +205,7 @@ matrix, where the quantity of interest is how much has left the dense core.
   Determinism is not correctness: a predicted core that splits (the paper's
   intact spheroid `251201_0 (20)`, flagged `core_fragmented`) now splits every
   time.
-- The per-image read-out (DI, Index B, reach, fragments, core diagnostics,
+- The per-image read-out (outside-core fraction, DI, reach, fragments, core diagnostics,
   regime flags) is computed from the **raster** argmax mask at inference time by
   `api/disintegration_metrics.py`, a verbatim port of the paper's
   `compute_di.py`, and returned as `image_metrics`; `warnings` carries the
