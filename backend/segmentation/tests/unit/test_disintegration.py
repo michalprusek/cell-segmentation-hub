@@ -111,7 +111,7 @@ class TestDisintegrationIndex:
         assert out["reference"] == "core"
         assert out["di"] < 0.05
         assert out["index_b"] == 0.0
-        # an intact spheroid is below the validated floor, and says so
+        # an intact spheroid is below the detection floor (outside-core fraction < 0.61), and says so
         assert out["below_validated_regime"] == 1
 
     def test_smaller_core_increases_di(self, client):
@@ -281,7 +281,7 @@ class TestDisintegrationPanel:
 
     def test_unvalidated_regime_flag(self, client):
         # core radius 100, foreground radius 115 -> outside-core fraction
-        # 1 - (100/115)^2 ~ 0.24, inside [0.15, 0.30)
+        # 1 - (100/115)^2 ~ 0.24, inside the gap [0.08, 0.47) that holds no expert mask
         out = _post(client, {"mask_polygon": _circle(CX, CY, 115),
                              "core_polygon": _circle(CX, CY, 100),
                              "image_width": W, "image_height": H})

@@ -119,8 +119,8 @@ export interface ImageMetrics {
   largestCoreComponentFrac: number | null;
   coreCentroidShift: number | null; // centroid shift by the minor pieces, in R_core
   coreFragmented: number | null; // 0/1: the core anchor is broken (inspect)
-  unvalidatedRegime: number | null; // 0/1: Index B in [0.15, 0.30)
-  belowValidatedRegime: number | null; // 0/1: DI < 0.6, a screen not a grade
+  unvalidatedRegime: number | null; // 0/1: Index B in [0.08, 0.47), where the paper's release holds no expert mask
+  belowValidatedRegime: number | null; // 0/1: Index B < 0.61 (the detection floor), a screen not a grade
   // Where the numbers came from: the model's raster mask at inference time,
   // or the stored polygons re-rasterised (no raster read-out, or edited).
   diSource: 'model_raster' | 'polygons' | null;
@@ -190,6 +190,34 @@ interface PaperPanel {
   below_validated_regime?: number | null;
 }
 
+// The two regime flags are functions of the outside-core fraction (Index B)
+// alone. Mirrors UNVALIDATED_LO / UNVALIDATED_HI / VALIDATED_FRACTION_FLOOR in
+// backend/segmentation/api/disintegration_metrics.py (a verbatim port of the
+// paper's compute_di.py); a unit test reads that file and fails if they drift.
+export const UNVALIDATED_FRACTION_LO = 0.08;
+export const UNVALIDATED_FRACTION_HI = 0.47;
+export const VALIDATED_FRACTION_FLOOR = 0.61;
+
+// Derived here from Index B instead of being read from the panel, so that a
+// read-out stored before the flags were re-keyed (until 2026-10 they keyed on
+// Index B in [0.15, 0.30) and on DI < 0.6) is exported under the current rule
+// without recomputing anything.
+export function regimeFlags(indexB: number | null): {
+  unvalidatedRegime: number | null;
+  belowValidatedRegime: number | null;
+} {
+  if (indexB === null) {
+    return { unvalidatedRegime: null, belowValidatedRegime: null };
+  }
+  return {
+    unvalidatedRegime:
+      indexB >= UNVALIDATED_FRACTION_LO && indexB < UNVALIDATED_FRACTION_HI
+        ? 1
+        : 0,
+    belowValidatedRegime: indexB < VALIDATED_FRACTION_FLOOR ? 1 : 0,
+  };
+}
+
 function panelToDiFields(
   p: PaperPanel,
   diSource: 'model_raster' | 'polygons',
@@ -229,8 +257,7 @@ function panelToDiFields(
     largestCoreComponentFrac: n(p.largest_core_component_frac),
     coreCentroidShift: n(p.core_centroid_shift),
     coreFragmented: n(p.core_fragmented),
-    unvalidatedRegime: n(p.unvalidated_regime),
-    belowValidatedRegime: n(p.below_validated_regime),
+    ...regimeFlags(n(p.index_B)),
     diSource,
     note,
     warnings,
@@ -1461,14 +1488,14 @@ export class MetricsCalculator {
       },
       { header: 'Core Fragmented (0/1)', key: 'coreFragmented', width: 22 },
       {
-        header: 'Unvalidated Regime: Index B 0.15-0.30 (0/1)',
+        header: 'Unvalidated Regime: Outside-core Fraction 0.08-0.47 (0/1)',
         key: 'unvalidatedRegime',
-        width: 40,
+        width: 52,
       },
       {
-        header: 'Below Validated Floor: DI < 0.6 (0/1)',
+        header: 'Below Validated Floor: Outside-core Fraction < 0.61 (0/1)',
         key: 'belowValidatedRegime',
-        width: 36,
+        width: 52,
       },
       { header: 'DI Source', key: 'diSource', width: 14 },
       { header: 'Note', key: 'note', width: 48 },

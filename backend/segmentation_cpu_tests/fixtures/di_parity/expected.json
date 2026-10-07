@@ -1,8 +1,8 @@
 {
  "generator": "spheroid_rozpad/analysis/review_fixes/hub_parity_fixtures.py",
  "source": "spheroid_seg/compute_di.py",
- "source_sha256": "efdb7c3b6ea29b6b1381d8feece76d385aa414f1a14fcfb06c34564cdfa730db",
- "masks_sha256": "48f78da57c06e0328bda9d77a21dd29df003b6c4f4c500159f4359b13154967f",
+ "source_sha256": "e579601881e09f2e3c0bf68d2d1b0e50a89bc3cd7ea0fed6da72bf7ecc664516",
+ "masks_sha256": "c4a2e67a4923b36f49cff5a8d71920190a2fc782b16d26d27f4d400b065c1627",
  "tolerance": 1e-09,
  "expected": {
   "intact": {
@@ -88,6 +88,62 @@
    ],
    "area_total_px": 39091,
    "area_core_px": 30174
+  },
+  "compact_corona": {
+   "undefined_reason": null,
+   "metrics": {
+    "DI": 0.4623483048021803,
+    "W1": 0.5002939533530649,
+    "index_B": 0.6736335711615661,
+    "reach_p90": 1.6612368595288256,
+    "n_fragments": 1,
+    "largest_fragment_frac": 1.0,
+    "solidity": 0.9952122927618278,
+    "area_core_px": 20081,
+    "area_corona_px": 41448,
+    "area_total_px": 61529,
+    "n_core_components": 1,
+    "largest_core_component_frac": 1.0,
+    "core_centroid_shift": 0.0,
+    "core_fragmented": 0,
+    "unvalidated_regime": 0,
+    "below_validated_regime": 0
+   },
+   "core_components": [
+    1,
+    1.0,
+    0.0
+   ],
+   "area_total_px": 61529,
+   "area_core_px": 20081
+  },
+  "narrow_rim": {
+   "undefined_reason": null,
+   "metrics": {
+    "DI": 0.03962856646080324,
+    "W1": 0.03964933057048651,
+    "index_B": 0.10911668793421239,
+    "reach_p90": 1.0049703926292224,
+    "n_fragments": 1,
+    "largest_fragment_frac": 1.0,
+    "solidity": 0.9932403886776511,
+    "area_core_px": 31417,
+    "area_corona_px": 3848,
+    "area_total_px": 35265,
+    "n_core_components": 1,
+    "largest_core_component_frac": 1.0,
+    "core_centroid_shift": 0.0,
+    "core_fragmented": 0,
+    "unvalidated_regime": 1,
+    "below_validated_regime": 1
+   },
+   "core_components": [
+    1,
+    1.0,
+    0.0
+   ],
+   "area_total_px": 35265,
+   "area_core_px": 31417
   },
   "core_too_small": {
    "undefined_reason": "core of 5025 px is below the minimum core size (16048 px, the smallest expert core of the released dataset): DI undefined",

@@ -14,11 +14,17 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import {
   MetricsCalculator,
   PolygonMetrics,
   ImageMetrics,
   ImageWithSegmentation,
+  regimeFlags,
+  UNVALIDATED_FRACTION_LO,
+  UNVALIDATED_FRACTION_HI,
+  VALIDATED_FRACTION_FLOOR,
 } from '../metricsCalculator';
 import { serialiseImageMetricsForStorage } from '../rasterImageMetrics';
 
@@ -789,7 +795,9 @@ describe('MetricsCalculator — calculateAllImageMetrics (DI / panel)', () => {
     expect(row.nCoreComponents).toBe(1);
     expect(row.coreFragmented).toBe(0);
     expect(row.unvalidatedRegime).toBe(0);
-    expect(row.belowValidatedRegime).toBe(1);
+    // The panel carries below_validated_regime = 1, as the old DI < 0.6 rule
+    // gave for DI 0.42. The flag is derived from Index B (0.7 >= 0.61), so 0.
+    expect(row.belowValidatedRegime).toBe(0);
     expect(row.diSource).toBe('polygons');
     // polygon path keeps the Shoelace areas
     expect(row.totalSpheroidArea).toBeCloseTo(100, 3);
@@ -828,6 +836,39 @@ describe('MetricsCalculator — calculateAllImageMetrics (DI / panel)', () => {
     expect(row.referenceMode).toBe('core_too_small');
     expect(row.indexB).toBeNull();
     expect(row.note).toContain('minimum core size');
+  });
+
+  describe('regime flags', () => {
+    it('are functions of the outside-core fraction alone', () => {
+      expect(regimeFlags(null)).toEqual({ unvalidatedRegime: null, belowValidatedRegime: null });
+      // intact: at the floor, not in the gap
+      expect(regimeFlags(0)).toEqual({ unvalidatedRegime: 0, belowValidatedRegime: 1 });
+      // the gap [0.08, 0.47) that holds no expert mask of the paper's release
+      expect(regimeFlags(0.0799)).toEqual({ unvalidatedRegime: 0, belowValidatedRegime: 1 });
+      expect(regimeFlags(0.08)).toEqual({ unvalidatedRegime: 1, belowValidatedRegime: 1 });
+      expect(regimeFlags(0.4699)).toEqual({ unvalidatedRegime: 1, belowValidatedRegime: 1 });
+      expect(regimeFlags(0.47)).toEqual({ unvalidatedRegime: 0, belowValidatedRegime: 1 });
+      // the detection floor
+      expect(regimeFlags(0.6099)).toEqual({ unvalidatedRegime: 0, belowValidatedRegime: 1 });
+      expect(regimeFlags(0.61)).toEqual({ unvalidatedRegime: 0, belowValidatedRegime: 0 });
+      expect(regimeFlags(0.95)).toEqual({ unvalidatedRegime: 0, belowValidatedRegime: 0 });
+    });
+
+    it('use the bounds of the ported compute_di.py', () => {
+      const py = readFileSync(
+        join(__dirname, '../../../../segmentation/api/disintegration_metrics.py'),
+        'utf8'
+      );
+      const gap = /^UNVALIDATED_LO, UNVALIDATED_HI = ([0-9.]+), ([0-9.]+)$/m.exec(py);
+      const floor = /^VALIDATED_FRACTION_FLOOR = ([0-9.]+)$/m.exec(py);
+      expect(gap).not.toBeNull();
+      expect(floor).not.toBeNull();
+      expect(Number(gap![1])).toBe(UNVALIDATED_FRACTION_LO);
+      expect(Number(gap![2])).toBe(UNVALIDATED_FRACTION_HI);
+      expect(Number(floor![1])).toBe(VALIDATED_FRACTION_FLOOR);
+      // the floor is no longer keyed on the distance-weighted index
+      expect(py).not.toMatch(/VALIDATED_DI_FLOOR/);
+    });
   });
 
   describe('stored raster read-out', () => {
@@ -882,6 +923,25 @@ describe('MetricsCalculator — calculateAllImageMetrics (DI / panel)', () => {
       // stored frame warning + the export-time pixel-size warning
       expect(row.warnings).toHaveLength(2);
       expect(row.warnings[1]).toContain('pixel size is 2 um/px');
+    });
+
+    it('re-derives both regime flags from the stored Index B, whatever flags were stored', async () => {
+      // A read-out stored while the flags keyed on DI < 0.6 and on [0.15, 0.30):
+      // DI 0.5 with Index B 0.64 was stored as below the floor, and Index B 0.10
+      // as outside the unvalidated range.
+      const stale = (indexB: number, di: number, below: number, unval: number) =>
+        serialiseImageMetricsForStorage(
+          { ...raster, DI: di, index_B: indexB, below_validated_regime: below, unvalidated_regime: unval },
+          polygonsJson
+        );
+      const hug = (await calc.calculateAllImageMetrics([withStored('rf1', polygonsJson, stale(0.64, 0.5, 1, 0))]))[0]!;
+      expect(postMock).not.toHaveBeenCalled();
+      expect(hug.diSource).toBe('model_raster');
+      expect(hug.belowValidatedRegime).toBe(0);
+      expect(hug.unvalidatedRegime).toBe(0);
+      const rim = (await calc.calculateAllImageMetrics([withStored('rf2', polygonsJson, stale(0.1, 0.03, 1, 0))]))[0]!;
+      expect(rim.belowValidatedRegime).toBe(1);
+      expect(rim.unvalidatedRegime).toBe(1);
     });
 
     it('is ignored once the polygons were edited (hash mismatch) and says so', async () => {
@@ -1108,6 +1168,9 @@ describe('MetricsCalculator — exportToExcel (spheroid_invasive)', () => {
     const headers = primaryColumns.map(c => c.header ?? '');
     expect(headers.some(h => h.includes('um^2'))).toBe(true);
     expect(headers).toContain('Outside-core Fraction (Index B)');
+    expect(headers).toContain('Unvalidated Regime: Outside-core Fraction 0.08-0.47 (0/1)');
+    expect(headers).toContain('Below Validated Floor: Outside-core Fraction < 0.61 (0/1)');
+    expect(headers.some(h => /DI < 0\.6|0\.15-0\.30/.test(h))).toBe(false);
     expect(headers).toContain('Reach p90 (R_core)');
     expect(headers.some(h => /q95|Hole Count|Equiv\. Diameter/.test(h))).toBe(false);
   });

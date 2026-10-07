@@ -7,8 +7,8 @@ paper repository (GigaScience submission, released code DOI
 constants above them are copied VERBATIM from that file (the CLI ``main`` is
 not). ``ALGORITHM_SOURCE_SHA256`` is the SHA-256 of the exact file they were
 copied from; ``backend/segmentation_cpu_tests/test_disintegration_parity.py``
-checks this port against values that file computed on five synthetic masks
-(three with a defined DI), to 1e-9. When the paper's file changes, re-copy the
+checks this port against values that file computed on seven synthetic masks
+(five with a defined DI), to 1e-9. When the paper's file changes, re-copy the
 four functions, update the hash and regenerate the fixtures
 (``backend/segmentation_cpu_tests/fixtures/di_parity/README.md`` says how) —
 never edit the copied bodies here on their own, or the web app and the paper
@@ -38,7 +38,7 @@ from scipy import ndimage
 
 # SHA-256 of the compute_di.py the functions below were copied from.
 ALGORITHM_SOURCE = "spheroid_seg/compute_di.py"
-ALGORITHM_SOURCE_SHA256 = "efdb7c3b6ea29b6b1381d8feece76d385aa414f1a14fcfb06c34564cdfa730db"
+ALGORITHM_SOURCE_SHA256 = "e579601881e09f2e3c0bf68d2d1b0e50a89bc3cd7ea0fed6da72bf7ecc664516"
 
 # ---------------------------------------------------------------------------
 # VERBATIM from compute_di.py (constants and the four functions).
@@ -47,8 +47,10 @@ ALGORITHM_SOURCE_SHA256 = "efdb7c3b6ea29b6b1381d8feece76d385aa414f1a14fcfb06c345
 # smallest at 0 h is 23,081 px), an effective radius of 71 px (91 um at 1.28 um/px). The index was never validated on
 # a smaller anchor, and below it R_C -> 0 drives DI -> 1 whatever the corona does, so a smaller core yields an
 # undefined DI rather than a number. No production prediction behind the paper comes near it (smallest predicted
-# core: 16,604 px over the 528 held-out images of run v6; 35,556 px over the 615 time-course images; 28,800 px over
-# the 647 BLM images). Source: analysis/review_fixes/compute_di_guards.json.
+# core: 16,850 px over the 528 held-out images of run v7 at the pinned clip limit, from the re-created masks,
+# analysis/review_fixes/v7/v7_masks_grids_summary.json; before the pin 16,604 px over run v6, 35,556 px over the 615
+# time-course images and 28,800 px over the 647 BLM images, analysis/review_fixes/compute_di_guards.json).
+# On the 528 predicted masks of run v7 the core_fragmented flag below fires on 85 (3 at 0 h, 82 at 48 h; same file).
 MIN_CORE_PX = 16048
 # Core fragmentation (8-connectivity). Among the 528 expert cores the largest component never holds less than
 # 99.27 % of the core at 0 h, while 6 of 263 expert 48 h cores fall below 99 %; a core whose largest component holds
@@ -57,18 +59,21 @@ MIN_CORE_PX = 16048
 CORE_LARGEST_MIN = 0.99
 CORE_SHIFT_MAX = 0.1
 _S8 = np.ones((3, 3), dtype=int)
-# No image in the released dataset has an outside-core fraction between these bounds: the two time
-# points fall on either side of the gap. The core operator was therefore never exercised at an
-# intermediate degree of dispersal, and a read-out landing there is flagged rather than returned as
-# though it were as well supported as the rest.
-UNVALIDATED_LO, UNVALIDATED_HI = 0.15, 0.30
-# The pipeline reproduces the expert read-out on spheroids scoring above this and collapses a
-# handful of mildly dispersed ones onto the intact mode below it, where an intact spheroid and a
-# mildly dispersed one are not separable from the prediction alone. Below the floor DI is a screen,
-# not a graded measurement. This is deliberately NOT the same kind of flag as unvalidated_regime:
-# that one keys on the predicted outside-core fraction, which is near zero exactly when the model
-# collapses, so it cannot mark these images however its bounds are set.
-VALIDATED_DI_FLOOR = 0.6
+# Both regime flags key on the outside-core fraction (Index B), the read-out of the paper (2026-10-07; they
+# were keyed on [0.15, 0.30) and on DI < 0.6 before, and on new data the DI criterion flagged far more read-outs
+# than the range in which the model was actually checked against expert masks).
+#
+# No expert mask of the release has an outside-core fraction between these bounds: the largest value of an
+# intact (0 h) image is 0.0763 and the smallest value of a dispersed (48 h) one is 0.4755. A read-out landing in
+# the gap comes from a regime in which the pipeline was never compared with an expert, and is flagged rather
+# than returned as though it were as well supported as the rest.
+UNVALIDATED_LO, UNVALIDATED_HI = 0.08, 0.47
+# The detection floor. At and above this fraction the model reproduces the expert read-out (0.6137 is the
+# smallest expert value among the 247 treated images on which it does). Below it the only expert-masked
+# spheroids are compact ones and three half-dispersed ones (0.4755 to 0.5476), all three of which the model read
+# as compact: a low read-out means intact, held compact, or not yet grossly disintegrated, and the prediction
+# cannot say which. Below the floor the read-out is a screen, not a graded measurement.
+VALIDATED_FRACTION_FLOOR = 0.61
 
 
 def undefined_reason(mask: np.ndarray) -> str | None:
@@ -143,7 +148,7 @@ def disintegration_index(mask: np.ndarray) -> dict | None:
         "core_centroid_shift": shift,
         "core_fragmented": int(largest_cc < CORE_LARGEST_MIN or shift > CORE_SHIFT_MAX),
         "unvalidated_regime": int(UNVALIDATED_LO <= index_b < UNVALIDATED_HI),
-        "below_validated_regime": int(np.tanh(w1) < VALIDATED_DI_FLOOR),
+        "below_validated_regime": int(index_b < VALIDATED_FRACTION_FLOOR),
         "note": "",
     }
 
