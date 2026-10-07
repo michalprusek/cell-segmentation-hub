@@ -3,7 +3,7 @@
 `backend/segmentation/api/disintegration_metrics.py` is a verbatim port of the
 paper's released `spheroid_seg/compute_di.py`. The fixtures in
 `fixtures/di_parity/` were produced by running THAT file (in the paper
-repository, see the README there) on five synthetic 3-class masks; this suite
+repository, see the README there) on seven synthetic 3-class masks; this suite
 recomputes every field with the hub's port and requires agreement to 1e-9.
 
 It lives here, beside `backend/segmentation/`, and not in
@@ -117,7 +117,8 @@ def test_undefined_reference_names():
 # core-normalised distance less 2/3, "up to pixel discretisation". With a corona
 # every quantile lies above the disk's and the absolute value never acts; on an
 # intact spheroid the mask is the core and d~ straddles sqrt(u) at pixel scale.
-_W1_MEAN_FORM_TOL = {"dispersed": 1e-6, "fragmented_core": 1e-6, "intact": 1e-3}
+_W1_MEAN_FORM_TOL = {"dispersed": 1e-6, "fragmented_core": 1e-6, "compact_corona": 1e-6,
+                     "narrow_rim": 1e-6, "intact": 1e-3}
 
 
 def test_w1_reading_is_checked_on_every_defined_fixture():
@@ -133,6 +134,31 @@ def test_w1_is_the_mean_distance_less_two_thirds(name):
     d = np.hypot(fx - cx.mean(), fy - cy.mean()) / np.sqrt((m == 2).sum() / np.pi)
     w1 = dm.disintegration_index(m)["W1"]
     assert abs(w1 - (d.mean() - 2 / 3)) <= _W1_MEAN_FORM_TOL[name]
+
+
+# ---- the two regime flags key on the outside-core fraction ------------------------
+
+# The paper's read-out is the outside-core fraction (Index B), so both flags are
+# statements about it: below 0.61 the model was not verified against expert masks
+# (the detection floor), and no expert mask of the release lies in [0.08, 0.47).
+# Until 2026-10-07 the floor keyed on DI < 0.6 and the gap was [0.15, 0.30).
+def test_flag_bounds_are_the_papers():
+    assert (dm.VALIDATED_FRACTION_FLOOR, dm.UNVALIDATED_LO, dm.UNVALIDATED_HI) == (0.61, 0.08, 0.47)
+    assert not hasattr(dm, "VALIDATED_DI_FLOOR")
+
+
+@pytest.mark.parametrize("name", sorted(_W1_MEAN_FORM_TOL))
+def test_flags_follow_the_fraction_on_every_defined_fixture(name):
+    r = dm.disintegration_index(MASKS[name])
+    assert r["below_validated_regime"] == int(r["index_B"] < 0.61)
+    assert r["unvalidated_regime"] == int(0.08 <= r["index_B"] < 0.47)
+
+
+def test_fixtures_separate_the_fraction_rule_from_the_old_di_rule():
+    hug = dm.disintegration_index(MASKS["compact_corona"])   # corona close to the core
+    assert hug["index_B"] > 0.61 and hug["DI"] < 0.6 and hug["below_validated_regime"] == 0
+    rim = dm.disintegration_index(MASKS["narrow_rim"])       # in the gap, outside the old [0.15, 0.30)
+    assert 0.08 <= rim["index_B"] < 0.15 and rim["unvalidated_regime"] == 1
 
 
 # ---- input-scale warning -----------------------------------------------------

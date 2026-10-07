@@ -109,21 +109,21 @@ undefined, like a missing one.
 
 ### The panel metrics beside it
 
-| Column                            | Definition (compute_di.py)                                                     |
-| --------------------------------- | ------------------------------------------------------------------------------ |
-| `Outside-core Fraction (Index B)` | corona pixels / foreground pixels — Lim's Index B, the primary read-out        |
-| `W1`                              | the 1-Wasserstein distance before `tanh`                                       |
-| `Reach p90 (R_core)`              | 90th percentile of `d/R_C` over the foreground                                 |
-| `Corona Fragments`                | 4-connected components of the corona — no closing, no size floor               |
-| `Largest-Fragment Fraction`       | largest corona component / corona                                              |
-| `Solidity`                        | foreground pixels / pixels of its convex hull                                  |
-| `Core Components`                 | 8-connected components of the core                                             |
-| `Largest Core Component Fraction` | largest core component / core                                                  |
-| `Core Centroid Shift (R_core)`    | shift of the core centroid caused by the minor core pieces                     |
-| `Core Fragmented (0/1)`           | largest core piece < 99 % of the core, or centroid shift > 0.1 `R_C` — inspect |
-| `Unvalidated Regime (0/1)`        | Index B in `[0.15, 0.30)`, a range absent from the validation data             |
-| `Below Validated Floor (0/1)`     | DI < 0.6: a screen ("not grossly disintegrated"), not a graded value           |
-| `Input-Scale Warning`             | frame ≠ 2048 × 2048 px, or an entered scale ≠ 1.28 µm/px by more than 10 %     |
+| Column                            | Definition (compute_di.py)                                                                                     |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `Outside-core Fraction (Index B)` | corona pixels / foreground pixels — Lim's Index B, the primary read-out                                        |
+| `W1`                              | the 1-Wasserstein distance before `tanh`                                                                       |
+| `Reach p90 (R_core)`              | 90th percentile of `d/R_C` over the foreground                                                                 |
+| `Corona Fragments`                | 4-connected components of the corona — no closing, no size floor                                               |
+| `Largest-Fragment Fraction`       | largest corona component / corona                                                                              |
+| `Solidity`                        | foreground pixels / pixels of its convex hull                                                                  |
+| `Core Components`                 | 8-connected components of the core                                                                             |
+| `Largest Core Component Fraction` | largest core component / core                                                                                  |
+| `Core Centroid Shift (R_core)`    | shift of the core centroid caused by the minor core pieces                                                     |
+| `Core Fragmented (0/1)`           | largest core piece < 99 % of the core, or centroid shift > 0.1 `R_C` — inspect                                 |
+| `Unvalidated Regime (0/1)`        | outside-core fraction in `[0.08, 0.47)`, where the paper's release holds no expert mask                        |
+| `Below Validated Floor (0/1)`     | outside-core fraction < 0.61 (the detection floor): a screen ("not grossly disintegrated"), not a graded value |
+| `Input-Scale Warning`             | frame ≠ 2048 × 2048 px, or an entered scale ≠ 1.28 µm/px by more than 10 %                                     |
 
 If the index calculation fails outright the areas are still computed locally and
 reported; only the DI columns drop out.

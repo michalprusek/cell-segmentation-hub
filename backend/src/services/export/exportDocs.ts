@@ -753,11 +753,14 @@ corona does.
 - **Core Fragmented** — the largest core piece holds < 99 % of the core, or the
 minor pieces move the centroid by > 0.1 \`R_C\`. DI then rests on a broken
 anchor; inspect the image. The flag does not change DI.
-- **Unvalidated Regime** — Index B in \`[0.15, 0.30)\`, a range absent from the
-paper's dataset; the value is computed the same way but is less well supported.
-- **Below Validated Floor** — DI < 0.6. Below it the pipeline does not separate
-an intact spheroid from a mildly dispersed one: read it as "not grossly
-disintegrated", a screen rather than a graded value.
+- **Unvalidated Regime** — outside-core fraction in \`[0.08, 0.47)\`, a range in
+which the paper's dataset holds no expert mask; the value is computed the same
+way but was never checked against an expert.
+- **Below Validated Floor** — outside-core fraction < 0.61, the detection floor.
+Below it the pipeline does not separate an intact spheroid from a partly
+dispersed one: read it as "not grossly disintegrated", a screen rather than a
+graded value. Both flags key on the outside-core fraction (until October 2026
+they keyed on \`[0.15, 0.30)\` and on DI < 0.6).
 
 ## Input-scale warning
 
