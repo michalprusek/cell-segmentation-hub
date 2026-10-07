@@ -112,7 +112,7 @@ export default {
       disintegration: {
         label: 'Rozpadající se sféroid',
         detail:
-          'Světlé pole, 2048 × 2048, 48 hodin od začátku rozpadového testu. Husté jádro je zeleně, každá buňka, která se od něj oddělila, červeně. Přesně z tohoto rozdělení se počítá index rozpadu.',
+          'Světlé pole, 2048 × 2048, 48 hodin od začátku rozpadového testu. Husté jádro je zeleně, každá buňka, která se od něj oddělila, červeně. Přesně z tohoto rozdělení se počítá podíl mimo jádro i index rozpadu.',
         alt: 'Snímek rozpadajícího se sféroidu ve světlém poli: husté jádro obtažené zeleně, každá oddělená buňka červeně.',
       },
       wound: {
@@ -601,7 +601,7 @@ export default {
         spheroid_disintegration: {
           name: 'Rozpad sféroidů',
           description:
-            'UNet++ s enkodérem EfficientNet-B5 — 3třídová segmentace (pozadí / korona / husté jádro) rozpadajících se sféroidů; jádro predikuje přímo pro správný Disintegration Index (~0.7s/snímek)',
+            'UNet++ s enkodérem EfficientNet-B5 — 3třídová segmentace (pozadí / korona / husté jádro) rozpadajících se sféroidů; jádro predikuje přímo, protože se k němu vztahuje podíl mimo jádro i Disintegration Index (~0.7s/snímek)',
         },
         segformer: {
           name: 'SegFormer',
@@ -663,7 +663,7 @@ export default {
       unet_spherohq:
         'Nejrychlejší model po optimalizacích! Výborný pro zpracování v reálném čase (E2E ~286ms, 5.5 obr/s)',
       spheroid_disintegration:
-        'Model UNet++ / EfficientNet-B5, 3 třídy (pozadí / korona / jádro) pro rozpadající se sféroidy; husté jádro predikuje přímo pro správný Disintegration Index (30.7M parametrů)',
+        'Model UNet++ / EfficientNet-B5, 3 třídy (pozadí / korona / jádro) pro rozpadající se sféroidy; husté jádro predikuje přímo, protože se k němu vztahuje podíl mimo jádro i Disintegration Index (30.7M parametrů)',
       segformer:
         'Model SegFormer-B0 založený na transformeru, trénovaný na datasetu SpheroMix. Nejvyšší přesnost segmentace sféroidů v platformě (93% IoU) a zároveň nejmenší a nejrychlejší model (~13 ms/snímek).',
       mamba_unet:
@@ -1690,7 +1690,7 @@ export default {
         spheroidInvasive: {
           name: 'Rozpadající se sferoidy',
           bestFor:
-            'Pro: sferoidy rozptylující se do matrice. Klíčovým číslem je index rozpadu ukotvený v jádře.',
+            'Pro: sferoidy rozptylující se do matrice. Klíčovým číslem je podíl mimo jádro (Index B); index rozpadu ukotvený v jádře se exportuje vedle něj.',
           output:
             'Výstup: uzavřené polygony; husté jádro je predikováno jako vlastní třída a vykresleno zeleně.',
         },
@@ -1870,7 +1870,7 @@ export default {
             'Přibližně 0,70 s na snímek · bez prahu — rozhoduje argmax',
           bestFor: 'Používá: projekty s rozpadajícími se sferoidy.',
           description:
-            'UNet++ s enkodérem EfficientNet-B5 predikující tři třídy — pozadí, koronu a husté jádro. Jádro je predikováno přímo, nikoli odvozeno, což teprve dělá index rozpadu důvěryhodným.',
+            'UNet++ s enkodérem EfficientNet-B5 predikující tři třídy — pozadí, koronu a husté jádro. Jádro je predikováno přímo, nikoli odvozeno, což teprve dělá podíl mimo jádro i index rozpadu důvěryhodnými.',
         },
         wound: {
           name: 'Hojení ran',
@@ -2088,7 +2088,7 @@ export default {
         sperm:
           'Spermie: panel instancí, kde před kreslením zvolíte aktivní buňku a část, plus přeřazení z kontextové nabídky.',
         disintegration:
-          'Rozpadající se sferoidy: husté jádro se vykresluje zeleně. Samotný index rozpadu se počítá až při exportu.',
+          'Rozpadající se sferoidy: husté jádro se vykresluje zeleně. Podíl mimo jádro i index rozpadu se počítají až při exportu.',
       },
     },
 
@@ -2136,7 +2136,7 @@ export default {
         spheroid:
           'Polygon Metrics + Summary — plocha, obvod, kruhovitost, Feretovy průměry, solidita a další, jeden řádek na tvar',
         spheroidInvasive:
-          'Image Metrics — jeden řádek na snímek s indexem rozpadu, plochou jádra a invaze a panelem rozptylu',
+          'Image Metrics — jeden řádek na snímek s podílem mimo jádro, indexem rozpadu, plochou jádra a invaze a panelem rozptylu',
         wound:
           'Polygon Metrics + Summary + WoundTimeSeries — křivka uzavírání rány s vloženým grafem',
         sperm:

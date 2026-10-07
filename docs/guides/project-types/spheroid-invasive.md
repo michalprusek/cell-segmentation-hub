@@ -5,7 +5,8 @@
 
 For spheroids dispersing into the surrounding matrix, where the question is not
 "how big is it" but **how much mass has left the dense core**. The headline
-number is the core-anchored **Disintegration Index**.
+number is the **outside-core fraction** (Lim's Index B); the core-anchored
+**Disintegration Index** is exported beside it.
 
 ---
 
@@ -65,10 +66,12 @@ type-specific behaviour in the editor.
 
 ---
 
-## The Disintegration Index
+## The read-outs
 
-**It is computed from the model's raster mask at segmentation time** and
-stored with the segmentation; the export reads it. There is no DI panel on the
+Two core-anchored read-outs are exported: the **outside-core fraction** (the
+headline number) and the **Disintegration Index** (DI). **Both are computed from
+the model's raster mask at segmentation time** and
+stored with the segmentation; the export reads them. There is no DI panel on the
 canvas. The polygons you see are for display and editing: they drop every
 region under 50 px and every hole, which are exactly the far corona cells that
 set the index's reach. **Once you edit a segmentation's polygons**, its stored
@@ -105,7 +108,7 @@ The metrics workbook has a single sheet, **`Image Metrics`**, with **one row per
 image** — not per polygon, because the index is a whole-image property:
 
 `Image Name`, `Total Spheroid Area`, `Core Area`, `Invasion Area`,
-`Disintegration Index`, `Index B (outside-core fraction)`, `W1`,
+`Outside-core Fraction (Index B)`, `Disintegration Index`, `W1`,
 `Reach p90 (R_core)`, `Corona Fragments`, `Largest-Fragment Fraction`,
 `Solidity`, `Core Components`, `Largest Core Component Fraction`,
 `Core Centroid Shift (R_core)`, `Core Fragmented (0/1)`,
@@ -113,8 +116,10 @@ image** — not per polygon, because the index is a whole-image property:
 `Below Validated Floor: DI < 0.6 (0/1)`, `DI Source`, `Note`,
 `Input-Scale Warning`.
 
-Index B (Lim's outside-core fraction) is reported beside DI as a co-primary
-read-out.
+The outside-core fraction (Lim's Index B: corona pixels over all foreground
+pixels) is the paper's primary read-out and the first read-out column. DI, a
+distance-weighted index, is reported beside it as the secondary one. See
+[Metrics → Outside-core fraction](../../reference/metrics.md#outside-core-fraction-index-b).
 
 Areas are still reported even when the index calculation fails; only the
 index columns drop out in that case.

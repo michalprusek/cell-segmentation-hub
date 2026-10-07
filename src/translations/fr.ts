@@ -113,7 +113,7 @@ export default {
       disintegration: {
         label: 'Sphéroïde en désintégration',
         detail:
-          "Fond clair, 2048 × 2048, 48 heures après le début d'un test de désintégration. Le cœur dense est en vert, chaque cellule qui s'en est détachée en rouge. L'indice de désintégration se calcule exactement à partir de cette séparation.",
+          "Fond clair, 2048 × 2048, 48 heures après le début d'un test de désintégration. Le cœur dense est en vert, chaque cellule qui s'en est détachée en rouge. La fraction hors noyau et l'indice de désintégration se calculent exactement à partir de cette séparation.",
         alt: "Micrographie en fond clair d'un sphéroïde en train de se désintégrer, son cœur dense détouré en vert et chaque cellule détachée en rouge.",
       },
       wound: {
@@ -615,7 +615,7 @@ export default {
         spheroid_disintegration: {
           name: 'Désintégration des sphéroïdes',
           description:
-            'UNet++ avec encodeur EfficientNet-B5 — segmentation en 3 classes (fond / couronne / noyau dense) de sphéroïdes en désintégration ; prédit le noyau directement pour un Indice de Désintégration correct (~0.7s/image)',
+            'UNet++ avec encodeur EfficientNet-B5 — segmentation en 3 classes (fond / couronne / noyau dense) de sphéroïdes en désintégration ; prédit le noyau directement, référence de la fraction hors noyau et de l’Indice de Désintégration (~0.7s/image)',
         },
         segformer: {
           name: 'SegFormer',
@@ -677,7 +677,7 @@ export default {
       unet_spherohq:
         'Le modèle le plus rapide après optimisations! Excellent pour le traitement en temps réel (E2E ~286ms, 5.5 img/s)',
       spheroid_disintegration:
-        'Modèle UNet++ / EfficientNet-B5 à 3 classes (fond / couronne / noyau) pour sphéroïdes en désintégration ; prédit le noyau dense directement pour un Indice de Désintégration correct (30,7M paramètres)',
+        'Modèle UNet++ / EfficientNet-B5 à 3 classes (fond / couronne / noyau) pour sphéroïdes en désintégration ; prédit le noyau dense directement, référence de la fraction hors noyau et de l’Indice de Désintégration (30,7M paramètres)',
       segformer:
         'Modèle SegFormer-B0 basé sur un transformeur, entraîné sur le jeu de données SpheroMix. Meilleure précision de segmentation des sphéroïdes de la plateforme (93% IoU), tout en étant le modèle le plus petit et le plus rapide (~13 ms/image).',
       mamba_unet:
@@ -1722,7 +1722,7 @@ export default {
         spheroidInvasive: {
           name: 'Sphéroïdes en désagrégation',
           bestFor:
-            'Pour : sphéroïdes se dispersant dans une matrice. Le chiffre clé est l’indice de désagrégation ancré au noyau.',
+            'Pour : sphéroïdes se dispersant dans une matrice. Le chiffre clé est la fraction hors noyau (Index B) ; l’indice de désagrégation ancré au noyau est exporté à côté.',
           output:
             'Résultat : polygones fermés ; le noyau dense est prédit comme classe à part et dessiné en vert.',
         },
@@ -1903,7 +1903,7 @@ export default {
             'Environ 0,70 s par image · pas de seuil : la décision est un argmax',
           bestFor: 'Utilisé par : les projets de sphéroïdes en désagrégation.',
           description:
-            'UNet++ à encodeur EfficientNet-B5 prédisant trois classes : fond, couronne et noyau dense. Le noyau est prédit directement plutôt que déduit, et c’est ce qui rend l’indice de désagrégation fiable.',
+            'UNet++ à encodeur EfficientNet-B5 prédisant trois classes : fond, couronne et noyau dense. Le noyau est prédit directement plutôt que déduit, et c’est ce qui rend fiables la fraction hors noyau et l’indice de désagrégation.',
         },
         wound: {
           name: 'Cicatrisation',
@@ -2125,7 +2125,7 @@ export default {
         sperm:
           'Spermatozoïdes : un panneau d’instances où vous choisissez la cellule et la partie actives avant de dessiner, ainsi que la réaffectation depuis le menu contextuel.',
         disintegration:
-          'Sphéroïdes en désagrégation : le noyau dense est dessiné en vert. L’indice de désagrégation, lui, est calculé au moment de l’export.',
+          'Sphéroïdes en désagrégation : le noyau dense est dessiné en vert. La fraction hors noyau et l’indice de désagrégation sont calculés au moment de l’export.',
       },
     },
 
@@ -2173,7 +2173,7 @@ export default {
         spheroid:
           'Polygon Metrics + Summary — aire, périmètre, circularité, diamètres de Feret, solidité et davantage, une ligne par forme',
         spheroidInvasive:
-          'Image Metrics — une ligne par image, avec l’indice de désagrégation, les aires du noyau et d’invasion, et le panneau de dispersion',
+          'Image Metrics — une ligne par image, avec la fraction hors noyau, l’indice de désagrégation, les aires du noyau et d’invasion, et le panneau de dispersion',
         wound:
           'Polygon Metrics + Summary + WoundTimeSeries — la courbe de fermeture, graphique intégré',
         sperm:

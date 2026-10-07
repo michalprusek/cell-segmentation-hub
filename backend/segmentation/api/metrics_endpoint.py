@@ -62,7 +62,8 @@ class DisintegrationResponse(BaseModel):
     algorithm: str = dm.ALGORITHM_SOURCE
     algorithm_sha256: str = dm.ALGORITHM_SOURCE_SHA256
     note: str = ""
-    # Index B (Lim et al.): outside-core fraction of the foreground. Co-primary with DI.
+    # Index B (Lim et al.): outside-core fraction of the foreground. The paper's primary
+    # read-out; DI is the secondary, distance-weighted one.
     index_b: Optional[float] = None
     # 90th percentile of core-normalised foreground distances (in core radii).
     reach_p90: Optional[float] = None

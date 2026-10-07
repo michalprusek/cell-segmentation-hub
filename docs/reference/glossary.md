@@ -22,10 +22,12 @@ the gallery, and is never segmented.
 dense core.
 
 **Core** — in a disintegrating spheroid, the dense centre. Predicted directly by
-the model, and **required** for a Disintegration Index.
+the model, and **required** for the outside-core fraction and the Disintegration
+Index.
 
-**DI (Disintegration Index)** — a core-anchored measure in [0, 1) of how far
-spheroid mass has dispersed from its core. See
+**DI (Disintegration Index)** — a core-anchored, distance-weighted measure in
+[0, 1) of how far spheroid mass has dispersed from its core; the secondary
+read-out beside the outside-core fraction. See
 [Metrics](metrics.md#disintegration-index-di).
 
 **Feret diameter** — the distance between two parallel lines enclosing a shape.
@@ -54,6 +56,12 @@ palette. Assigned per **track**, so it applies to every frame.
 
 **ND2** — Nikon's microscopy container format. May hold multiple channels,
 multiple time points and multiple stage **positions**.
+
+**Outside-core fraction (Index B)** — in a disintegrating spheroid, the corona
+pixels divided by all foreground pixels (corona and core): how much of the cell
+mass lies outside the dense core. Lim, Kang and Lee's Index B, and the primary
+read-out of the disintegration model. See
+[Metrics](metrics.md#outside-core-fraction-index-b).
 
 **Playback proxy** — a small 8-bit WebP copy of a frame, generated lazily to
 make scrubbing fast. Never used for measurement.

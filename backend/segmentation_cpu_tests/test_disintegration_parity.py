@@ -111,6 +111,30 @@ def test_undefined_reference_names():
     assert dm.raster_metrics(np.zeros((64, 64), np.uint8))["reference"] == "none"
 
 
+# ---- the documented reading of W1 --------------------------------------------
+
+# docs/reference/metrics.md and the export README read W1 as the mean
+# core-normalised distance less 2/3, "up to pixel discretisation". With a corona
+# every quantile lies above the disk's and the absolute value never acts; on an
+# intact spheroid the mask is the core and d~ straddles sqrt(u) at pixel scale.
+_W1_MEAN_FORM_TOL = {"dispersed": 1e-6, "fragmented_core": 1e-6, "intact": 1e-3}
+
+
+def test_w1_reading_is_checked_on_every_defined_fixture():
+    defined = {k for k, v in EXPECTED["expected"].items() if v["metrics"] is not None}
+    assert set(_W1_MEAN_FORM_TOL) == defined
+
+
+@pytest.mark.parametrize("name", sorted(_W1_MEAN_FORM_TOL))
+def test_w1_is_the_mean_distance_less_two_thirds(name):
+    m = MASKS[name]
+    cy, cx = np.nonzero(m == 2)
+    fy, fx = np.nonzero(m > 0)
+    d = np.hypot(fx - cx.mean(), fy - cy.mean()) / np.sqrt((m == 2).sum() / np.pi)
+    w1 = dm.disintegration_index(m)["W1"]
+    assert abs(w1 - (d.mean() - 2 / 3)) <= _W1_MEAN_FORM_TOL[name]
+
+
 # ---- input-scale warning -----------------------------------------------------
 
 def test_validated_frame_and_scale_give_no_warning():

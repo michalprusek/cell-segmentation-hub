@@ -112,7 +112,7 @@ export default {
       disintegration: {
         label: '解体中的球状体',
         detail:
-          '明场，2048 × 2048，解体实验第 48 小时。致密核心为绿色，从核心脱离的每一个细胞为红色。解体指数正是由这一区分计算得出。',
+          '明场，2048 × 2048，解体实验第 48 小时。致密核心为绿色，从核心脱离的每一个细胞为红色。核心外占比与解体指数正是由这一区分计算得出。',
         alt: '正在解体的球状体明场显微图像，致密核心以绿色勾出，每个脱离的细胞以红色勾出。',
       },
       wound: {
@@ -569,7 +569,7 @@ export default {
         spheroid_disintegration: {
           name: '球体解体',
           description:
-            'UNet++ 搭配 EfficientNet-B5 编码器——对解体球体进行3类分割（背景/冠状层/致密核心）；直接预测核心以获得正确的解体指数（约0.7秒/图像）',
+            'UNet++ 搭配 EfficientNet-B5 编码器——对解体球体进行3类分割（背景/冠状层/致密核心）；直接预测核心，核心外占比与解体指数均以其为基准（约0.7秒/图像）',
         },
         segformer: {
           name: 'SegFormer',
@@ -627,7 +627,7 @@ export default {
       unet_spherohq:
         '优化后最快的模型！非常适合实时处理 (E2E ~286ms, 5.5 图像/秒)',
       spheroid_disintegration:
-        'UNet++ / EfficientNet-B5 三类模型（背景/冠状层/核心），用于解体球体；直接预测致密核心以获得正确的解体指数（3070万参数）',
+        'UNet++ / EfficientNet-B5 三类模型（背景/冠状层/核心），用于解体球体；直接预测致密核心，核心外占比与解体指数均以其为基准（3070万参数）',
       segformer:
         '基于 Transformer 的 SegFormer-B0 模型，在 SpheroMix 数据集上训练。平台中球体分割精度最高（93% IoU），同时是体积最小、速度最快的模型（约 13 毫秒/图像）。',
       mamba_unet:
@@ -1597,7 +1597,7 @@ export default {
         spheroidInvasive: {
           name: '解体球体',
           bestFor:
-            '适用于：向基质中扩散的球体。核心指标是以致密核心为基准的解体指数。',
+            '适用于：向基质中扩散的球体。核心指标是核心外占比（Index B）；以致密核心为基准的解体指数与其一同导出。',
           output:
             '输出：闭合多边形；致密核心作为独立类别被预测，并以绿色绘制。',
         },
@@ -1766,7 +1766,7 @@ export default {
           inferenceTime: '每幅约 0.70 秒 · 没有阈值——判定由 argmax 决定',
           bestFor: '用于：解体球体项目。',
           description:
-            '采用 EfficientNet-B5 编码器的 UNet++，预测三个类别 — 背景、外围晕圈与致密核心。核心是直接预测而非推断得出，这正是解体指数得以可信的原因。',
+            '采用 EfficientNet-B5 编码器的 UNet++，预测三个类别 — 背景、外围晕圈与致密核心。核心是直接预测而非推断得出，这正是核心外占比与解体指数得以可信的原因。',
         },
         wound: {
           name: '划痕愈合',
@@ -1967,7 +1967,7 @@ export default {
         sperm:
           '精子：实例面板可在绘制前选定当前细胞与部位，并可通过右键菜单重新指派。',
         disintegration:
-          '解体球体：致密核心以绿色绘制。解体指数本身是在导出时计算的。',
+          '解体球体：致密核心以绿色绘制。核心外占比与解体指数是在导出时计算的。',
       },
     },
 
@@ -2015,7 +2015,7 @@ export default {
         spheroid:
           'Polygon Metrics + Summary — 面积、周长、圆度、Feret 直径、实心度等，每个形状一行',
         spheroidInvasive:
-          'Image Metrics — 每幅图像一行，含解体指数、核心与侵袭面积以及扩散指标面板',
+          'Image Metrics — 每幅图像一行，含核心外占比、解体指数、核心与侵袭面积以及扩散指标面板',
         wound:
           'Polygon Metrics + Summary + WoundTimeSeries — 愈合曲线，并内嵌图表',
         sperm: 'Sperm Metrics — 头部、中段、尾部与总长度，每个细胞一行',

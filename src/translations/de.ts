@@ -113,7 +113,7 @@ export default {
       disintegration: {
         label: 'Zerfallendes Sphäroid',
         detail:
-          'Hellfeld, 2048 × 2048, 48 Stunden nach Beginn eines Zerfallsassays. Der dichte Kern ist grün, jede abgelöste Zelle rot. Genau aus dieser Trennung wird der Zerfallsindex berechnet.',
+          'Hellfeld, 2048 × 2048, 48 Stunden nach Beginn eines Zerfallsassays. Der dichte Kern ist grün, jede abgelöste Zelle rot. Genau aus dieser Trennung werden der Anteil außerhalb des Kerns und der Zerfallsindex berechnet.',
         alt: 'Hellfeldaufnahme eines zerfallenden Sphäroids: der dichte Kern grün umrissen, jede abgelöste Zelle rot.',
       },
       wound: {
@@ -624,7 +624,7 @@ export default {
         spheroid_disintegration: {
           name: 'Sphäroid-Zerfall',
           description:
-            'UNet++ mit EfficientNet-B5-Encoder — 3-Klassen-Segmentierung (Hintergrund / Korona / dichter Kern) zerfallender Sphäroide; sagt den Kern direkt für einen korrekten Zerfallsindex voraus (~0.7s/Bild)',
+            'UNet++ mit EfficientNet-B5-Encoder — 3-Klassen-Segmentierung (Hintergrund / Korona / dichter Kern) zerfallender Sphäroide; sagt den Kern direkt voraus, auf den sich der Anteil außerhalb des Kerns und der Zerfallsindex beziehen (~0.7s/Bild)',
         },
         segformer: {
           name: 'SegFormer',
@@ -686,7 +686,7 @@ export default {
       unet_spherohq:
         'Schnellstes Modell nach Optimierungen! Hervorragend für Echtzeitverarbeitung (E2E ~286ms, 5.5 Bilder/s)',
       spheroid_disintegration:
-        'UNet++ / EfficientNet-B5-Modell mit 3 Klassen (Hintergrund / Korona / Kern) für zerfallende Sphäroide; sagt den dichten Kern direkt für einen korrekten Zerfallsindex voraus (30,7M Parameter)',
+        'UNet++ / EfficientNet-B5-Modell mit 3 Klassen (Hintergrund / Korona / Kern) für zerfallende Sphäroide; sagt den dichten Kern direkt voraus, auf den sich der Anteil außerhalb des Kerns und der Zerfallsindex beziehen (30,7M Parameter)',
       segformer:
         'Transformer-basiertes SegFormer-B0-Modell, trainiert auf dem SpheroMix-Datensatz. Höchste Sphäroid-Genauigkeit der Plattform (93% IoU) bei gleichzeitig kleinstem und schnellstem Modell (~13 ms/Bild).',
       mamba_unet:
@@ -1732,7 +1732,7 @@ export default {
         spheroidInvasive: {
           name: 'Zerfallende Sphäroide',
           bestFor:
-            'Für: Sphäroide, die in eine Matrix auswandern. Die zentrale Kennzahl ist der kernverankerte Zerfallsindex.',
+            'Für: Sphäroide, die in eine Matrix auswandern. Die zentrale Kennzahl ist der Anteil außerhalb des Kerns (Index B); der kernverankerte Zerfallsindex wird daneben exportiert.',
           output:
             'Ergebnis: geschlossene Polygone; der dichte Kern wird als eigene Klasse vorhergesagt und grün gezeichnet.',
         },
@@ -1913,7 +1913,7 @@ export default {
             'Etwa 0,70 s pro Bild · kein Schwellenwert — entschieden wird per Argmax',
           bestFor: 'Verwendet von: Projekten mit zerfallenden Sphäroiden.',
           description:
-            'UNet++ mit EfficientNet-B5-Encoder, das drei Klassen vorhersagt — Hintergrund, Korona und dichter Kern. Der Kern wird direkt vorhergesagt statt abgeleitet, und erst das macht den Zerfallsindex belastbar.',
+            'UNet++ mit EfficientNet-B5-Encoder, das drei Klassen vorhersagt — Hintergrund, Korona und dichter Kern. Der Kern wird direkt vorhergesagt statt abgeleitet, und erst das macht den Anteil außerhalb des Kerns und den Zerfallsindex belastbar.',
         },
         wound: {
           name: 'Wundheilung',
@@ -2134,7 +2134,7 @@ export default {
         sperm:
           'Spermien: ein Instanz-Panel, in dem Sie vor dem Zeichnen aktive Zelle und Teil wählen, sowie Neuzuordnung über das Kontextmenü.',
         disintegration:
-          'Zerfallende Sphäroide: Der dichte Kern wird grün gezeichnet. Der Zerfallsindex selbst wird beim Export berechnet.',
+          'Zerfallende Sphäroide: Der dichte Kern wird grün gezeichnet. Der Anteil außerhalb des Kerns und der Zerfallsindex werden erst beim Export berechnet.',
       },
     },
 
@@ -2183,7 +2183,7 @@ export default {
         spheroid:
           'Polygon Metrics + Summary — Fläche, Umfang, Rundheit, Feret-Durchmesser, Solidität und mehr, eine Zeile je Form',
         spheroidInvasive:
-          'Image Metrics — eine Zeile je Bild mit Zerfallsindex, Kern- und Invasionsfläche sowie dem Dispersionspanel',
+          'Image Metrics — eine Zeile je Bild mit dem Anteil außerhalb des Kerns, dem Zerfallsindex, Kern- und Invasionsfläche sowie dem Dispersionspanel',
         wound:
           'Polygon Metrics + Summary + WoundTimeSeries — die Verschlusskurve mit eingebettetem Diagramm',
         sperm:
