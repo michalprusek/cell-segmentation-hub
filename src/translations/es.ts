@@ -959,6 +959,8 @@ export default {
       propagateSuccess:
         'Microtúbulo propagado a {{count}} fotogramas siguientes',
       propagateFailed: 'No se pudo propagar el microtúbulo',
+      propagateSelectedFailed:
+        'No se pudieron propagar los microtúbulos seleccionados',
       propagateNoChange:
         'Nada que cambiar: los fotogramas siguientes ya tienen esta forma',
       propagateSelectedNoChange:

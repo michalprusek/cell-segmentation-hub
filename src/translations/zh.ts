@@ -892,6 +892,7 @@ export default {
       deleteSelectedPartial: '已删除 {{total}} 条中的 {{done}} 条微管',
       propagateSuccess: '微管已传播到 {{count}} 个后续帧',
       propagateFailed: '微管传播失败',
+      propagateSelectedFailed: '所选微管传播失败',
       propagateNoChange: '无需更改——后续帧已是此形状',
       propagateSelectedNoChange: '无需更改——后续帧已是这些形状',
       deleteTrackSuccess: '已从 {{count}} 帧中删除轨迹',

@@ -960,6 +960,8 @@ export default {
       deleteSelectedPartial: '{{done}} microtubules sur {{total}} supprimés',
       propagateSuccess: 'Microtubule propagé vers {{count}} images suivantes',
       propagateFailed: 'Échec de la propagation du microtubule',
+      propagateSelectedFailed:
+        'Échec de la propagation des microtubules sélectionnés',
       propagateNoChange:
         'Rien à modifier : les images suivantes ont déjà cette forme',
       propagateSelectedNoChange:

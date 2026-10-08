@@ -2111,11 +2111,14 @@ class ApiClient {
   /**
    * `propagateTrackForward` for several microtubules in ONE request: the
    * server reads each following frame once and writes it at most once,
-   * where one call per microtubule rewrote every frame every time. One
-   * result per polyline, in the order sent.
+   * where one call per microtubule re-read every frame each time and rewrote
+   * a frame once for every microtubule that changed on it. One result per
+   * polyline, in the order sent.
    *
-   * A reply that does not carry one result per polyline is an error, not a
-   * partial success: the caller pairs results with its sources by position.
+   * A reply that does not carry one well-formed result per polyline is an
+   * error, not a partial success: the caller pairs results with its sources
+   * by position, and a count read as 0 from a malformed entry would be
+   * reported to the user as "nothing to change".
    */
   async propagateTracksForward(
     videoId: string,
@@ -2143,12 +2146,22 @@ class ApiClient {
     if (!Array.isArray(results) || results.length !== polylines.length) {
       throw new Error('Propagate reply does not match the request');
     }
-    return results.map((r, i) => ({
-      trackId: String(r?.trackId ?? polylines[i]?.trackId ?? ''),
-      framesChanged: Number(r?.framesChanged ?? 0),
-      framesUnchanged: Number(r?.framesUnchanged ?? 0),
-      framesSkipped: Number(r?.framesSkipped ?? 0),
-    }));
+    return results.map(r => {
+      const counts = [r?.framesChanged, r?.framesUnchanged, r?.framesSkipped];
+      if (
+        typeof r?.trackId !== 'string' ||
+        r.trackId.length === 0 ||
+        !counts.every(n => typeof n === 'number' && Number.isFinite(n))
+      ) {
+        throw new Error('Propagate reply does not match the request');
+      }
+      return {
+        trackId: r.trackId as string,
+        framesChanged: r.framesChanged as number,
+        framesUnchanged: r.framesUnchanged as number,
+        framesSkipped: r.framesSkipped as number,
+      };
+    });
   }
 
   /**

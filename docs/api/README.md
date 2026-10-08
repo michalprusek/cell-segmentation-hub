@@ -267,8 +267,12 @@ separate what happened to each following frame:
 microtubules in one transaction and answers `{ results }` — one entry per
 polyline, in the order sent, each with `trackId` and the same four counts. A
 frame's polygons are one JSON column, so the batch reads every following frame
-once and writes it at most once; one `propagate` call per microtubule rewrites
-every frame once per microtubule. The editor's "Propagate selected
+once and writes it at most once; one `propagate` call per microtubule re-reads
+every frame each time and rewrites a frame once for each microtubule that
+changes on it. A polyline sent with a `trackId` makes the request idempotent,
+which is why the editor chooses the id for an untracked microtubule itself;
+without one the server mints `mt_<8 hex>`. Coordinates must be finite JSON
+numbers (on both endpoints) — a numeric string is refused. The editor's "Propagate selected
 microtubules" uses the batch.
 
 ## Queue

@@ -800,6 +800,7 @@ export default {
       propagateSuccess:
         'Mikrotubulus propagován do {{count}} následujících snímků',
       propagateFailed: 'Propagace mikrotubulu selhala',
+      propagateSelectedFailed: 'Propagace vybraných mikrotubulů selhala',
       propagateNoChange:
         'Není co měnit – následující snímky už tento tvar mají',
       propagateSelectedNoChange:

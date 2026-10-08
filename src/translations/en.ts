@@ -802,6 +802,7 @@ export default {
       propagateSuccess:
         'Microtubule propagated to {{count}} following frame(s)',
       propagateFailed: 'Failed to propagate the microtubule',
+      propagateSelectedFailed: 'Failed to propagate the selected microtubules',
       propagateNoChange:
         'Nothing to change – the following frames already have this shape',
       propagateSelectedNoChange:

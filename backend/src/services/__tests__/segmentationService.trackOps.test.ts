@@ -828,7 +828,9 @@ describe('SegmentationService track ops (orchestration)', () => {
       const polylines = [bent('a', 0), bent('b', 10), bent('c', 20)];
 
       // The loop the editor used to run: every call re-reads what the
-      // previous one wrote.
+      // previous one wrote. Run here through the single-track method, itself
+      // now a batch of one — so this proves a batch of N equals N batches of
+      // one, and the single-track suite above pins what a batch of one does.
       const state: Record<string, string> = Object.fromEntries(
         Object.entries(initial).map(([k, v]) => [k, JSON.stringify(v)])
       );
@@ -941,7 +943,51 @@ describe('SegmentationService track ops (orchestration)', () => {
       expect(res.map(r => r.framesChanged)).toEqual([1, 1]);
     });
 
-    it('refuses the whole batch for one degenerate polyline, before reading anything', async () => {
+    it('counts a repeated track on a frame with no row as it did when each was its own request', async () => {
+      prismaMock.image.findMany.mockResolvedValue([
+        { id: 'f1', width: 512, height: 512, segmentation: null },
+      ]);
+      const res = await service.propagateTracksGeometryForward(
+        'vid',
+        0,
+        [bent('a', 0), bent('a', 0)],
+        'user'
+      );
+      // The second is the same track and shape the first just put there.
+      expect(res.map(r => [r.framesChanged, r.framesUnchanged])).toEqual([
+        [1, 0],
+        [0, 1],
+      ]);
+      expect(
+        JSON.parse(prismaMock.segmentation.create.mock.calls[0][0].data.polygons)
+      ).toHaveLength(1);
+    });
+
+    it('refuses a non-finite coordinate before reading any frame', async () => {
+      // With no following frame `upsertTrackPolyline` never runs, so without
+      // the up-front check this answered 200 with zero counts.
+      prismaMock.image.findMany.mockResolvedValue([]);
+      await expect(
+        service.propagateTracksGeometryForward(
+          'vid',
+          0,
+          [
+            bent('a', 0),
+            {
+              geometry: 'polyline',
+              points: [
+                { x: 1, y: 1 },
+                { x: Number.NaN, y: 2 },
+              ],
+            },
+          ],
+          'user'
+        )
+      ).rejects.toThrow('at least 2 finite points');
+      expect(prismaMock.image.findMany).not.toHaveBeenCalled();
+    });
+
+    it('refuses the whole batch for one degenerate polyline, before reading any frame', async () => {
       await expect(
         service.propagateTracksGeometryForward(
           'vid',

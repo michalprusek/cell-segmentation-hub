@@ -108,6 +108,14 @@ router.delete(
   segmentationController.deleteSegmentationResults
 );
 
+// A propagated coordinate must be a finite JSON number. `isNumeric()` was the
+// wrong test in both directions: it accepts the STRING "5", which the service
+// then refuses, and it rejects a real number that stringifies with an
+// exponent — `5e-7`, a vertex a rounding error away from the image border —
+// which in a batch would refuse the whole selection.
+const isFiniteNumber = (value: unknown): boolean =>
+  typeof value === 'number' && Number.isFinite(value);
+
 /**
  * @route POST /api/segmentation/videos/:videoId/tracks/propagate
  * @description Propagate a microtubule polyline into all following frames
@@ -125,10 +133,10 @@ router.post(
       .isArray({ min: 2 })
       .withMessage('polyline musí mít alespoň 2 body'),
     body('polyline.points.*.x')
-      .isNumeric()
+      .custom(isFiniteNumber)
       .withMessage('Souřadnice x musí být číslo'),
     body('polyline.points.*.y')
-      .isNumeric()
+      .custom(isFiniteNumber)
       .withMessage('Souřadnice y musí být číslo'),
     body('polyline.trackId')
       .optional({ nullable: true })
@@ -151,8 +159,8 @@ router.post(
   segmentationController.propagateTrack
 );
 
-// Far above any real field (the densest production frame holds 84
-// microtubules) and far below what the 50 MB JSON limit would admit.
+// Far above any real field (the densest frame on record, container aafdf846,
+// holds 146 polylines) and far below what the JSON body limit would admit.
 const MAX_PROPAGATED_POLYLINES = 2000;
 
 /**
@@ -178,10 +186,10 @@ router.post(
       .isArray({ min: 2 })
       .withMessage('polyline musí mít alespoň 2 body'),
     body('polylines.*.points.*.x')
-      .isNumeric()
+      .custom(isFiniteNumber)
       .withMessage('Souřadnice x musí být číslo'),
     body('polylines.*.points.*.y')
-      .isNumeric()
+      .custom(isFiniteNumber)
       .withMessage('Souřadnice y musí být číslo'),
     body('polylines.*.trackId')
       .optional({ nullable: true })

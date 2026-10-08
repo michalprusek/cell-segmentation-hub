@@ -965,6 +965,8 @@ export default {
       deleteSelectedPartial: '{{done}} von {{total}} Mikrotubuli gelöscht',
       propagateSuccess: 'Mikrotubulus in {{count}} folgende Frames übertragen',
       propagateFailed: 'Übertragung des Mikrotubulus fehlgeschlagen',
+      propagateSelectedFailed:
+        'Übertragung der ausgewählten Mikrotubuli fehlgeschlagen',
       propagateNoChange:
         'Nichts zu ändern – die folgenden Frames haben diese Form bereits',
       propagateSelectedNoChange:

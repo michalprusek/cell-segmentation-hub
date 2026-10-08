@@ -1167,6 +1167,42 @@ describe('segmentation', () => {
       c().propagateTracksForward('vid-1', 4, [bentLine, bentLine])
     ).rejects.toThrow('does not match');
   });
+
+  it.each<[string, unknown]>([
+    ['an empty object', {}],
+    ['null', null],
+    [
+      'a missing trackId',
+      { framesChanged: 1, framesUnchanged: 0, framesSkipped: 0 },
+    ],
+    [
+      'an empty trackId',
+      { trackId: '', framesChanged: 1, framesUnchanged: 0, framesSkipped: 0 },
+    ],
+    [
+      'a missing count',
+      { trackId: 't7', framesChanged: 1, framesUnchanged: 0 },
+    ],
+    [
+      'a count that is a string',
+      {
+        trackId: 't7',
+        framesChanged: '1',
+        framesUnchanged: 0,
+        framesSkipped: 0,
+      },
+    ],
+  ])(
+    'propagateTracksForward — %s as a result is an error, not "nothing changed"',
+    async (_n, entry) => {
+      // Read leniently, each of these became framesChanged 0 / framesSkipped 0,
+      // which the editor reports as "nothing to change".
+      mockAxiosInstance.post.mockResolvedValue(ok({ results: [entry] }));
+      await expect(
+        c().propagateTracksForward('vid-1', 4, [bentLine])
+      ).rejects.toThrow('does not match');
+    }
+  );
 });
 
 // ════════════════════════════════════════════════════════════════════════════

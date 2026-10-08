@@ -34,6 +34,7 @@ import {
   applyMtTypeToPolygons,
 } from './utils/mtTypeTargets';
 import { planAdditiveToggle } from './utils/multiSelect';
+import { mintTrackId } from './utils/mintTrackId';
 import { usePolygonHandlers } from './hooks/usePolygonHandlers';
 import { useDeleteTrackScope } from './hooks/useDeleteTrackScope';
 import { useCanvasBackgroundDeselect } from './hooks/useCanvasBackgroundDeselect';
@@ -419,7 +420,7 @@ const SegmentationEditor = () => {
   // both redundant and WRONG: the editor does not adopt the save's response
   // when the polygon count is unchanged (the same-count staleness in
   // CLAUDE.md #13), so a freshly drawn microtubule still looks untracked
-  // here, and `propagateTrackForward` would mint a SECOND id for it and
+  // here, and a propagate (single or batch) would give it a SECOND id and
   // append a duplicate alongside the copy the save already wrote.
   const lastSaveShareRef = useRef<SaveShareOutcome>(null);
 
@@ -1287,7 +1288,7 @@ const SegmentationEditor = () => {
   // current shape into every later frame of the video.
   // Commit the frame BEFORE propagating from it.
   //
-  // `propagateTrackGeometryForward` writes `frameIndex > fromFrameIndex` —
+  // `propagateTracksGeometryForward` writes `frameIndex > fromFrameIndex` —
   // STRICTLY greater, so it never writes the frame you drew on. Propagating an
   // unsaved edit therefore left the source frame holding the OLD geometry while
   // every later frame held the new one, and as soon as the user scrubbed away
@@ -1821,9 +1822,9 @@ const SegmentationEditor = () => {
       return;
     }
 
-    // Persist the frame ONCE, before the loop — not per microtubule. Same
-    // reason as the single-track twin: the endpoint never writes the source
-    // frame, so propagating an unsaved edit would leave it behind.
+    // Persist the frame before the request. Same reason as the single-track
+    // twin: the endpoint never writes the source frame, so propagating an
+    // unsaved edit would leave it behind.
     const commit = await commitBeforePropagate();
     if (commit === 'failed') {
       toast.error(t('segmentation.trackOps.propagateFailed'));
@@ -1831,7 +1832,7 @@ const SegmentationEditor = () => {
     }
     if (commit === 'already-shared') {
       // Every frame already has this frame's annotation, all of them, in both
-      // directions — which is strictly more than this loop could do.
+      // directions — which is strictly more than this propagate could do.
       return;
     }
     if (commit === 'already-shared-silently') {
@@ -1854,35 +1855,60 @@ const SegmentationEditor = () => {
       return;
     }
 
+    // A source with no track gets its id HERE, not from the server. The
+    // request is then idempotent: sent twice — the client retries a 502/503/
+    // 504 by itself, and a user retries after a lost answer — it overwrites
+    // the same track where a server-minted id would add a second copy of the
+    // microtubule to every following frame.
+    const sent = sources.map(src => ({
+      src,
+      trackId: src.trackId || mintTrackId(),
+    }));
+    // Put those ids on the source polylines in ONE update. `getPolygons` is a
+    // render-time snapshot, so one update per polyline with no render between
+    // them would each start from the same array and keep only the last id.
+    const adoptMintedTrackIds = () => {
+      const minted = new Map(
+        sent
+          .filter(s => s.trackId !== s.src.trackId)
+          .map(s => [s.src.id, s.trackId])
+      );
+      if (minted.size === 0) return;
+      editorRef.current.updatePolygons(
+        editorRef.current
+          .getPolygons()
+          .map(p =>
+            minted.has(p.id) ? { ...p, trackId: minted.get(p.id) } : p
+          )
+      );
+    };
+
     let failed = 0;
     let changed = 0;
-    // The request produced no ANSWER. Not the same as "nothing written": the
-    // server commits the propagate in one transaction, and a 502 during a
+    // 'refused': the server answered 4xx, so nothing was written.
+    // 'unanswered': no answer, or a 5xx. Not the same as "nothing written":
+    // the server commits the propagate in one transaction, and a 502 during a
     // backend recreate, a dropped connection or the 120 s client timeout can
     // all lose the response to a write that happened.
-    let unanswered = false;
+    let outcome: 'answered' | 'refused' | 'unanswered' = 'answered';
     // ONE request for the whole selection. A frame's polygons are a single
-    // JSON column, so a call per microtubule rewrote every following frame
-    // once per microtubule: 83 calls, two minutes, and later frames showing
-    // only the microtubules the loop had reached so far.
+    // JSON column, so a call per microtubule re-read every following frame
+    // once per microtubule: 83 calls and two minutes on a real video, with
+    // later frames showing only the microtubules reached so far.
     try {
       const results = await apiClient.propagateTracksForward(
         videoId,
         fromFrameIndex,
-        sources.map(src => ({
-          trackId: src.trackId,
+        sent.map(({ src, trackId }) => ({
+          trackId,
           instanceId: src.instanceId,
           name: src.name,
           geometry: 'polyline' as const,
           points: src.points.map(p => ({ x: p.x, y: p.y })),
         }))
       );
-      results.forEach((result, i) => {
-        const src = sources[i];
-        if (!src) return;
-        if (result.trackId && result.trackId !== src.trackId) {
-          handleUpdatePolygonField(src.id, { trackId: result.trackId });
-        }
+      adoptMintedTrackIds();
+      for (const result of results) {
         if (result.framesChanged > 0) {
           changed++;
         } else if (result.framesSkipped > 0) {
@@ -1890,11 +1916,19 @@ const SegmentationEditor = () => {
           // microtubule did not reach them. Same verdict as the single twin.
           failed++;
         }
-      });
+      }
     } catch (error) {
       logger.error('Failed to propagate the selected microtubules', error);
-      failed = sources.length;
-      unanswered = true;
+      const status = (error as { response?: { status?: number } })?.response
+        ?.status;
+      if (typeof status === 'number' && status >= 400 && status < 500) {
+        outcome = 'refused';
+      } else {
+        outcome = 'unanswered';
+        // The following frames may carry these ids now; the source must too,
+        // or the next propagate would mint new ones beside them.
+        adoptMintedTrackIds();
+      }
     }
 
     // Nothing written means nothing cached is stale and no status moved —
@@ -1902,16 +1936,18 @@ const SegmentationEditor = () => {
     // request the following frames may hold the new shape, and the cache-first
     // load would keep showing the old one until a reload, so they are
     // refreshed as if it had landed: a refetch of an unchanged frame costs one
-    // request, a stale frame costs the user's trust in what they see.
-    if (changed > 0 || unanswered) {
+    // request, a stale frame costs the user's trust in what they see. A
+    // REFUSED request wrote nothing, and marking its frames segmented would
+    // send the loader after rows that do not exist.
+    if (changed > 0 || outcome === 'unanswered') {
       evictVideoFrameSegmentationCaches();
       markFollowingFramesSegmented(fromFrameIndex);
     }
     clearMultiSelect();
-    if (unanswered) {
+    if (outcome !== 'answered') {
       // One request carries the whole selection, so there is no "some of
       // them": nothing is known to have landed.
-      toast.error(t('segmentation.trackOps.propagateFailed'));
+      toast.error(t('segmentation.trackOps.propagateSelectedFailed'));
     } else if (failed === 0 && changed === 0) {
       toast.info(t('segmentation.trackOps.propagateSelectedNoChange'));
     } else if (failed === 0) {
@@ -1935,7 +1971,6 @@ const SegmentationEditor = () => {
     videoContainerId,
     currentFrameIndex,
     commitBeforePropagate,
-    handleUpdatePolygonField,
     evictVideoFrameSegmentationCaches,
     markFollowingFramesSegmented,
     clearMultiSelect,

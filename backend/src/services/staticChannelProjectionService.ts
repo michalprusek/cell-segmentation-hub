@@ -41,7 +41,7 @@ import {
 /**
  * A fresh cross-frame identity for one filament.
  *
- * Same shape as the id `segmentationService.propagateTrackGeometryForward`
+ * Same shape as the id `segmentationService.propagateTracksGeometryForward`
  * mints when the user propagates a polyline by hand (`mt_<8 hex>`), so a
  * container can hold ids from both sources without a reader having to tell them
  * apart. Nothing anywhere parses a `trackId` — the tracker's own ids are

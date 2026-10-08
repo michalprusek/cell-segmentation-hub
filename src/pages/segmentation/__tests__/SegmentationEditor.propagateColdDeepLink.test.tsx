@@ -147,6 +147,14 @@ const mockT = vi.hoisted(() =>
 
 // ─── vi.mock declarations ─────────────────────────────────────────────────────
 
+// The global test setup pins `crypto.randomUUID` to one constant, which would
+// hand every untracked microtubule the SAME id and hide a mix-up between
+// them. A counter keeps the ids distinct and the real shape.
+const mintCounter = vi.hoisted(() => ({ n: 0 }));
+vi.mock('../utils/mintTrackId', () => ({
+  mintTrackId: () => `mt_${String(++mintCounter.n).padStart(8, '0')}`,
+}));
+
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual('react-router-dom');
   return {
@@ -995,6 +1003,176 @@ describe('propagate that changes nothing', () => {
     expect(mockProjectData.updateImages).toHaveBeenCalledTimes(1);
   });
 
+  // Three sources with DIFFERENT shapes, two of them untracked, so a result
+  // paired with the wrong source, a payload built from the wrong polyline or
+  // an id that never reaches the editor each show up.
+  const threeMixed = () => {
+    const at = (dx: number) => [
+      { x: 10 + dx, y: 40 },
+      { x: 25.5 + dx, y: 31.25 },
+      { x: 48 + dx, y: 36 },
+    ];
+    const sources = () =>
+      [
+        polyline({ id: 'poly-1', points: at(0), instanceId: 'inst-1' }),
+        polyline({
+          id: 'poly-2',
+          trackId: 'track-2',
+          points: at(100),
+          name: 'kept name',
+        }),
+        polyline({ id: 'poly-3', points: at(200) }),
+      ] as never[];
+    mockEditor.polygons = sources();
+    mockEditor.getPolygons.mockImplementation(sources);
+    return { at };
+  };
+  const selectThree = () => {
+    fireEvent.click(screen.getByTestId('shift-select-poly-1'));
+    fireEvent.click(screen.getByTestId('shift-select-poly-2'));
+    fireEvent.click(screen.getByTestId('shift-select-poly-3'));
+  };
+  type Sent = Array<{
+    trackId: string;
+    instanceId?: string;
+    name?: string;
+    geometry: string;
+    points: Array<{ x: number; y: number }>;
+  }>;
+  const sentPolylines = () =>
+    mockApiClient.propagateTracksForward.mock.calls[0]?.[2] as Sent;
+  /** trackId per polygon id after the editor's updates, in order. */
+  const trackIdsInEditor = () => {
+    const calls = mockEditor.updatePolygons.mock.calls as Array<
+      [Array<{ id: string; trackId?: string }>]
+    >;
+    return calls.map(c => Object.fromEntries(c[0].map(p => [p.id, p.trackId])));
+  };
+
+  it('BULK: sends each source its OWN shape and fields, and an id for every untracked one', async () => {
+    const { at } = threeMixed();
+    renderEditor();
+    selectThree();
+
+    await clickAndSettle('propagate-selected-poly-1', () => {
+      expect(mockApiClient.propagateTracksForward).toHaveBeenCalledTimes(1);
+    });
+
+    const sent = sentPolylines();
+    expect(sent.map(p => p.points)).toEqual([at(0), at(100), at(200)]);
+    expect(sent.map(p => p.geometry)).toEqual([
+      'polyline',
+      'polyline',
+      'polyline',
+    ]);
+    expect(sent[0]?.instanceId).toBe('inst-1');
+    expect(sent[1]?.name).toBe('kept name');
+    // The tracked one keeps its id; the others get one HERE, so a retried
+    // request overwrites the same track instead of adding a second copy.
+    expect(sent[1]?.trackId).toBe('track-2');
+    expect(sent[0]?.trackId).toMatch(/^mt_[0-9a-f]{8}$/);
+    expect(sent[2]?.trackId).toMatch(/^mt_[0-9a-f]{8}$/);
+    expect(sent[0]?.trackId).not.toBe(sent[2]?.trackId);
+  });
+
+  it('BULK: puts EVERY new id on its own source polyline, in one update', async () => {
+    threeMixed();
+    renderEditor();
+    selectThree();
+
+    await clickAndSettle('propagate-selected-poly-1', () => {
+      expect(mockApiClient.propagateTracksForward).toHaveBeenCalledTimes(1);
+    });
+
+    // `getPolygons` is a render-time snapshot: one update per polyline, each
+    // starting from the same array, kept only the LAST id — and the next
+    // propagate then duplicated the others on every following frame.
+    const sent = sentPolylines();
+    expect(trackIdsInEditor()).toEqual([
+      {
+        'poly-1': sent[0]?.trackId,
+        'poly-2': 'track-2',
+        'poly-3': sent[2]?.trackId,
+      },
+    ]);
+  });
+
+  it('BULK: still adopts the ids when the request was not answered', async () => {
+    // The server may have committed; the following frames would then carry
+    // these ids, and a source left untracked would be given new ones next
+    // time.
+    mockApiClient.propagateTracksForward.mockRejectedValue(
+      new Error('timeout of 120000ms exceeded')
+    );
+    threeMixed();
+    renderEditor();
+    selectThree();
+
+    await clickAndSettle('propagate-selected-poly-1', () => {
+      expect(mockApiClient.propagateTracksForward).toHaveBeenCalledTimes(1);
+    });
+
+    const sent = sentPolylines();
+    expect(trackIdsInEditor()).toEqual([
+      {
+        'poly-1': sent[0]?.trackId,
+        'poly-2': 'track-2',
+        'poly-3': sent[2]?.trackId,
+      },
+    ]);
+  });
+
+  it('BULK: a REFUSED request wrote nothing — error toast, no refresh, no ids adopted', async () => {
+    mockApiClient.propagateTracksForward.mockRejectedValue(
+      Object.assign(new Error('Request failed with status code 400'), {
+        response: { status: 400 },
+      })
+    );
+    twoFrames();
+    threeMixed();
+    const queryClient = makeQueryClient();
+    const removeQueries = vi.spyOn(queryClient, 'removeQueries');
+    renderEditor(queryClient);
+    selectThree();
+
+    await clickAndSettle('propagate-selected-poly-1', () => {
+      expect(mockApiClient.propagateTracksForward).toHaveBeenCalledTimes(1);
+    });
+
+    const toast = await toasts();
+    expect(toast.error).toHaveBeenCalledWith(
+      'segmentation.trackOps.propagateSelectedFailed'
+    );
+    // Marking the following frames segmented would send the loader after
+    // rows the server never wrote.
+    expect(removeQueries).not.toHaveBeenCalled();
+    expect(mockProjectData.updateImages).not.toHaveBeenCalled();
+    expect(mockEditor.updatePolygons).not.toHaveBeenCalled();
+  });
+
+  it('BULK: a microtubule that changed some frames counts as changed even if others were unreadable', async () => {
+    answerByTrack({
+      'track-1': { framesChanged: 2, framesSkipped: 1 },
+      'track-2': { framesChanged: 3 },
+    });
+    twoFrames();
+    twoTracked();
+    renderEditor();
+    selectBoth();
+
+    await clickAndSettle('propagate-selected-poly-1', () => {
+      expect(mockApiClient.propagateTracksForward).toHaveBeenCalledTimes(1);
+    });
+
+    const toast = await toasts();
+    expect(mockT).toHaveBeenCalledWith(
+      'segmentation.trackOps.propagateSelectedSuccess',
+      { count: 2 }
+    );
+    expect(toast.warning).not.toHaveBeenCalled();
+    expect(mockProjectData.updateImages).toHaveBeenCalledTimes(1);
+  });
+
   it('BULK: a microtubule stopped by unreadable frames counts as failed', async () => {
     answerByTrack({
       'track-1': { framesUnchanged: 0, framesUpdated: 0, framesSkipped: 4 },
@@ -1013,6 +1191,10 @@ describe('propagate that changes nothing', () => {
     const toast = await toasts();
     expect(toast.warning).toHaveBeenCalledWith(
       'segmentation.trackOps.propagateSelectedPartial'
+    );
+    expect(mockT).toHaveBeenCalledWith(
+      'segmentation.trackOps.propagateSelectedPartial',
+      { done: 1, total: 2 }
     );
     expect(toast.info).not.toHaveBeenCalled();
     // The server ANSWERED, and the answer was "nothing written": a failure,
@@ -1046,7 +1228,7 @@ describe('propagate that changes nothing', () => {
     // landed: an error, not "0 of 2".
     const toast = await toasts();
     expect(toast.error).toHaveBeenCalledWith(
-      'segmentation.trackOps.propagateFailed'
+      'segmentation.trackOps.propagateSelectedFailed'
     );
     expect(toast.warning).not.toHaveBeenCalled();
     const evicted = removeQueries.mock.calls.map(
