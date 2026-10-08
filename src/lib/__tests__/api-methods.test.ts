@@ -1114,6 +1114,95 @@ describe('segmentation', () => {
     const result = await c().propagateTrackForward('vid-1', 4, bentLine);
     expect(result.trackId).toBe('t7');
   });
+
+  it('propagateTracksForward — posts every polyline in ONE request and keeps their order', async () => {
+    const other = { ...bentLine, trackId: undefined };
+    mockAxiosInstance.post.mockResolvedValue(
+      ok({
+        results: [
+          {
+            trackId: 't7',
+            framesChanged: 2,
+            framesUnchanged: 7,
+            framesSkipped: 3,
+          },
+          {
+            trackId: 'mt_ab12cd34',
+            framesChanged: 9,
+            framesUnchanged: 0,
+            framesSkipped: 3,
+          },
+        ],
+      })
+    );
+
+    const result = await c().propagateTracksForward('vid-1', 4, [
+      bentLine,
+      other,
+    ]);
+
+    expect(mockAxiosInstance.post).toHaveBeenCalledTimes(1);
+    expect(mockAxiosInstance.post).toHaveBeenCalledWith(
+      '/segmentation/videos/vid-1/tracks/propagate-batch',
+      { fromFrameIndex: 4, polylines: [bentLine, other] }
+    );
+    expect(result).toEqual([
+      { trackId: 't7', framesChanged: 2, framesUnchanged: 7, framesSkipped: 3 },
+      {
+        trackId: 'mt_ab12cd34',
+        framesChanged: 9,
+        framesUnchanged: 0,
+        framesSkipped: 3,
+      },
+    ]);
+  });
+
+  it('propagateTracksForward — a reply that does not match the request is an error', async () => {
+    // Results are paired with their sources by POSITION, so a short reply
+    // would stamp one microtubule's trackId onto another.
+    mockAxiosInstance.post.mockResolvedValue(
+      ok({ results: [{ trackId: 't7', framesChanged: 1 }] })
+    );
+    await expect(
+      c().propagateTracksForward('vid-1', 4, [bentLine, bentLine])
+    ).rejects.toThrow('does not match');
+  });
+
+  it.each<[string, unknown]>([
+    ['an empty object', {}],
+    ['null', null],
+    [
+      'a missing trackId',
+      { framesChanged: 1, framesUnchanged: 0, framesSkipped: 0 },
+    ],
+    [
+      'an empty trackId',
+      { trackId: '', framesChanged: 1, framesUnchanged: 0, framesSkipped: 0 },
+    ],
+    [
+      'a missing count',
+      { trackId: 't7', framesChanged: 1, framesUnchanged: 0 },
+    ],
+    [
+      'a count that is a string',
+      {
+        trackId: 't7',
+        framesChanged: '1',
+        framesUnchanged: 0,
+        framesSkipped: 0,
+      },
+    ],
+  ])(
+    'propagateTracksForward — %s as a result is an error, not "nothing changed"',
+    async (_n, entry) => {
+      // Read leniently, each of these became framesChanged 0 / framesSkipped 0,
+      // which the editor reports as "nothing to change".
+      mockAxiosInstance.post.mockResolvedValue(ok({ results: [entry] }));
+      await expect(
+        c().propagateTracksForward('vid-1', 4, [bentLine])
+      ).rejects.toThrow('does not match');
+    }
+  );
 });
 
 // ════════════════════════════════════════════════════════════════════════════

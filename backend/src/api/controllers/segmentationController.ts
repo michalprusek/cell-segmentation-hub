@@ -331,6 +331,47 @@ class SegmentationController {
   };
 
   /**
+   * Propagate SEVERAL microtubule polylines into all following frames of a
+   * video in one pass — one read and at most one write per frame.
+   */
+  propagateTracks = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { videoId } = req.params;
+      const { fromFrameIndex, polylines } = req.body;
+
+      const userId = this.validateUser(req, res);
+      if (!userId) {
+        return;
+      }
+      if (!this.validateParams(req.params, ['videoId'], res)) {
+        return;
+      }
+
+      const results =
+        await this.segmentationService.propagateTracksGeometryForward(
+          videoId as string,
+          Number(fromFrameIndex),
+          polylines,
+          userId
+        );
+
+      ResponseHelper.success(
+        res,
+        { results },
+        'Mikrotubuly propagovány do dalších snímků'
+      );
+    } catch (error) {
+      logger.error(
+        'Failed to propagate microtubule tracks',
+        error instanceof Error ? error : undefined,
+        'SegmentationController',
+        { videoId: req.params.videoId, userId: req.user?.id }
+      );
+      this.handleTrackOpError(error, res, 'Chyba při propagaci mikrotubulů');
+    }
+  };
+
+  /**
    * Delete a whole microtubule track (every frame of the video).
    */
   deleteTrack = async (req: Request, res: Response): Promise<void> => {

@@ -255,6 +255,18 @@ export interface PropagatedPolyline {
   points: Array<{ x: number; y: number }>;
 }
 
+/** What a propagate did with ONE microtubule — see
+ *  `propagateTrackGeometryForward` for the meaning of each count. In a batch
+ *  `framesSkipped` is the same on every entry: an unreadable frame is skipped
+ *  for all of them. */
+export interface PropagateTrackResult {
+  trackId: string;
+  framesUpdated: number;
+  framesChanged: number;
+  framesUnchanged: number;
+  framesSkipped: number;
+}
+
 /**
  * Thrown when a track operation targets a video the user does not own / that
  * does not exist. The controller maps this to a 404 by `instanceof` rather than
@@ -3104,6 +3116,9 @@ export class SegmentationService {
   }
 
   /**
+   * The single-polyline form of `propagateTracksGeometryForward` (a batch of
+   * one), which is where everything described here is implemented.
+   *
    * Propagate a microtubule polyline forward: stamp `polyline`'s geometry into
    * every frame of the video with `frameIndex > fromFrameIndex`, overwriting any
    * existing polyline that already carries the track's id and adding it where
@@ -3139,25 +3154,75 @@ export class SegmentationService {
     fromFrameIndex: number,
     polyline: PropagatedPolyline,
     userId: string
-  ): Promise<{
-    trackId: string;
-    framesUpdated: number;
-    framesChanged: number;
-    framesUnchanged: number;
-    framesSkipped: number;
-  }> {
+  ): Promise<PropagateTrackResult> {
+    const [result] = await this.propagateTracksGeometryForward(
+      videoId,
+      fromFrameIndex,
+      [polyline],
+      userId
+    );
+    return result as PropagateTrackResult;
+  }
+
+  /**
+   * `propagateTrackGeometryForward` for SEVERAL microtubules in one pass: every
+   * following frame is read once, receives all the polylines in memory and is
+   * written at most once, in one transaction for the whole batch.
+   *
+   * It exists because a frame's polygons are ONE JSON column, so the unit of
+   * a write is the whole frame whatever part of it changed. "Propagate
+   * selected" used to call the single endpoint once per microtubule. On a
+   * production video (propagating from frame 1 of 165, so 163 following
+   * frames of ~142 kB of JSON each, 84 microtubules on the frame) the backend
+   * logged 83 such requests in two minutes, the late ones 1.7-1.9 s each,
+   * every one re-reading all 163 frames. Meanwhile the later frames held only
+   * the microtubules the loop had reached, which the user read as "only the
+   * top half was propagated". Measured read-only on that video, the batch's
+   * read is 195 ms and its in-memory work 158 ms for all 84.
+   *
+   * The polylines are applied to each frame IN ORDER, so the stored result is
+   * what that loop produced, and each polyline gets the same four counts the
+   * single call returns. Results are in request order.
+   *
+   * @throws {VideoAccessError} if the video is not owned.
+   * @throws if any polyline has fewer than 2 points or a non-finite
+   *   coordinate — before any frame is read, so a bad polyline cannot cost
+   *   the read of the whole video and then fail on the first frame.
+   */
+  async propagateTracksGeometryForward(
+    videoId: string,
+    fromFrameIndex: number,
+    polylines: PropagatedPolyline[],
+    userId: string
+  ): Promise<PropagateTrackResult[]> {
     const container = await this.imageService.getImageById(videoId, userId);
     if (!container) {
       throw new VideoAccessError();
     }
-    if (!Array.isArray(polyline.points) || polyline.points.length < 2) {
-      throw new Error('Propagated polyline needs at least 2 points');
+    for (const polyline of polylines) {
+      if (!Array.isArray(polyline.points) || polyline.points.length < 2) {
+        throw new Error('Propagated polyline needs at least 2 points');
+      }
+      // The same rule `upsertTrackPolyline` enforces per frame, applied here
+      // so the answer does not depend on whether a following frame exists.
+      if (
+        !polyline.points.every(
+          p => Number.isFinite(p?.x) && Number.isFinite(p?.y)
+        )
+      ) {
+        throw new Error('Propagated polyline needs at least 2 finite points');
+      }
     }
 
-    const trackId =
-      typeof polyline.trackId === 'string' && polyline.trackId.length > 0
-        ? polyline.trackId
-        : `mt_${uuidv4().replace(/-/g, '').slice(0, 8)}`;
+    const tracks = polylines.map(polyline => ({
+      polyline,
+      trackId:
+        typeof polyline.trackId === 'string' && polyline.trackId.length > 0
+          ? polyline.trackId
+          : `mt_${uuidv4().replace(/-/g, '').slice(0, 8)}`,
+      framesChanged: 0,
+      framesUnchanged: 0,
+    }));
 
     const frames = await this.prisma.image.findMany({
       where: { parentVideoId: videoId, frameIndex: { gt: fromFrameIndex } },
@@ -3172,13 +3237,13 @@ export class SegmentationService {
     const ops: Prisma.PrismaPromise<unknown>[] = [];
     let framesRewritten = 0;
     let framesCreated = 0;
-    let framesUnchanged = 0;
     let corruptFrames = 0;
     for (const frame of frames) {
+      let polygons: unknown[] = [];
       if (frame.segmentation) {
-        // Existing row: overwrite the same track / add it, preserving other MTs.
-        // Use the corrupt-aware parse — overwriting an unreadable frame with only
-        // the propagated polyline would silently destroy its other microtubules.
+        // Existing row: start from its polygons, so other MTs are preserved.
+        // Use the corrupt-aware parse — overwriting an unreadable frame with
+        // only the propagated polylines would silently destroy the rest.
         const { polygons: parsed, corrupt } = parsePolygonsForWrite(
           frame.segmentation.polygons
         );
@@ -3191,28 +3256,49 @@ export class SegmentationService {
           );
           continue;
         }
-        if (trackPolylineMatches(parsed, trackId, polyline)) {
-          framesUnchanged++;
+        polygons = parsed;
+      }
+
+      let frameChanged = false;
+      for (const track of tracks) {
+        // Asked of a frame with no row too: its list starts empty, so the
+        // first polyline never matches, and a second one carrying the same
+        // track and shape is counted as unchanged — as it was when each
+        // polyline was its own request and the row existed by then.
+        if (trackPolylineMatches(polygons, track.trackId, track.polyline)) {
+          track.framesUnchanged++;
           continue;
         }
-        const updated = upsertTrackPolyline(parsed, trackId, polyline, uuidv4);
+        polygons = upsertTrackPolyline(
+          polygons,
+          track.trackId,
+          track.polyline,
+          uuidv4
+        );
+        track.framesChanged++;
+        frameChanged = true;
+      }
+      if (!frameChanged) {
+        continue;
+      }
+
+      if (frame.segmentation) {
         ops.push(
           this.prisma.segmentation.update({
             where: { id: frame.segmentation.id },
-            data: { polygons: JSON.stringify(updated), updatedAt: new Date() },
+            data: { polygons: JSON.stringify(polygons), updatedAt: new Date() },
           })
         );
         framesRewritten++;
       } else {
         // No segmentation row yet — the frame was never segmented or its
         // annotations were deleted. Create a row carrying just the propagated
-        // polyline so the microtubule still appears in EVERY following frame
+        // polylines so the microtubules still appear in EVERY following frame
         // (the whole point of "propagate to following frames"), and mark the
         // frame segmented.
-        const created = upsertTrackPolyline([], trackId, polyline, uuidv4);
         const createData: Prisma.SegmentationCreateInput = {
           image: { connect: { id: frame.id } },
-          polygons: JSON.stringify(created),
+          polygons: JSON.stringify(polygons),
           model: 'manual',
           threshold: 0.5,
         };
@@ -3237,21 +3323,22 @@ export class SegmentationService {
 
     logger.info('Propagated microtubule track forward', 'SegmentationService', {
       videoId,
-      trackId,
+      trackId: tracks.length === 1 ? tracks[0]?.trackId : undefined,
+      trackCount: tracks.length,
       fromFrameIndex,
       framesRewritten,
       framesCreated,
-      framesUnchanged,
+      // Summed over the microtubules: (frame, microtubule) pairs left alone.
+      framesUnchanged: tracks.reduce((n, t) => n + t.framesUnchanged, 0),
       corruptFramesSkipped: corruptFrames,
     });
-    const framesChanged = framesRewritten + framesCreated;
-    return {
-      trackId,
-      framesUpdated: framesChanged + framesUnchanged,
-      framesChanged,
-      framesUnchanged,
+    return tracks.map(track => ({
+      trackId: track.trackId,
+      framesUpdated: track.framesChanged + track.framesUnchanged,
+      framesChanged: track.framesChanged,
+      framesUnchanged: track.framesUnchanged,
       framesSkipped: corruptFrames,
-    };
+    }));
   }
 
   /**

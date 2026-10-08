@@ -764,6 +764,243 @@ describe('SegmentationService track ops (orchestration)', () => {
     });
   });
 
+  describe('propagateTracksGeometryForward (batch)', () => {
+    // Bent, and different per track, so one polyline cannot stand in for
+    // another and a swapped x/y would show.
+    const bent = (trackId: string | undefined, dx: number) => ({
+      geometry: 'polyline' as const,
+      trackId,
+      instanceId: `inst-${dx}`,
+      points: [
+        { x: 5 + dx, y: 5 },
+        { x: 6 + dx, y: 7.5 },
+        { x: 9 + dx, y: 8 },
+      ],
+    });
+    /** What a frame holds, without the per-polygon ids uuid mints. */
+    const shape = (polys: any[]) =>
+      polys.map(({ id: _id, ...rest }) => rest);
+
+    it('writes each frame ONCE however many microtubules are sent', async () => {
+      prismaMock.image.findMany.mockResolvedValue([
+        { id: 'f1', segmentation: seg('1', [line('other')]) },
+        { id: 'f2', segmentation: seg('2', [line('a')]) },
+        { id: 'f3', segmentation: seg('3', []) },
+      ]);
+
+      const res = await service.propagateTracksGeometryForward(
+        'vid',
+        0,
+        [bent('a', 0), bent('b', 10), bent('c', 20)],
+        'user'
+      );
+
+      expect(prismaMock.image.findMany).toHaveBeenCalledTimes(1);
+      expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
+      expect(prismaMock.segmentation.update).toHaveBeenCalledTimes(3);
+      expect(res.map(r => r.trackId)).toEqual(['a', 'b', 'c']);
+      for (const call of prismaMock.segmentation.update.mock.calls) {
+        const polys = writtenPolys(call);
+        for (const [trackId, dx] of [
+          ['a', 0],
+          ['b', 10],
+          ['c', 20],
+        ] as const) {
+          const held = polys.filter(p => p.trackId === trackId);
+          expect(held).toHaveLength(1);
+          expect(held[0].points).toEqual(bent(trackId, dx).points);
+        }
+      }
+      // The unrelated track on f1 survives all three upserts.
+      expect(
+        writtenPolys(prismaMock.segmentation.update.mock.calls[0]).some(
+          p => p.trackId === 'other'
+        )
+      ).toBe(true);
+    });
+
+    it('stores exactly what one call per microtubule stored', async () => {
+      const initial: Record<string, unknown[]> = {
+        f1: [line('other'), { ...line('a'), mtType: 'label-1' }],
+        f2: [line('b'), line('b')],
+        f3: [],
+      };
+      const polylines = [bent('a', 0), bent('b', 10), bent('c', 20)];
+
+      // The loop the editor used to run: every call re-reads what the
+      // previous one wrote. Run here through the single-track method, itself
+      // now a batch of one — so this proves a batch of N equals N batches of
+      // one, and the single-track suite above pins what a batch of one does.
+      const state: Record<string, string> = Object.fromEntries(
+        Object.entries(initial).map(([k, v]) => [k, JSON.stringify(v)])
+      );
+      prismaMock.image.findMany.mockImplementation(async () =>
+        Object.keys(state).map(k => ({
+          id: k,
+          segmentation: { id: k, polygons: state[k] },
+        }))
+      );
+      prismaMock.segmentation.update.mockImplementation((arg: any) => {
+        state[arg.where.id] = arg.data.polygons;
+        return arg;
+      });
+      const looped = [];
+      for (const polyline of polylines) {
+        looped.push(
+          await service.propagateTrackGeometryForward('vid', 0, polyline, 'user')
+        );
+      }
+      const afterLoop = Object.fromEntries(
+        Object.entries(state).map(([k, v]) => [k, shape(JSON.parse(v))])
+      );
+
+      for (const [k, v] of Object.entries(initial)) {
+        state[k] = JSON.stringify(v);
+      }
+      const batched = await service.propagateTracksGeometryForward(
+        'vid',
+        0,
+        polylines,
+        'user'
+      );
+      const afterBatch = Object.fromEntries(
+        Object.entries(state).map(([k, v]) => [k, shape(JSON.parse(v))])
+      );
+
+      expect(afterBatch).toEqual(afterLoop);
+      expect(batched).toEqual(looped);
+      // The type label a track carried on a later frame is still there.
+      expect(
+        afterBatch.f1?.find((p: any) => p.trackId === 'a')?.mtType
+      ).toBe('label-1');
+    });
+
+    it('counts per microtubule, and leaves a frame that holds them all unwritten', async () => {
+      const a = bent('a', 0);
+      const b = bent('b', 10);
+      const stored = (p: typeof a) => ({ id: 'x', type: 'external', ...p });
+      prismaMock.image.findMany.mockResolvedValue([
+        // Holds both already: no write.
+        { id: 'f1', segmentation: seg('1', [stored(a), stored(b)]) },
+        // Holds only `a`: written once, for `b`.
+        { id: 'f2', segmentation: seg('2', [stored(a)]) },
+        { id: 'bad', segmentation: { id: 'seg-bad', polygons: '{not json' } },
+      ]);
+
+      const res = await service.propagateTracksGeometryForward(
+        'vid',
+        0,
+        [a, b],
+        'user'
+      );
+
+      expect(res).toEqual([
+        {
+          trackId: 'a',
+          framesUpdated: 2,
+          framesChanged: 0,
+          framesUnchanged: 2,
+          framesSkipped: 1,
+        },
+        {
+          trackId: 'b',
+          framesUpdated: 2,
+          framesChanged: 1,
+          framesUnchanged: 1,
+          framesSkipped: 1,
+        },
+      ]);
+      expect(prismaMock.segmentation.update).toHaveBeenCalledTimes(1);
+      expect(prismaMock.segmentation.update.mock.calls[0][0].where.id).toBe(
+        'seg-2'
+      );
+    });
+
+    it('creates ONE row carrying every microtubule for a frame that has none', async () => {
+      prismaMock.image.findMany.mockResolvedValue([
+        { id: 'f1', width: 512, height: 512, segmentation: null },
+      ]);
+
+      const res = await service.propagateTracksGeometryForward(
+        'vid',
+        0,
+        [bent(undefined, 0), bent(undefined, 10)],
+        'user'
+      );
+
+      expect(prismaMock.segmentation.create).toHaveBeenCalledTimes(1);
+      const created = JSON.parse(
+        prismaMock.segmentation.create.mock.calls[0][0].data.polygons
+      );
+      expect(created).toHaveLength(2);
+      // Each untracked source gets its OWN minted id.
+      expect(res[0]?.trackId).toMatch(/^mt_[0-9a-f]{8}$/);
+      expect(res[1]?.trackId).toMatch(/^mt_[0-9a-f]{8}$/);
+      expect(res[0]?.trackId).not.toBe(res[1]?.trackId);
+      expect(created.map((p: any) => p.trackId)).toEqual(
+        res.map(r => r.trackId)
+      );
+      expect(res.map(r => r.framesChanged)).toEqual([1, 1]);
+    });
+
+    it('counts a repeated track on a frame with no row as it did when each was its own request', async () => {
+      prismaMock.image.findMany.mockResolvedValue([
+        { id: 'f1', width: 512, height: 512, segmentation: null },
+      ]);
+      const res = await service.propagateTracksGeometryForward(
+        'vid',
+        0,
+        [bent('a', 0), bent('a', 0)],
+        'user'
+      );
+      // The second is the same track and shape the first just put there.
+      expect(res.map(r => [r.framesChanged, r.framesUnchanged])).toEqual([
+        [1, 0],
+        [0, 1],
+      ]);
+      expect(
+        JSON.parse(prismaMock.segmentation.create.mock.calls[0][0].data.polygons)
+      ).toHaveLength(1);
+    });
+
+    it('refuses a non-finite coordinate before reading any frame', async () => {
+      // With no following frame `upsertTrackPolyline` never runs, so without
+      // the up-front check this answered 200 with zero counts.
+      prismaMock.image.findMany.mockResolvedValue([]);
+      await expect(
+        service.propagateTracksGeometryForward(
+          'vid',
+          0,
+          [
+            bent('a', 0),
+            {
+              geometry: 'polyline',
+              points: [
+                { x: 1, y: 1 },
+                { x: Number.NaN, y: 2 },
+              ],
+            },
+          ],
+          'user'
+        )
+      ).rejects.toThrow('at least 2 finite points');
+      expect(prismaMock.image.findMany).not.toHaveBeenCalled();
+    });
+
+    it('refuses the whole batch for one degenerate polyline, before reading any frame', async () => {
+      await expect(
+        service.propagateTracksGeometryForward(
+          'vid',
+          0,
+          [bent('a', 0), { geometry: 'polyline', points: [{ x: 1, y: 1 }] }],
+          'user'
+        )
+      ).rejects.toThrow('at least 2 points');
+      expect(prismaMock.image.findMany).not.toHaveBeenCalled();
+      expect(prismaMock.$transaction).not.toHaveBeenCalled();
+    });
+  });
+
   describe('deleteTrackAcrossVideo', () => {
     it('removes the track from exactly the frames that carry it', async () => {
       prismaMock.image.findMany.mockResolvedValue([
