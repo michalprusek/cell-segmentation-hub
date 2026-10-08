@@ -14,8 +14,11 @@ class PostprocessingService:
     def __init__(self):
         self.min_area = 50  # Minimum polygon area in pixels - lowered for better small cell detection
         self.simplification_tolerance = 0.1  # Douglas-Peucker tolerance - reduced for higher precision
+        # Holes below this are closed rather than reported (emit_holes only).
+        self.min_hole_area = 30
     
-    def mask_to_polygons(self, mask: np.ndarray, threshold: float = 0.5, detect_holes: bool = True) -> List[Dict[str, Any]]:
+    def mask_to_polygons(self, mask: np.ndarray, threshold: float = 0.5, detect_holes: bool = True,
+                         emit_holes: bool = False) -> List[Dict[str, Any]]:
         """
         Convert segmentation mask to polygons
         
@@ -23,6 +26,14 @@ class PostprocessingService:
             mask: Numpy array of shape (H, W) with values 0-1
             threshold: Threshold for binarizing the mask
             detect_holes: Whether to detect holes/internal structures
+            emit_holes: With `detect_holes`, attach each region's holes to its
+                polygon under ``"holes"`` (a list of point lists). Off by
+                default, in which case a region is its OUTER ring only and
+                whatever it encloses is silently part of it -- which is what
+                every caller got until neurite networks needed otherwise:
+                crossing neurites close loops, and a loop reported as a filled
+                outline counts the background inside it as neurite. Turn the
+                result into the app's wire format with `holes_to_internal`.
             
         Returns:
             List of polygon dictionaries with points, area, and confidence.
@@ -68,7 +79,9 @@ class PostprocessingService:
             region_mask = (labeled_mask == region.label).astype(np.uint8)
 
             # Convert region to polygon
-            polygon_data = self._region_to_polygon(region_mask, mask, region, detect_holes)
+            polygon_data = self._region_to_polygon(
+                region_mask, mask, region, detect_holes, emit_holes
+            )
 
             if polygon_data:
                 polygons.append(polygon_data)
@@ -85,7 +98,8 @@ class PostprocessingService:
     
     
     def _region_to_polygon(self, region_mask: np.ndarray, original_mask: np.ndarray, 
-                          region: Any, detect_holes: bool = True) -> Optional[Dict[str, Any]]:
+                          region: Any, detect_holes: bool = True,
+                          emit_holes: bool = False) -> Optional[Dict[str, Any]]:
         """Convert a single region to polygon format.
 
         Returns None for a region that legitimately cannot become a polygon
@@ -142,12 +156,59 @@ class PostprocessingService:
         # Calculate area
         area = float(region.area)
 
-        return {
+        polygon = {
             "points": points,
             "area": area,
             "confidence": confidence,
             "type": "external"  # Postprocessing works per-region, so defaults to external
         }
+        if emit_holes:
+            # No `and detect_holes`: without it the contours above come from
+            # RETR_EXTERNAL, which returns outer rings only, so there is
+            # nothing here to emit.
+            #
+            # One connected region, so every other contour RETR_TREE found is a
+            # hole of it: a hole cannot contain more of the SAME region, and an
+            # island inside a hole is a region of its own, handled on its turn.
+            holes = []
+            for contour in contours:
+                if contour is main_contour or len(contour) < 3:
+                    continue
+                if cv2.contourArea(contour) < self.min_hole_area:
+                    continue
+                holes.append(
+                    [{"x": float(p[0][0]), "y": float(p[0][1])} for p in contour]
+                )
+            if holes:
+                polygon["holes"] = holes
+        return polygon
+
+    @staticmethod
+    def holes_to_internal(polygons: List[Dict[str, Any]], next_id: int) -> List[Dict[str, Any]]:
+        """Move every polygon's ``"holes"`` out into polygons of their own.
+
+        The app stores a hole as a separate polygon -- ``type='internal'`` with
+        a ``parent_id`` -- not as a nested ring. Each input polygon must already
+        carry its ``id``. A hole gets NO class: with one it would be read as a
+        region of that class and the loop it sits in would be filled again.
+
+        Returns the same polygons (their ``"holes"`` key removed) followed by
+        the internal ones, numbered ``polygon_<next_id>`` onwards.
+        """
+        internal: List[Dict[str, Any]] = []
+        for polygon in polygons:
+            for ring in polygon.pop("holes", None) or []:
+                contour = np.array([[p["x"], p["y"]] for p in ring], np.float32)
+                internal.append({
+                    "id": f"polygon_{next_id}",
+                    "points": ring,
+                    "area": float(cv2.contourArea(contour)),
+                    "confidence": polygon.get("confidence", 1.0),
+                    "type": "internal",
+                    "parent_id": polygon["id"],
+                })
+                next_id += 1
+        return polygons + internal
 
     def filter_polygons(self, polygons: List[Dict[str, Any]],
                        min_area: int = None, min_confidence: float = None) -> List[Dict[str, Any]]:

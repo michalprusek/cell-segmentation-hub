@@ -1675,7 +1675,8 @@ class ModelLoader:
             for class_id, class_name in NEURITE_SOMA_CLASSES:
                 class_hit = label == class_id
                 class_polys = pp.mask_to_polygons(
-                    class_hit.astype(np.float32), threshold=0.5, detect_holes=detect_holes
+                    class_hit.astype(np.float32), threshold=0.5,
+                    detect_holes=detect_holes, emit_holes=True,
                 )
                 counts[class_name] = len(class_polys)
                 coverage[class_name] = float(class_hit.mean()) * 100.0
@@ -1716,6 +1717,13 @@ class ModelLoader:
                         "emitted (min-area filter or postprocessing failure).",
                         class_px, class_name,
                     )
+
+            # Holes last, as polygons of their own. Crossing neurites close
+            # loops; until 2026-10-08 a loop came back as its outer ring only,
+            # so the background it encloses was measured -- and skeletonised --
+            # as neurite. `num_per_class` above deliberately counts regions,
+            # not holes.
+            emitted = pp.holes_to_internal(emitted, polygon_id_counter)
 
             processing_time = _time.time() - start_time
             logger.info(

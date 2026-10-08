@@ -30,6 +30,7 @@ import { config } from '../../utils/config';
 import { logger } from '../../utils/logger';
 import type { Semaphore } from '../../utils/concurrency';
 import { neutraliseCsvFormula } from './csvSafety';
+import { isPointInPolygon } from '../metrics/geometricPrimitives';
 
 /** One row of the neurite sheet, as the ML service returns it. */
 export interface NeuriteRow {
@@ -182,16 +183,48 @@ function toMLPolygon(
   };
 }
 
+type Ring = Array<{ x: number; y: number }>;
+
+function ringArea(ring: Ring): number {
+  let twice = 0;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const a = ring[j];
+    const b = ring[i];
+    if (a && b) {
+      twice += a.x * b.y - b.x * a.y;
+    }
+  }
+  return Math.abs(twice) / 2;
+}
+
+/** Every vertex of `inner` lies inside `outer`'s ring. */
+function isNestedIn(inner: Ring, outer: Ring): boolean {
+  return inner.every(point => isPointInPolygon(point, { points: outer }));
+}
+
 /**
  * Read a stored segmentation into the soma and neurite polygons the ML
  * service measures, each carrying its holes.
  *
- * The app stores a hole as its OWN polygon — `type: 'internal'`, pointing at
- * the region it belongs to through `parent_id` — and such a polygon carries no
- * class. So it is neither a soma nor a neurite here; it is folded into its
- * parent's `holes`. Dropping it instead would fill every closed loop a neurite
- * network makes: the skeleton of a filled loop is a line through its middle
- * rather than a ring, and its mean intensity includes the background inside.
+ * Two things are a hole, and nothing else is:
+ *
+ * 1. A polygon stored as `type: 'internal'` with a `parent_id`. That is how
+ *    the app stores a hole, and how the models emit one.
+ * 2. A polygon with NO class that lies wholly inside a soma or a neurite —
+ *    the way to cut a hole by hand: draw it where the background shows
+ *    through. It belongs to the smallest region that contains it.
+ *
+ * Dropping holes instead would fill every loop that crossing neurites close:
+ * the skeleton of a filled loop is a line through its middle rather than a
+ * ring, and its mean intensity includes the background inside.
+ *
+ * A nested polygon that HAS a class is never a hole. A soma inside the outline
+ * of a neurite network is a soma (and comes off the neurite anyway, because
+ * soma wins an overlap); a neurite island inside a loop is a neurite. Reading
+ * those as holes would turn real structure into background.
+ *
+ * A classless polygon that is not inside anything, or only partly, is ignored
+ * as it always was.
  *
  * Returns `null` when the JSON cannot be read. Exported because the intensity
  * table needs exactly these regions, and a second reading of the same JSON
@@ -210,41 +243,72 @@ export function splitNeuritePolygons(
     return null;
   }
 
-  const holesByParent = new Map<string, Array<Array<{ x: number; y: number }>>>();
+  const hasRing = (poly: PolygonLike): poly is PolygonLike & { points: Ring } =>
+    Array.isArray(poly?.points) && poly.points.length >= 3;
+
+  // Regions, keyed by their position so a polygon without an id still works.
+  const regions = parsed
+    .map((poly, index) => ({ poly, index, kind: classOf(poly) }))
+    .filter(
+      (entry): entry is typeof entry & { kind: 'soma' | 'neurite' } =>
+        entry.poly?.type !== 'internal' &&
+        entry.kind !== null &&
+        hasRing(entry.poly)
+    );
+  const holesByRegion = new Map<number, Ring[]>();
+  const addHole = (regionIndex: number, ring: Ring): void => {
+    const list = holesByRegion.get(regionIndex) ?? [];
+    list.push(ring);
+    holesByRegion.set(regionIndex, list);
+  };
+
   for (const poly of parsed) {
-    if (
-      poly?.type === 'internal' &&
-      typeof poly.parent_id === 'string' &&
-      Array.isArray(poly.points) &&
-      poly.points.length >= 3
-    ) {
-      const list = holesByParent.get(poly.parent_id) ?? [];
-      list.push(poly.points);
-      holesByParent.set(poly.parent_id, list);
+    if (!hasRing(poly)) {
+      continue;
+    }
+    if (poly.type === 'internal') {
+      const parent =
+        typeof poly.parent_id === 'string'
+          ? regions.find(region => region.poly.id === poly.parent_id)
+          : undefined;
+      if (parent) {
+        addHole(parent.index, poly.points);
+      }
+      continue;
+    }
+    if (classOf(poly) !== null) {
+      continue;
+    }
+    // No class: a hole of the smallest region it is wholly inside, if any.
+    let best: { index: number; area: number } | null = null;
+    for (const region of regions) {
+      const ring = region.poly.points as Ring;
+      if (!isNestedIn(poly.points, ring)) {
+        continue;
+      }
+      const area = ringArea(ring);
+      if (!best || area < best.area) {
+        best = { index: region.index, area };
+      }
+    }
+    if (best) {
+      addHole(best.index, poly.points);
     }
   }
 
   const soma: MLPolygon[] = [];
   const neurite: MLPolygon[] = [];
-  parsed.forEach((poly, i) => {
-    // A hole is never a region of its own, whatever class it might carry.
-    if (poly?.type === 'internal') {
-      return;
-    }
-    const kind = classOf(poly);
-    if (!kind) {
-      return;
-    }
+  for (const region of regions) {
     const ml = toMLPolygon(
-      poly,
-      i,
-      (poly.id && holesByParent.get(poly.id)) || []
+      region.poly,
+      region.index,
+      holesByRegion.get(region.index) ?? []
     );
     if (!ml) {
-      return;
+      continue;
     }
-    (kind === 'soma' ? soma : neurite).push(ml);
-  });
+    (region.kind === 'soma' ? soma : neurite).push(ml);
+  }
   return { soma, neurite };
 }
 
