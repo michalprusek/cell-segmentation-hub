@@ -785,7 +785,7 @@ export default {
     resizeSidebar: 'Změnit šířku panelu',
     trackOps: {
       propagateSelectedSuccess:
-        '{{count}} mikrotubulů propagováno do dalších snímků',
+        'Mikrotubuly propagované do dalších snímků: {{count}}',
       propagateSelectedPartial: 'Propagováno {{done}} z {{total}} mikrotubulů',
       deleteSelectedPartial: 'Smazáno {{done}} z {{total}} mikrotubulů',
       propagateSuccess:
@@ -2039,7 +2039,7 @@ export default {
         saving:
           'Ukládání na povel: tlačítkem Uložit, klávesou Ctrl+S, nebo automaticky při přechodu na jiný snímek.',
         zoomPan:
-          'Přiblížení k ukazateli myši, posun tažením a přizpůsobení snímku klávesou R nebo 0. Obrysy, body i jejich zvýraznění mají na obrazovce při každém přiblížení stejnou velikost.',
+          'Přiblížení k ukazateli myši, posun tažením a přizpůsobení snímku klávesou R nebo 0. Obrysy, body i jejich zvýraznění mají na obrazovce od přiblížení 0,7× výše stejnou velikost; při větším oddálení se obrysy ztenčují, aby nezakryly velký snímek zobrazený zmenšeně.',
         polygonManagement:
           'Seznam tvarů s vícenásobným výběrem, skrýváním, přejmenováním a mazáním.',
         keyboardShortcuts:

@@ -878,7 +878,7 @@ export default {
     },
     resizeSidebar: '调整面板宽度',
     trackOps: {
-      propagateSelectedSuccess: '已将 {{count}} 个微管传播到后续帧',
+      propagateSelectedSuccess: '传播到后续帧的微管数：{{count}}',
       propagateSelectedPartial: '已传播 {{done}}/{{total}} 个微管',
       deleteSelectedPartial: '已删除 {{total}} 条中的 {{done}} 条微管',
       propagateSuccess: '微管已传播到 {{count}} 个后续帧',
@@ -1919,7 +1919,7 @@ export default {
         saving:
           '按需保存：点击「保存」、按 Ctrl+S，或在切换到其他图像时自动保存。',
         zoomPan:
-          '以鼠标指针为中心缩放、拖动平移，并可用 R 或 0 让图像适应窗口。轮廓、顶点及其高亮在任何缩放级别下都保持相同的屏幕大小。',
+          '以鼠标指针为中心缩放、拖动平移，并可用 R 或 0 让图像适应窗口。轮廓、顶点及其高亮在缩放 0.7× 及以上时保持相同的屏幕大小；缩得更小时轮廓会变细，以免遮住缩小显示的大图。',
         polygonManagement: '形状列表支持多选、显示与隐藏、重命名与删除。',
         keyboardShortcuts: '完整的键盘操作 — 按 H 或 ? 可查看应用内列表。',
         realTimeFeedback:

@@ -944,7 +944,7 @@ export default {
     resizeSidebar: 'Redimensionar panel',
     trackOps: {
       propagateSelectedSuccess:
-        '{{count}} microtúbulos propagados a los fotogramas siguientes',
+        'Microtúbulos propagados a los fotogramas siguientes: {{count}}',
       propagateSelectedPartial: '{{done}} de {{total}} microtúbulos propagados',
       deleteSelectedPartial: '{{done}} de {{total}} microtúbulos eliminados',
       propagateSuccess:
@@ -2067,7 +2067,7 @@ export default {
         saving:
           'Guardado a petición: el botón Guardar, Ctrl+S, o automáticamente al pasar a otra imagen.',
         zoomPan:
-          'Zoom en el puntero del ratón, desplazamiento arrastrando y ajuste a la vista con R o 0. Los contornos, los puntos y su resaltado mantienen el mismo tamaño en pantalla con cualquier zoom.',
+          'Zoom en el puntero del ratón, desplazamiento arrastrando y ajuste a la vista con R o 0. Los contornos, los puntos y su resaltado mantienen el mismo tamaño en pantalla a partir de un zoom de 0,7×; más lejos, los contornos se afinan para no tapar una imagen grande mostrada en pequeño.',
         polygonManagement:
           'Una lista de formas con selección múltiple, mostrar y ocultar, renombrar y eliminar.',
         keyboardShortcuts:

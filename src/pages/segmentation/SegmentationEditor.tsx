@@ -1855,6 +1855,11 @@ const SegmentationEditor = () => {
 
     let failed = 0;
     let changed = 0;
+    // Requests that produced no ANSWER. Not the same as "nothing written":
+    // the server commits the propagate in one transaction, and a 502 during
+    // a backend recreate, a dropped connection or the 120 s client timeout
+    // can all lose the response to a write that happened.
+    let unanswered = 0;
     for (const src of sources) {
       try {
         const result = await apiClient.propagateTrackForward(
@@ -1881,11 +1886,17 @@ const SegmentationEditor = () => {
       } catch (error) {
         logger.error('Failed to propagate a selected microtubule', error);
         failed++;
+        unanswered++;
       }
     }
 
-    // Nothing written means nothing cached is stale and no status moved.
-    if (changed > 0) {
+    // Nothing written means nothing cached is stale and no status moved —
+    // but only an ANSWER can say nothing was written. After an unanswered
+    // request the following frames may hold the new shape, and the cache-first
+    // load would keep showing the old one until a reload, so they are
+    // refreshed as if it had landed: a refetch of an unchanged frame costs one
+    // request, a stale frame costs the user's trust in what they see.
+    if (changed > 0 || unanswered > 0) {
       evictVideoFrameSegmentationCaches();
       markFollowingFramesSegmented(fromFrameIndex);
     }

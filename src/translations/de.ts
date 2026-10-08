@@ -951,7 +951,7 @@ export default {
     resizeSidebar: 'Panelbreite ändern',
     trackOps: {
       propagateSelectedSuccess:
-        '{{count}} Mikrotubuli in die folgenden Frames übertragen',
+        'In die folgenden Frames übertragene Mikrotubuli: {{count}}',
       propagateSelectedPartial: '{{done}} von {{total}} Mikrotubuli übertragen',
       deleteSelectedPartial: '{{done}} von {{total}} Mikrotubuli gelöscht',
       propagateSuccess: 'Mikrotubulus in {{count}} folgende Frames übertragen',
@@ -2085,7 +2085,7 @@ export default {
         saving:
           'Speichern auf Zuruf: Schaltfläche Speichern, Strg+S, oder automatisch beim Wechsel zu einem anderen Bild.',
         zoomPan:
-          'Zoom am Mauszeiger, Verschieben per Ziehen und Einpassen mit R oder 0. Konturen, Punkte und ihre Hervorhebung behalten bei jedem Zoom dieselbe Größe auf dem Bildschirm.',
+          'Zoom am Mauszeiger, Verschieben per Ziehen und Einpassen mit R oder 0. Konturen, Punkte und ihre Hervorhebung behalten ab Zoom 0,7× dieselbe Größe auf dem Bildschirm; weiter herausgezoomt werden die Konturen dünner, damit sie ein verkleinert dargestelltes großes Bild nicht verdecken.',
         polygonManagement:
           'Eine Formenliste mit Mehrfachauswahl, Ein- und Ausblenden, Umbenennen und Löschen.',
         keyboardShortcuts:

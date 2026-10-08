@@ -110,6 +110,7 @@ Everything drawn over the image has a **constant size on screen**, as in CVAT:
 | Vertex handle / hovered                   | 5 px radius / 6.5 px    |
 | Selection glow                            | 8 px blur               |
 | Drawing preview line, sperm endpoint dots | 2 px, 3 px radius       |
+| Shared-neurite stripes (colour by soma)   | 10 px per colour        |
 
 Below 0.7× the outlines thin out (to 60 %, then 40 % of those widths under
 0.5×) so they do not bury a large image shown small. Sizes follow the zoom

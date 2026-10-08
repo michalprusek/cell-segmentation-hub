@@ -90,6 +90,12 @@ export const screenPx = (n: number): string =>
  * means an invisible, ungrabbable handle rather than a wrong width.
  */
 export const OVERLAY_RADIUS_VAR = '--overlay-r';
+/** The class that turns {@link OVERLAY_RADIUS_VAR} into a radius. These
+ *  circles carry NO `r` attribute, so one without the class — or with the
+ *  class and no matching rule in `src/index.css` — has radius 0: a handle
+ *  that is neither drawn nor grabbable. jsdom applies no stylesheet and
+ *  cannot see either, which is why `overlayScale.test.ts` reads the CSS. */
+export const OVERLAY_DOT_CLASS = 'overlay-dot';
 export const dotRadiusStyle = (px: number): React.CSSProperties =>
   ({ [OVERLAY_RADIUS_VAR]: String(px) }) as React.CSSProperties;
 
@@ -118,6 +124,10 @@ export const STROKE_MULTIPLIER = {
  * and the topmost one swallows every click near either.
  */
 export const POLYLINE_HIT_BAND_MULTIPLIER = 12;
+
+/** Dash length, screen px, of the stripes that mark a neurite shared by
+ *  several somas (CanvasPolygon). Each soma's colour gets one dash per cycle. */
+export const SOMA_STRIPE_DASH_PX = 10;
 
 /** Vertex handle, screen px. 5 and 1.2 are the old values AT ZOOM 1; the old
  *  `5 / zoom^0.85` let the dot grow from 12 px across at zoom 2.3 to 17 px at

@@ -1,6 +1,11 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'fs';
+import { dirname, join } from 'path';
+import { fileURLToPath } from 'url';
 import {
+  OVERLAY_DOT_CLASS,
   OVERLAY_PX_VAR,
+  OVERLAY_RADIUS_VAR,
   OVERLAY_STROKE_VAR,
   POLYLINE_HIT_BAND_MULTIPLIER,
   STROKE_MULTIPLIER,
@@ -61,5 +66,49 @@ describe('vertexRadiusPx', () => {
     expect(vertexRadiusPx(false, true)).toBe(5.5);
     expect(vertexRadiusPx(false, false, true)).toBe(6);
     expect(vertexRadiusPx(true, true, true)).toBe(8.58);
+  });
+});
+
+// The components emit a class and a custom property; the stylesheet turns the
+// pair into a radius. jsdom applies no stylesheet, so nothing in the component
+// suites can tell whether the rule still exists, still has that selector, or
+// still reads those properties — deleting the declaration left every suite of
+// `src/pages/segmentation` green while every vertex handle in the browser had
+// radius 0. This reads the CSS as text and ties it to the exported names.
+describe('the stylesheet half of the overlay sizes (src/index.css)', () => {
+  const css = readFileSync(
+    join(
+      dirname(fileURLToPath(import.meta.url)),
+      '..',
+      '..',
+      '..',
+      '..',
+      'index.css'
+    ),
+    'utf8'
+  ).replace(/\/\*[\s\S]*?\*\//g, ''); // a rule quoted in a comment is not a rule
+
+  /** Declarations of the ONE rule with exactly this selector. */
+  const rule = (selector: string): string => {
+    const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const found = [
+      ...css.matchAll(
+        new RegExp(`(?:^|[\\s}])${escaped}\\s*\\{([^}]*)\\}`, 'g')
+      ),
+    ];
+    expect(found).toHaveLength(1);
+    return found[0][1].replace(/\s+/g, ' ').trim();
+  };
+
+  it('gives the overlay dot class its radius from the two properties', () => {
+    expect(rule(`.${OVERLAY_DOT_CLASS}`)).toBe(
+      `r: calc(var(${OVERLAY_PX_VAR}, 1px) * var(${OVERLAY_RADIUS_VAR}, 5));`
+    );
+  });
+
+  it('sizes the selection glow in screen pixels', () => {
+    expect(rule('.polygon-selected')).toBe(
+      `filter: drop-shadow( 0 0 calc(var(${OVERLAY_PX_VAR}, 1px) * 8) var(--polygon-selected-glow, #3b82f6) );`
+    );
   });
 });

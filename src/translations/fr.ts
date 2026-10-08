@@ -946,7 +946,7 @@ export default {
     resizeSidebar: 'Redimensionner le panneau',
     trackOps: {
       propagateSelectedSuccess:
-        '{{count}} microtubules propagés vers les images suivantes',
+        'Microtubules propagés vers les images suivantes : {{count}}',
       propagateSelectedPartial: '{{done}} sur {{total}} microtubules propagés',
       deleteSelectedPartial: '{{done}} microtubules sur {{total}} supprimés',
       propagateSuccess: 'Microtubule propagé vers {{count}} images suivantes',
@@ -2076,7 +2076,7 @@ export default {
         saving:
           'Enregistrement à la demande : le bouton Enregistrer, Ctrl+S, ou automatiquement en passant à une autre image.',
         zoomPan:
-          'Zoom au pointeur, déplacement par glisser, et ajustement de l’image avec R ou 0. Les contours, les points et leur surbrillance gardent la même taille à l’écran à tous les niveaux de zoom.',
+          'Zoom au pointeur, déplacement par glisser, et ajustement de l’image avec R ou 0. Les contours, les points et leur surbrillance gardent la même taille à l’écran à partir d’un zoom de 0,7× ; en deçà, les contours s’affinent pour ne pas masquer une grande image affichée en petit.',
         polygonManagement:
           'Une liste des formes avec sélection multiple, affichage/masquage, renommage et suppression.',
         keyboardShortcuts:

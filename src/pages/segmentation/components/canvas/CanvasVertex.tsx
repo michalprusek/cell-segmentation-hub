@@ -1,6 +1,7 @@
 import React from 'react';
 import { Point } from '@/lib/segmentation';
 import {
+  OVERLAY_DOT_CLASS,
   VERTEX_STROKE_PX,
   dotRadiusStyle,
   screenPx,
@@ -99,7 +100,7 @@ const CanvasVertex = React.memo<CanvasVertexProps>(
       <circle
         cx={actualX}
         cy={actualY}
-        className="overlay-dot"
+        className={OVERLAY_DOT_CLASS}
         fill={fillColor}
         stroke={strokeColor}
         opacity={opacity}

@@ -25,6 +25,8 @@ import {
   dotRadiusStyle,
   screenPx,
   strokeUnits,
+  OVERLAY_DOT_CLASS,
+  SOMA_STRIPE_DASH_PX,
 } from '../../utils/overlayScale';
 
 interface CanvasPolygonProps {
@@ -746,18 +748,25 @@ const CanvasPolygon = React.memo(
               keep seeing exactly one path per polygon. */}
           {stripeColors.map((color, i) => {
             const total = stripeColors.length + 1; // + the solid base coat
-            const dash = 10;
+            // SCREEN pixels, like the width it is painted at. As attributes
+            // these were user units: a 100 px dash on a 2 px stroke at zoom
+            // 10, and 2.7 px — dots — at the 0.27 fit zoom of a 2048 px frame.
+            const dash = SOMA_STRIPE_DASH_PX;
             return (
               <path
                 key={`soma-stripe-${id}-${i}`}
                 d={pathString}
                 fill="none"
                 stroke={color}
-                style={{ strokeWidth: strokeWidthCss }}
+                style={{
+                  // Without this the stripe falls back to SVG's 1 user unit:
+                  // 10 px at zoom 10 over a 2 px base coat.
+                  strokeWidth: strokeWidthCss,
+                  strokeDasharray: `${screenPx(dash)} ${screenPx(dash * (total - 1))}`,
+                  strokeDashoffset: screenPx(-dash * (i + 1)),
+                }}
                 strokeOpacity={pathString ? 1 : 0}
                 strokeLinecap="butt"
-                strokeDasharray={`${dash} ${dash * (total - 1)}`}
-                strokeDashoffset={-dash * (i + 1)}
                 vectorEffect="non-scaling-stroke"
                 pointerEvents="none"
               />
@@ -781,7 +790,7 @@ const CanvasPolygon = React.memo(
                 <circle
                   cx={validPoints[0].x}
                   cy={validPoints[0].y}
-                  className="overlay-dot"
+                  className={OVERLAY_DOT_CLASS}
                   fill={pathColor}
                   stroke="white"
                   style={ENDPOINT_MARKER_STYLE}
@@ -791,7 +800,7 @@ const CanvasPolygon = React.memo(
                 <circle
                   cx={validPoints[validPoints.length - 1].x}
                   cy={validPoints[validPoints.length - 1].y}
-                  className="overlay-dot"
+                  className={OVERLAY_DOT_CLASS}
                   fill={pathColor}
                   stroke="white"
                   style={ENDPOINT_MARKER_STYLE}

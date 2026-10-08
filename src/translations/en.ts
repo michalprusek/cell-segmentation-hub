@@ -787,7 +787,7 @@ export default {
     resizeSidebar: 'Resize panel',
     trackOps: {
       propagateSelectedSuccess:
-        'Propagated {{count}} microtubules to the following frames',
+        'Microtubules propagated to the following frames: {{count}}',
       propagateSelectedPartial: '{{done}} of {{total}} microtubules propagated',
       deleteSelectedPartial: '{{done}} of {{total}} microtubules deleted',
       propagateSuccess:
@@ -2068,7 +2068,7 @@ export default {
         saving:
           'Saving on demand: the Save button, Ctrl+S, or automatically when you move to another image.',
         zoomPan:
-          'Zoom at the mouse pointer, pan with a drag, and fit the image with R or 0. Outlines, points and their highlight keep the same size on screen at every zoom.',
+          'Zoom at the mouse pointer, pan with a drag, and fit the image with R or 0. Outlines, points and their highlight keep the same size on screen from 0.7× zoom up; further out, outlines get thinner so they do not cover a large image shown small.',
         polygonManagement:
           'A shape list with multi-select, hide and show, rename and delete.',
         keyboardShortcuts:

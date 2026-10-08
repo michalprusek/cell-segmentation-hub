@@ -47,6 +47,22 @@ describe('wheelZoomFactor', () => {
     );
   });
 
+  it('reads a page-mode event (deltaMode 2) as 800 px a page', () => {
+    // A whole page either way is far past the clamp: one notch.
+    expect(wheelZoomFactor({ deltaY: -1, deltaMode: 2 }, 1.2)).toBeCloseTo(
+      1.2,
+      12
+    );
+    expect(normalizedWheelDelta({ deltaY: 1, deltaMode: 2 })).toBe(
+      WHEEL_NOTCH_PX
+    );
+    // Below the clamp the unit itself shows: a twentieth of a page is 40 px.
+    expect(normalizedWheelDelta({ deltaY: 0.05, deltaMode: 2 })).toBeCloseTo(
+      40,
+      12
+    );
+  });
+
   it('amplifies a pinch (ctrlKey) tenfold, still clamped', () => {
     expect(normalizedWheelDelta(px(-2, true))).toBe(-20);
     expect(normalizedWheelDelta(px(-50, true))).toBe(-WHEEL_NOTCH_PX);

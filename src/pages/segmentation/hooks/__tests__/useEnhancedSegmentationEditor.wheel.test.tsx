@@ -203,3 +203,95 @@ describe('wheel zoom wiring', () => {
     expect(event.defaultPrevented).toBe(true);
   });
 });
+
+// The cursor read-out goes through `rafThrottle`, which arms its own frame.
+// The hook used to keep only `.fn` and drop `.cancel`, so that frame could
+// not be withdrawn: it fired after unmount and called `setCursorPosition`.
+describe('cursor read-out throttle', () => {
+  let pending: Map<number, FrameRequestCallback>;
+  let nextId: number;
+  let cancelled: number[];
+  let cursor: { x: number; y: number } | null;
+  const originalGBCR = HTMLElement.prototype.getBoundingClientRect;
+
+  function MoveHarness() {
+    const editor = useEnhancedSegmentationEditor(PROPS);
+    cursor = editor.cursorPosition;
+    return (
+      <div
+        ref={editor.canvasRef}
+        data-testid="canvas"
+        onMouseMove={editor.handleMouseMove}
+      />
+    );
+  }
+  /** Run every frame pending right now (not the ones they arm). */
+  const frame = () =>
+    act(() => {
+      const due = [...pending.entries()];
+      due.forEach(([id, cb]) => {
+        pending.delete(id);
+        cb(1000);
+      });
+    });
+
+  beforeEach(() => {
+    pending = new Map();
+    nextId = 1;
+    cancelled = [];
+    cursor = null;
+    vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
+      pending.set(nextId, cb);
+      return nextId++;
+    });
+    vi.stubGlobal('cancelAnimationFrame', (id: number) => {
+      cancelled.push(id);
+      pending.delete(id);
+    });
+    HTMLElement.prototype.getBoundingClientRect = function () {
+      return {
+        ...RECT,
+        x: RECT.left,
+        y: RECT.top,
+        right: RECT.left + RECT.width,
+        bottom: RECT.top + RECT.height,
+        toJSON: () => ({}),
+      } as DOMRect;
+    };
+  });
+
+  afterEach(() => {
+    HTMLElement.prototype.getBoundingClientRect = originalGBCR;
+    vi.unstubAllGlobals();
+  });
+
+  /** Move the mouse and run the hook's own frame, leaving the throttle's. */
+  const moveAndArm = (utils: ReturnType<typeof render>) => {
+    fireEvent.mouseMove(utils.getByTestId('canvas'), {
+      clientX: 500,
+      clientY: 350,
+    });
+    frame();
+    expect([...pending.keys()]).toHaveLength(1);
+    return [...pending.keys()][0];
+  };
+
+  it('delivers the cursor position on the throttle frame', () => {
+    // The control for the test below: the frame left pending IS the one that
+    // sets the cursor, so cancelling it is what keeps the state untouched.
+    const utils = render(<MoveHarness />);
+    moveAndArm(utils);
+    expect(cursor).toBeNull();
+    frame();
+    expect(cursor).not.toBeNull();
+    expect(pending.size).toBe(0);
+  });
+
+  it('withdraws the armed throttle frame on unmount', () => {
+    const utils = render(<MoveHarness />);
+    const armed = moveAndArm(utils);
+    utils.unmount();
+    expect(cancelled).toContain(armed);
+    expect(pending.size).toBe(0);
+  });
+});

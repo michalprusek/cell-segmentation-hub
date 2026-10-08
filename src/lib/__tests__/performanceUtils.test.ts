@@ -115,6 +115,31 @@ describe('Performance Utils', () => {
       expect(global.requestAnimationFrame).toHaveBeenCalledTimes(2);
     });
 
+    // `src/test/setup.ts` mocks rAF as `setTimeout(callback, 16)` — no
+    // timestamp. `undefined - lastTime` is NaN, which is never `>= interval`,
+    // so with the re-arm below the throttle scheduled a frame every 16 ms for
+    // ever and never delivered: 25 frames and 0 calls in 400 ms. Under fake
+    // timers that is an infinite loop, which is how this fails when broken.
+    test('delivers, and stops, when the frame carries no timestamp', () => {
+      vi.mocked(global.requestAnimationFrame).mockImplementation(
+        (cb: FrameRequestCallback) => {
+          setTimeout(cb as () => void, 16);
+          return 1;
+        }
+      );
+      const callback = vi.fn();
+      const { fn: throttled } = rafThrottle(callback, 16);
+
+      vi.advanceTimersByTime(100); // the clock is past the first interval
+      throttled('only');
+      vi.advanceTimersByTime(400);
+
+      expect(callback.mock.calls).toEqual([['only']]);
+      // One frame for one call; nothing left armed.
+      expect(global.requestAnimationFrame).toHaveBeenCalledTimes(1);
+      expect(vi.getTimerCount()).toBe(0);
+    });
+
     // A 120 Hz display: frames 8 ms apart against the 16 ms interval. The
     // frame that arrives too early used to clear its handle and return, so
     // the last call of a burst sat in `lastArgs` until some LATER call

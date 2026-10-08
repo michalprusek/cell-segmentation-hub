@@ -225,10 +225,14 @@ export const useEnhancedSegmentationEditor = ({
   transformRef.current = transform;
 
   // Create throttled cursor position update
-  const throttledSetCursorPosition = useMemo(
-    () => rafThrottle((position: Point) => setCursorPosition(position), 16).fn,
+  // The whole throttle is kept, not just `.fn`: its `cancel` is the only way
+  // to withdraw a frame it has already armed, and that frame calls
+  // `setCursorPosition` — after unmount, if nobody cancels it.
+  const cursorThrottle = useMemo(
+    () => rafThrottle((position: Point) => setCursorPosition(position), 16),
     []
   );
+  const throttledSetCursorPosition = cursorThrottle.fn;
 
   // Interaction state
   const [interactionState, setInteractionState] = useState<InteractionState>({
@@ -274,8 +278,9 @@ export const useEnhancedSegmentationEditor = ({
       if (undoRedoTimeoutRef.current !== null) {
         clearTimeout(undoRedoTimeoutRef.current);
       }
+      cursorThrottle.cancel();
     };
-  }, []);
+  }, [cursorThrottle]);
 
   // Track image changes and polygon data
   const initialPolygonsRef = useRef<Polygon[]>([]);

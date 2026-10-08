@@ -1005,8 +1005,11 @@ describe('propagate that changes nothing', () => {
     answerByTrack({
       'track-1': { framesUnchanged: 0, framesUpdated: 0, framesSkipped: 4 },
     });
+    twoFrames();
     twoTracked();
-    renderEditor();
+    const queryClient = makeQueryClient();
+    const removeQueries = vi.spyOn(queryClient, 'removeQueries');
+    renderEditor(queryClient);
     selectBoth();
 
     await clickAndSettle('propagate-selected-poly-1', () => {
@@ -1018,6 +1021,46 @@ describe('propagate that changes nothing', () => {
       'segmentation.trackOps.propagateSelectedPartial'
     );
     expect(toast.info).not.toHaveBeenCalled();
+    // The server ANSWERED, and the answer was "nothing written": a failure,
+    // but a known one, so the cached frames are still right. This is what
+    // separates it from the unanswered request below.
+    expect(removeQueries).not.toHaveBeenCalled();
+    expect(mockProjectData.updateImages).not.toHaveBeenCalled();
+  });
+
+  // A request can fail on the CLIENT after the server committed: a 502 while
+  // the backend is being recreated, a dropped connection, the 120 s timeout.
+  // `changed` is counted from answers, so it is 0 here — and gating the
+  // refresh on it alone left every following frame showing its cached
+  // pre-propagate shape until a reload.
+  it('BULK: refreshes the following frames when no request was ANSWERED', async () => {
+    mockApiClient.propagateTrackForward.mockRejectedValue(
+      new Error('timeout of 120000ms exceeded')
+    );
+    twoFrames();
+    twoTracked();
+    const queryClient = makeQueryClient();
+    const removeQueries = vi.spyOn(queryClient, 'removeQueries');
+    renderEditor(queryClient);
+    selectBoth();
+
+    await clickAndSettle('propagate-selected-poly-1', () => {
+      expect(mockApiClient.propagateTrackForward).toHaveBeenCalledTimes(2);
+    });
+
+    const toast = await toasts();
+    expect(toast.warning).toHaveBeenCalledWith(
+      'segmentation.trackOps.propagateSelectedPartial'
+    );
+    expect(mockT).toHaveBeenCalledWith(
+      'segmentation.trackOps.propagateSelectedPartial',
+      { done: 0, total: 2 }
+    );
+    const evicted = removeQueries.mock.calls.map(
+      c => ((c[0] as { queryKey?: unknown[] })?.queryKey ?? [])[1]
+    );
+    expect(evicted.sort()).toEqual(['img-1', 'img-2']);
+    expect(mockProjectData.updateImages).toHaveBeenCalledTimes(1);
   });
 
   // --- static container: the SAVE already reached every frame ---------------

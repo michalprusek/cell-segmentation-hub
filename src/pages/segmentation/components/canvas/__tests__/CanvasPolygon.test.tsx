@@ -1001,6 +1001,49 @@ describe('CanvasPolygon', () => {
       ).toBe('calc(var(--overlay-stroke, 2px) * 2.5)');
     });
 
+    // The stripes over a neurite shared by several somas are extra <path>s
+    // with no attribute sizes either. One that loses its `stroke-width`
+    // falls back to SVG's 1 user unit — 10 px at zoom 10 over a 2 px base
+    // coat — and the dash was `10` USER units: 100 px long at zoom 10.
+    it('sizes the shared-neurite stripes in screen pixels, like their base', () => {
+      const shared = createMockPolygon({
+        id: 'shared-neurite',
+        partClass: 'neurite',
+        somaId: 's1',
+        somaIds: ['s1', 's2', 's3'],
+      });
+      const { container } = render(
+        at(1, { polygon: shared, colorBySoma: true })
+      );
+      const base = container.querySelector(
+        'path.polygon-path'
+      ) as SVGPathElement;
+      // The decorative stripes: every path that is neither the shape nor a
+      // hit band. Two of them for three somas (the base coat is the third).
+      const stripes = Array.from(
+        container.querySelectorAll('g.polygon-group path')
+      ).filter(
+        p =>
+          !p.classList.contains('polygon-path') &&
+          p.getAttribute('stroke') !== 'transparent'
+      ) as SVGPathElement[];
+      expect(stripes).toHaveLength(2);
+
+      const px = (n: number) => `calc(var(--overlay-px, 1px) * ${n})`;
+      stripes.forEach((stripe, i) => {
+        expect(stripe.style.strokeWidth).toBe(base.style.strokeWidth);
+        expect(stripe.style.strokeWidth).toBe(
+          'calc(var(--overlay-stroke, 2px) * 1)'
+        );
+        // One 10 px dash per 30 px cycle, each stripe in its own slot.
+        expect(stripe.style.strokeDasharray).toBe(`${px(10)} ${px(20)}`);
+        expect(stripe.style.strokeDashoffset).toBe(px(-10 * (i + 1)));
+        expect(stripe.getAttribute('stroke-width')).toBeNull();
+        expect(stripe.getAttribute('stroke-dasharray')).toBeNull();
+        expect(stripe.getAttribute('stroke-dashoffset')).toBeNull();
+      });
+    });
+
     it('keeps the hit band when the MoveShape cursor is added to its style', () => {
       // The band's width and the cursor share one `style` prop.
       const { container } = render(at(1, { editMode: EditMode.MoveShape }));

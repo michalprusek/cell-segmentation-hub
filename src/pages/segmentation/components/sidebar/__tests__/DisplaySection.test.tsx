@@ -398,6 +398,31 @@ describe('DisplaySection', () => {
       expect(smoothSwitch()).toHaveAccessibleDescription(/sharp square/i);
     });
 
+    // Its POSITION is the fix for "where is the switch?": at the bottom of
+    // the card it was 825 px down a 1000 px window on a three-channel video,
+    // under the tabs, the histogram and four sliders. Everything else in the
+    // card body has to come after it.
+    it('is the first row of the card, above tabs, histogram and sliders', () => {
+      renderWithCtx(makeCtx({ visibleChannels: ['IRM', '488_nm', '640_nm'] }));
+      const below = [
+        screen.getByRole('tablist'),
+        ...screen.getAllByRole('tab'),
+        ...screen.getAllByRole('spinbutton'),
+        ...['Min', 'Max', 'Brightness', 'Contrast'].map(label =>
+          screen.getByText(label)
+        ),
+      ];
+      // Not vacuous: the fullest card there is — 3 tabs and all four rows.
+      expect(screen.getAllByRole('tab')).toHaveLength(3);
+      expect(screen.getAllByRole('spinbutton')).toHaveLength(4);
+      below.forEach(el => {
+        expect(
+          smoothSwitch().compareDocumentPosition(el) &
+            Node.DOCUMENT_POSITION_FOLLOWING
+        ).toBeTruthy();
+      });
+    });
+
     it('is left alone by Reset', async () => {
       const user = userEvent.setup();
       const setSmoothImage = vi.fn();

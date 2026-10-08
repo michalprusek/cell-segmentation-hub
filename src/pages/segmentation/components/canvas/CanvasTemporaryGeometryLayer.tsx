@@ -7,6 +7,7 @@ import {
 } from '../../types';
 import { Point, Polygon } from '@/lib/segmentation';
 import {
+  OVERLAY_DOT_CLASS,
   VERTEX_RADIUS_PX,
   dotRadiusStyle,
   screenPx,
@@ -71,7 +72,7 @@ const CanvasTemporaryGeometryLayer: React.FC<
           key={`temp-vertex-${index}`}
           cx={point.x}
           cy={point.y}
-          className="overlay-dot"
+          className={OVERLAY_DOT_CLASS}
           fill={isFirstPoint ? '#3b82f6' : '#4ade80'}
           stroke="none"
           style={{ ...dotRadiusStyle(vertexRadius), opacity: 0.8 }}
@@ -151,7 +152,7 @@ const CanvasTemporaryGeometryLayer: React.FC<
             key="first-point-highlight"
             cx={firstPoint.x}
             cy={firstPoint.y}
-            className="overlay-dot"
+            className={OVERLAY_DOT_CLASS}
             fill="none"
             stroke="#22c55e"
             style={{
@@ -181,7 +182,7 @@ const CanvasTemporaryGeometryLayer: React.FC<
           key={`slice-point-${index}`}
           cx={point.x}
           cy={point.y}
-          className="overlay-dot"
+          className={OVERLAY_DOT_CLASS}
           fill="#ffcc00"
           stroke="none"
           style={{ ...dotRadiusStyle(vertexRadius), opacity: 0.9 }}
@@ -239,7 +240,7 @@ const CanvasTemporaryGeometryLayer: React.FC<
           key={`add-point-${index}`}
           cx={point.x}
           cy={point.y}
-          className="overlay-dot"
+          className={OVERLAY_DOT_CLASS}
           fill="#60a5fa"
           stroke="none"
           style={{ ...dotRadiusStyle(vertexRadius), opacity: 0.8 }}
@@ -373,7 +374,7 @@ const CanvasTemporaryGeometryLayer: React.FC<
           key={`temp-polyline-vertex-${index}`}
           cx={point.x}
           cy={point.y}
-          className="overlay-dot"
+          className={OVERLAY_DOT_CLASS}
           fill={isFirstPoint ? '#a855f7' : '#c084fc'}
           stroke="none"
           style={{ ...dotRadiusStyle(vertexRadius), opacity: 0.8 }}
@@ -442,7 +443,7 @@ const CanvasTemporaryGeometryLayer: React.FC<
         key="join-target-ring"
         cx={p.x}
         cy={p.y}
-        className="overlay-dot"
+        className={OVERLAY_DOT_CLASS}
         fill="none"
         stroke="#f59e0b"
         style={{
