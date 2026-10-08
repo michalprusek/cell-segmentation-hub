@@ -4,6 +4,7 @@ import {
   SEGMENTATION_MODELS,
   SEGMENTATION_MODEL_ERROR_MESSAGE,
 } from '../constants/segmentationModels';
+import { MAX_MERGE_CHANNELS } from '../constants/modelRegistry';
 
 // ============================================================================
 // Common validation schemas
@@ -240,7 +241,6 @@ export const standardPolygonMetricsApply = (
  *  - Standard `spheroid` projects use the general spheroid models;
  *    `spheroid_disintegration` is excluded there on purpose. */
 import {
-  MAX_MERGE_CHANNELS,
   MODEL_TYPE_COMPATIBILITY,
   type KnownModelId,
 } from '../constants/modelRegistry';

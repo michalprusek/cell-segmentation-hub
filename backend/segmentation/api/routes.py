@@ -434,7 +434,10 @@ async def segment_image(
                     )
                 extra_images.append(extra_image)
 
-        logger.info(f"Processing image: {file.filename}, Model: {model}, Threshold: {threshold}, Detect holes: {detect_holes}, Channels: {1 + len(extra_images)}")
+        logger.info(f"Processing image: {file.filename}, Model: {model}, Threshold: {threshold}, Detect holes: {detect_holes}")
+        if extra_images:
+            # Its own line, and an integer only: nothing a caller typed.
+            logger.info("Merging %d channels of that image", 1 + len(extra_images))
         
         # Perform segmentation with timing
         inference_start = time.time()
