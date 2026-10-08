@@ -172,7 +172,12 @@ export async function computeNeuriteIntensity(
     const send = async (): Promise<void> => {
       try {
         const response = await axios.post(url, body, { timeout });
-        rows.push(...assertRows(response.data));
+        // The service names the frame once, on the envelope; its rows are
+        // (channel, class) only. Stamped here, from the label this side
+        // chose, so a row can be traced to its image.
+        rows.push(
+          ...assertRows(response.data).map(row => ({ ...row, frame: label }))
+        );
       } catch (error) {
         const detail =
           axios.isAxiosError(error) &&

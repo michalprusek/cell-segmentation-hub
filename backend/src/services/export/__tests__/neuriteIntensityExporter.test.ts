@@ -84,6 +84,11 @@ function frame(
 
 const row = (channel: string, cls: string) => ({
   frame: 'stack.tif (frame 7)',
+  ...mlRow(channel, cls),
+});
+
+/** A row exactly as the ML service sends it: it does NOT carry the frame. */
+const mlRow = (channel: string, cls: string) => ({
   channel,
   class: cls,
   area_px: 10,
@@ -109,7 +114,7 @@ beforeEach(() => {
     },
   ]);
   post.mockResolvedValue({
-    data: { frame: 'x', rows: [row('MAP7', 'soma'), row('tau', 'soma')] },
+    data: { frame: 'x', rows: [mlRow('MAP7', 'soma'), mlRow('tau', 'soma')] },
   });
 });
 
@@ -209,6 +214,22 @@ describe('computeNeuriteIntensity', () => {
     expect(result.skipped).toEqual([]);
   });
 
+  it('stamps every row with its frame', async () => {
+    // The service's rows carry no frame. The first real export had an empty
+    // `frame` column: two frames' rows, indistinguishable.
+    post
+      .mockResolvedValueOnce({ data: { rows: [mlRow('MAP7', 'soma')] } })
+      .mockResolvedValueOnce({ data: { rows: [mlRow('MAP7', 'soma')] } });
+    const result = await computeNeuriteIntensity([
+      frame({ name: 'stack.tif (frame 7)' }),
+      frame({ id: 'frame-8', name: 'stack.tif (frame 8)' }),
+    ]);
+    expect(result.rows.map(r => r.frame)).toEqual([
+      'stack.tif (frame 7)',
+      'stack.tif (frame 8)',
+    ]);
+  });
+
   it('needs no pixel size and no soma', async () => {
     // Either would make the morphology tables skip the frame.
     const result = await computeNeuriteIntensity([
@@ -282,7 +303,7 @@ describe('computeNeuriteIntensity', () => {
         message: 'Request failed',
         response: { data: { detail: 'Channel file not found: tau' } },
       })
-      .mockResolvedValueOnce({ data: { rows: [row('MAP7', 'neurite')] } });
+      .mockResolvedValueOnce({ data: { rows: [mlRow('MAP7', 'neurite')] } });
 
     const result = await computeNeuriteIntensity([
       frame({ name: 'first' }),
