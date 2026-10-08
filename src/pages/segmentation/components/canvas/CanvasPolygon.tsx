@@ -6,7 +6,7 @@ import {
   somaAssignmentColor,
   somaAssignmentColors,
 } from '../../utils/somaAssignmentColor';
-import { Polygon } from '@/lib/segmentation';
+import { Polygon, type EditablePartClass } from '@/lib/segmentation';
 import PolygonVertices from './PolygonVertices';
 import PolygonContextMenu from '../context-menu/PolygonContextMenu';
 import { VertexDragState, EditMode } from '@/pages/segmentation/types';
@@ -78,10 +78,7 @@ interface CanvasPolygonProps {
   onDeletePolygonFromFrame?: (id: string) => void;
   onSlicePolygon?: (id: string) => void;
   onEditPolygon?: (id: string) => void;
-  onChangePartClass?: (
-    polygonId: string,
-    partClass: 'head' | 'midpiece' | 'tail'
-  ) => void;
+  onChangePartClass?: (polygonId: string, partClass: EditablePartClass) => void;
   onChangeInstanceId?: (polygonId: string, instanceId: string) => void;
   availableInstanceIds?: string[];
   /** Propagate this microtubule into all following frames (MT only). */
@@ -549,8 +546,7 @@ const CanvasPolygon = React.memo(
       [onChangeMtType, id]
     );
     const handleChangePartClass = useCallback(
-      (partClass: 'head' | 'midpiece' | 'tail') =>
-        onChangePartClass?.(id, partClass),
+      (partClass: EditablePartClass) => onChangePartClass?.(id, partClass),
       [onChangePartClass, id]
     );
     const handleChangeInstanceId = useCallback(
@@ -618,7 +614,13 @@ const CanvasPolygon = React.memo(
             ? somaId => onRemoveSoma(id, somaId)
             : undefined
         }
-        onChangePartClass={isPolyline ? handleChangePartClass : undefined}
+        onChangePartClass={
+          // A sperm part is a polyline; a soma or a neurite is a closed
+          // polygon. The menu shows the pair that fits.
+          isPolyline || projectType === 'neurite'
+            ? handleChangePartClass
+            : undefined
+        }
         onChangeInstanceId={isPolyline ? handleChangeInstanceId : undefined}
         currentInstanceId={isPolyline ? polygon.instanceId : undefined}
         availableInstanceIds={isPolyline ? availableInstanceIds : undefined}

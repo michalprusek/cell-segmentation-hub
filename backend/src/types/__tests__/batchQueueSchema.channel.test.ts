@@ -60,3 +60,43 @@ describe('batchQueueSchema — channel field', () => {
     expect(out.channel).toBe(ch);
   });
 });
+
+describe('batchQueueSchema — channels to merge', () => {
+  const base = {
+    imageIds: ['a1b2c3d4-e5f6-4890-abcd-ef1234567890'],
+    projectId: 'b2c3d4e5-f6a7-4901-bcde-f12345678901',
+  };
+  const parse = (channels: unknown) =>
+    batchQueueSchema.safeParse({ ...base, channels });
+
+  it('accepts a list of channel names and keeps their order', () => {
+    const result = parse(['Channel_2', 'Channel_1']);
+    expect(result.success).toBe(true);
+    expect(result.success && result.data.channels).toEqual([
+      'Channel_2',
+      'Channel_1',
+    ]);
+  });
+
+  it('is optional', () => {
+    const result = batchQueueSchema.safeParse(base);
+    expect(result.success && result.data.channels).toBeUndefined();
+  });
+
+  it('refuses an empty list, a duplicate, and more than eight', () => {
+    expect(parse([]).success).toBe(false);
+    expect(parse(['a', 'a']).success).toBe(false);
+    expect(parse(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']).success).toBe(true);
+    expect(parse(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i']).success).toBe(
+      false
+    );
+  });
+
+  it('refuses a name that could leave the frame directory', () => {
+    // Each name becomes a filename under frames/<NNNN>/.
+    expect(parse(['../secret']).success).toBe(false);
+    expect(parse(['a/b']).success).toBe(false);
+    expect(parse(['a.png']).success).toBe(false);
+    expect(parse(['']).success).toBe(false);
+  });
+});

@@ -51,6 +51,11 @@ export const POLYGON_PART_CLASSES = [
 ] as const;
 export type PolygonPartClass = (typeof POLYGON_PART_CLASSES)[number];
 
+/** The classes a user can assign from the editor's context menu: the sperm
+ *  parts on a polyline, soma / neurite on a closed polygon. */
+export type EditablePartClass =
+  'head' | 'midpiece' | 'tail' | 'soma' | 'neurite';
+
 export interface Polygon {
   id: string;
   points: Point[];

@@ -115,7 +115,7 @@ describe('useProjectModel', () => {
     ['sperm', 2],
     ['microtubules', 1],
     ['microcapsule', 1],
-    ['neurite', 1],
+    ['neurite', 2],
   ])('offers only the %s models (%i of them)', (type, count) => {
     const { result } = renderHook(() =>
       useProjectModel(type as ProjectType, null)

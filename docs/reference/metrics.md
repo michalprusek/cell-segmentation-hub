@@ -248,6 +248,72 @@ raw, un-normalised matrix. Velocities depend on `pixel_size_um` and
 
 ---
 
+## Neurite projects
+
+Neurite projects do not use the shape metrics above. Their export writes
+`neurite_metrics/` instead — tables `Neurites`, `Somas` and `Intensity`, with a
+`README` sheet and, when frames were left out, `Skipped frames`. File names and
+the Neurites / Somas columns are in
+[Export](../guides/export.md#neurite--neurite_metrics). It is the same for both
+neurite models.
+
+### Neurites and Somas
+
+Computed in the ML service (`POST /api/v1/neurite-metrics`) from the polygons
+stored in the editor: each neurite is assigned to a soma and each cell is given
+a developmental stage. They need a pixel size; a frame without one is skipped.
+The `README` sheet states what must be known before averaging — a bridging
+neurite appears twice with half its length in each row, and somas the
+classifier rejected are kept with `soma_neuronal = 0`.
+
+### Intensity
+
+The intensity of the soma and neurite classes, one row per frame × channel ×
+class (`soma`, `neurite`). Implementation:
+`backend/segmentation/models/neurite_intensity.py`, called through
+`POST /api/v1/neurite-intensity` by
+`backend/src/services/export/neuriteIntensityExporter.ts`. The statistics are
+the ones the microtubule export uses (`mt_measure.py`).
+
+| Column                  | Meaning                                              |
+| ----------------------- | ---------------------------------------------------- |
+| `frame`                 | The image (or video frame) the row belongs to        |
+| `channel`               | The channel measured                                 |
+| `class`                 | `soma` or `neurite`                                  |
+| `area_px`               | Pixels in the class region                           |
+| `mean_intensity`        | Mean over the region                                 |
+| `median_intensity`      | Median over the region                               |
+| `std_intensity`         | Standard deviation over the region                   |
+| `sum_intensity`         | Sum over the region                                  |
+| `background_median`     | Median of the pixels more than 5 px from any polygon |
+| `background_area_px`    | Pixels in that background region                     |
+| `mean_minus_background` | `mean_intensity` − `background_median`               |
+
+Read these before comparing anything:
+
+1. **A row is a whole class, not one object.** The region is the UNION of every
+   stored polygon of the class on the frame, holes subtracted. Where a soma and
+   a neurite overlap, the pixel counts as soma.
+2. **The regions are the stored polygons**, manual edits included — not the
+   model's original mask.
+3. **Values are raw camera counts**, measured at native bit depth on EVERY
+   channel of the file, regardless of which channels were ticked for
+   segmentation.
+4. **`background_median` is a median on purpose**: what lies outside the masks
+   still contains debris and neurites the model missed.
+5. **`mean_minus_background` removes the camera offset, not the scale.** Dye,
+   exposure and gain still differ between channels, so compare a channel with
+   itself across conditions, not two channels with each other.
+6. **An empty class has blank statistics.** `area_px` 0 with blank intensities
+   means nothing of that class is segmented on the frame; it is not an
+   intensity of zero.
+
+It needs no pixel size. A plain single-channel image (PNG / JPG) is measured as
+one channel named `image`; per-protein intensities need a multi-channel TIFF or
+ND2.
+
+---
+
 ## Microcapsule diameter
 
 The microcapsule sheet's **`Diameter`** column is the mean of **six chords
@@ -343,11 +409,12 @@ These are real properties of the implementation, not hypotheticals.
 9. **Border-clipped microcapsules are excluded** from every microcapsule
    metric — unless the user types them back in, which is a deliberate act and
    measures only the visible fragment. See _Which microcapsules are measured_.
-10. **Neurite/soma output carries no per-class metric.** Both classes land in
-    the generic `Polygon Metrics` sheet as plain polygons, and the sheet has no
-    column saying which is which. To split soma from neurite you need the
-    **COCO or custom-JSON** export, where they are separate categories — the
-    YOLO writer emits class id `0` for every polygon and loses the split.
+10. **Neurite projects do not get the generic `Polygon Metrics` sheet.** Their
+    metrics are the `neurite_metrics/` tables — see
+    [Neurite projects](#neurite-projects) — which are per class and per cell.
+    In the annotation exports the two classes are separate categories in
+    **COCO and the custom JSON**; the YOLO writer emits class id `0` for every
+    polygon and loses the split.
 11. **Neurite/soma soma counts are only validated at ~0.180 µm/px.** At about
     half that pixel size each soma tends to be returned split into two pieces,
     which inflates any count or per-soma average taken from it.

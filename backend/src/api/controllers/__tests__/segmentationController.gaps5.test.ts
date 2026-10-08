@@ -221,7 +221,8 @@ describe('segmentationController.batchSegment', () => {
       0.5,
       mockUser.id,
       true, // detectHoles defaults on
-      undefined // no channel override
+      undefined, // no channel override
+      undefined // no channels to merge
     );
     expect(mockRH.success).toHaveBeenCalledWith(
       res,

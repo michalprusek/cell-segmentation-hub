@@ -11,6 +11,7 @@ import {
   SEGMENTATION_MODELS,
   SEGMENTATION_MODEL_ERROR_MESSAGE,
 } from '../../constants/segmentationModels';
+import { modelMergesChannels } from '../../constants/modelRegistry';
 
 class SegmentationController {
   private segmentationService: SegmentationService;
@@ -459,6 +460,7 @@ class SegmentationController {
         threshold = 0.5,
         detectHoles = true,
         channel,
+        channels,
       } = req.body;
 
       // Validate user authentication
@@ -502,6 +504,20 @@ class SegmentationController {
         return;
       }
 
+      // Refused, not ignored: a caller who named three channels and got the
+      // first one segmented would have no way to tell.
+      const mergeChannels: string[] | undefined =
+        Array.isArray(channels) && channels.length > 0
+          ? Array.from(new Set(channels as string[]))
+          : undefined;
+      if (mergeChannels && !modelMergesChannels(model)) {
+        ResponseHelper.validationError(
+          res,
+          `Model '${model}' segmentuje jeden kanál; seznam kanálů ke sloučení nepřijímá`
+        );
+        return;
+      }
+
       logger.info('Starting batch segmentation', 'SegmentationController', {
         imageCount: imageIds.length,
         model,
@@ -520,7 +536,8 @@ class SegmentationController {
         // vs TIRF_488 etc). Validated by the route at body('channel').
         typeof channel === 'string' && channel.length > 0
           ? channel
-          : undefined
+          : undefined,
+        mergeChannels
       );
 
       ResponseHelper.success(res, result, 'Dávkové zpracování dokončeno');

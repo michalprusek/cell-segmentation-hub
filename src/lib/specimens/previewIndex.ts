@@ -315,4 +315,28 @@ export const SPECIMEN_PREVIEWS: readonly SpecimenPreview[] = [
     geometry: '/specimens/previews/neurite_soma-3.geom.json',
     objects: 31,
   },
+  {
+    id: 'neurite_soma_classical-1',
+    model: 'neurite_soma_classical',
+    projectType: 'neurite',
+    image: '/specimens/previews/neurite_soma_classical-1.webp',
+    geometry: '/specimens/previews/neurite_soma_classical-1.geom.json',
+    objects: 32,
+  },
+  {
+    id: 'neurite_soma_classical-2',
+    model: 'neurite_soma_classical',
+    projectType: 'neurite',
+    image: '/specimens/previews/neurite_soma_classical-2.webp',
+    geometry: '/specimens/previews/neurite_soma_classical-2.geom.json',
+    objects: 30,
+  },
+  {
+    id: 'neurite_soma_classical-3',
+    model: 'neurite_soma_classical',
+    projectType: 'neurite',
+    image: '/specimens/previews/neurite_soma_classical-3.webp',
+    geometry: '/specimens/previews/neurite_soma_classical-3.geom.json',
+    objects: 29,
+  },
 ] as const;

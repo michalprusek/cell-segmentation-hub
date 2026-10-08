@@ -28,9 +28,10 @@ That is three frames with no ground truth: "came out right" is a visual
 judgement of the stretched frame and its outlines, not a measured accuracy.
 Re-measure before moving either number.
 
-`microtubule` and `neurite_soma` are deliberately NOT routed through this:
-they read the native depth and apply their own percentile stretch (1-99 and
-1-99.5), and feeding them an 8-bit copy would throw away the precision they
+`microtubule`, `neurite_soma` and `neurite_soma_classical` are deliberately NOT
+routed through this: they read the native depth and apply their own
+normalisation (a 1-99 and a 1-99.5 percentile stretch, and a per-channel
+median/MAD respectively), and feeding them an 8-bit copy would throw away the precision they
 were trained on.
 
 An 8-bit image is returned untouched — the same object — so every result on
@@ -47,7 +48,9 @@ from fastapi import HTTPException
 from PIL import Image, UnidentifiedImageError
 
 #: Models that consume the native bit depth and must not be pre-converted.
-NATIVE_DEPTH_MODELS = frozenset({"microtubule", "neurite_soma"})
+NATIVE_DEPTH_MODELS = frozenset(
+    {"microtubule", "neurite_soma", "neurite_soma_classical"}
+)
 
 #: Pillow modes that `convert('RGB')` / `convert('L')` clip rather than scale.
 HIGH_DEPTH_MODES = frozenset({"I;16", "I;16L", "I;16B", "I;16N", "I", "F"})

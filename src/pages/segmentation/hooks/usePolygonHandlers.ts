@@ -1,6 +1,11 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { EditMode } from '../types';
-import { Polygon, polygonKey, type PolygonKey } from '@/lib/segmentation';
+import {
+  Polygon,
+  polygonKey,
+  type EditablePartClass,
+  type PolygonKey,
+} from '@/lib/segmentation';
 import { logger } from '@/lib/logger';
 
 /**
@@ -247,7 +252,7 @@ export function usePolygonHandlers({
   );
 
   const handleChangePartClass = useCallback(
-    (polygonId: string, partClass: 'head' | 'midpiece' | 'tail') =>
+    (polygonId: string, partClass: EditablePartClass) =>
       handleUpdatePolygonField(polygonId, { partClass }),
     [handleUpdatePolygonField]
   );

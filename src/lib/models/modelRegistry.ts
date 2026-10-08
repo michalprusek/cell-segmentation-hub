@@ -72,6 +72,12 @@ export interface ModelRegistryEntry {
   readonly i18nKey: string;
   /** Project types this model can run on. ORDER MATTERS for UI lists. */
   readonly compatibleProjectTypes: readonly ProjectTypeKey[];
+  /**
+   * The model segments ONE image merged from several channels, so the channel
+   * picker lets the user tick more than one. Every other model reads exactly
+   * one channel. Mirrored by `mergesChannels` in the backend registry.
+   */
+  readonly mergesChannels?: boolean;
 }
 
 /**
@@ -307,6 +313,28 @@ export const MODEL_REGISTRY = {
     i18nKey: 'neurite_soma',
     compatibleProjectTypes: ['neurite'],
   },
+  neurite_soma_classical: {
+    size: 'small',
+    // The cut is relative to each image's own noise and is part of the fitted
+    // parameter set; this is the registry's neutral default, not a knob.
+    defaultThreshold: 0.5,
+    category: 'neurite',
+    performance: {
+      // Measured 2026-10-08 in the ml container on four production frames of
+      // 1024 x 1024: 1.13-1.46 s, CPU only, one or two channels alike.
+      avgTimePerImage: 1.3,
+      throughput: 0.75,
+      p95Latency: 1.5,
+      batchSize: 1,
+    },
+    name: 'Neurite / Soma (classical)',
+    displayName: 'Neurite / Soma – classical (merged channels)',
+    description:
+      'Classical, training-free segmentation of neurites and somas for fluorescence images where the cell only shows when several channels are taken together. You tick the channels before segmenting; each is normalised to its own noise and they are merged into one greyscale image. Neurites come from a Meijering ridge filter, somas from a width-and-shape test. Runs on the CPU in about a second per 1024 x 1024 frame. Faint, diffuse somas are found only some of the time — check them in the editor.',
+    i18nKey: 'neurite_soma_classical',
+    compatibleProjectTypes: ['neurite'],
+    mergesChannels: true,
+  },
 } as const satisfies Record<string, ModelRegistryEntry>;
 
 /** Canonical model id union, derived from the registry keys. */
@@ -314,6 +342,19 @@ export type ModelType = keyof typeof MODEL_REGISTRY;
 
 /** Ordered list of all known model ids (declaration order preserved). */
 export const ALL_MODEL_IDS = Object.keys(MODEL_REGISTRY) as ModelType[];
+
+/** Whether `model` merges several channels of a frame into the image it
+ *  segments — i.e. whether the channel picker should offer checkboxes. */
+export function modelMergesChannels(model: string | null | undefined): boolean {
+  const entry: ModelRegistryEntry | undefined =
+    model && Object.prototype.hasOwnProperty.call(MODEL_REGISTRY, model)
+      ? MODEL_REGISTRY[model as ModelType]
+      : undefined;
+  return entry?.mergesChannels === true;
+}
+
+/** Most channels one request may merge. Mirrors the backend constant. */
+export const MAX_MERGE_CHANNELS = 8;
 
 /**
  * Static display metadata for a single model. Localized name/displayName/
@@ -434,8 +475,11 @@ type CompatibleModelFor<PT extends ProjectTypeKey> = {
  * The model a project of each type starts on — the most ACCURATE compatible
  * model, deliberately NOT the fastest.
  *
- * Six of the seven types have exactly one compatible model, so their entry is
- * forced. `spheroid` is the only real choice, and it resolves to `segformer`
+ * Four of the seven types have exactly one compatible model, so their entry is
+ * forced. `sperm` and `neurite` have two and keep the learned model they
+ * started with (`neurite_soma_classical` is for images the learned one cannot
+ * take, not a more accurate replacement). `spheroid` is the open choice among
+ * accuracy claims, and it resolves to `segformer`
  * on the only accuracy figure any of the five candidates actually carries:
  * 93 % IoU on bright-field spheroids (see its `description`). `cbam_resunet`
  * claims "most precise" in prose but publishes no number, and `mamba_unet`'s

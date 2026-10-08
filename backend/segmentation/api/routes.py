@@ -1,7 +1,7 @@
 """API routes for segmentation microservice"""
 
 import time
-from typing import Optional
+from typing import List, Optional, Sequence
 import logging
 import asyncio
 import threading
@@ -61,6 +61,19 @@ router = APIRouter()
 #    forward passes of 512^2 for a 1024^2 frame, ~2 min for a native one, and
 #    22 min for the 498 Mpx frame that prompted this change.
 _inference_lock = threading.Lock()
+
+#: Models that merge several channels of one image. Everything else segments
+#: exactly one, and `/segment` answers 400 if it is sent more.
+MULTI_CHANNEL_MODELS = frozenset({"neurite_soma_classical"})
+
+#: Channels beyond the first. A real acquisition has 2-4 channels; this only
+#: stops a request from making the service decode an unbounded list.
+MAX_EXTRA_CHANNELS = 7
+
+#: `models.neurite_classical.MAX_PIXELS`, written out rather than imported:
+#: this module is also loaded by the CPU test suite, where the `models`
+#: package is a stub. `test_neurite_classical.py` holds the two equal.
+CLASSICAL_MAX_PIXELS = 64_000_000
 
 # One slot, so hopping off the event loop does not become real concurrency.
 #
@@ -162,8 +175,14 @@ async def get_status(loader = Depends(get_model_loader)):
         raise HTTPException(status_code=503, detail="Failed to get service status")
 
 
-def _dispatch_inference(loader, model, image, threshold, detect_holes):
+def _dispatch_inference(
+    loader, model, image, threshold, detect_holes, extra_images: Sequence = ()
+):
     """Run one inference, holding the loader-wide lock.
+
+    `extra_images` are further channels of the SAME image, for the one model
+    that merges channels (`neurite_soma_classical`). `segment_image` refuses
+    them for every other model before this is reached.
 
     Split out of `segment_image` so the async route can hand it to
     `_INFERENCE_EXECUTOR` instead of running it on the event loop. The branch
@@ -172,9 +191,23 @@ def _dispatch_inference(loader, model, image, threshold, detect_holes):
     # Before the lock: this is CPU work on the caller's own image and needs
     # nothing the lock protects. See `input_depth` for why it exists at all.
     decode_or_400(image)
+    for extra in extra_images:
+        decode_or_400(extra)
     image, input_conversion = prepare_for_model(image, model)
     with _inference_lock:
-        if model in ('sperm', 'sperm_2part'):
+        if model == 'neurite_soma_classical':
+            # Classical ridge filter on ONE image merged from N channels. It
+            # runs on the CPU and holds no GPU memory, but it stays under the
+            # same lock as everything else: the lock is also what keeps
+            # `loader.is_processing` / `current_model` truthful, and a second
+            # CPU-bound job beside a GPU inference would only slow both.
+            #
+            # `threshold` is echoed, not applied -- the cut is relative to each
+            # image's own noise and belongs to the fitted parameter set.
+            result = loader.predict_neurite_classical(
+                [image, *extra_images], threshold, detect_holes
+            )
+        elif model in ('sperm', 'sperm_2part'):
             # Sperm models use their own mask_threshold (0.3) and score_threshold (0.95)
             # Don't override with the user's segmentation threshold — it's calibrated differently
             result = loader.predict_sperm(image, model_name=model)
@@ -311,6 +344,11 @@ async def segment_image(
         description="Refuse (413) an image with more pixels than this. "
         "Read from the header, before anything is decoded.",
     ),
+    extra_channels: Optional[List[UploadFile]] = File(
+        None,
+        description="Further channels of the same image, merged with `file` "
+        "before segmentation. Accepted by `neurite_soma_classical` only.",
+    ),
     loader = Depends(get_model_loader)
 ):
     """Main segmentation endpoint"""
@@ -351,7 +389,55 @@ async def segment_image(
                 },
             )
 
+        if model in MULTI_CHANNEL_MODELS and width * height > CLASSICAL_MAX_PIXELS:
+            # The model would raise the same thing as a ValueError, which
+            # reaches the caller as a 500. Answered here, from the header.
+            raise HTTPException(
+                status_code=413,
+                detail={
+                    "error": "image_too_large",
+                    "width": width,
+                    "height": height,
+                    "pixels": width * height,
+                    "max_pixels": CLASSICAL_MAX_PIXELS,
+                },
+            )
+
+        # Further channels of the same image. Refused, not ignored, for a
+        # model that cannot use them: a caller who sent three channels and got
+        # the segmentation of the first one would have no way to tell.
+        extra_images = []
+        if extra_channels:
+            if model not in MULTI_CHANNEL_MODELS:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Model {model!r} segments one channel; "
+                    "extra_channels is accepted only by "
+                    f"{sorted(MULTI_CHANNEL_MODELS)}",
+                )
+            if len(extra_channels) > MAX_EXTRA_CHANNELS:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"At most {MAX_EXTRA_CHANNELS + 1} channels can be merged",
+                )
+            for extra in extra_channels:
+                extra_image, _ = open_image_page(await extra.read(), page)
+                if extra_image.size != image.size:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=(
+                            f"Channel {extra.filename!r} is "
+                            f"{extra_image.size[0]}x{extra_image.size[1]} but the "
+                            f"first channel is {width}x{height}. Channels of one "
+                            "image must have the same size."
+                        ),
+                    )
+                extra_images.append(extra_image)
+
         logger.info(f"Processing image: {file.filename}, Model: {model}, Threshold: {threshold}, Detect holes: {detect_holes}")
+        if extra_images:
+            # Its own line, and an integer only: nothing a caller typed.
+            logger.info("Merging %d channels of that image", 1 + len(extra_images))
         
         # Perform segmentation with timing
         inference_start = time.time()
@@ -364,6 +450,7 @@ async def segment_image(
             image,
             threshold,
             detect_holes,
+            extra_images,
         )
         inference_time = time.time() - inference_start
         

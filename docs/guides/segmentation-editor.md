@@ -162,8 +162,9 @@ Neurite projects produce **closed polygons**, so a shape you draw there is an
 ordinary polygon with no class. Segmented shapes carry one, and the canvas and
 the shape list colour them by it: **cyan** for `neurite` (the processes) and
 **magenta** for `soma` (the cell body), the same two colours the model's own
-overlay uses. Unlike the sperm part classes, there is no menu for changing a
-neuron class after the fact.
+overlay uses. The class can be set from the context menu: right-click a closed
+polygon and choose **Set as soma** or **Set as neurite**. A drawn polygon needs
+this before the export measures it — a polygon with no class is ignored there.
 
 ### Adding vertices
 
@@ -331,8 +332,15 @@ channel currently marked as the segmentation source. On single-channel data the
 run starts immediately.
 
 The model is **the project's**, shown next to the project type at the top of
-the project page. Plain spheroid projects choose among five models and sperm projects between
-two; every other type has exactly one compatible model and is forced to it.
+the project page. Plain spheroid projects choose among five models, sperm
+projects and neurite projects between two each; every other type has exactly
+one compatible model and is forced to it.
+
+With the classical neurite model (`neurite_soma_classical`) the channel picker
+shows **checkboxes** instead: tick one or more channels and they are merged
+into one greyscale image, which is what gets segmented. Nothing is ticked by
+default and Confirm is disabled until at least one is. See
+[Neurite and soma projects](project-types/neurite.md).
 
 > **Resegmenting replaces the frame's segmentation.** Manual edits to that frame
 > are overwritten by the new model output, and unsaved local edits are discarded

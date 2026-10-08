@@ -400,7 +400,10 @@ export class QueueService {
     priority = 0,
     forceResegment = false,
     detectHoles = true,
-    channel?: string
+    channel?: string,
+    // Channels to merge into the segmented image. The controller has already
+    // refused this for a model that does not merge.
+    mergeChannels?: string[]
   ): Promise<SegmentationQueue[]> {
     try {
       const batchId = `batch_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -522,6 +525,7 @@ export class QueueService {
             status: 'queued',
             batchId,
             channel: channel ?? null,
+            mergeChannels: mergeChannels ?? [],
           })),
         });
 
@@ -1033,6 +1037,9 @@ export class QueueService {
             userId: firstItem.userId,
             detectHoles: firstItem.detectHoles ?? false,
             channel: firstItem.channel ?? undefined,
+            channels: firstItem.mergeChannels?.length
+              ? firstItem.mergeChannels
+              : undefined,
           }
         );
         results = [singleResult];

@@ -236,6 +236,7 @@ warning codes and a `result_url`.
 | `microtubule`             | Microtubule                    | polyline | `microtubule`                              | no                | no                 | native      |
 | `microcapsule`            | Microcapsule                   | polygon  | `microcapsule`, `membrane`                 | yes (default 0.5) | no                 | 8bit        |
 | `neurite_soma`            | Neurite / Soma                 | polygon  | `neurite`, `soma`                          | no                | no                 | native      |
+| `neurite_soma_classical`  | Neurite / Soma (classical)     | polygon  | `neurite`, `soma`                          | no                | yes (default true) | native      |
 
 - **`hrnet`** — The image is resized to 1024 x 1024 for inference, whatever its size or aspect ratio, and the outlines are scaled back. A frame much larger than that gains no detail; segment one spheroid per image.
 - **`cbam_resunet`** — The image is resized to 1024 x 1024 for inference, whatever its size or aspect ratio, and the outlines are scaled back. A frame much larger than that gains no detail; segment one spheroid per image.
@@ -247,6 +248,7 @@ warning codes and a `result_url`.
 - **`microtubule`** — IRM (label-free) images only. On fluorescence (TIRF) frames the output does not track image content. The detection cut is part of the fitted model and cannot be set.
 - **`microcapsule`** — A membrane outline encloses its capsule, so the two overlap. In mask outputs the smaller object is drawn on top.
 - **`neurite_soma`** — Single-channel images. A colour image is accepted only if its channels are identical. Holes are never emitted for this model.
+- **`neurite_soma_classical`** — One image is one channel here. Merging several channels before segmentation is a feature of the application; this endpoint does not take them. A colour image is reduced to its luminance. Images over 64 megapixels are refused.
 
 **Input depth.** `native` models use a 16-bit or float image at full depth.
 For `8bit` models such an image is first stretched from its 0.1–99.9

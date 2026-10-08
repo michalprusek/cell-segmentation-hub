@@ -69,6 +69,9 @@ export interface BatchQueueData {
   // Optional channel override for multi-channel video frames. Validated by
   // batchQueueSchema (^[A-Za-z0-9_-]+$, 1-64 chars).
   channel?: string;
+  // Channels to merge into the segmented image; only for a model whose
+  // registry entry says `mergesChannels`.
+  channels?: string[];
 }
 
 /**

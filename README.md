@@ -1,6 +1,6 @@
 # SpheroSeg - Cell Segmentation Hub
 
-Microscopy segmentation and measurement platform powered by deep learning. Full-stack system with a React frontend, a Node.js backend and a Python ML microservice, running twelve AI models across seven project types with real-time processing.
+Microscopy segmentation and measurement platform powered by deep learning. Full-stack system with a React frontend, a Node.js backend and a Python ML microservice, running thirteen AI models across seven project types with real-time processing.
 
 > **Resources**: [Dataset, Paper & Supplementary Materials](https://staff.utia.cas.cz/novozada/spheroseg/)
 
@@ -79,7 +79,7 @@ covers that route.
 │  :3000           │ │  :3001           │ │  :8000           │
 │  Vite + React 18 │ │  Express + Prisma│ │  FastAPI + PyTorch│
 │  shadcn/ui       │ │  Socket.io       │ │  CUDA / CPU      │
-│  TanStack Query  │ │  JWT Auth        │ │  12 Models       │
+│  TanStack Query  │ │  JWT Auth        │ │  13 Models       │
 └──────────────────┘ └────────┬─────────┘ └──────────────────┘
                               │
                     ┌─────────┼─────────┐
@@ -97,7 +97,7 @@ covers that route.
 | ---------- | ------------------------------------------------------------------------ |
 | Frontend   | React 18 + TypeScript + Vite + shadcn/ui (Radix + Tailwind)              |
 | Backend    | Node.js + Express + TypeScript + Prisma ORM                              |
-| ML Service | Python + FastAPI + PyTorch (12 models — see docs/reference/ml-models.md) |
+| ML Service | Python + FastAPI + PyTorch (13 models — see docs/reference/ml-models.md) |
 | Database   | PostgreSQL (dev + prod, via Docker Compose)                              |
 | Real-time  | Socket.io with auto-reconnect + exponential backoff                      |
 | Auth       | JWT access + refresh tokens                                              |
@@ -106,9 +106,11 @@ covers that route.
 
 ## AI Models
 
-Twelve models, each locked to the project types it was trained for. Standard
+Thirteen models, each locked to the project types it was made for. Standard
 spheroid projects choose among five, sperm projects between two (three-part by
-default, or head + tail only); every other type has exactly one.
+default, or head + tail only), neurite projects between two (the learned model
+by default, or the classical one that merges the channels you tick); every
+other type has exactly one.
 
 | Model                          | Project type      | Inference | Throughput |
 | ------------------------------ | ----------------- | --------- | ---------- |
@@ -124,13 +126,16 @@ default, or head + tail only); every other type has exactly one.
 | Microtubule (SPARSE35)         | microtubules      | ~0.6 s    | 1.7 img/s  |
 | Microcapsule                   | microcapsule      | ~0.30 s   | 3.0 img/s  |
 | Neurite / Soma                 | neurite           | ~12 s     | 0.08 img/s |
+| Neurite / Soma (classical)     | neurite           | ~1.3 s    | 0.75 img/s |
 
 Full detail — architecture, training data, thresholds and known limits — in
 [docs/reference/ml-models.md](docs/reference/ml-models.md). The figures for
 _Sperm Morphology (head + tail)_ are the registry's, copied from _Sperm
 Morphology_ (same architecture and pipeline), not a separate measurement.
 
-Performance measured on NVIDIA GPU. CPU fallback is supported.
+Performance measured on NVIDIA GPU. CPU fallback is supported. _Neurite / Soma
+(classical)_ is the exception: it has no neural network and no weights and runs
+on the CPU by design; its figure is for a 1024 × 1024 frame.
 
 ## Development
 
@@ -257,21 +262,21 @@ search box.
 
 ### For developers
 
-| Topic                  | Link                                                                       |
-| ---------------------- | -------------------------------------------------------------------------- |
-| Architecture Overview  | [docs/architecture/README.md](docs/architecture/README.md)                 |
-| Frontend Architecture  | [docs/architecture/frontend.md](docs/architecture/frontend.md)             |
-| Backend Architecture   | [docs/architecture/backend.md](docs/architecture/backend.md)               |
-| ML Service             | [docs/architecture/ml-service.md](docs/architecture/ml-service.md)         |
-| ML Models (all twelve) | [docs/reference/ml-models.md](docs/reference/ml-models.md)                 |
-| Metrics reference      | [docs/reference/metrics.md](docs/reference/metrics.md)                     |
-| Database Schema        | [docs/reference/database-schema.md](docs/reference/database-schema.md)     |
-| API Reference          | [docs/api/README.md](docs/api/README.md)                                   |
-| Contributing           | [docs/development/contributing.md](docs/development/contributing.md)       |
-| Testing Guide          | [docs/testing-guide.md](docs/testing-guide.md)                             |
-| i18n Guide             | [docs/i18n-guide.md](docs/i18n-guide.md)                                   |
-| Getting Started        | [docs/development/getting-started.md](docs/development/getting-started.md) |
-| Deployment             | [docs/deployment/README.md](docs/deployment/README.md)                     |
+| Topic                    | Link                                                                       |
+| ------------------------ | -------------------------------------------------------------------------- |
+| Architecture Overview    | [docs/architecture/README.md](docs/architecture/README.md)                 |
+| Frontend Architecture    | [docs/architecture/frontend.md](docs/architecture/frontend.md)             |
+| Backend Architecture     | [docs/architecture/backend.md](docs/architecture/backend.md)               |
+| ML Service               | [docs/architecture/ml-service.md](docs/architecture/ml-service.md)         |
+| ML Models (all thirteen) | [docs/reference/ml-models.md](docs/reference/ml-models.md)                 |
+| Metrics reference        | [docs/reference/metrics.md](docs/reference/metrics.md)                     |
+| Database Schema          | [docs/reference/database-schema.md](docs/reference/database-schema.md)     |
+| API Reference            | [docs/api/README.md](docs/api/README.md)                                   |
+| Contributing             | [docs/development/contributing.md](docs/development/contributing.md)       |
+| Testing Guide            | [docs/testing-guide.md](docs/testing-guide.md)                             |
+| i18n Guide               | [docs/i18n-guide.md](docs/i18n-guide.md)                                   |
+| Getting Started          | [docs/development/getting-started.md](docs/development/getting-started.md) |
+| Deployment               | [docs/deployment/README.md](docs/deployment/README.md)                     |
 
 ## About
 

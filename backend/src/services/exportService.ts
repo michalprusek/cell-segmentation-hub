@@ -61,6 +61,7 @@ import {
   computeNeuriteMetrics,
   writeNeuriteMetrics,
 } from './export/neuriteMetricsExporter';
+import { computeNeuriteIntensity } from './export/neuriteIntensityExporter';
 import {
   exportMicrotubuleKymographs,
   type MTKymographOptions,
@@ -1921,6 +1922,30 @@ export class ExportService {
         { formats, classify: options?.classify ?? true },
         mlGate
       );
+
+      // Its own try: the intensity table needs neither a pixel size nor a
+      // soma, so it must not go down with the morphology tables, nor take
+      // them down. A failure leaves `intensity` unset — no sheet — and says so.
+      try {
+        result.intensity = await computeNeuriteIntensity(images, mlGate);
+      } catch (intensityError) {
+        logger.error(
+          'Neurite intensity failed',
+          intensityError instanceof Error
+            ? intensityError
+            : new Error(String(intensityError)),
+          'ExportService'
+        );
+        if (jobId) {
+          const job = this.exportJobs.get(jobId);
+          if (job) {
+            job.warnings = [
+              ...(job.warnings ?? []),
+              'Soma and neurite intensity could not be measured, so this export has no Intensity sheet. Try the export again; if it keeps failing, report it.',
+            ];
+          }
+        }
+      }
 
       await writeNeuriteMetrics(
         result,

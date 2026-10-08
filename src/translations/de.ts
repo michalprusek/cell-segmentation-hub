@@ -666,6 +666,11 @@ export default {
           description:
             'Semantische Zwei-Klassen-Segmentierung von Neuronen in der Fluoreszenzmikroskopie — Neurit (Fortsätze) und Soma (Zellkörper) — allein aus dem Tubulin-Kanal. nnU-Net v2 ResEnc-M, Ensemble aus 3 Folds mit Spiegel-TTA und clDice-Topologieterm für die Neurit-Klasse. Dice auf Holdout-Daten 0,832 Neurit / 0,915 Soma.',
         },
+        neurite_soma_classical: {
+          name: 'Neurit / Soma – klassisch (zusammengeführte Kanäle)',
+          description:
+            'Klassische, trainingsfreie Segmentierung von Neuriten und Somata für Fluoreszenzbilder, in denen die Zelle erst sichtbar wird, wenn mehrere Kanäle zusammengenommen werden. Sie haken die Kanäle vor dem Segmentieren an; jeder wird auf sein eigenes Rauschen normiert, und sie werden zu einem Graustufenbild zusammengeführt. Neuriten stammen aus einem Meijering-Gratfilter, Somata aus einem Breiten- und Formtest. Läuft auf der CPU in etwa einer Sekunde pro Bild von 1024 × 1024. Schwache, diffuse Somata werden nur manchmal gefunden — prüfen Sie sie im Editor.',
+        },
       },
     },
     detectHoles: 'Löcher Erkennen',
@@ -703,6 +708,8 @@ export default {
         'Kompaktes U-Net (destilliert aus Meta SAM 3) zur Instanz-Segmentierung von Mikrokapseln — Fläche, Umfang und Kompaktheit je Kapsel; am Bildrand abgeschnittene Kapseln werden von den Metriken ausgeschlossen.',
       neurite_soma:
         'nnU-Net v2 ResEnc-M (2D, Ensemble aus 3 Folds) zur Segmentierung von Neuriten und Somata in der Fluoreszenzmikroskopie. Liest den Tubulin-Kanal; Dice auf Holdout-Daten 0,832 Neurit / 0,915 Soma. Trainiert auf Leica-Konfokaldaten bei ~0,180 µm/px — Soma-Zahlen bei anderer Pixelgröße prüfen.',
+      neurite_soma_classical:
+        'Klassische Segmentierung von Neuriten und Somata ohne neuronales Netz und ohne Gewichte (Meijering-Gratfilter plus Formregeln; nur CPU, etwa 1,3 s pro Bild von 1024 × 1024). Für Fluoreszenzbilder, in denen eine Zelle erst sichtbar wird, wenn mehrere Kanäle zusammengenommen werden: Sie haken die Kanäle an, jeder wird auf sein eigenes Hintergrundrauschen normiert, und sie werden zu einem Graustufenbild zusammengeführt. Schwache, diffuse Somata werden nur manchmal gefunden — prüfen Sie sie im Editor.',
     },
     dataUsageTitle: 'Datennutzung und Datenschutz',
     dataUsageDescription:
@@ -927,6 +934,8 @@ export default {
   segmentation: {
     // Neurite-only editor controls.
     neurite: {
+      setAsSoma: 'Als Soma festlegen',
+      setAsNeurite: 'Als Neurit festlegen',
       assignDone: '{{assigned}} Neuriten zugeordnet, {{unassigned}} nicht',
       assignFailed: 'Die Neuriten konnten nicht zugeordnet werden',
       somaLabel: 'Soma {{n}}',
@@ -974,6 +983,9 @@ export default {
       description:
         'Dieses Projekt enthält Videoframes mit mehreren Kanälen. Wählen Sie den zu segmentierenden Kanal.',
       confirm: 'Segmentieren',
+      titleMerge: 'Kanäle zum Zusammenführen und Segmentieren auswählen',
+      descriptionMerge:
+        'Haken Sie einen oder mehrere Kanäle an. Sie werden zu einem Graustufenbild zusammengeführt, und das Modell segmentiert dieses Bild. Die Intensität wird beim Export weiterhin auf jedem Kanal einzeln gemessen.',
     },
     mode: {
       view: 'Anzeigen und navigieren',
@@ -1481,7 +1493,7 @@ export default {
     neuriteMetrics: {
       title: 'Neuriten-Metriken',
       description:
-        'Ordnet jeden Neuriten einem Soma zu und exportiert Tabellen pro Zelle samt Entwicklungsstadium.',
+        'Ordnet jeden Neuriten einem Soma zu und exportiert Tabellen pro Zelle samt Entwicklungsstadium, dazu eine Tabelle Intensity mit der Intensität von Somata und Neuriten auf jedem Kanal.',
       classify: 'Nicht-neuronale Somata herausfiltern',
       classifyHint:
         'Ein feinabgestimmter Klassifikator verwirft Wachstumskegel und Zellfragmente. Verworfene Objekte bleiben mit soma_neuronal = 0 in der Tabelle.',
@@ -1688,7 +1700,7 @@ export default {
       title: 'Einführung',
       whatIs: 'Was ist SpheroSeg?',
       description:
-        'SpheroSeg ist eine Plattform für KI-gestützte Segmentierung und Vermessung mikroskopischer Bilder und Zeitrafferaufnahmen. Sie bietet sieben Projekttypen auf Basis von zwölf Segmentierungsmodellen, einen Editor für Polygone und Polylinien, bildübergreifendes Mikrotubuli-Tracking und einen Stapel-Export.',
+        'SpheroSeg ist eine Plattform für KI-gestützte Segmentierung und Vermessung mikroskopischer Bilder und Zeitrafferaufnahmen. Sie bietet sieben Projekttypen auf Basis von dreizehn Segmentierungsmodellen, einen Editor für Polygone und Polylinien, bildübergreifendes Mikrotubuli-Tracking und einen Stapel-Export.',
       developedBy:
         'Die Plattform wurde von Bc. Michal Průšek an der Fakultät für Nuklearwissenschaften und Physikalische Ingenieurwissenschaften der Tschechischen Technischen Universität Prag unter der Betreuung von Ing. Adam Novozámský, Ph.D. entwickelt, in Zusammenarbeit mit dem Institut für Biochemie und Mikrobiologie der UCT Prag.',
       addresses:
@@ -1771,9 +1783,9 @@ export default {
         neurite: {
           name: 'Neuriten & Somata',
           bestFor:
-            'Für: kultivierte Neuronen in der Fluoreszenzmikroskopie, gelesen aus dem Tubulin-Kanal. Die Frage ist, wie viel einer Zelle Zellkörper und wie viel Fortsatz ist.',
+            'Für: kultivierte Neuronen in der Fluoreszenzmikroskopie. Es gibt zwei Modelle: Das Standardmodell liest allein den Tubulin-Kanal; das klassische segmentiert eine Zusammenführung der Kanäle, die Sie anhaken, für Bilder, in denen eine Zelle erst sichtbar wird, wenn mehrere Kanäle zusammengenommen werden. Die Frage ist, wie viel einer Zelle Zellkörper und wie viel Fortsatz ist.',
           output:
-            'Ausgabe: geschlossene Polygone in zwei Klassen — Soma (der Zellkörper) und Neurit (die Fortsätze) — in Magenta und Cyan gezeichnet.',
+            'Ausgabe: geschlossene Polygone in zwei Klassen — Soma (der Zellkörper) und Neurit (die Fortsätze) — in Magenta und Cyan gezeichnet. Der Export vermisst jede Zelle und zusätzlich die Intensität von Somata und Neuriten auf jedem Kanal.',
         },
       },
       note: 'Wählen Sie den Typ vor dem Hochladen.',
@@ -1867,7 +1879,7 @@ export default {
     modelSelection: {
       title: 'Modelle',
       description:
-        'Zwölf Modelle, jedes an die Projekttypen gebunden, für die es trainiert wurde. Die Auswahl zeigt nur kompatible Modelle: Standard-Sphäroidprojekte wählen unter fünf, Spermienprojekte zwischen zwei, alle anderen Typen haben genau eines.',
+        'Dreizehn Modelle, jedes an die Projekttypen gebunden, für die es gedacht ist. Die Auswahl zeigt nur kompatible Modelle: Standard-Sphäroidprojekte wählen unter fünf, Spermienprojekte sowie Neuriten- und Soma-Projekte jeweils zwischen zwei, alle anderen Typen haben genau eines.',
       spheroidModels: 'Sphäroidmodelle — Sie haben die Wahl',
       specialisedModels: 'Spezialmodelle — an einen Projekttyp gebunden',
       models: {
@@ -1967,6 +1979,15 @@ export default {
           description:
             'Ein Ensemble aus drei Folds von nnU-Net v2 ResEnc-M, im Logit-Raum gemittelt, mit Spiegelungs-Augmentierung zur Inferenzzeit und einem clDice-Topologieterm, der dünne Fortsätze zusammenhängend statt perlenartig hält. Auf zurückgehaltenen Daten Dice 0,832 Neurit / 0,915 Soma. Trainiert auf Leica-Konfokaldaten bei etwa 0,180 µm/px — bei halber Pixelgröße kommt jedes Soma meist zweigeteilt zurück, prüfen Sie Somazahlen also zuerst.',
         },
+        neuriteSomaClassical: {
+          name: 'Neurit / Soma (klassisch)',
+          inferenceTime:
+            'Etwa 1,3 s für ein Bild von 1024 × 1024, auf der CPU · kein einstellbarer Schwellenwert — der Schnitt folgt dem Rauschen des Bildes selbst',
+          bestFor:
+            'Verwendet von: Neuriten- und Soma-Projekten, wenn Sie es statt des Standardmodells wählen. Für Fluoreszenzbilder, in denen eine Zelle erst sichtbar wird, wenn mehrere Kanäle zusammengenommen werden.',
+          description:
+            'Ein klassisches Verfahren: kein neuronales Netz, keine Gewichte, kein Training. Vor dem Segmentieren haken Sie einen oder mehrere Kanäle an; jeder wird auf sein eigenes Hintergrundrauschen normiert, und sie werden per pixelweisem Maximum zu einem Graustufenbild zusammengeführt, das dann segmentiert wird. Neuriten stammen aus einem Meijering-Gratfilter mit einem Schwellenwert relativ zum Rauschen des Bildes selbst; kurze, isolierte Fragmente (unter etwa 100 px) werden als Flecken im Hintergrund verworfen. Somata sind breite, kompakte Strukturen, von denen Neuriten ausgehen. Löcher, etwa das Innere einer Neuritenschleife, bleiben als Löcher erhalten. Schwache, diffuse Somata werden nur manchmal gefunden, prüfen und korrigieren Sie die Somata also im Editor. Bilder über 64 Megapixel werden abgelehnt.',
+        },
       },
       howToSelect: 'Ein Modell wählen',
       selectionSteps: {
@@ -1985,7 +2006,7 @@ export default {
       },
       thresholdNote: 'Erkennungsschwellwerte sind je Modell fest.',
       thresholdNoteText:
-        'Es gibt keine Schwellwert-Einstellung in der Oberfläche: Jedes Modell, das einen Schwellwert nutzt, verwendet den Schnitt, mit dem es validiert wurde — beim Mikrotubuli-Modell 0,98 —, und zwei Modelle (Sphäroid-Zerfall, Neurit / Soma) haben gar keinen: Sie entscheiden per Argmax. Ein niedrigerer Schwellwert findet nicht mehr echte Objekte — er findet mehr mit schwächerer Evidenz, und auf einem Nicht-IRM-Kanal folgt die Mikrotubuli-Ausgabe bei keiner Einstellung dem Bild. Fehlen Detektionen, prüfen Sie stattdessen den Eingangskanal.',
+        'Es gibt keine Schwellwert-Einstellung in der Oberfläche: Jedes Modell, das einen Schwellwert nutzt, verwendet den Schnitt, mit dem es validiert wurde — beim Mikrotubuli-Modell 0,98 —, und zwei Modelle (Sphäroid-Zerfall, Neurit / Soma) haben gar keinen: Sie entscheiden per Argmax. Auch das klassische Neuritenmodell hat keine Einstellung: Es leitet seinen Schnitt aus dem Rauschen des jeweiligen Bildes ab. Ein niedrigerer Schwellwert findet nicht mehr echte Objekte — er findet mehr mit schwächerer Evidenz, und auf einem Nicht-IRM-Kanal folgt die Mikrotubuli-Ausgabe bei keiner Einstellung dem Bild. Fehlen Detektionen, prüfen Sie stattdessen den Eingangskanal.',
       tip: 'Tipp:',
       tipText:
         'Beginnen Sie mit dem Standardmodell. Greifen Sie zu CBAM-ResUNet, wenn Ränder wichtiger sind als Geschwindigkeit, und zu Mamba-UNet, wenn Ihre Bilder niemandes Trainingsdaten ähneln.',
@@ -2197,7 +2218,7 @@ export default {
         microcapsule:
           'Microcapsule Metrics + Summary — eine Zeile je vollständiger Kapsel; angeschnittene Kapseln entfallen',
         neurite:
-          'Polygon Metrics + Summary — derselbe Bericht pro Form wie bei Standard-Sphäroidprojekten, eine Zeile je Neuriten- oder Soma-Polygon',
+          'neurite_metrics — Neurites (eine Zeile je primärem Neuriten) und Somas (eine Zeile je Zellkörper, mit Entwicklungsstadium), beide benötigen eine Pixelgröße; Intensity (Intensität von Somata und Neuriten auf jedem Kanal in rohen Kamerawerten, eine Zeile je Bild, Kanal und Klasse — ohne Pixelgröße; ein einfaches PNG oder JPG zählt als ein Kanal namens image); und ein README-Blatt',
       },
       scaleTitle: 'Pixelgröße und Einheiten',
       scaleText:
@@ -2340,10 +2361,10 @@ export default {
         'YOLO-Segmentierungslabels in einer Zip-Datei. Nur für Polygonmodelle.',
       modelsHeading: 'Modelle und ihre Parameter',
       modelsText:
-        'Alle zwölf Modelle sind verfügbar. Nicht jedes Modell liest jeden Parameter: threshold und detect_holes gelten für einige Modelle und werden bei den übrigen abgelehnt. Fragen Sie daher GET /api/v1/models, was jedes Modell akzeptiert und zurückgibt.',
+        'Alle dreizehn Modelle sind verfügbar. Nicht jedes Modell liest jeden Parameter: threshold und detect_holes gelten für einige Modelle und werden bei den übrigen abgelehnt. Fragen Sie daher GET /api/v1/models, was jedes Modell akzeptiert und zurückgibt.',
       depthNoteLabel: '16-Bit-Bilder',
       depthNoteText:
-        'Die Modelle für Mikrotubuli und für Neuriten/Somata verwenden ein 16-Bit-Bild in voller Tiefe. Für alle anderen Modelle wird ein 16-Bit-Bild zunächst auf 8 Bit gestreckt, und die Antwort weist in einer Warnung darauf hin.',
+        'Das Mikrotubuli-Modell und beide Modelle für Neuriten/Somata verwenden ein 16-Bit-Bild in voller Tiefe. Für alle anderen Modelle wird ein 16-Bit-Bild zunächst auf 8 Bit gestreckt, und die Antwort weist in einer Warnung darauf hin.',
       jobsHeading: 'Größere Bilder und Stapel',
       jobsText:
         'Eine Anfrage an /segment hält die Verbindung offen, bis das Modell fertig ist. Für ein Bild über 4096 × 4096 Pixel oder für viele Bilder legen Sie mit POST /api/v1/jobs einen Job an: Der Upload antwortet sofort, Sie fragen den Job ab und holen das Ergebnis jedes Bildes, sobald es fertig ist — das Ausgabeformat wählen Sie erst dann. Ein Job nimmt bis zu 20 Bilder mit bis zu 8192 × 8192 Pixeln (4096 × 4096 beim Modell spheroid_disintegration) auf, und seine Ergebnisse werden 24 Stunden aufbewahrt.',

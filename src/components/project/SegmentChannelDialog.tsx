@@ -9,6 +9,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/contexts/useLanguage';
@@ -17,7 +18,14 @@ export interface SegmentChannelDialogProps {
   open: boolean;
   channels: string[];
   defaultChannel: string;
-  onConfirm: (channel: string) => void;
+  /**
+   * The model MERGES channels: the picker offers checkboxes and confirms with
+   * every ticked channel (in the order they are listed), as an array. Without
+   * it the picker is a radio group and confirms with one name, as a string —
+   * the difference in type is what the API client keys the request on.
+   */
+  multiple?: boolean;
+  onConfirm: (channel: string | string[]) => void;
   onCancel: () => void;
 }
 
@@ -30,16 +38,24 @@ export interface SegmentChannelDialogProps {
  * exactly one channel; the parent dispatches the batch with that channel
  * forwarded to the queue (see resolveChannelPath on the backend, which
  * rewrites the path per queue item).
+ *
+ * With `multiple` (a model that merges channels) the user ticks one or more,
+ * and they are merged into the single greyscale image that gets segmented.
+ * Nothing is ticked on open, for the same reason nothing is preselected in
+ * the single-channel case unless the container names a source: a default the
+ * user merely confirms is the dangerous one.
  */
 export function SegmentChannelDialog({
   open,
   channels,
   defaultChannel,
+  multiple = false,
   onConfirm,
   onCancel,
 }: SegmentChannelDialogProps) {
   const { t } = useLanguage();
   const [selected, setSelected] = React.useState(defaultChannel);
+  const [ticked, setTicked] = React.useState<readonly string[]>([]);
 
   // Sync the controlled value to the prop when the dialog re-opens for a
   // different project — without this the picker would remember the previous
@@ -47,8 +63,16 @@ export function SegmentChannelDialog({
   React.useEffect(() => {
     if (open) {
       setSelected(defaultChannel);
+      setTicked([]);
     }
   }, [open, defaultChannel]);
+
+  // In the order the channels are LISTED, not the order they were ticked: the
+  // merge is symmetric, and a stable order makes two identical choices send
+  // identical requests.
+  const tickedInOrder = channels.filter(ch => ticked.includes(ch));
+  const toggle = (ch: string, on: boolean) =>
+    setTicked(prev => (on ? [...prev, ch] : prev.filter(name => name !== ch)));
 
   return (
     <Dialog
@@ -62,46 +86,81 @@ export function SegmentChannelDialog({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>
-            {t('segmentation.channelPicker.title') ?? 'Select channel'}
+            {multiple
+              ? t('segmentation.channelPicker.titleMerge')
+              : (t('segmentation.channelPicker.title') ?? 'Select channel')}
           </DialogTitle>
           <DialogDescription>
-            {t('segmentation.channelPicker.description') ??
-              'This project contains multiple channels. Choose which channel to segment.'}
+            {multiple
+              ? t('segmentation.channelPicker.descriptionMerge')
+              : (t('segmentation.channelPicker.description') ??
+                'This project contains multiple channels. Choose which channel to segment.')}
           </DialogDescription>
         </DialogHeader>
-        <RadioGroup
-          value={selected}
-          onValueChange={setSelected}
-          className="space-y-2 py-2"
-        >
-          {channels.map(ch => (
-            // The whole row is the target, not just the 16 px dot, and the
-            // chosen row carries the selection so it is answerable at a
-            // glance which channel the model is about to run on.
-            <Label
-              key={ch}
-              htmlFor={`channel-${ch}`}
-              className={`flex min-w-0 cursor-pointer items-center gap-3 rounded-md border p-3 font-normal transition-colors ${
-                selected === ch
-                  ? 'border-primary bg-primary/5 ring-1 ring-primary'
-                  : 'border-input hover:bg-accent'
-              }`}
-              title={ch}
-            >
-              <RadioGroupItem
-                value={ch}
-                id={`channel-${ch}`}
-                className="flex-shrink-0"
-              />
-              <span className="min-w-0 truncate">{ch}</span>
-            </Label>
-          ))}
-        </RadioGroup>
+        {multiple ? (
+          <div className="space-y-2 py-2">
+            {channels.map(ch => {
+              const on = ticked.includes(ch);
+              return (
+                <Label
+                  key={ch}
+                  htmlFor={`channel-${ch}`}
+                  className={`flex min-w-0 cursor-pointer items-center gap-3 rounded-md border p-3 font-normal transition-colors ${
+                    on
+                      ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                      : 'border-input hover:bg-accent'
+                  }`}
+                  title={ch}
+                >
+                  <Checkbox
+                    id={`channel-${ch}`}
+                    checked={on}
+                    onCheckedChange={state => toggle(ch, state === true)}
+                    className="flex-shrink-0"
+                  />
+                  <span className="min-w-0 truncate">{ch}</span>
+                </Label>
+              );
+            })}
+          </div>
+        ) : (
+          <RadioGroup
+            value={selected}
+            onValueChange={setSelected}
+            className="space-y-2 py-2"
+          >
+            {channels.map(ch => (
+              // The whole row is the target, not just the 16 px dot, and the
+              // chosen row carries the selection so it is answerable at a
+              // glance which channel the model is about to run on.
+              <Label
+                key={ch}
+                htmlFor={`channel-${ch}`}
+                className={`flex min-w-0 cursor-pointer items-center gap-3 rounded-md border p-3 font-normal transition-colors ${
+                  selected === ch
+                    ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                    : 'border-input hover:bg-accent'
+                }`}
+                title={ch}
+              >
+                <RadioGroupItem
+                  value={ch}
+                  id={`channel-${ch}`}
+                  className="flex-shrink-0"
+                />
+                <span className="min-w-0 truncate">{ch}</span>
+              </Label>
+            ))}
+          </RadioGroup>
+        )}
         <DialogFooter>
           <Button variant="outline" onClick={onCancel}>
             {t('common.cancel') ?? 'Cancel'}
           </Button>
-          <Button onClick={() => onConfirm(selected)} disabled={!selected}>
+          <Button
+            onClick={() => onConfirm(multiple ? tickedInOrder : selected)}
+            disabled={multiple ? tickedInOrder.length === 0 : !selected}
+          >
             {t('segmentation.channelPicker.confirm') ?? 'Segment'}
           </Button>
         </DialogFooter>

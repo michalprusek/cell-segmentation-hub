@@ -643,6 +643,11 @@ export default {
           description:
             'Dvoutřídní sémantická segmentace neuronů ve fluorescenční mikroskopii — neurit (výběžky) a soma (tělo buňky) — pouze z tubulinového kanálu. nnU-Net v2 ResEnc-M, ansámbl 3 foldů se zrcadlovou TTA a topologickým členem clDice pro třídu neurit. Dice na testovací sadě 0,832 neurit / 0,915 soma.',
         },
+        neurite_soma_classical: {
+          name: 'Neurit / Soma – klasický (sloučené kanály)',
+          description:
+            'Klasická segmentace neuritů a somat bez trénování, určená pro fluorescenční snímky, na nichž je buňka vidět až po spojení několika kanálů. Kanály zaškrtnete před segmentací; každý se normalizuje na vlastní šum a sloučí se do jednoho obrazu ve stupních šedi. Neurity hledá Meijeringův hřebenový filtr, somata test šířky a tvaru. Běží na CPU, zhruba sekundu na snímek 1024 × 1024. Slabá, rozplizlá somata najde jen někdy — zkontrolujte je v editoru.',
+        },
       },
     },
     detectHoles: 'Detekce Děr',
@@ -680,6 +685,8 @@ export default {
         'Kompaktní U-Net (destilovaný z Meta SAM 3) pro instanční segmentaci mikrokapsulí — plocha, obvod a kompaktnost každé kapsule; kapsule přesahující okraj snímku jsou vyloučeny z metrik.',
       neurite_soma:
         'nnU-Net v2 ResEnc-M (2D, ansámbl 3 foldů) pro segmentaci neuritů a somat ve fluorescenční mikroskopii. Čte tubulinový kanál; Dice na testovací sadě 0,832 neurit / 0,915 soma. Trénováno na konfokálních datech Leica při ~0,180 µm/px — u jiné velikosti pixelu ověřte počty somat.',
+      neurite_soma_classical:
+        'Klasická segmentace neuritů a somat bez neuronové sítě a bez vah (Meijeringův hřebenový filtr a tvarová pravidla; jen CPU, asi 1,3 s na snímek 1024 × 1024). Pro fluorescenční snímky, na nichž je buňka vidět až po spojení několika kanálů: zaškrtnete kanály, každý se normalizuje na vlastní šum pozadí a sloučí se do jednoho obrazu ve stupních šedi. Slabá, rozplizlá somata najde jen někdy — zkontrolujte je v editoru.',
     },
     dataUsageTitle: 'Použití dat a soukromí',
     dataUsageDescription:
@@ -761,6 +768,8 @@ export default {
   segmentation: {
     // Neurite-only editor controls.
     neurite: {
+      setAsSoma: 'Nastavit jako soma',
+      setAsNeurite: 'Nastavit jako neurit',
       assignDone:
         'Přiřazeno {{assigned}} neuritů, {{unassigned}} se nepodařilo',
       assignFailed: 'Přiřazení neuritů se nepodařilo',
@@ -808,6 +817,9 @@ export default {
       description:
         'Tento projekt obsahuje snímky videa s více kanály. Vyberte, který kanál se má segmentovat.',
       confirm: 'Segmentovat',
+      titleMerge: 'Vyberte kanály ke sloučení a segmentaci',
+      descriptionMerge:
+        'Zaškrtněte jeden nebo více kanálů. Sloučí se do jednoho obrazu ve stupních šedi a model segmentuje ten. Intenzita se při exportu i tak měří na každém kanálu zvlášť.',
     },
     mode: {
       view: 'Zobrazit a navigovat',
@@ -1459,7 +1471,7 @@ export default {
     neuriteMetrics: {
       title: 'Metriky neuritů',
       description:
-        'Přiřadí každý neurit k somě a vyexportuje tabulky po buňkách včetně vývojového stadia.',
+        'Přiřadí každý neurit k somě a vyexportuje tabulky po buňkách včetně vývojového stadia a k nim tabulku Intensity s intenzitou somat a neuritů na každém kanálu.',
       classify: 'Odfiltrovat neneuronální somy',
       classifyHint:
         'Doučený klasifikátor odmítne růstové kužely a fragmenty buněk. Odmítnuté objekty zůstanou v tabulce se soma_neuronal = 0.',
@@ -1647,7 +1659,7 @@ export default {
       title: 'Úvod',
       whatIs: 'Co je SpheroSeg?',
       description:
-        'SpheroSeg je platforma pro segmentaci a měření mikroskopických snímků a časosběrných videí s pomocí umělé inteligence. Nabízí sedm typů projektů opřených o dvanáct segmentačních modelů, editor polygonů a polyline, sledování mikrotubulů napříč snímky a dávkový export.',
+        'SpheroSeg je platforma pro segmentaci a měření mikroskopických snímků a časosběrných videí s pomocí umělé inteligence. Nabízí sedm typů projektů opřených o třináct segmentačních modelů, editor polygonů a polyline, sledování mikrotubulů napříč snímky a dávkový export.',
       developedBy:
         'Platformu vyvinul Bc. Michal Průšek z Fakulty jaderné a fyzikálně inženýrské ČVUT v Praze pod vedením Ing. Adama Novozámského, Ph.D., ve spolupráci s výzkumníky z Ústavu biochemie a mikrobiologie VŠCHT Praha.',
       addresses:
@@ -1729,9 +1741,9 @@ export default {
         neurite: {
           name: 'Neurity a somata',
           bestFor:
-            'Pro: kultivované neurony ve fluorescenční mikroskopii, čtené z tubulinového kanálu. Otázkou je, kolik z buňky je tělo a kolik výběžky.',
+            'Pro: kultivované neurony ve fluorescenční mikroskopii. Modely jsou dva: výchozí čte jen tubulinový kanál; klasický segmentuje sloučení kanálů, které zaškrtnete, a je určen pro snímky, na nichž je buňka vidět až po spojení několika kanálů. Otázkou je, kolik z buňky je tělo a kolik výběžky.',
           output:
-            'Výstup: uzavřené polygony ve dvou třídách — soma (tělo buňky) a neurit (výběžky) — kreslené purpurově a azurově.',
+            'Výstup: uzavřené polygony ve dvou třídách — soma (tělo buňky) a neurit (výběžky) — kreslené purpurově a azurově. Export změří každou buňku a také intenzitu somat a neuritů na každém kanálu.',
         },
       },
       note: 'Typ zvolte ještě před nahráním dat.',
@@ -1824,7 +1836,7 @@ export default {
     modelSelection: {
       title: 'Modely',
       description:
-        'Dvanáct modelů, každý svázaný s typy projektů, pro které byl trénován. Výběr nabízí jen kompatibilní modely: standardní sferoidové projekty volí z pěti, projekty se spermiemi ze dvou a ostatní typy mají právě jeden.',
+        'Třináct modelů, každý svázaný s typy projektů, pro které je určen. Výběr nabízí jen kompatibilní modely: standardní sferoidové projekty volí z pěti, projekty se spermiemi a projekty s neurity a somaty ze dvou a ostatní typy mají právě jeden.',
       spheroidModels: 'Sferoidové modely — vyberte si',
       specialisedModels: 'Specializované modely — vázané na jeden typ projektu',
       models: {
@@ -1924,6 +1936,15 @@ export default {
           description:
             'Ansámbl tří foldů nnU-Net v2 ResEnc-M, průměrovaný v prostoru logitů, s mirroring augmentací při inferenci a topologickým členem clDice, který drží tenké výběžky spojité místo přerušované. Na odložených datech Dice 0,832 pro neurity a 0,915 pro somata. Trénováno na konfokálních datech z Leiky při zhruba 0,180 µm/px — při poloviční velikosti pixelu se soma obvykle vrací rozdělená na dva kusy, takže si počty somat nejdřív ověřte.',
         },
+        neuriteSomaClassical: {
+          name: 'Neurit / soma (klasický)',
+          inferenceTime:
+            'Přibližně 1,3 s na snímek 1024 × 1024, na CPU · práh se nenastavuje — řídí se šumem samotného snímku',
+          bestFor:
+            'Používají: projekty s neurity a somaty, pokud ho zvolíte místo výchozího. Pro fluorescenční snímky, na nichž je buňka vidět až po spojení několika kanálů.',
+          description:
+            'Klasická metoda: žádná neuronová síť, žádné váhy, žádné trénování. Před segmentací zaškrtnete jeden nebo více kanálů; každý se normalizuje na vlastní šum pozadí a kanály se sloučí maximem po pixelech do jednoho obrazu ve stupních šedi, který se pak segmentuje. Neurity hledá Meijeringův hřebenový filtr s prahem vztaženým k šumu samotného snímku a krátké osamocené úlomky (pod zhruba 100 px) se zahazují jako skvrny v pozadí. Somata jsou široké, kompaktní útvary, ze kterých vycházejí neurity. Díry, například vnitřek smyčky neuritu, zůstávají dírami. Slabá, rozplizlá somata najde jen někdy, proto somata v editoru zkontrolujte a opravte. Snímky nad 64 megapixelů odmítne.',
+        },
       },
       howToSelect: 'Výběr modelu',
       selectionSteps: {
@@ -1941,7 +1962,7 @@ export default {
       },
       thresholdNote: 'Prahy detekce jsou pevně dané pro každý model.',
       thresholdNoteText:
-        'V rozhraní žádné nastavení prahu není: každý model, který práh používá, pracuje s řezem, se kterým byl validován — u mikrotubulů je to 0,98 — a dva modely (Rozpad sferoidů, Neurit / soma) žádný práh nemají: rozhodují argmaxem. Snížení prahu nenajde více skutečných objektů — najde jich více se slabším důkazem, a na jiném než IRM kanálu výstup mikrotubulového modelu nesleduje obraz při žádném nastavení. Pokud detekce chybí, zkontrolujte raději vstupní kanál.',
+        'V rozhraní žádné nastavení prahu není: každý model, který práh používá, pracuje s řezem, se kterým byl validován — u mikrotubulů je to 0,98 — a dva modely (Rozpad sferoidů, Neurit / soma) žádný práh nemají: rozhodují argmaxem. Ani klasický model pro neurity žádné nastavení nemá: řez si odvozuje ze šumu každého snímku. Snížení prahu nenajde více skutečných objektů — najde jich více se slabším důkazem, a na jiném než IRM kanálu výstup mikrotubulového modelu nesleduje obraz při žádném nastavení. Pokud detekce chybí, zkontrolujte raději vstupní kanál.',
       tip: 'Tip:',
       tipText:
         'Začněte výchozím modelem. Po CBAM-ResUNetu sáhněte, když jsou hranice důležitější než rychlost, a po Mamba-UNetu, když vaše snímky nevypadají jako ničí trénovací data.',
@@ -2150,7 +2171,7 @@ export default {
         microcapsule:
           'Microcapsule Metrics + Summary — jeden řádek na celou kapsli; kapsle useknuté okrajem se vynechávají',
         neurite:
-          'Polygon Metrics + Summary — stejný report na tvar jako u standardních sferoidových projektů, jeden řádek na polygon neuritu nebo somatu',
+          'neurite_metrics — Neurites (jeden řádek na primární neurit) a Somas (jeden řádek na tělo buňky, s vývojovým stadiem), oba listy potřebují velikost pixelu; Intensity (intenzita somat a neuritů na každém kanálu v surových hodnotách kamery, jeden řádek na snímek, kanál a třídu — velikost pixelu nepotřebuje; obyčejný PNG nebo JPG se počítá jako jeden kanál pojmenovaný image); a list README',
       },
       scaleTitle: 'Velikost pixelu a jednotky',
       scaleText:
@@ -2290,10 +2311,10 @@ export default {
         'Segmentační popisky YOLO v archivu zip. Jen pro modely s polygony.',
       modelsHeading: 'Modely a jejich parametry',
       modelsText:
-        'K dispozici je všech dvanáct modelů. Ne každý model čte každý parametr: threshold a detect_holes platí jen pro některé a u ostatních jsou odmítnuty, proto se zeptejte GET /api/v1/models, co který model přijímá a vrací.',
+        'K dispozici je všech třináct modelů. Ne každý model čte každý parametr: threshold a detect_holes platí jen pro některé a u ostatních jsou odmítnuty, proto se zeptejte GET /api/v1/models, co který model přijímá a vrací.',
       depthNoteLabel: '16bitové obrázky',
       depthNoteText:
-        'Modely pro mikrotubuly a neurity/somata používají 16bitový obrázek v plné hloubce. Pro všechny ostatní modely se 16bitový obrázek nejprve převede na 8 bitů a odpověď to uvede ve varování.',
+        'Model pro mikrotubuly a oba modely pro neurity/somata používají 16bitový obrázek v plné hloubce. Pro všechny ostatní modely se 16bitový obrázek nejprve převede na 8 bitů a odpověď to uvede ve varování.',
       jobsHeading: 'Větší snímky a dávky',
       jobsText:
         'Požadavek na /segment drží spojení, dokud model nedoběhne. Pro snímek větší než 4096 × 4096 pixelů nebo pro mnoho snímků vytvořte job přes POST /api/v1/jobs: nahrání se vrátí okamžitě, stav jobu průběžně dotazujete a výsledek každého snímku si vyzvednete, až je hotový — výstupní formát volíte až tehdy. Job pojme až 20 snímků o velikosti až 8192 × 8192 pixelů (u modelu spheroid_disintegration 4096 × 4096) a jeho výsledky se uchovávají 24 hodin.',

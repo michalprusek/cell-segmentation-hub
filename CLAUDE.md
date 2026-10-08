@@ -583,15 +583,15 @@ There are no longer `scripts/deploy-production.sh` / `rollback-deployment.sh` / 
 
 ## Tech Stack
 
-| Layer      | Technology                                                                                                                                                                                                |
-| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Frontend   | React 18 + TypeScript + Vite + shadcn/ui (Radix + Tailwind)                                                                                                                                               |
-| Backend    | Node.js + Express + TypeScript + Prisma                                                                                                                                                                   |
-| ML Service | Python + FastAPI + PyTorch (SegFormer, HRNet, CBAM-ResUNet, U-Net, Mamba-UNet, Spheroid Disintegration, Sperm, Sperm 2-part (head + tail), Wound, Microcapsule, Neurite/Soma, Microtubule SPARSE35 ep040) |
-| Database   | PostgreSQL (dev + prod via Docker compose)                                                                                                                                                                |
-| Real-time  | Socket.io with auto-reconnect + exponential backoff                                                                                                                                                       |
-| Auth       | JWT access + refresh tokens                                                                                                                                                                               |
-| i18n       | 6 languages (EN, CS, ES, DE, FR, ZH) via a hand-rolled `LanguageContext` — **not i18next**                                                                                                                |
+| Layer      | Technology                                                                                                                                                                                                                                                                                                                                             |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Frontend   | React 18 + TypeScript + Vite + shadcn/ui (Radix + Tailwind)                                                                                                                                                                                                                                                                                            |
+| Backend    | Node.js + Express + TypeScript + Prisma                                                                                                                                                                                                                                                                                                                |
+| ML Service | Python + FastAPI + PyTorch (SegFormer, HRNet, CBAM-ResUNet, U-Net, Mamba-UNet, Spheroid Disintegration, Sperm, Sperm 2-part (head + tail), Wound, Microcapsule, Neurite/Soma, Neurite/Soma classical (`neurite_soma_classical`: Meijering ridge filter + shape rules on a merge of user-ticked channels; CPU, no weights), Microtubule SPARSE35 ep040) |
+| Database   | PostgreSQL (dev + prod via Docker compose)                                                                                                                                                                                                                                                                                                             |
+| Real-time  | Socket.io with auto-reconnect + exponential backoff                                                                                                                                                                                                                                                                                                    |
+| Auth       | JWT access + refresh tokens                                                                                                                                                                                                                                                                                                                            |
+| i18n       | 6 languages (EN, CS, ES, DE, FR, ZH) via a hand-rolled `LanguageContext` — **not i18next**                                                                                                                                                                                                                                                             |
 
 ---
 
@@ -629,10 +629,11 @@ only a bare ML-status dot.
   of `make ci` and a step of the same CI job. Both gates were mutation-tested
   on a scratch copy: dropping an id from any one of the four sources, or
   changing one default in either copy, exits 1.
-- **Only `spheroid` (5 models) and `sperm` (2: `sperm`, the default, and
-  `sperm_2part` — head + tail, no midpiece; PR #566) have a real choice**; the
-  other five project types have exactly one each, so their picker is a single
-  disabled row.
+- **Only `spheroid` (5 models), `sperm` (2: `sperm`, the default, and
+  `sperm_2part` — head + tail, no midpiece; PR #566) and `neurite` (2:
+  `neurite_soma`, the default, and `neurite_soma_classical`) have a real
+  choice**; the other four project types have exactly one each, so their
+  picker is a single disabled row.
 - **The server must read the column too.** It shipped once with
   `resolveProjectModel` having zero backend call sites and a docstring claiming
   otherwise, while the queue defaulted to `'hrnet'` — a model compatible with
@@ -778,7 +779,7 @@ Bearer sseg_…` only. A key in the query string is refused with 400 rather
 - **A parameter a model does not read is REFUSED (422), never dropped.**
   `v1/models.ts` records, per model, what
   `segmentation/api/routes.py::_dispatch_inference` does with `threshold` and
-  `detect_holes` (five models ignore the first, six read the second). Those
+  `detect_holes` (six models ignore the first, seven read the second). Those
   flags are facts about the dispatch; change them only together with it.
   `openapi.test.ts` pins both lists.
 - **Objects own their holes.** The ML service returns a flat list where a
@@ -841,20 +842,48 @@ Bearer sseg_…` only. A key in the query string is refused with 400 rather
 ### ML service (`/backend/segmentation/`)
 
 - FastAPI + PyTorch, CUDA with CPU fallback
-- Models: SegFormer (~200 ms — **the spheroid default** since 2026-09-20), HRNet (~200 ms), CBAM-ResUNet (~400 ms), U-Net (~200 ms), Mamba-UNet (~240 ms), Spheroid Disintegration, Sperm, Sperm 2-part (`sperm_2part`: head + tail, same Mask2Former pipeline, `weights/sperm_2part.pth`), Wound, Microcapsule, Neurite/Soma, Microtubule SPARSE35 ep040 (nnU-Net ResEnc-M + curvature-bounded instancer, NATIVE-scale inference since 2026-09-19, ~0.6 s per 1024x1024 frame on the A5000; `backend/segmentation/models/microtubule/MODEL_CARD.md` is the reference for the model, its numbers and its rollback)
+- Models: SegFormer (~200 ms — **the spheroid default** since 2026-09-20), HRNet (~200 ms), CBAM-ResUNet (~400 ms), U-Net (~200 ms), Mamba-UNet (~240 ms), Spheroid Disintegration, Sperm, Sperm 2-part (`sperm_2part`: head + tail, same Mask2Former pipeline, `weights/sperm_2part.pth`), Wound, Microcapsule, Neurite/Soma, Neurite/Soma classical (`neurite_soma_classical`: Meijering ridge filter + shape rules on a merge of user-ticked channels; CPU, no weights), Microtubule SPARSE35 ep040 (nnU-Net ResEnc-M + curvature-bounded instancer, NATIVE-scale inference since 2026-09-19, ~0.6 s per 1024x1024 frame on the A5000; `backend/segmentation/models/microtubule/MODEL_CARD.md` is the reference for the model, its numbers and its rollback)
 - Weights from Google Drive; `make check-weights`. Microtubule: `scripts/download-microtubule-weights.sh` stages `weights/microtubule_sparse35_ep040.pth` and refuses any file whose sha256 is not the pinned one (a wrong checkpoint of the right shape loads without an error). `microtubule_v5h.pth` + `params_v5h.json` stay on disk/in git as the rollback. **No `HF_TOKEN`** — the checkpoint is a complete `state_dict` with no frozen backbone, so MT segmentation needs no network at run time. (As of 2026-09-20 **no model fetches on its shipped path** — see the HF note below.)
 - **High-bit-depth input is stretched, not clipped (2026-10-06).** Ten of the
-  twelve models go through PIL `convert('RGB'/'L')`, which CLIPS a 16-bit /
+  thirteen models go through PIL `convert('RGB'/'L')`, which CLIPS a 16-bit /
   32-bit / float image at 255. Measured on every such still in production (3
   of 3 475): the model saw 1, 1 and 5 grey levels and found nothing. They now
   get a 0.1–99.9 percentile stretch first (`api/input_depth.py`), reported as
   `input_conversion`. **Not min-max**: one hot pixel (51 586 vs a p99.9 of
   16 851) squeezed a real frame into 125 dark levels and changed the result
-  from a core with a fragmented corona to one blob. `microtubule` and
-  `neurite_soma` keep the native depth. 8-bit input is returned as the same
-  object — 62 real results across all twelve models were identical before and
-  after. It is three frames with no ground truth; re-measure before moving
+  from a core with a fragmented corona to one blob. `microtubule`,
+  `neurite_soma` and `neurite_soma_classical` keep the native depth. 8-bit input is returned as the same
+  object — 62 real results across all twelve models of that date were identical
+  before and after. It is three frames with no ground truth; re-measure before moving
   either percentile.
+- **`neurite_soma_classical` is a classical model that segments a MERGE of
+  channels (2026-10-08).** `models/neurite_classical.py`: no network, no
+  weights, CPU only; ~1.3 s per 1024² frame (1.13–1.46 s on four production
+  frames); parameters are `PARAMS` in that file; `threshold` does not apply;
+  images over 64 Mpx are refused. The channels are merged **in Python at
+  native depth, never in Node** — each normalised to its own noise
+  (median / MAD), then pixel-wise maximum — and reach `/segment` as `file`
+  plus the multipart field `extra_channels`, which only this model accepts.
+  The registry flag `mergesChannels` (both `modelRegistry.ts`) is what turns
+  `SegmentChannelDialog` into checkboxes (`multiple`): nothing ticked by
+  default, Confirm disabled until one is. The request field `channels[]` (1–8
+  names, on `POST /api/queue/batch` and `POST /api/segmentation/batch`,
+  refused for a model that does not merge) and the column
+  `segmentation_queue.mergeChannels` are **separate from the single
+  `channel`**. Holes are emitted as `type:'internal'` polygons with a
+  `parent_id` and **NO class**, and `splitNeuritePolygons` folds them into the
+  parent's `holes` — so a neurite loop is not measured with the background
+  inside it. Known limit: faint, diffuse somas are found only some of the time
+  (2 of 3, 1 and 0 on three dim production frames), so the user is expected to
+  add them — and a polygon drawn by hand has NO class and is ignored by every
+  neurite table until it is given one, which is what the context menu's
+  **Set as soma / Set as neurite** (closed polygons, neurite projects only) is
+  for. The neurite export (BOTH
+  neurite models) gains an **Intensity** table in `neurite_metrics/` — one row
+  per frame × channel × class, on the union of the stored polygons, on EVERY
+  channel of the file at native depth whichever were ticked, via
+  `POST /api/v1/neurite-intensity` (`models/neurite_intensity.py`,
+  `neuriteIntensityExporter.ts`); it needs no pixel size.
 - **`/segment` takes `page` and `max_pixels`**, answers 400 for an unknown
   model or bytes that are not an image (both used to be 500, and an unknown
   model could evict a loaded one first), and does NOT decode at open: the

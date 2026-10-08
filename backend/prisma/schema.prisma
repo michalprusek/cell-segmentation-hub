@@ -240,6 +240,11 @@ model SegmentationQueue {
   // default originalPath; when set, the worker rewrites the channel segment
   // of the path so the user's Segment-All channel choice is honored.
   channel     String?
+  // The channels this item's image is MERGED from, for a model that segments
+  // one image built out of several channels (`neurite_soma_classical`). Empty
+  // for every other model. Separate from `channel`, which names ONE channel to
+  // read instead of the default and keys the static-channel collapse.
+  mergeChannels String[] @default([])
   createdAt   DateTime  @default(now())
   startedAt   DateTime?
   completedAt DateTime?

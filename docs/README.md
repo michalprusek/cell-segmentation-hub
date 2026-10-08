@@ -2,7 +2,7 @@
 
 SpheroSeg is a web platform for AI-assisted segmentation and measurement of
 microscopy images and time-lapse videos. It ships **seven project types** backed
-by **twelve segmentation models**, a polygon/polyline editor, cross-frame
+by **thirteen segmentation models**, a polygon/polyline editor, cross-frame
 microtubule tracking, and a batch export pipeline.
 
 Live instance: <https://spherosegapp.utia.cas.cz> · Developed at
@@ -73,13 +73,13 @@ Written for the person in front of the browser. No code knowledge assumed.
 
 ## Reference
 
-| Page                                                  | Covers                                                                    |
-| ----------------------------------------------------- | ------------------------------------------------------------------------- |
-| [ML models](reference/ml-models.md)                   | All twelve models: architecture, training data, speed, thresholds, limits |
-| [Metrics](reference/metrics.md)                       | Exact formula and convention behind every measured number                 |
-| [Keyboard shortcuts](reference/keyboard-shortcuts.md) | One table, whole app                                                      |
-| [Database schema](reference/database-schema.md)       | Every Prisma model, column, index and its purpose                         |
-| [Glossary](reference/glossary.md)                     | Container, frame, channel, track, polyline, IRM, DI, …                    |
+| Page                                                  | Covers                                                                      |
+| ----------------------------------------------------- | --------------------------------------------------------------------------- |
+| [ML models](reference/ml-models.md)                   | All thirteen models: architecture, training data, speed, thresholds, limits |
+| [Metrics](reference/metrics.md)                       | Exact formula and convention behind every measured number                   |
+| [Keyboard shortcuts](reference/keyboard-shortcuts.md) | One table, whole app                                                        |
+| [Database schema](reference/database-schema.md)       | Every Prisma model, column, index and its purpose                           |
+| [Glossary](reference/glossary.md)                     | Container, frame, channel, track, polyline, IRM, DI, …                      |
 
 ## API
 

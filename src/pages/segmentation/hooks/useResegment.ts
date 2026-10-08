@@ -39,7 +39,7 @@ interface UseResegmentResult {
   isResegmenting: boolean;
   showResegmentChannelDialog: boolean;
   setShowResegmentChannelDialog: React.Dispatch<React.SetStateAction<boolean>>;
-  runResegment: (channel?: string) => Promise<void>;
+  runResegment: (channel?: string | string[]) => Promise<void>;
   handleResegmentCurrentFrame: () => void;
 }
 
@@ -155,7 +155,7 @@ export function useResegment({
   // Pure request helper — shared by the direct (single-channel) path
   // and the dialog's onConfirm callback.
   const runResegment = useCallback(
-    async (channel?: string) => {
+    async (channel?: string | string[]) => {
       // `selectedModel` is absent only in the window before the project has
       // loaded. Bail rather than dispatching a request with no model, which
       // the backend would reject with a 400 the user cannot act on.

@@ -4,6 +4,7 @@ import {
   SEGMENTATION_MODELS,
   SEGMENTATION_MODEL_ERROR_MESSAGE,
 } from '../constants/segmentationModels';
+import { MAX_MERGE_CHANNELS } from '../constants/modelRegistry';
 
 // ============================================================================
 // Common validation schemas
@@ -104,6 +105,30 @@ export const batchQueueSchema = z.object({
       /^[A-Za-z0-9_-]+$/,
       'Kanál může obsahovat jen alfanumerické znaky, _ a -'
     )
+    .optional(),
+  // Channels to MERGE into the one image that is segmented. Accepted only for
+  // a model whose registry entry says `mergesChannels`; the controller refuses
+  // it for any other, because a caller who named three channels and got the
+  // first one segmented could not tell.
+  channels: z
+    .array(
+      z
+        .string()
+        .min(1, 'Kanál nesmí být prázdný')
+        .max(64, 'Kanál může mít maximálně 64 znaků')
+        .regex(
+          /^[A-Za-z0-9_-]+$/,
+          'Kanál může obsahovat jen alfanumerické znaky, _ a -'
+        )
+    )
+    .min(1, 'Musíte vybrat alespoň jeden kanál')
+    .max(
+      MAX_MERGE_CHANNELS,
+      `Sloučit lze nejvýše ${MAX_MERGE_CHANNELS} kanálů`
+    )
+    .refine(list => new Set(list).size === list.length, {
+      message: 'Každý kanál lze vybrat jen jednou',
+    })
     .optional(),
 });
 

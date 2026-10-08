@@ -1,3 +1,4 @@
+import type { EditablePartClass } from '@/lib/segmentation';
 import React from 'react';
 import {
   ContextMenu,
@@ -82,7 +83,7 @@ interface PolygonContextMenuProps {
   onHighlightSoma?: (somaId: string | null) => void;
   /** Remove ONE soma from this neurite's assignment. */
   onRemoveSoma?: (somaId: string) => void;
-  onChangePartClass?: (partClass: 'head' | 'midpiece' | 'tail') => void;
+  onChangePartClass?: (partClass: EditablePartClass) => void;
   onChangeInstanceId?: (instanceId: string) => void;
   currentInstanceId?: string;
   availableInstanceIds?: string[];
@@ -390,6 +391,27 @@ const PolygonContextMenu = ({
                 )}
               </ContextMenuSubContent>
             </ContextMenuSub>
+          )}
+          {/* A polygon drawn by hand in a neurite project has NO class, and
+              the export measures only somas and neurites — so without this a
+              soma the model missed could be drawn but never counted. Also the
+              way to turn a wrongly classified region into the other class. */}
+          {!isPolyline && projectType === 'neurite' && onChangePartClass && (
+            <>
+              <ContextMenuSeparator />
+              <ContextMenuItem
+                onClick={() => onChangePartClass('soma')}
+                className="cursor-pointer"
+              >
+                <span>{t('segmentation.neurite.setAsSoma')}</span>
+              </ContextMenuItem>
+              <ContextMenuItem
+                onClick={() => onChangePartClass('neurite')}
+                className="cursor-pointer"
+              >
+                <span>{t('segmentation.neurite.setAsNeurite')}</span>
+              </ContextMenuItem>
+            </>
           )}
           {isPolyline && isSperm && onChangePartClass && (
             <>

@@ -81,9 +81,12 @@ interface PolygonLike {
   holes?: Array<Array<{ x: number; y: number }>>;
   partClass?: string;
   class?: string;
+  /** `internal` = a hole of the polygon named by `parent_id`. */
+  type?: string;
+  parent_id?: string;
 }
 
-interface MLPolygon {
+export interface MLPolygon {
   polygon_id: string;
   points: number[][];
   holes?: number[][][];
@@ -138,6 +141,12 @@ export interface NeuriteMetricsResult {
   skipped: Array<{ image: string; reason: string }>;
   /** Per-frame quality counters, keyed by frame name. */
   qc: Record<string, Record<string, unknown>>;
+  /**
+   * The per-class intensity table (`neuriteIntensityExporter`). Absent when it
+   * was not computed at all, which the writer reports differently from a table
+   * that was computed and came back empty.
+   */
+  intensity?: NeuriteIntensityResult;
 }
 
 /**
@@ -154,18 +163,89 @@ function classOf(poly: PolygonLike): string | null {
   return value === 'neurite' || value === 'soma' ? value : null;
 }
 
-function toMLPolygon(poly: PolygonLike, index: number): MLPolygon | null {
+function toMLPolygon(
+  poly: PolygonLike,
+  index: number,
+  childHoles: ReadonlyArray<Array<{ x: number; y: number }>>
+): MLPolygon | null {
   const points = poly.points;
   if (!Array.isArray(points) || points.length < 3) {
     return null;
   }
+  const holes = [...(poly.holes ?? []), ...childHoles];
   return {
     polygon_id: poly.id ?? `poly_${index}`,
     points: points.map(p => [p.x, p.y]),
-    ...(poly.holes?.length
-      ? { holes: poly.holes.map(h => h.map(p => [p.x, p.y])) }
+    ...(holes.length
+      ? { holes: holes.map(h => h.map(p => [p.x, p.y])) }
       : {}),
   };
+}
+
+/**
+ * Read a stored segmentation into the soma and neurite polygons the ML
+ * service measures, each carrying its holes.
+ *
+ * The app stores a hole as its OWN polygon — `type: 'internal'`, pointing at
+ * the region it belongs to through `parent_id` — and such a polygon carries no
+ * class. So it is neither a soma nor a neurite here; it is folded into its
+ * parent's `holes`. Dropping it instead would fill every closed loop a neurite
+ * network makes: the skeleton of a filled loop is a line through its middle
+ * rather than a ring, and its mean intensity includes the background inside.
+ *
+ * Returns `null` when the JSON cannot be read. Exported because the intensity
+ * table needs exactly these regions, and a second reading of the same JSON
+ * would be free to disagree with this one about what a hole is.
+ */
+export function splitNeuritePolygons(
+  polygonsJson: string
+): { soma: MLPolygon[]; neurite: MLPolygon[] } | null {
+  let parsed: PolygonLike[];
+  try {
+    const raw: unknown = JSON.parse(polygonsJson);
+    parsed = Array.isArray(raw)
+      ? (raw as PolygonLike[])
+      : ((raw as { polygons?: PolygonLike[] })?.polygons ?? []);
+  } catch {
+    return null;
+  }
+
+  const holesByParent = new Map<string, Array<Array<{ x: number; y: number }>>>();
+  for (const poly of parsed) {
+    if (
+      poly?.type === 'internal' &&
+      typeof poly.parent_id === 'string' &&
+      Array.isArray(poly.points) &&
+      poly.points.length >= 3
+    ) {
+      const list = holesByParent.get(poly.parent_id) ?? [];
+      list.push(poly.points);
+      holesByParent.set(poly.parent_id, list);
+    }
+  }
+
+  const soma: MLPolygon[] = [];
+  const neurite: MLPolygon[] = [];
+  parsed.forEach((poly, i) => {
+    // A hole is never a region of its own, whatever class it might carry.
+    if (poly?.type === 'internal') {
+      return;
+    }
+    const kind = classOf(poly);
+    if (!kind) {
+      return;
+    }
+    const ml = toMLPolygon(
+      poly,
+      i,
+      (poly.id && holesByParent.get(poly.id)) || []
+    );
+    if (!ml) {
+      return;
+    }
+    (kind === 'soma' ? soma : neurite).push(ml);
+  });
+  return { soma, neurite };
 }
 
 /**
@@ -208,30 +288,13 @@ export async function computeNeuriteFrame(
     return null;
   }
 
-  let parsed: PolygonLike[];
-  try {
-    const raw: unknown = JSON.parse(image.segmentation.polygons);
-    parsed = Array.isArray(raw)
-      ? (raw as PolygonLike[])
-      : ((raw as { polygons?: PolygonLike[] })?.polygons ?? []);
-  } catch {
+  const split = splitNeuritePolygons(image.segmentation.polygons);
+  if (!split) {
     skipped.push({ image: label, reason: 'segmentation JSON unreadable' });
     return null;
   }
-
-  const somaPolygons: MLPolygon[] = [];
-  const neuritePolygons: MLPolygon[] = [];
-  parsed.forEach((poly, i) => {
-    const kind = classOf(poly);
-    if (!kind) {
-      return;
-    }
-    const ml = toMLPolygon(poly, i);
-    if (!ml) {
-      return;
-    }
-    (kind === 'soma' ? somaPolygons : neuritePolygons).push(ml);
-  });
+  const somaPolygons = split.soma;
+  const neuritePolygons = split.neurite;
 
   if (!somaPolygons.length) {
     // Every row is keyed by a soma, so there is nothing to report. Recorded as
@@ -389,6 +452,67 @@ export const SOMA_HEADERS = [
   'centroid_y_px',
 ] as const;
 
+export interface NeuriteIntensityRow {
+  frame: string;
+  channel: string;
+  class: string;
+  area_px: number;
+  mean_intensity: number | null;
+  median_intensity: number | null;
+  std_intensity: number | null;
+  sum_intensity: number | null;
+  background_median: number | null;
+  background_area_px: number;
+  mean_minus_background: number | null;
+}
+
+export interface NeuriteIntensityResult {
+  rows: NeuriteIntensityRow[];
+  skipped: Array<{ image: string; reason: string }>;
+}
+
+export const INTENSITY_HEADERS = [
+  'frame',
+  'channel',
+  'class',
+  'area_px',
+  'mean_intensity',
+  'median_intensity',
+  'std_intensity',
+  'sum_intensity',
+  'background_median',
+  'background_area_px',
+  'mean_minus_background',
+] as const;
+
+/** What a reader has to know before comparing anything in the sheet. */
+export const INTENSITY_README_LINES: ReadonlyArray<[string, string]> = [
+  [
+    'Intensity: one row per frame, channel and class',
+    'soma and neurite are each the UNION of every polygon of that class on the frame, holes subtracted. Where a soma and a neurite overlap the pixel counts as soma.',
+  ],
+  [
+    'Intensity is measured on the stored polygons',
+    'Whatever is in the editor when you export, manual corrections included — not the model\'s original mask.',
+  ],
+  [
+    'Intensity is in raw camera counts',
+    'Read from each channel\'s own image at its native bit depth, whichever channels were used for segmentation.',
+  ],
+  [
+    'background_median',
+    'Median of the pixels more than 5 px from any polygon. A median, because what lies outside the masks still contains debris and neurites the model missed.',
+  ],
+  [
+    'mean_minus_background',
+    'mean_intensity less background_median. It removes the camera offset, not the scale: dye, exposure and gain still differ between channels, so compare a channel with itself across conditions, not two channels with each other.',
+  ],
+  [
+    'An empty class has blank statistics',
+    'area_px 0 with blank intensities means nothing of that class is segmented on the frame. It is not an intensity of zero.',
+  ],
+];
+
 /** What a reader has to know before averaging anything in these sheets. */
 const README_LINES: ReadonlyArray<[string, string]> = [
   [
@@ -481,6 +605,16 @@ export async function writeNeuriteMetrics(
         toCsv(SOMA_HEADERS, result.somas),
         'utf-8'
       );
+      if (result.intensity) {
+        await fs.writeFile(
+          path.join(destDir, 'intensity.csv'),
+          toCsv(
+            INTENSITY_HEADERS,
+            result.intensity.rows as unknown as Array<Record<string, unknown>>
+          ),
+          'utf-8'
+        );
+      }
     } else if (format === 'json') {
       await fs.writeFile(
         path.join(destDir, 'neurite_metrics.json'),
@@ -490,6 +624,12 @@ export async function writeNeuriteMetrics(
             somas: result.somas,
             qc: result.qc,
             skipped: result.skipped,
+            ...(result.intensity
+              ? {
+                  intensity: result.intensity.rows,
+                  intensity_skipped: result.intensity.skipped,
+                }
+              : {}),
           },
           null,
           2
@@ -536,6 +676,19 @@ async function writeWorkbook(
   }
   somaSheet.getRow(1).font = { bold: true };
 
+  if (result.intensity) {
+    const intensitySheet = workbook.addWorksheet('Intensity');
+    intensitySheet.columns = INTENSITY_HEADERS.map(h => ({
+      header: h,
+      key: h,
+      width: 20,
+    }));
+    for (const row of result.intensity.rows) {
+      intensitySheet.addRow(row);
+    }
+    intensitySheet.getRow(1).font = { bold: true };
+  }
+
   // The README sheet is not decoration. Every caveat on it changes how a
   // number reads, and a spreadsheet is opened long after any conversation
   // about it has been forgotten.
@@ -544,19 +697,33 @@ async function writeWorkbook(
     { header: 'Point', key: 'point', width: 42 },
     { header: 'What it means', key: 'detail', width: 110 },
   ];
-  for (const [point, detail] of README_LINES) {
+  for (const [point, detail] of [
+    ...README_LINES,
+    ...(result.intensity ? INTENSITY_README_LINES : []),
+  ]) {
     readme.addRow({ point, detail });
   }
   readme.getRow(1).font = { bold: true };
   readme.getColumn('detail').alignment = { wrapText: true, vertical: 'top' };
 
-  if (result.skipped.length) {
+  // One sheet for both tables, with the table named: a frame can be skipped by
+  // the morphology tables (no pixel size, no soma) and still be measured for
+  // intensity, and the reader needs to see which.
+  const skippedRows = [
+    ...result.skipped.map(row => ({ ...row, table: 'Neurites / Somas' })),
+    ...(result.intensity?.skipped ?? []).map(row => ({
+      ...row,
+      table: 'Intensity',
+    })),
+  ];
+  if (skippedRows.length) {
     const skipped = workbook.addWorksheet('Skipped frames');
     skipped.columns = [
       { header: 'Frame', key: 'image', width: 40 },
+      { header: 'Table', key: 'table', width: 20 },
       { header: 'Reason', key: 'reason', width: 70 },
     ];
-    for (const row of result.skipped) {
+    for (const row of skippedRows) {
       skipped.addRow(row);
     }
     skipped.getRow(1).font = { bold: true };

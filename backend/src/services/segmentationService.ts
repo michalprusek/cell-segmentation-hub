@@ -24,7 +24,10 @@ import { computeNeuriteFrame } from './export/neuriteMetricsExporter';
 const NOMINAL_SCALE_FOR_ASSIGNMENT_UM = 0.65;
 import { config } from '../utils/config';
 import type { JobStatus } from '../types';
-import { type KnownModelId } from '../constants/modelRegistry';
+import {
+  type KnownModelId,
+  modelMergesChannels,
+} from '../constants/modelRegistry';
 import {
   PolygonValidator,
   type PolygonPartClass,
@@ -536,11 +539,16 @@ export interface SegmentationRequest {
   // originalPath so it reads the user-selected channel's PNG instead of the
   // default segmentation source.
   channel?: string;
+  // Channels to MERGE into the one image that is segmented, for a model whose
+  // registry entry says `mergesChannels`. Each is read from its own per-frame
+  // file and sent to the ML service, which does the merging at native depth.
+  // Ignored for an image that is not a frame of a multi-channel container.
+  channels?: string[];
 }
 
 // resolveChannelPath lives in utils/channelPath.ts so tests can import it
 // without dragging in the heavy service module.
-import { resolveChannelPath } from '../utils/channelPath';
+import { frameChannelPath, resolveChannelPath } from '../utils/channelPath';
 
 export interface SegmentationResponse {
   success: boolean;
@@ -839,6 +847,48 @@ export class SegmentationService {
   /**
    * Request segmentation for an image
    */
+  /**
+   * Storage keys of the channels to merge for one image, in the order asked.
+   *
+   * Returns `null` for an image that is not a frame of a multi-channel
+   * container (a still has one channel, and the caller reads its own file).
+   * Throws for a channel the container does not have: segmenting what is left
+   * would hand back a result that looks like the requested merge and is not.
+   */
+  private async resolveMergeChannelPaths(
+    image: { originalPath: string; parentVideoId?: string | null },
+    channels: string[]
+  ): Promise<string[] | null> {
+    if (!image.parentVideoId) {
+      return null;
+    }
+    const container = await this.prisma.image.findUnique({
+      where: { id: image.parentVideoId },
+      select: { channels: true },
+    });
+    const declared = Array.isArray(container?.channels)
+      ? (container.channels as unknown as Array<{
+          name: string;
+          sparseFill?: Record<string, number> | null;
+        }>)
+      : [];
+    const paths: string[] = [];
+    for (const name of channels) {
+      const meta = declared.find(c => c?.name === name);
+      if (!meta) {
+        throw new Error(
+          `Channel '${name}' does not exist on this image. Available: ${declared.map(c => c.name).join(', ') || 'none'}`
+        );
+      }
+      const resolved = frameChannelPath(image.originalPath, meta);
+      if (!resolved) {
+        return null;
+      }
+      paths.push(resolved);
+    }
+    return paths;
+  }
+
   async requestSegmentation(
     request: SegmentationRequest
   ): Promise<SegmentationResponse> {
@@ -862,6 +912,7 @@ export class SegmentationService {
       userId,
       detectHoles,
       channel,
+      channels,
     } = request;
     const startTime = Date.now();
 
@@ -919,10 +970,30 @@ export class SegmentationService {
           { imageId, channel, originalPath: image.originalPath, resolvedPath }
         );
       }
-      const imageBuffer = await storage.getBuffer(resolvedPath);
+      // A model that merges channels gets every picked channel's own file;
+      // the first goes in `file`, the rest in `extra_channels`.
+      const mergePaths =
+        channels?.length && modelMergesChannels(model)
+          ? await this.resolveMergeChannelPaths(image, channels)
+          : null;
+      const imageBuffer = await storage.getBuffer(
+        mergePaths?.[0] ?? resolvedPath
+      );
 
       if (!imageBuffer) {
         throw new Error('Failed to load image from storage');
+      }
+      const extraChannelBuffers: Buffer[] = [];
+      for (const extraPath of mergePaths?.slice(1) ?? []) {
+        const buffer = await storage.getBuffer(extraPath);
+        if (!buffer) {
+          // Never segment a subset silently: the result would look like the
+          // merge the user asked for and be something else.
+          throw new Error(
+            `Failed to load channel file from storage: ${extraPath}`
+          );
+        }
+        extraChannelBuffers.push(buffer);
       }
 
       // Prepare form data for Python service. The filename has to
@@ -939,6 +1010,12 @@ export class SegmentationService {
       formData.append('model', model);
       formData.append('threshold', threshold.toString());
       formData.append('detect_holes', (detectHoles ?? true).toString());
+      extraChannelBuffers.forEach((buffer, i) => {
+        formData.append('extra_channels', buffer, {
+          filename: `channel_${i + 1}.png`,
+          contentType: 'image/png',
+        });
+      });
 
       logger.info(
         'Sending segmentation request to ML service',
@@ -2403,7 +2480,9 @@ export class SegmentationService {
     // When set, every per-image call inside this loop receives it so
     // a multi-channel ND2 frame is segmented from the user-picked
     // channel rather than the project's default `isSegmentationSource`.
-    channel?: string
+    channel?: string,
+    // Channels to merge, for a model that merges; see SegmentationRequest.
+    channels?: string[]
   ): Promise<{
     successful: number;
     failed: number;
@@ -2435,6 +2514,7 @@ export class SegmentationService {
           userId,
           detectHoles,
           channel,
+          channels,
         });
 
         results.push({
