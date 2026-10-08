@@ -12,6 +12,8 @@
  *  - Initial slider values reflect context values
  *  - % suffix shown for Brightness and Contrast rows
  *  - No % suffix for Min and Max rows
+ *  - The Smooth image switch: default, state, toggle by click and keyboard,
+ *    its accessible name and description, and that Reset leaves it alone
  *
  * NOT tested:
  *  - Slider drag interactions — Radix Slider is a third-party component
@@ -307,6 +309,130 @@ describe('DisplaySection', () => {
 
       expect(screen.getByText('Brightness')).toBeInTheDocument();
       expect(screen.getByText('Contrast')).toBeInTheDocument();
+    });
+
+    it('still offers Smooth image without a measurement', () => {
+      // An 8-bit still (the <img> path) has no Min/Max, and it is exactly
+      // where a user looks for the switch first.
+      renderWithCtx(makeCtx({ windowIsMeasured: false }));
+      expect(
+        screen.getByRole('switch', { name: /smooth image/i })
+      ).toBeInTheDocument();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Smooth image
+  // -------------------------------------------------------------------------
+
+  describe('Smooth image switch', () => {
+    const smoothSwitch = () =>
+      screen.getByRole('switch', { name: /smooth image/i });
+
+    it('is on for a context value that predates the setting', () => {
+      // makeCtx() carries no `smoothImage`, like every hand-built value in
+      // the suites around this one.
+      renderWithCtx(makeCtx());
+      expect(smoothSwitch()).toHaveAttribute('aria-checked', 'true');
+    });
+
+    it('reflects the context value', () => {
+      renderWithCtx(makeCtx({ smoothImage: false }));
+      expect(smoothSwitch()).toHaveAttribute('aria-checked', 'false');
+    });
+
+    it('turns smoothing off on click', async () => {
+      const user = userEvent.setup();
+      const setSmoothImage = vi.fn();
+      renderWithCtx(makeCtx({ smoothImage: true, setSmoothImage }));
+      await user.click(smoothSwitch());
+      expect(setSmoothImage).toHaveBeenCalledTimes(1);
+      expect(setSmoothImage).toHaveBeenCalledWith(false);
+    });
+
+    it('turns smoothing back on on click', async () => {
+      const user = userEvent.setup();
+      const setSmoothImage = vi.fn();
+      renderWithCtx(makeCtx({ smoothImage: false, setSmoothImage }));
+      await user.click(smoothSwitch());
+      expect(setSmoothImage).toHaveBeenCalledWith(true);
+    });
+
+    it('toggles when its text label is clicked', async () => {
+      const user = userEvent.setup();
+      const setSmoothImage = vi.fn();
+      renderWithCtx(makeCtx({ smoothImage: true, setSmoothImage }));
+      await user.click(screen.getByText('Smooth image'));
+      expect(setSmoothImage).toHaveBeenCalledWith(false);
+    });
+
+    // In the editor itself Space never arrives: `useKeyboardShortcuts`
+    // reserves it for pan-hold / play-pause and cancels it on every
+    // non-input target (verified in a real browser — Enter toggles, Space
+    // does not). The card alone, as rendered here, takes both.
+    it('is reachable with Tab and toggles with Space and Enter', async () => {
+      const user = userEvent.setup();
+      const setSmoothImage = vi.fn();
+      renderWithCtx(makeCtx({ smoothImage: true, setSmoothImage }));
+
+      // Tab until the switch has focus — it must be in the tab order.
+      for (
+        let i = 0;
+        i < 30 && document.activeElement !== smoothSwitch();
+        i++
+      ) {
+        await user.tab();
+      }
+      expect(smoothSwitch()).toHaveFocus();
+
+      await user.keyboard(' ');
+      await user.keyboard('{Enter}');
+      expect(setSmoothImage).toHaveBeenCalledTimes(2);
+      expect(setSmoothImage).toHaveBeenNthCalledWith(1, false);
+    });
+
+    it('is described by its hint for a screen reader', () => {
+      renderWithCtx(makeCtx());
+      // The name is the label alone; the hint is the description, once.
+      expect(smoothSwitch()).toHaveAccessibleName('Smooth image');
+      expect(smoothSwitch()).toHaveAccessibleDescription(/sharp square/i);
+    });
+
+    // Its POSITION is the fix for "where is the switch?": at the bottom of
+    // the card it was 825 px down a 1000 px window on a three-channel video,
+    // under the tabs, the histogram and four sliders. Everything else in the
+    // card body has to come after it.
+    it('is the first row of the card, above tabs, histogram and sliders', () => {
+      renderWithCtx(makeCtx({ visibleChannels: ['IRM', '488_nm', '640_nm'] }));
+      const below = [
+        screen.getByRole('tablist'),
+        ...screen.getAllByRole('tab'),
+        ...screen.getAllByRole('spinbutton'),
+        ...['Min', 'Max', 'Brightness', 'Contrast'].map(label =>
+          screen.getByText(label)
+        ),
+      ];
+      // Not vacuous: the fullest card there is — 3 tabs and all four rows.
+      expect(screen.getAllByRole('tab')).toHaveLength(3);
+      expect(screen.getAllByRole('spinbutton')).toHaveLength(4);
+      below.forEach(el => {
+        expect(
+          smoothSwitch().compareDocumentPosition(el) &
+            Node.DOCUMENT_POSITION_FOLLOWING
+        ).toBeTruthy();
+      });
+    });
+
+    it('is left alone by Reset', async () => {
+      const user = userEvent.setup();
+      const setSmoothImage = vi.fn();
+      const resetDisplay = vi.fn();
+      renderWithCtx(
+        makeCtx({ smoothImage: false, setSmoothImage, resetDisplay })
+      );
+      await user.click(screen.getByRole('button', { name: /reset/i }));
+      expect(resetDisplay).toHaveBeenCalledTimes(1);
+      expect(setSmoothImage).not.toHaveBeenCalled();
     });
   });
 });

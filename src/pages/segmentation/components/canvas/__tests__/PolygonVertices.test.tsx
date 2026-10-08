@@ -122,7 +122,6 @@ const DEFAULT_PROPS = {
   isHovered: false,
   hoveredVertex: { polygonId: null, vertexIndex: null },
   vertexDragState: emptyDragState,
-  zoom: 1,
 };
 
 // ── tests ────────────────────────────────────────────────────────────────────

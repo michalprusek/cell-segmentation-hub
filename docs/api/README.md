@@ -248,6 +248,20 @@ Mounted twice, so the same handlers are reachable as
 Track propagation and per-track type assignment are also served from this
 router; see [Microtubule projects](../guides/project-types/microtubules.md).
 
+`POST /api/segmentation/videos/:videoId/tracks/propagate` (body
+`{ fromFrameIndex, polyline }`) answers with `trackId` and four counts. A frame
+that already holds exactly the sent polyline is not rewritten, so the counts
+separate what happened to each following frame:
+
+| Field             | Meaning                                                          |
+| ----------------- | ---------------------------------------------------------------- |
+| `framesChanged`   | Rows rewritten, plus rows created for frames that had none       |
+| `framesUnchanged` | Frames that already held this exact polyline; not written        |
+| `framesSkipped`   | Frames whose stored polygons could not be read; left alone       |
+| `framesUpdated`   | `framesChanged + framesUnchanged` — frames the microtubule is on |
+
+"Nothing to change" is `framesChanged === 0 && framesSkipped === 0`.
+
 ## Queue
 
 | Method | Path                                   | Purpose                                                                                                                                                                                                                                                    |

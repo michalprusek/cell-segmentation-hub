@@ -1,8 +1,15 @@
 /**
- * Sidebar card with the image-display controls: a histogram, Min, Max,
- * Brightness, Contrast. Each slider row is a Radix Slider paired with a numeric
- * Input (Input ↔ Slider sync follows the FrameSlider pattern). Brightness/
- * Contrast are global and persist across frame and channel changes.
+ * Sidebar card with the image-display controls: the Smooth image switch,
+ * then a histogram, Min, Max, Brightness and Contrast. Each slider row is a
+ * Radix Slider paired with a numeric Input (Input ↔ Slider sync follows the
+ * FrameSlider pattern). Brightness/Contrast are global and persist across
+ * frame and channel changes, for the session.
+ *
+ * Smooth image is the one control here that is remembered across reloads and
+ * that Reset leaves alone — it is CVAT's setting of the same name, on by
+ * default: the browser interpolates between image pixels when zoomed in.
+ * Off shows each image pixel as a hard-edged block, which is what you want
+ * when placing a vertex on an exact pixel.
  *
  * Min/Max are the ImageJ-style window/level cutoffs and belong to ONE CHANNEL
  * at a time — the tabs above them pick which. Channels in a composite differ in
@@ -24,11 +31,13 @@
  * composite. The two compose at draw time.
  */
 
-import { useRef } from 'react';
+import { useId, useRef } from 'react';
 import { RotateCcw } from 'lucide-react';
 import { useLanguage } from '@/contexts/useLanguage';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { Slider } from '@/components/ui/slider';
 import { autoAdjust, rawStatistics } from '@/lib/histogram';
 import {
@@ -112,6 +121,9 @@ export default function DisplaySection() {
     channelColors,
     brightness,
     contrast,
+    // `= true` for the suites that hand-build this context value.
+    smoothImage = true,
+    setSmoothImage,
     setWindow,
     setWindowMin,
     setWindowMax,
@@ -120,6 +132,7 @@ export default function DisplaySection() {
     setContrast,
     resetDisplay,
   } = useImageDisplay();
+  const smoothId = useId();
   const displayed = useDisplayedSamples();
   const activeSamples = displayed?.channels[windowChannel] ?? null;
 
@@ -203,6 +216,45 @@ export default function DisplaySection() {
         </div>
       </div>
       <div className="p-4 space-y-3">
+        {/* A real <button role="switch"> (Radix), so Tab reaches it and Space
+            / Enter toggle it; the <label> makes the whole text a click
+            target and names it for a screen reader, the hint describes it.
+            FIRST in the card, set off by a rule: on a video the Channels
+            section sits above this card and the tabs, histogram and four
+            sliders fill it, so at the bottom the switch was 825 px down a
+            1000 px window with three channels — below the fold on a laptop,
+            and the first user to look for it did not find it. Outside every
+            `windowIsMeasured` gate below: an 8-bit still has no Min/Max and
+            still gets it. Space does not toggle it inside the editor — the
+            editor reserves Space for pan-hold and play/pause and cancels it
+            on every non-input target (`useKeyboardShortcuts`); Enter does. */}
+        <div className="flex items-start justify-between gap-3 border-b border-gray-200 pb-3 dark:border-gray-700">
+          {/* The hint sits beside the <label>, not inside it: inside, the
+              switch's accessible NAME would be the label and the hint run
+              together, with the hint then read a second time as the
+              description. */}
+          <div className="min-w-0 flex-1">
+            <Label
+              htmlFor={smoothId}
+              className="cursor-pointer text-xs font-medium text-gray-700 dark:text-gray-300"
+            >
+              {t('editor.windowLevel.smooth')}
+            </Label>
+            <p
+              id={`${smoothId}-hint`}
+              className="mt-0.5 text-[11px] leading-snug text-gray-500 dark:text-gray-400"
+            >
+              {t('editor.windowLevel.smoothHint')}
+            </p>
+          </div>
+          <Switch
+            id={smoothId}
+            checked={smoothImage}
+            onCheckedChange={setSmoothImage}
+            aria-describedby={`${smoothId}-hint`}
+            className="shrink-0"
+          />
+        </div>
         {showChannelTabs && (
           <div className="space-y-1">
             <span className="text-xs text-gray-700 dark:text-gray-300">

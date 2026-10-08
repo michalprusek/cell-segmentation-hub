@@ -10,6 +10,11 @@ import CanvasPolygon from '../CanvasPolygon';
 import { createMockPolygon } from '@/test-utils/segmentationTestUtils';
 import { colorFromInstanceId } from '../../../utils/instanceColors';
 import { EditMode, type VertexDragState } from '@/pages/segmentation/types';
+import { overlayScaleStyle } from '../../../utils/overlayScale';
+
+// How many times CanvasPolygon has rendered, counted by the context-menu stub
+// it renders exactly once per render of its own.
+const counters = vi.hoisted(() => ({ polygonRenders: 0 }));
 
 // Mock the heavy dependencies
 vi.mock('../PolygonVertices', () => ({
@@ -31,16 +36,22 @@ vi.mock('../PolygonVertices', () => ({
 }));
 
 vi.mock('../../context-menu/PolygonContextMenu', () => ({
-  default: ({ children, polygonId, onDelete, onSlice, onEdit }: any) => (
-    <g>
-      {children}
-      <g data-testid={`context-menu-${polygonId}`} style={{ display: 'none' }}>
-        <rect data-testid="delete-button" onClick={() => onDelete?.()} />
-        <rect data-testid="slice-button" onClick={() => onSlice?.()} />
-        <rect data-testid="edit-button" onClick={() => onEdit?.()} />
+  default: ({ children, polygonId, onDelete, onSlice, onEdit }: any) => {
+    counters.polygonRenders++;
+    return (
+      <g>
+        {children}
+        <g
+          data-testid={`context-menu-${polygonId}`}
+          style={{ display: 'none' }}
+        >
+          <rect data-testid="delete-button" onClick={() => onDelete?.()} />
+          <rect data-testid="slice-button" onClick={() => onSlice?.()} />
+          <rect data-testid="edit-button" onClick={() => onEdit?.()} />
+        </g>
       </g>
-    </g>
-  ),
+    );
+  },
 }));
 
 vi.mock('@/lib/polygonGeometry', () => ({
@@ -68,7 +79,6 @@ describe('CanvasPolygon', () => {
   const defaultProps = {
     polygon: mockPolygon,
     isSelected: false,
-    zoom: 1,
     onSelectPolygon: vi.fn(),
     onDeletePolygon: vi.fn(),
     onSlicePolygon: vi.fn(),
@@ -333,7 +343,12 @@ describe('CanvasPolygon', () => {
         styleFilter: path?.style.filter ?? '',
         styleFill: path?.style.fill ?? '',
         attrFilter: path?.getAttribute('filter') ?? '',
-        strokeWidth: Number(path?.getAttribute('stroke-width') ?? 0),
+        // The width is a CSS declaration — `calc(var(--overlay-stroke, 2px) *
+        // N)` — and N is what the highlight changes.
+        strokeWidth: Number(
+          /\* ([\d.]+)\)$/.exec(path?.style.strokeWidth ?? '')?.[1] ?? NaN
+        ),
+        strokeAttr: path?.getAttribute('stroke-width') ?? null,
       };
       unmount();
       return read;
@@ -350,7 +365,9 @@ describe('CanvasPolygon', () => {
       const on = pathOf({ isSomaHighlighted: true });
 
       expect(on.styleFilter).toContain('soma-highlight');
-      expect(on.strokeWidth).toBeGreaterThan(off.strokeWidth);
+      expect(off.strokeWidth).toBe(1);
+      expect(on.strokeWidth).toBe(3);
+      expect(on.strokeAttr).toBeNull();
     });
 
     it("still carries a microcapsule core's own fill, which shares the prop", () => {
@@ -403,7 +420,7 @@ describe('CanvasPolygon', () => {
         html: group!.innerHTML,
         cls: path!.getAttribute('class') ?? '',
         dash: path!.getAttribute('stroke-dasharray'),
-        strokeWidth: path!.getAttribute('stroke-width'),
+        strokeWidth: (path as SVGPathElement).style.strokeWidth,
         filter: path!.getAttribute('filter'),
         // Fixed endpoint markers are the group's own <circle> children; the
         // draggable vertices live inside the PolygonVertices child <g>.
@@ -499,6 +516,10 @@ describe('CanvasPolygon', () => {
       expect(renderOnce({ isMultiSelected: true }).strokeWidth).toBe(
         renderOnce({}).strokeWidth
       );
+      // ...and that the three being equal is not three empty strings.
+      expect(renderOnce({}).strokeWidth).toBe(
+        'calc(var(--overlay-stroke, 2px) * 1)'
+      );
     });
 
     it('hides the polyline endpoint markers when multi-selected, as when selected', () => {
@@ -528,12 +549,29 @@ describe('CanvasPolygon', () => {
       expect(renderOnce({}).cls).not.toContain('polygon-selected');
     });
 
-    it('leaves the SVG filter attribute empty on a selected closed polygon', () => {
+    it('leaves the SVG filter attribute off a selected closed polygon', () => {
       // Guards the deletion of `red-glow`: it was only ever emitted here, in
       // the one case CSS overrides, so it had never reached the screen.
-      expect(renderOnce({ isSelected: true }).filter).toBe('');
-      expect(renderOnce({ isMultiSelected: true }).filter).toBe('');
-      expect(renderOnce({}).filter).toBe('');
+      expect(renderOnce({ isSelected: true }).filter).toBeNull();
+      expect(renderOnce({ isMultiSelected: true }).filter).toBeNull();
+      expect(renderOnce({}).filter).toBeNull();
+    });
+
+    it('glows a hovered polyline through #blue-glow, and only while unselected', () => {
+      // An SVG filter reference, not a CSS drop-shadow class: WebKit paints
+      // no CSS filter function on an SVG child (measured — see
+      // CanvasSvgFilters), so a class would remove this glow in Safari.
+      const hovered = { polygon: polyline(), isHovered: true };
+      expect(renderOnce(hovered).filter).toBe('url(#blue-glow)');
+      // On a selected shape `.polygon-selected`'s CSS filter would win
+      // anyway; not emitting the attribute keeps the markup honest.
+      expect(renderOnce({ ...hovered, isSelected: true }).filter).toBeNull();
+      expect(
+        renderOnce({ ...hovered, isMultiSelected: true }).filter
+      ).toBeNull();
+      expect(renderOnce({ polygon: polyline() }).filter).toBeNull();
+      // A closed polygon never had a hover glow.
+      expect(renderOnce({ isHovered: true }).filter).toBeNull();
     });
   });
 
@@ -860,24 +898,162 @@ describe('CanvasPolygon', () => {
       // 1 moveto + 99 lineto commands for a closed 100-gon.
       expect(path!.getAttribute('d')!.match(/L/g)).toHaveLength(99);
     });
+  });
 
-    it('updates efficiently when zoom changes', () => {
-      const { rerender } = renderPolygonInSvg(
-        <CanvasPolygon {...defaultProps} zoom={1} />
-      );
+  // Stroke, hit band, glow and marker sizes used to be numbers computed from a
+  // `zoom` prop, so every zoom step re-rendered every CanvasPolygon — and the
+  // memo comparator skipped exactly those re-renders while the wheel was
+  // turning, which left the sizes stale for the whole gesture. They are CSS
+  // `calc()`s on two custom properties of the overlay <svg> now.
+  describe('Sizes follow the zoom through CSS, not through a re-render', () => {
+    const polylineShape = createMockPolygon({
+      id: 'zoom-polyline',
+      geometry: 'polyline',
+      partClass: 'head',
+      points: [
+        { x: 10, y: 10 },
+        { x: 40, y: 25 },
+        { x: 70, y: 15 },
+      ],
+    });
+    // Stable across re-renders, as the layout's are: a fresh object or
+    // callback here would re-render the polygon for a reason unrelated to
+    // the zoom and hide what this is measuring.
+    const stable = { ...defaultProps, polygon: polylineShape };
+    const at = (zoom: number, extra: Record<string, unknown> = {}) => (
+      <svg style={overlayScaleStyle(zoom)}>
+        <CanvasPolygon {...stable} {...extra} />
+      </svg>
+    );
 
-      rerender(
-        <svg width="800" height="600" viewBox="0 0 800 600">
-          <CanvasPolygon {...defaultProps} zoom={2} />
-        </svg>
-      );
-      rerender(
-        <svg width="800" height="600" viewBox="0 0 800 600">
-          <CanvasPolygon {...defaultProps} zoom={0.5} />
-        </svg>
-      );
+    it('does not re-render when only the zoom changes', () => {
+      const { container, rerender } = render(at(1));
+      const afterMount = counters.polygonRenders;
+      expect(afterMount).toBeGreaterThan(0);
+      const before = container.querySelector('g.polygon-group')!.innerHTML;
 
-      expect(screen.getByTestId('test-polygon')).toBeInTheDocument();
+      rerender(at(2.35));
+      rerender(at(10));
+
+      expect(counters.polygonRenders).toBe(afterMount);
+      // Not one attribute of the shape moved...
+      expect(container.querySelector('g.polygon-group')!.innerHTML).toBe(
+        before
+      );
+      // ...the zoom landed on the <svg>, as the two properties they read.
+      const svg = container.querySelector('svg')!;
+      expect(svg.style.getPropertyValue('--overlay-px')).toBe('0.1px');
+      expect(svg.style.getPropertyValue('--overlay-stroke')).toBe('0.2px');
+    });
+
+    it('still re-renders for a prop that does change', () => {
+      // The control for the test above: the counter can move.
+      const { rerender } = render(at(1));
+      const afterMount = counters.polygonRenders;
+      rerender(at(1, { isHovered: true }));
+      expect(counters.polygonRenders).toBeGreaterThan(afterMount);
+    });
+
+    it('writes every size as a calc() on the overlay properties', () => {
+      const { container } = render(at(1));
+      const visible = container.querySelector(
+        'path.polygon-path'
+      ) as SVGPathElement;
+      const hitBand = container.querySelector(
+        'path[stroke="transparent"]'
+      ) as SVGPathElement;
+      const markers = container.querySelectorAll(
+        'g.polygon-group > circle'
+      ) as NodeListOf<SVGCircleElement>;
+
+      // An idle polyline is 1.5 base strokes: 3 px on screen.
+      expect(visible.style.strokeWidth).toBe(
+        'calc(var(--overlay-stroke, 2px) * 1.5)'
+      );
+      // The hit band is 12: 24 px. It was `Math.max(strokeWidth * 12, 6)`
+      // user units — 60 px at zoom 10, wide enough for neighbouring
+      // microtubules' bands to overlap.
+      expect(hitBand.style.strokeWidth).toBe(
+        'calc(var(--overlay-stroke, 2px) * 12)'
+      );
+      // No presentation attribute left to disagree with the declaration, and
+      // no floor: `Math.max(…, 0.5)` user units is what made the stroke 5 px
+      // wide at zoom 10.
+      expect(visible.getAttribute('stroke-width')).toBeNull();
+      expect(hitBand.getAttribute('stroke-width')).toBeNull();
+
+      expect(markers).toHaveLength(2);
+      markers.forEach(marker => {
+        expect(marker.getAttribute('class')).toBe('overlay-dot');
+        expect(marker.style.getPropertyValue('--overlay-r')).toBe('3');
+        expect(marker.style.strokeWidth).toBe(
+          'calc(var(--overlay-px, 1px) * 1)'
+        );
+        expect(marker.getAttribute('r')).toBeNull();
+      });
+    });
+
+    it('widens a hovered polyline to 2.5 base strokes', () => {
+      const { container } = render(at(1, { isHovered: true }));
+      expect(
+        (container.querySelector('path.polygon-path') as SVGPathElement).style
+          .strokeWidth
+      ).toBe('calc(var(--overlay-stroke, 2px) * 2.5)');
+    });
+
+    // The stripes over a neurite shared by several somas are extra <path>s
+    // with no attribute sizes either. One that loses its `stroke-width`
+    // falls back to SVG's 1 user unit — 10 px at zoom 10 over a 2 px base
+    // coat — and the dash was `10` USER units: 100 px long at zoom 10.
+    it('sizes the shared-neurite stripes in screen pixels, like their base', () => {
+      const shared = createMockPolygon({
+        id: 'shared-neurite',
+        partClass: 'neurite',
+        somaId: 's1',
+        somaIds: ['s1', 's2', 's3'],
+      });
+      const { container } = render(
+        at(1, { polygon: shared, colorBySoma: true })
+      );
+      const base = container.querySelector(
+        'path.polygon-path'
+      ) as SVGPathElement;
+      // The decorative stripes: every path that is neither the shape nor a
+      // hit band. Two of them for three somas (the base coat is the third).
+      const stripes = Array.from(
+        container.querySelectorAll('g.polygon-group path')
+      ).filter(
+        p =>
+          !p.classList.contains('polygon-path') &&
+          p.getAttribute('stroke') !== 'transparent'
+      ) as SVGPathElement[];
+      expect(stripes).toHaveLength(2);
+
+      const px = (n: number) => `calc(var(--overlay-px, 1px) * ${n})`;
+      stripes.forEach((stripe, i) => {
+        expect(stripe.style.strokeWidth).toBe(base.style.strokeWidth);
+        expect(stripe.style.strokeWidth).toBe(
+          'calc(var(--overlay-stroke, 2px) * 1)'
+        );
+        // One 10 px dash per 30 px cycle, each stripe in its own slot.
+        expect(stripe.style.strokeDasharray).toBe(`${px(10)} ${px(20)}`);
+        expect(stripe.style.strokeDashoffset).toBe(px(-10 * (i + 1)));
+        expect(stripe.getAttribute('stroke-width')).toBeNull();
+        expect(stripe.getAttribute('stroke-dasharray')).toBeNull();
+        expect(stripe.getAttribute('stroke-dashoffset')).toBeNull();
+      });
+    });
+
+    it('keeps the hit band when the MoveShape cursor is added to its style', () => {
+      // The band's width and the cursor share one `style` prop.
+      const { container } = render(at(1, { editMode: EditMode.MoveShape }));
+      const hitBand = container.querySelector(
+        'path[stroke="transparent"]'
+      ) as SVGPathElement;
+      expect(hitBand.style.cursor).toBe('move');
+      expect(hitBand.style.strokeWidth).toBe(
+        'calc(var(--overlay-stroke, 2px) * 12)'
+      );
     });
   });
 
@@ -941,7 +1117,7 @@ describe('CanvasPolygon', () => {
       });
 
       renderPolygonInSvg(
-        <CanvasPolygon {...defaultProps} polygon={tinyPolygon} zoom={100} />
+        <CanvasPolygon {...defaultProps} polygon={tinyPolygon} />
       );
 
       expect(screen.getByTestId('tiny-polygon')).toBeInTheDocument();
@@ -959,7 +1135,7 @@ describe('CanvasPolygon', () => {
       });
 
       renderPolygonInSvg(
-        <CanvasPolygon {...defaultProps} polygon={largePolygon} zoom={0.01} />
+        <CanvasPolygon {...defaultProps} polygon={largePolygon} />
       );
 
       expect(screen.getByTestId('large-polygon')).toBeInTheDocument();

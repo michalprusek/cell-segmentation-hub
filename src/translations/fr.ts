@@ -946,11 +946,15 @@ export default {
     resizeSidebar: 'Redimensionner le panneau',
     trackOps: {
       propagateSelectedSuccess:
-        '{{count}} microtubules propagés vers les images suivantes',
+        'Microtubules propagés vers les images suivantes : {{count}}',
       propagateSelectedPartial: '{{done}} sur {{total}} microtubules propagés',
       deleteSelectedPartial: '{{done}} microtubules sur {{total}} supprimés',
       propagateSuccess: 'Microtubule propagé vers {{count}} images suivantes',
       propagateFailed: 'Échec de la propagation du microtubule',
+      propagateNoChange:
+        'Rien à modifier : les images suivantes ont déjà cette forme',
+      propagateSelectedNoChange:
+        'Rien à modifier : les images suivantes ont déjà ces formes',
       deleteTrackSuccess: 'Trace supprimée de {{count}} images',
       deleteTrackFailed: 'Échec de la suppression de la trace',
       deleteFrameSuccess:
@@ -1832,7 +1836,7 @@ export default {
         'Lorsqu’aucun nom de canal n’est reconnaissable, aucune source n’est marquée et le premier canal est utilisé. Pour les microtubules, cela compte : le modèle ne fonctionne qu’en IRM, le pointer vers un canal de fluorescence produit donc des polylignes convaincantes sans rien dessous.',
       windowLevel: 'Afficher des données 16 bits',
       windowLevelDescription:
-        'Les images à grande profondeur de bits sont ajustées à l’affichage par les curseurs Min et Max, complétés par Luminosité et Contraste. Au-dessus, un histogramme du canal actif partage l’axe des curseurs et trace la fenêtre sur les données, et Auto ajuste Min et Max à l’image courante comme l’Auto d’ImageJ ; chaque nouvel appui sature davantage. La fenêtre est propre à chaque canal, et non partagée : un canal s’ajuste automatiquement à ses propres données la première fois que vous le voyez, conserve ensuite vos bornes et n’élargit sa plage que lorsque des images plus lumineuses arrivent. Ces réglages valent pour la session ; les couleurs et opacités des canaux, elles, sont mémorisées.',
+        'Les images à grande profondeur de bits sont ajustées à l’affichage par les curseurs Min et Max, complétés par Luminosité et Contraste. Au-dessus, un histogramme du canal actif partage l’axe des curseurs et trace la fenêtre sur les données, et Auto ajuste Min et Max à l’image courante comme l’Auto d’ImageJ ; chaque nouvel appui sature davantage. La fenêtre est propre à chaque canal, et non partagée : un canal s’ajuste automatiquement à ses propres données la première fois que vous le voyez, conserve ensuite vos bornes et n’élargit sa plage que lorsque des images plus lumineuses arrivent. Ces réglages valent pour la session ; les couleurs et opacités des canaux, elles, sont mémorisées. Lisser l’image, en haut de la carte Affichage, fond les pixels voisins lors du zoom ; désactivez-le pour voir chaque pixel de l’image comme un carré net. Ce réglage est mémorisé dans ce navigateur et Réinitialiser n’y touche pas.',
       navigation: 'Se déplacer dans les images',
       keys: {
         step: 'Image précédente / suivante',
@@ -2072,7 +2076,7 @@ export default {
         saving:
           'Enregistrement à la demande : le bouton Enregistrer, Ctrl+S, ou automatiquement en passant à une autre image.',
         zoomPan:
-          'Zoom au pointeur, déplacement par glisser, et ajustement de l’image avec R ou 0.',
+          'Zoom au pointeur, déplacement par glisser, et ajustement de l’image avec R ou 0. Les contours, les points et leur surbrillance gardent la même taille à l’écran à partir d’un zoom de 0,7× ; en deçà, les contours s’affinent pour ne pas masquer une grande image affichée en petit.',
         polygonManagement:
           'Une liste des formes avec sélection multiple, affichage/masquage, renommage et suppression.',
         keyboardShortcuts:
@@ -3076,6 +3080,9 @@ export default {
       auto: 'Auto',
       autoHint:
         'Ajuste Min et Max à cette image, comme Auto dans ImageJ. Appuyez à nouveau pour saturer davantage.',
+      smooth: 'Lisser l’image',
+      smoothHint:
+        'Fond les pixels voisins lors du zoom. Désactivez-le pour voir chaque pixel de l’image comme un carré net.',
     },
     frameNavigation: {
       frame: 'Image',

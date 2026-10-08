@@ -1,13 +1,15 @@
 /**
  * Tests for CanvasImage component
  * Covers src/alt rendering, load and error callbacks, dimension styles,
- * and CSS positioning.
+ * CSS positioning, and the display style (Smooth image + brightness/contrast
+ * filter) on both of its bitmap paths.
  */
 
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { act, render, screen, fireEvent } from '@testing-library/react';
 import CanvasImage from '../CanvasImage';
+import { ImageDisplayContext } from '../../../contexts/ImageDisplayContext';
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -160,12 +162,80 @@ describe('CanvasImage', () => {
       const img = screen.getByTestId('canvas-image');
       expect(img.className).toMatch(/pointer-events-none/);
     });
+  });
 
-    it('applies crisp-edges image rendering style', () => {
+  // -------------------------------------------------------------------------
+  // Display style: Smooth image + brightness/contrast filter (<img> path)
+  // -------------------------------------------------------------------------
+
+  describe('Display style on the <img> path', () => {
+    const withDisplay = (
+      value: Record<string, unknown>,
+      props: Record<string, unknown> = {}
+    ) => (
+      <ImageDisplayContext.Provider value={value as never}>
+        <CanvasImage src="/images/test.png" {...props} />
+      </ImageDisplayContext.Provider>
+    );
+    const style = () => screen.getByTestId('canvas-image').style;
+
+    it('is smooth by default, with no provider at all', () => {
       render(<CanvasImage src="/images/test.png" />);
+      expect(style().imageRendering).toBe('auto');
+    });
 
-      const img = screen.getByTestId('canvas-image');
-      expect(img).toHaveStyle({ imageRendering: 'crisp-edges' });
+    it('is smooth for a context value that predates the setting', () => {
+      render(withDisplay({ brightness: 100, contrast: 100 }));
+      expect(style().imageRendering).toBe('auto');
+    });
+
+    it('draws hard pixels when Smooth image is off — pixelated, never crisp-edges', () => {
+      // `crisp-edges` is invalid before Chrome 148 and silently computes to
+      // `auto`, i.e. the "sharp" mode was smooth there.
+      render(withDisplay({ smoothImage: false }));
+      expect(style().imageRendering).toBe('pixelated');
+    });
+
+    it('toggles as a style on the SAME element, without refiring onLoad', () => {
+      const onLoad = vi.fn();
+      const { rerender } = render(
+        withDisplay({ smoothImage: true }, { onLoad })
+      );
+      const before = screen.getByTestId('canvas-image');
+      fireEvent.load(before);
+      expect(onLoad).toHaveBeenCalledTimes(1);
+
+      rerender(withDisplay({ smoothImage: false }, { onLoad }));
+      const after = screen.getByTestId('canvas-image');
+      // A remount would be a new node, a new image request and a second
+      // onLoad — which resets the editor's "frame loaded" state.
+      expect(after).toBe(before);
+      expect(after.style.imageRendering).toBe('pixelated');
+      expect(onLoad).toHaveBeenCalledTimes(1);
+    });
+
+    it('emits no filter at brightness 100 / contrast 100', () => {
+      // An identity `brightness(1) contrast(1)` still promotes the element to
+      // its own compositor surface: measured, one blended pixel per image
+      // pixel boundary and half the pan frame rate on a software GPU.
+      render(withDisplay({ brightness: 100, contrast: 100 }));
+      expect(style().filter).toBe('');
+    });
+
+    it('emits no filter with no provider', () => {
+      render(<CanvasImage src="/images/test.png" />);
+      expect(style().filter).toBe('');
+    });
+
+    it('emits the filter as soon as either value moves', () => {
+      const { rerender } = render(
+        withDisplay({ brightness: 150, contrast: 100 })
+      );
+      expect(style().filter).toBe('brightness(1.5) contrast(1)');
+      rerender(withDisplay({ brightness: 100, contrast: 80 }));
+      expect(style().filter).toBe('brightness(1) contrast(0.8)');
+      rerender(withDisplay({ brightness: 100, contrast: 100 }));
+      expect(style().filter).toBe('');
     });
   });
 });
@@ -253,6 +323,79 @@ describe('CanvasImage 16-bit window', () => {
       // user's window on every scrub.
       'container-42'
     );
+  });
+
+  // The 16-bit <canvas> is the second bitmap path of this component and takes
+  // the same two display properties as the <img>.
+  it('applies Smooth image and the filter to the 16-bit canvas, as style only', async () => {
+    const { display, Comp } = await loadDeep();
+    const ui = (value: Record<string, unknown>) => (
+      <display.ImageDisplayContext.Provider value={value as never}>
+        <Comp src="/images/deep.png" />
+      </display.ImageDisplayContext.Provider>
+    );
+    const base = { reportChannelRanges: vi.fn(), windowChannel: '' };
+    const { container, rerender } = render(ui({ ...base, smoothImage: true }));
+    await settle();
+
+    const canvas = container.querySelector('canvas')!;
+    expect(canvas).toBeTruthy();
+    expect(canvas.getAttribute('data-bit-depth')).toBe('16');
+    expect(canvas.style.imageRendering).toBe('auto');
+    expect(canvas.style.filter).toBe('');
+
+    rerender(
+      ui({ ...base, smoothImage: false, brightness: 120, contrast: 100 })
+    );
+    await settle();
+    // Same node: a remount would repaint the frame from scratch.
+    expect(container.querySelector('canvas')).toBe(canvas);
+    expect(canvas.style.imageRendering).toBe('pixelated');
+    expect(canvas.style.filter).toBe('brightness(1.2) contrast(1)');
+  });
+
+  // VideoFrameImage hands CanvasImage a fresh `onLoad` arrow on every render,
+  // and the editor re-renders on every pan and zoom step. With `onLoad` in the
+  // probe effect's deps each of those re-fetched and re-decoded the image and
+  // put the bare <img> on screen while it did — measured on production: 18
+  // wheel steps, 18 canvas -> <img> -> canvas swaps.
+  it('does not re-fetch or drop the canvas when only the onLoad identity changes', async () => {
+    const { Comp } = await loadDeep();
+    const first = vi.fn();
+    const { container, rerender } = render(
+      <Comp src="/images/deep.png" onLoad={first} />
+    );
+    await settle();
+    const canvas = container.querySelector('canvas')!;
+    expect(canvas).toBeTruthy();
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(first).toHaveBeenCalledTimes(1);
+
+    for (let i = 0; i < 5; i++) {
+      rerender(<Comp src="/images/deep.png" onLoad={vi.fn()} />);
+      await settle();
+    }
+
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(container.querySelector('canvas')).toBe(canvas);
+    expect(container.querySelector('img')).toBeNull();
+    expect(first).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports a NEW image to the newest onLoad', async () => {
+    // The other half of holding the callback in a ref: it must not go stale.
+    const { Comp } = await loadDeep();
+    const first = vi.fn();
+    const second = vi.fn();
+    const { rerender } = render(<Comp src="/images/a.png" onLoad={first} />);
+    await settle();
+    rerender(<Comp src="/images/b.png" onLoad={second} />);
+    await settle();
+
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(first).toHaveBeenCalledTimes(1);
+    expect(second).toHaveBeenCalledTimes(1);
+    expect(second).toHaveBeenCalledWith(2, 1);
   });
 
   it('does not touch the window when the provider is absent', async () => {

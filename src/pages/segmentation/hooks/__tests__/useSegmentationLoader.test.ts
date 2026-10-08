@@ -267,6 +267,56 @@ describe('useSegmentationLoader', () => {
     });
   });
 
+  // The picture reports its size ONCE per source (the <img> load event, the
+  // 16-bit probe). The load effect also re-runs when only the status or the
+  // language changes, and it used to clear the dimensions on every run — so a
+  // row with no stored width/height lost them on Resegment and was drawn at
+  // the container's size until segmentation data came back.
+  it('keeps dimensions reported by the picture when the SAME image re-loads', async () => {
+    const base = makeParams({
+      selectedImage: { segmentationStatus: 'pending' },
+    });
+    const { result, rerender } = renderHook(
+      (p: ReturnType<typeof makeParams>) => useSegmentationLoader(p),
+      { initialProps: base }
+    );
+    act(() => {
+      result.current.handleImageLoad(640, 480, 'ch0');
+    });
+    expect(result.current.imageDimensions).toEqual({ width: 640, height: 480 });
+
+    // Resegment: the status moves, the picture does not.
+    rerender({ ...base, selectedImage: { segmentationStatus: 'queued' } });
+    await waitFor(() => expect(base.getSignal).toHaveBeenCalledTimes(2));
+    expect(result.current.imageDimensions).toEqual({ width: 640, height: 480 });
+
+    // A language switch re-runs it too.
+    rerender({
+      ...base,
+      selectedImage: { segmentationStatus: 'queued' },
+      t: (key: string) => `cs:${key}`,
+    });
+    await waitFor(() => expect(base.getSignal).toHaveBeenCalledTimes(3));
+    expect(result.current.imageDimensions).toEqual({ width: 640, height: 480 });
+  });
+
+  it('still clears the dimensions when the image itself changes', async () => {
+    const base = makeParams({
+      selectedImage: { segmentationStatus: 'pending' },
+    });
+    const { result, rerender } = renderHook(
+      (p: ReturnType<typeof makeParams>) => useSegmentationLoader(p),
+      { initialProps: base }
+    );
+    act(() => {
+      result.current.handleImageLoad(640, 480, 'ch0');
+    });
+    expect(result.current.imageDimensions).toEqual({ width: 640, height: 480 });
+
+    rerender({ ...base, imageId: 'img-2' });
+    await waitFor(() => expect(result.current.imageDimensions).toBeNull());
+  });
+
   // ─── setters are callable from outside ────────────────────────────────────
 
   it('exposes setSegmentationPolygons for the orchestrator to call', () => {

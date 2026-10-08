@@ -76,6 +76,7 @@ import {
 import { useImageDisplay } from '../../contexts/ImageDisplayContext';
 import { useLanguage } from '@/contexts/exports';
 import { logger } from '@/lib/logger';
+import { displayFilter, imageRenderingFor } from '../../utils/displayStyle';
 
 /** Stable empty default so the optional coverage prop keeps a constant
  *  reference across renders (a fresh `{}` would churn the memo below). */
@@ -203,6 +204,9 @@ export default function MultiChannelCanvas({
     proxyRangeMax,
     brightness,
     contrast,
+    // `= true`: MultiChannelCanvas.test.tsx and its siblings hand-build the
+    // context value, and an absent field must read as the default.
+    smoothImage = true,
     channelOpacities,
     reportChannelRanges,
     reportDisplayedSamples,
@@ -865,11 +869,16 @@ export default function MultiChannelCanvas({
         loading ? 'opacity-100' : 'opacity-50'
       )}
       style={{
-        imageRendering: 'crisp-edges',
+        // Style only — `key` above is the render path and nothing else. The
+        // textures inside are NEAREST and must be (integer textures are not
+        // filterable), but they are sampled 1:1 into a backing store of the
+        // frame's own size; the magnification the user sees is the browser
+        // scaling this element, which is what `image-rendering` controls.
+        imageRendering: imageRenderingFor(smoothImage),
         width: width ? `${width}px` : 'auto',
         height: height ? `${height}px` : 'auto',
         userSelect: 'none',
-        filter: `brightness(${brightness / 100}) contrast(${contrast / 100})`,
+        filter: displayFilter(brightness, contrast),
       }}
       data-testid="multi-channel-canvas"
     />

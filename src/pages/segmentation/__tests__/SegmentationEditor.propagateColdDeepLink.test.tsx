@@ -52,7 +52,6 @@ const mockEditor = vi.hoisted(() => ({
   transform: { zoom: 1, translateX: 0, translateY: 0 },
   hoveredVertex: null,
   vertexDragState: null,
-  isZooming: false,
   tempPoints: [],
   cursorPosition: null,
   interactionState: null,
@@ -101,6 +100,19 @@ const mockVideo = vi.hoisted(() => ({
   setFrameIndex: vi.fn(),
 }));
 
+/** The server wrote four following frames. Spelled out in full: the client
+ *  falls back to `framesUpdated` when `framesChanged` is missing, and a fixture
+ *  leaning on that fallback would keep every positive test green while the
+ *  handler read the wrong field. `framesUpdated` (5) deliberately differs from
+ *  `framesChanged` (4) so the two cannot be confused. */
+const PROPAGATED_TO_FOUR = vi.hoisted(() => ({
+  trackId: 'track-new',
+  framesUpdated: 5,
+  framesChanged: 4,
+  framesUnchanged: 1,
+  framesSkipped: 0,
+}));
+
 const mockApiClient = vi.hoisted(() => ({
   getSegmentationResults: vi.fn().mockResolvedValue(null),
   updateSegmentationResults: vi.fn().mockResolvedValue({ polygons: [] }),
@@ -111,10 +123,14 @@ const mockApiClient = vi.hoisted(() => ({
   putMtTypeLabels: vi.fn().mockResolvedValue([]),
   deleteMtTypeLabel: vi.fn().mockResolvedValue([]),
   setTrackType: vi.fn().mockResolvedValue({ framesAffected: 0 }),
-  propagateTrackForward: vi
-    .fn()
-    .mockResolvedValue({ trackId: 'track-new', framesUpdated: 4 }),
+  propagateTrackForward: vi.fn().mockResolvedValue(PROPAGATED_TO_FOUR),
 }));
+
+/** `t` echoes the key, so a toast is asserted by key — and, being a spy, by
+ *  the params it was asked to interpolate, which the toast itself never sees. */
+const mockT = vi.hoisted(() =>
+  vi.fn((key: string, _params?: Record<string, unknown>) => key)
+);
 
 // ─── vi.mock declarations ─────────────────────────────────────────────────────
 
@@ -129,7 +145,7 @@ vi.mock('react-router-dom', async () => {
 
 vi.mock('@/contexts/exports', () => ({
   useAuth: () => ({ user: { id: 'u1', email: 'test@example.com' } }),
-  useLanguage: () => ({ t: (k: string) => k }),
+  useLanguage: () => ({ t: mockT }),
   useModel: () => ({
     selectedModel: 'hrnet',
     confidenceThreshold: 0.5,
@@ -170,8 +186,16 @@ vi.mock('@/hooks/shared/useAbortController', () => ({
   }),
 }));
 
+/** The props the editor handed to the (stubbed) editor hook. Captured for the
+ *  production `onSave`: it is what records whether a save fanned out across a
+ *  static container, and the hook that would call it is mocked away. */
+const capturedEditorProps = vi.hoisted(() => ({ current: null as any }));
+
 vi.mock('../hooks/useEnhancedSegmentationEditor', () => ({
-  useEnhancedSegmentationEditor: () => mockEditor,
+  useEnhancedSegmentationEditor: (props: any) => {
+    capturedEditorProps.current = props;
+    return mockEditor;
+  },
 }));
 
 vi.mock('../hooks/useSegmentationReload', () => ({
@@ -220,6 +244,9 @@ vi.mock('sonner', () => ({
     success: vi.fn(),
     error: vi.fn(),
     warning: vi.fn(),
+    // Without this a `toast.info` throws inside the handler's try block and
+    // surfaces as the FAILURE toast — a wrong test, not a missing one.
+    info: vi.fn(),
   },
 }));
 
@@ -440,10 +467,12 @@ beforeEach(() => {
   mockEditor.keyboardState.isShiftPressed.mockReturnValue(false);
   mockEditor.getPolygons.mockReturnValue([]);
   mockApiClient.getSegmentationResults.mockResolvedValue(null);
-  mockApiClient.propagateTrackForward.mockResolvedValue({
-    trackId: 'track-new',
-    framesUpdated: 4,
-  });
+  mockApiClient.propagateTrackForward.mockReset();
+  mockApiClient.propagateTrackForward.mockResolvedValue(PROPAGATED_TO_FOUR);
+  mockApiClient.updateSegmentationResults.mockResolvedValue({ polygons: [] });
+  mockEditor.handleSave.mockReset();
+  mockEditor.handleSave.mockResolvedValue(true);
+  mockT.mockImplementation((key: string) => key);
   mockGetCached.mockReturnValue(undefined);
 });
 
@@ -566,6 +595,13 @@ describe('propagate on a cold deep-link (video.container still null)', () => {
     expect(toast.success).toHaveBeenCalledWith(
       'segmentation.trackOps.propagateSuccess'
     );
+    // The count is the frames WRITTEN (4), not the frames the microtubule is
+    // on (5): the fifth already had this shape.
+    expect(mockT).toHaveBeenCalledWith(
+      'segmentation.trackOps.propagateSuccess',
+      { count: 4 }
+    );
+    expect(toast.info).not.toHaveBeenCalled();
   });
 
   it('propagates EVERY Shift-selected microtubule from the same frame index', async () => {
@@ -576,7 +612,7 @@ describe('propagate on a cold deep-link (video.container still null)', () => {
         _videoId: string,
         _fromFrameIndex: number,
         p: { trackId?: string | null }
-      ) => ({ trackId: p.trackId ?? 'track-new', framesUpdated: 4 })
+      ) => ({ ...PROPAGATED_TO_FOUR, trackId: p.trackId ?? 'track-new' })
     );
     const sources = () =>
       [
@@ -769,5 +805,358 @@ describe('propagate on a cold deep-link (video.container still null)', () => {
       7,
       expect.objectContaining({ trackId: 'track-3' })
     );
+  });
+});
+
+// --- "nothing to change" (2026-10-08) ---------------------------------------
+//
+// The server used to rewrite every following frame whatever it held, and the
+// editor toasted the full count each time, so pressing propagate twice was
+// indistinguishable from two real changes. The server now leaves an identical
+// frame alone and says how many it WROTE; these pin what the user is told.
+//
+// Every case asserts the toast METHOD as well as the key: the same sentence in
+// a green success toast is the bug.
+describe('propagate that changes nothing', () => {
+  const NOTHING_CHANGED = {
+    trackId: 'track-3',
+    framesUpdated: 6,
+    framesChanged: 0,
+    framesUnchanged: 6,
+    framesSkipped: 0,
+  };
+  const twoFrames = () => {
+    mockProjectData.images = [
+      COLD_DEEP_LINK_FRAME,
+      {
+        ...COLD_DEEP_LINK_FRAME,
+        id: 'img-2',
+        frameIndex: 8,
+        segmentationStatus: 'no_segmentation',
+      },
+    ];
+  };
+  const toasts = async () => (await import('sonner')).toast;
+  const selectBoth = () => {
+    fireEvent.click(screen.getByTestId('shift-select-poly-1'));
+    fireEvent.click(screen.getByTestId('shift-select-poly-2'));
+  };
+  const twoTracked = () => {
+    const sources = () =>
+      [
+        polyline({ id: 'poly-1', trackId: 'track-1' }),
+        polyline({ id: 'poly-2', trackId: 'track-2' }),
+      ] as never[];
+    mockEditor.polygons = sources();
+    mockEditor.getPolygons.mockImplementation(sources);
+  };
+  /** Per-track server answers for the bulk loop, echoing the trackId sent. */
+  const answerByTrack = (byTrack: Record<string, Record<string, number>>) =>
+    mockApiClient.propagateTrackForward.mockImplementation(
+      async (_v: string, _f: number, p: { trackId?: string | null }) => ({
+        ...NOTHING_CHANGED,
+        ...byTrack[p.trackId ?? ''],
+        trackId: p.trackId ?? 'track-new',
+      })
+    );
+
+  it('says "nothing to change" as INFO, and evicts and marks nothing', async () => {
+    mockApiClient.propagateTrackForward.mockResolvedValue(NOTHING_CHANGED);
+    twoFrames();
+    setPolygons([polyline({ trackId: 'track-3' })]);
+    const queryClient = makeQueryClient();
+    const removeQueries = vi.spyOn(queryClient, 'removeQueries');
+    renderEditor(queryClient);
+
+    await clickAndSettle('propagate-poly-1', () => {
+      expect(mockApiClient.propagateTrackForward).toHaveBeenCalledTimes(1);
+    });
+
+    const toast = await toasts();
+    expect(toast.info).toHaveBeenCalledTimes(1);
+    expect(toast.info).toHaveBeenCalledWith(
+      'segmentation.trackOps.propagateNoChange'
+    );
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(toast.error).not.toHaveBeenCalled();
+    // No row was written: the cached frames are still right and no frame
+    // gained a segmentation.
+    expect(removeQueries).not.toHaveBeenCalled();
+    expect(mockProjectData.updateImages).not.toHaveBeenCalled();
+  });
+
+  it('still adopts a trackId the server minted when nothing was written', async () => {
+    // The last frame of a video: no following frame, but an untracked source
+    // was still given an identity, and a later save must carry it.
+    mockApiClient.propagateTrackForward.mockResolvedValue({
+      ...NOTHING_CHANGED,
+      trackId: 'mt_minted',
+      framesUpdated: 0,
+      framesUnchanged: 0,
+    });
+    setPolygons([polyline()]); // no trackId
+    renderEditor();
+
+    await clickAndSettle('propagate-poly-1', () => {
+      expect(mockApiClient.propagateTrackForward).toHaveBeenCalledTimes(1);
+    });
+
+    expect(mockEditor.updatePolygons).toHaveBeenCalledTimes(1);
+    expect((await toasts()).info).toHaveBeenCalledWith(
+      'segmentation.trackOps.propagateNoChange'
+    );
+  });
+
+  it('reports FAILURE, not "nothing to change", when the only frames were unreadable', async () => {
+    mockApiClient.propagateTrackForward.mockResolvedValue({
+      ...NOTHING_CHANGED,
+      framesUpdated: 0,
+      framesUnchanged: 0,
+      framesSkipped: 2,
+    });
+    setPolygons([polyline({ trackId: 'track-3' })]);
+    renderEditor();
+
+    await clickAndSettle('propagate-poly-1', () => {
+      expect(mockApiClient.propagateTrackForward).toHaveBeenCalledTimes(1);
+    });
+
+    const toast = await toasts();
+    expect(toast.error).toHaveBeenCalledWith(
+      'segmentation.trackOps.propagateFailed'
+    );
+    expect(toast.info).not.toHaveBeenCalled();
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  it('BULK: says "nothing to change" when no selected microtubule changed', async () => {
+    answerByTrack({});
+    twoFrames();
+    twoTracked();
+    const queryClient = makeQueryClient();
+    const removeQueries = vi.spyOn(queryClient, 'removeQueries');
+    renderEditor(queryClient);
+    selectBoth();
+
+    await clickAndSettle('propagate-selected-poly-1', () => {
+      expect(mockApiClient.propagateTrackForward).toHaveBeenCalledTimes(2);
+    });
+
+    const toast = await toasts();
+    expect(toast.info).toHaveBeenCalledTimes(1);
+    expect(toast.info).toHaveBeenCalledWith(
+      'segmentation.trackOps.propagateSelectedNoChange'
+    );
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(toast.warning).not.toHaveBeenCalled();
+    expect(removeQueries).not.toHaveBeenCalled();
+    expect(mockProjectData.updateImages).not.toHaveBeenCalled();
+  });
+
+  it('BULK: counts only the microtubules that CHANGED, and refreshes for them', async () => {
+    answerByTrack({ 'track-2': { framesChanged: 3, framesUnchanged: 3 } });
+    twoFrames();
+    twoTracked();
+    renderEditor();
+    selectBoth();
+
+    await clickAndSettle('propagate-selected-poly-1', () => {
+      expect(mockApiClient.propagateTrackForward).toHaveBeenCalledTimes(2);
+    });
+
+    const toast = await toasts();
+    expect(toast.success).toHaveBeenCalledWith(
+      'segmentation.trackOps.propagateSelectedSuccess'
+    );
+    // ONE of the two changed — not "2 propagated".
+    expect(mockT).toHaveBeenCalledWith(
+      'segmentation.trackOps.propagateSelectedSuccess',
+      { count: 1 }
+    );
+    expect(toast.info).not.toHaveBeenCalled();
+    // Something was written, so the following frames are refreshed.
+    expect(mockProjectData.updateImages).toHaveBeenCalledTimes(1);
+  });
+
+  it('BULK: a request that failed is a WARNING even when nothing else changed', async () => {
+    mockApiClient.propagateTrackForward
+      .mockRejectedValueOnce(new Error('500'))
+      .mockResolvedValueOnce({ ...NOTHING_CHANGED, trackId: 'track-2' });
+    twoTracked();
+    renderEditor();
+    selectBoth();
+
+    await clickAndSettle('propagate-selected-poly-1', () => {
+      expect(mockApiClient.propagateTrackForward).toHaveBeenCalledTimes(2);
+    });
+
+    const toast = await toasts();
+    expect(toast.warning).toHaveBeenCalledWith(
+      'segmentation.trackOps.propagateSelectedPartial'
+    );
+    expect(mockT).toHaveBeenCalledWith(
+      'segmentation.trackOps.propagateSelectedPartial',
+      { done: 1, total: 2 }
+    );
+    expect(toast.info).not.toHaveBeenCalled();
+  });
+
+  it('BULK: a microtubule stopped by unreadable frames counts as failed', async () => {
+    answerByTrack({
+      'track-1': { framesUnchanged: 0, framesUpdated: 0, framesSkipped: 4 },
+    });
+    twoFrames();
+    twoTracked();
+    const queryClient = makeQueryClient();
+    const removeQueries = vi.spyOn(queryClient, 'removeQueries');
+    renderEditor(queryClient);
+    selectBoth();
+
+    await clickAndSettle('propagate-selected-poly-1', () => {
+      expect(mockApiClient.propagateTrackForward).toHaveBeenCalledTimes(2);
+    });
+
+    const toast = await toasts();
+    expect(toast.warning).toHaveBeenCalledWith(
+      'segmentation.trackOps.propagateSelectedPartial'
+    );
+    expect(toast.info).not.toHaveBeenCalled();
+    // The server ANSWERED, and the answer was "nothing written": a failure,
+    // but a known one, so the cached frames are still right. This is what
+    // separates it from the unanswered request below.
+    expect(removeQueries).not.toHaveBeenCalled();
+    expect(mockProjectData.updateImages).not.toHaveBeenCalled();
+  });
+
+  // A request can fail on the CLIENT after the server committed: a 502 while
+  // the backend is being recreated, a dropped connection, the 120 s timeout.
+  // `changed` is counted from answers, so it is 0 here — and gating the
+  // refresh on it alone left every following frame showing its cached
+  // pre-propagate shape until a reload.
+  it('BULK: refreshes the following frames when no request was ANSWERED', async () => {
+    mockApiClient.propagateTrackForward.mockRejectedValue(
+      new Error('timeout of 120000ms exceeded')
+    );
+    twoFrames();
+    twoTracked();
+    const queryClient = makeQueryClient();
+    const removeQueries = vi.spyOn(queryClient, 'removeQueries');
+    renderEditor(queryClient);
+    selectBoth();
+
+    await clickAndSettle('propagate-selected-poly-1', () => {
+      expect(mockApiClient.propagateTrackForward).toHaveBeenCalledTimes(2);
+    });
+
+    const toast = await toasts();
+    expect(toast.warning).toHaveBeenCalledWith(
+      'segmentation.trackOps.propagateSelectedPartial'
+    );
+    expect(mockT).toHaveBeenCalledWith(
+      'segmentation.trackOps.propagateSelectedPartial',
+      { done: 0, total: 2 }
+    );
+    const evicted = removeQueries.mock.calls.map(
+      c => ((c[0] as { queryKey?: unknown[] })?.queryKey ?? [])[1]
+    );
+    expect(evicted.sort()).toEqual(['img-1', 'img-2']);
+    expect(mockProjectData.updateImages).toHaveBeenCalledTimes(1);
+  });
+
+  // --- static container: the SAVE already reached every frame ---------------
+  //
+  // `commitBeforePropagate` returns before any request when the last save of
+  // this frame fanned out. Whether to say anything depends on whether a save
+  // ran in THIS gesture: `handleSave` resolves `true` without calling `onSave`
+  // on a clean frame, and then no toast has fired at all.
+
+  /** Run the production `onSave` for this frame with a fanned-out response. */
+  const saveFansOut = async () => {
+    mockApiClient.updateSegmentationResults.mockResolvedValue({
+      polygons: [],
+      staticShare: { frameIds: ['img-2'] },
+    });
+    await capturedEditorProps.current.onSave(
+      [],
+      'img-1',
+      { width: 10, height: 10 },
+      undefined
+    );
+  };
+
+  it.each([
+    ['propagate-poly-1', 'segmentation.trackOps.propagateNoChange'],
+    [
+      'propagate-selected-poly-1',
+      'segmentation.trackOps.propagateSelectedNoChange',
+    ],
+  ])(
+    'static container, CLEAN frame (%s): says "nothing to change" instead of nothing',
+    async (testId, key) => {
+      twoFrames();
+      setPolygons([polyline({ trackId: 'track-3' })]);
+      renderEditor();
+      // An EARLIER save of this frame, in this session, fanned out.
+      await saveFansOut();
+      const toast = await toasts();
+      vi.mocked(toast.success).mockClear();
+
+      // Now the gesture: the frame is clean, so `handleSave` runs no save.
+      await clickAndSettle(testId, () => {
+        expect(mockEditor.handleSave).toHaveBeenCalledTimes(1);
+      });
+
+      expect(mockApiClient.propagateTrackForward).not.toHaveBeenCalled();
+      expect(toast.info).toHaveBeenCalledTimes(1);
+      expect(toast.info).toHaveBeenCalledWith(key);
+      expect(toast.success).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each([['propagate-poly-1'], ['propagate-selected-poly-1']])(
+    'static container, DIRTY frame (%s): the save\u2019s own toast is the only one',
+    async testId => {
+      twoFrames();
+      setPolygons([polyline({ trackId: 'track-3' })]);
+      // A real save runs as part of the gesture, and fans out.
+      mockEditor.handleSave.mockImplementation(async () => {
+        await saveFansOut();
+        return true;
+      });
+      renderEditor();
+
+      await clickAndSettle(testId, () => {
+        expect(mockEditor.handleSave).toHaveBeenCalledTimes(1);
+      });
+
+      const toast = await toasts();
+      expect(mockApiClient.propagateTrackForward).not.toHaveBeenCalled();
+      expect(toast.success).toHaveBeenCalledWith(
+        'segmentation.toolbar.sharedAcrossFrames'
+      );
+      // The save already said how far it reached; "nothing to change" on top
+      // of that would contradict it.
+      expect(toast.info).not.toHaveBeenCalled();
+    }
+  );
+
+  it('static container: a SECOND dirty save is still silent (the ref moved again)', async () => {
+    // Guards the identity compare: a fan-out earlier in the session must not
+    // make a later gesture that DOES save look like one that did not.
+    twoFrames();
+    setPolygons([polyline({ trackId: 'track-3' })]);
+    renderEditor();
+    await saveFansOut();
+    mockEditor.handleSave.mockImplementation(async () => {
+      await saveFansOut();
+      return true;
+    });
+
+    await clickAndSettle('propagate-poly-1', () => {
+      expect(mockEditor.handleSave).toHaveBeenCalledTimes(1);
+    });
+
+    expect((await toasts()).info).not.toHaveBeenCalled();
+    expect(mockApiClient.propagateTrackForward).not.toHaveBeenCalled();
   });
 });

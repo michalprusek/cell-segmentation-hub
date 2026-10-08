@@ -16,7 +16,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import React from 'react';
 
-import { ImageDisplayProvider, useImageDisplay } from '../ImageDisplayContext';
+import {
+  ImageDisplayProvider,
+  SMOOTH_IMAGE_PREF_KEY,
+  useImageDisplay,
+} from '../ImageDisplayContext';
 
 // ---------------------------------------------------------------------------
 // localStorage in-memory store (the global mock is already installed by
@@ -713,6 +717,94 @@ describe('ImageDisplayProvider + useImageDisplay', () => {
         expect.stringContaining('spheroseg.channelColors'),
         expect.anything()
       );
+    });
+  });
+
+  // ---- Smooth image --------------------------------------------------------
+
+  // CVAT's setting of the same name: on = the browser interpolates when
+  // zoomed in, off = hard pixels. Unlike everything else the Display card
+  // holds it survives a reload — one key for the browser, no user id needed —
+  // and neither Reset nor a container switch touches it.
+  describe('smoothImage', () => {
+    const mount = (opts: Parameters<typeof makeWrapper>[0] = {}) =>
+      renderHook(() => useImageDisplay(), { wrapper: makeWrapper(opts) });
+
+    it('is ON by default, and mounting stamps nothing into storage', () => {
+      const { result } = mount();
+      expect(result.current.smoothImage).toBe(true);
+      // A default written on a first visit would outlive a later change of
+      // that default.
+      expect(store).not.toHaveProperty(SMOOTH_IMAGE_PREF_KEY);
+    });
+
+    it('turning it off updates the state and persists it', () => {
+      const { result } = mount();
+      act(() => result.current.setSmoothImage(false));
+      expect(result.current.smoothImage).toBe(false);
+      expect(store[SMOOTH_IMAGE_PREF_KEY]).toBe('false');
+
+      act(() => result.current.setSmoothImage(true));
+      expect(result.current.smoothImage).toBe(true);
+      expect(store[SMOOTH_IMAGE_PREF_KEY]).toBe('true');
+    });
+
+    it('comes back off after a reload, with or without a user id', () => {
+      store[SMOOTH_IMAGE_PREF_KEY] = 'false';
+      expect(mount().result.current.smoothImage).toBe(false);
+      expect(mount({ userId: 'user-1' }).result.current.smoothImage).toBe(
+        false
+      );
+    });
+
+    it('round-trips through a remount', () => {
+      const first = mount();
+      act(() => first.result.current.setSmoothImage(false));
+      first.unmount();
+      expect(mount().result.current.smoothImage).toBe(false);
+    });
+
+    it('treats anything but a stored "false" as the default', () => {
+      for (const junk of ['', 'true', '0', 'null', '{"a":1}']) {
+        store[SMOOTH_IMAGE_PREF_KEY] = junk;
+        expect(mount().result.current.smoothImage).toBe(true);
+      }
+    });
+
+    it('is NOT reset by resetDisplay', () => {
+      const { result } = mount();
+      act(() => {
+        result.current.setSmoothImage(false);
+        result.current.setBrightness(140);
+      });
+      act(() => result.current.resetDisplay());
+      // The control: Reset did run.
+      expect(result.current.brightness).toBe(100);
+      expect(result.current.smoothImage).toBe(false);
+      expect(store[SMOOTH_IMAGE_PREF_KEY]).toBe('false');
+    });
+
+    it('still toggles when storage is unavailable', () => {
+      vi.mocked(localStorage.setItem).mockImplementation(() => {
+        throw new Error('QuotaExceededError');
+      });
+      const { result } = mount();
+      act(() => result.current.setSmoothImage(false));
+      expect(result.current.smoothImage).toBe(false);
+    });
+
+    it('starts ON when reading storage throws', () => {
+      vi.mocked(localStorage.getItem).mockImplementation(() => {
+        throw new Error('SecurityError');
+      });
+      expect(mount().result.current.smoothImage).toBe(true);
+    });
+
+    it('keeps one setter identity across state changes', () => {
+      const { result } = mount();
+      const setter = result.current.setSmoothImage;
+      act(() => result.current.setSmoothImage(false));
+      expect(result.current.setSmoothImage).toBe(setter);
     });
   });
 });

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import type { QueryClient } from '@tanstack/react-query';
 import apiClient, { type SegmentationPolygon } from '@/lib/api';
 import { logger } from '@/lib/logger';
@@ -124,6 +124,16 @@ export function useSegmentationLoader({
   // (it needs `visibleChannels` to construct the target key).
   const [loadedFrameKey, setLoadedFrameKey] = useState<string | null>(null);
 
+  // The image the current `imageDimensions` were cleared FOR. The load effect
+  // re-runs for reasons that do not change the picture (`segmentationStatus`
+  // going to queued on a Resegment, `t` on a language switch), and a source
+  // that reports its size once per `src` — the 8-bit `<img>`'s load event, and
+  // since 2026-10-08 the 16-bit probe — will not report it again. Clearing on
+  // those runs left an image whose row stores no width/height drawn at the
+  // CONTAINER's size and aspect (`imageDimensions?.width || canvasWidth` in
+  // the layout) until segmentation data arrived.
+  const dimensionsImageIdRef = useRef<string | undefined>(undefined);
+
   // Load segmentation data with proper cancellation handling
   useEffect(() => {
     let isMounted = true;
@@ -139,7 +149,13 @@ export function useSegmentationLoader({
 
       // Immediately clear polygons when switching images to prevent showing old data
       setSegmentationPolygons(null);
-      setImageDimensions(null); // Also clear image dimensions
+      // Dimensions belong to the IMAGE, so they are cleared only when it
+      // changes; every branch below still overwrites them with a better
+      // source (segmentation data, then the project row) when it has one.
+      if (dimensionsImageIdRef.current !== imageId) {
+        dimensionsImageIdRef.current = imageId;
+        setImageDimensions(null);
+      }
       logger.debug(
         '🧹 Cleared polygons and dimensions for new image:',
         imageId

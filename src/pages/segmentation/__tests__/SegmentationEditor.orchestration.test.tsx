@@ -48,7 +48,6 @@ const mockEditor = vi.hoisted(() => ({
   transform: { zoom: 1, translateX: 0, translateY: 0 },
   hoveredVertex: null,
   vertexDragState: null,
-  isZooming: false,
   tempPoints: [],
   cursorPosition: null,
   interactionState: null,
@@ -310,6 +309,8 @@ const mockChildProps = vi.hoisted(() => ({
   videoFrameImage: null as any,
   frameWindowPrefetcher: null as any,
   channelsSection: null as any,
+  canvasPolygon: null as any,
+  svgFilters: null as any,
 }));
 
 vi.mock('../components/canvas/VideoFrameImage', () => ({
@@ -337,23 +338,26 @@ vi.mock('../components/canvas/FrameLoadingGate', () => ({
 // whole suite. The layout's real `polylineKind === 'microtubule'` gate still
 // runs — this only replaces the leaf.
 vi.mock('../components/canvas/CanvasPolygon', () => ({
-  default: ({
-    polygon,
-    onChangeMtType,
-  }: {
+  default: (props: {
     polygon: { id: string };
     onChangeMtType?: (id: string, mtType: string | null) => void;
-  }) =>
-    onChangeMtType ? (
+  }) => {
+    mockChildProps.canvasPolygon = props;
+    const { polygon, onChangeMtType } = props;
+    return onChangeMtType ? (
       <button
         data-testid={`mt-type-${polygon.id}`}
         onClick={() => onChangeMtType(polygon.id, 'mt_type_brain')}
       />
-    ) : null,
+    ) : null;
+  },
 }));
 
 vi.mock('../components/canvas/CanvasSvgFilters', () => ({
-  default: () => null,
+  default: (props: any) => {
+    mockChildProps.svgFilters = props;
+    return null;
+  },
 }));
 
 vi.mock('../components/canvas/ModeInstructions', () => ({
@@ -1517,5 +1521,78 @@ describe('arming the neurite assignment tool', () => {
       'neuriteColorMode',
       'assignment',
     ]);
+  });
+});
+
+// ─── zoom reaches the overlay as CSS, never as a polygon prop ────────────────
+
+// The layout is the ONE place that turns `editor.transform.zoom` into sizes:
+// two custom properties on the overlay <svg> (utils/overlayScale.ts), which
+// every stroke, vertex, hit band and glow reads through `calc()`. A zoom prop
+// on CanvasPolygon would bring back a re-render of every shape per zoom step.
+describe('zoom wiring of the canvas overlay', () => {
+  const originalTransform = mockEditor.transform;
+
+  beforeEach(() => {
+    mockProjectData.images = [
+      {
+        id: 'img-1',
+        name: 'frame.jpg',
+        segmentationStatus: 'completed',
+        width: 800,
+        height: 600,
+      },
+    ];
+    mockEditor.polygons = [
+      {
+        id: 'p1',
+        geometry: 'polygon',
+        points: [
+          { x: 0, y: 0 },
+          { x: 10, y: 0 },
+          { x: 0, y: 10 },
+        ],
+      },
+    ];
+    mockChildProps.canvasPolygon = null;
+    mockChildProps.svgFilters = null;
+  });
+
+  afterEach(() => {
+    mockEditor.transform = originalTransform;
+    mockEditor.polygons = [];
+  });
+
+  const overlay = () =>
+    document.querySelector('svg[data-transform]') as SVGSVGElement;
+
+  it('writes the inverse zoom onto the overlay <svg>', () => {
+    mockEditor.transform = { zoom: 4, translateX: -12.3, translateY: 7.7 };
+    renderEditor();
+    expect(overlay().style.getPropertyValue('--overlay-px')).toBe('0.25px');
+    // 2 px base stroke at zoom 4.
+    expect(overlay().style.getPropertyValue('--overlay-stroke')).toBe('0.5px');
+  });
+
+  it('follows the zoom', () => {
+    mockEditor.transform = { zoom: 10, translateX: 0, translateY: 0 };
+    renderEditor();
+    expect(overlay().style.getPropertyValue('--overlay-px')).toBe('0.1px');
+    expect(overlay().style.getPropertyValue('--overlay-stroke')).toBe('0.2px');
+  });
+
+  it('hands CanvasPolygon neither a zoom nor an isZooming prop', () => {
+    mockEditor.transform = { zoom: 4, translateX: 0, translateY: 0 };
+    renderEditor();
+    expect(mockChildProps.canvasPolygon).not.toBeNull();
+    expect(mockChildProps.canvasPolygon.polygon.id).toBe('p1');
+    expect(mockChildProps.canvasPolygon).not.toHaveProperty('zoom');
+    expect(mockChildProps.canvasPolygon).not.toHaveProperty('isZooming');
+  });
+
+  it('gives the soma-highlight filter the zoom it cannot read from CSS', () => {
+    mockEditor.transform = { zoom: 4, translateX: 0, translateY: 0 };
+    renderEditor();
+    expect(mockChildProps.svgFilters).toEqual({ zoom: 4 });
   });
 });

@@ -10,14 +10,14 @@ A one-page shortcut table lives at
 
 ## Layout
 
-| Area              | Contains                                                                                                                                                     |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Top toolbar**   | Undo, Redo, **Resegment frame**, the saved/unsaved indicator, **Save**                                                                                       |
-| **Left rail**     | The seven edit modes, then Zoom in / Zoom out / Reset view                                                                                                   |
-| **Canvas**        | The image with polygons drawn over it. A coloured 4 px border tells you which mode you are in, and an instruction card in the corner tells you what to click |
-| **Right sidebar** | The shape list (or the microtubule / sperm instance panel), channel controls and display controls for videos                                                 |
-| **Footer**        | Shape and vertex counts, and a **Shortcuts** button                                                                                                          |
-| **Header**        | Breadcrumbs, image navigation, and — on videos — the frame slider and playback controls                                                                      |
+| Area              | Contains                                                                                                                                                                          |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Top toolbar**   | Undo, Redo, **Resegment frame**, the saved/unsaved indicator, **Save**                                                                                                            |
+| **Left rail**     | The seven edit modes, then Zoom in / Zoom out / Reset view                                                                                                                        |
+| **Canvas**        | The image with polygons drawn over it. A coloured 4 px border tells you which mode you are in, and an instruction card in the corner tells you what to click                      |
+| **Right sidebar** | The **Display** card (brightness, contrast, **Smooth image**; Min/Max on 16-bit data), channel controls on videos, and the shape list (or the microtubule / sperm instance panel) |
+| **Footer**        | Shape and vertex counts, and a **Shortcuts** button                                                                                                                               |
+| **Header**        | Breadcrumbs, image navigation, and — on videos — the frame slider and playback controls                                                                                           |
 
 **Save is disabled when there is nothing to save.** A greyed-out Save button
 means "all changes saved", which is also stated in words next to it.
@@ -59,8 +59,11 @@ Where each mode goes when it finishes:
 ## Mouse
 
 Hit radii are constant in _screen_ pixels — they scale with zoom, so a vertex is
-equally easy to grab at 1× and at 8×. A polyline gets an invisible click stroke
-12× its drawn width, so a one-pixel-wide microtubule is comfortably clickable.
+equally easy to grab at 1× and at 8×. A polyline gets an invisible click band
+**24 px wide on screen** (8× its drawn 3 px) at every zoom from 0.7× up, so a
+thin microtubule is comfortably clickable without the band of one swallowing
+its neighbour. (Until 2026-10-08 the band was in image units above 4× and
+reached 60 px at 10×.)
 
 | Gesture                                           | Effect                                                                     |
 | ------------------------------------------------- | -------------------------------------------------------------------------- |
@@ -82,6 +85,10 @@ you change frame** — shape ids are per frame.
 
 - One wheel notch is 1.2×, anchored **at the cursor**. The toolbar buttons and
   <kbd>+</kbd>/<kbd>−</kbd> use the same factor anchored at the canvas centre.
+  The step is proportional to how far the wheel moved (`1.2 ^ (delta / notch)`,
+  one notch at most per event), so a trackpad zooms smoothly instead of a full
+  1.2× per frame, and several notches spun quickly all count — they are added
+  up and applied once per animation frame.
 - <kbd>R</kbd> or <kbd>0</kbd> fits the image with a small margin and never
   zooms past 100 %.
 - Maximum 10×. The minimum goes _below_ fit-to-view so a large image can always
@@ -90,6 +97,42 @@ you change frame** — shape ids are per frame.
   reachable.
 - The view auto-fits when you open an image from the gallery, but not when you
   navigate between images inside the editor.
+
+### What stays the same size when you zoom
+
+Everything drawn over the image has a **constant size on screen**, as in CVAT:
+
+| Element                                   | On screen (zoom ≥ 0.7×) |
+| ----------------------------------------- | ----------------------- |
+| Polygon outline / hovered                 | 2 px / 2.6 px           |
+| Polyline / hovered                        | 3 px / 5 px             |
+| Polyline click band                       | 24 px                   |
+| Vertex handle / hovered                   | 5 px radius / 6.5 px    |
+| Selection glow                            | 8 px blur               |
+| Drawing preview line, sperm endpoint dots | 2 px, 3 px radius       |
+| Shared-neurite stripes (colour by soma)   | 10 px per colour        |
+
+Below 0.7× the outlines thin out (to 60 %, then 40 % of those widths under
+0.5×) so they do not bury a large image shown small. Sizes follow the zoom
+_during_ the wheel gesture, not after it.
+
+### Smooth image
+
+The **Display** card in the right sidebar — present for stills and videos alike
+— opens with a **Smooth image** switch, on by default:
+
+- **On**: the browser interpolates between image pixels when you zoom in, so
+  you see a continuous image rather than squares. This is CVAT's setting of the
+  same name and its default.
+- **Off**: each image pixel is drawn as a hard-edged square
+  (`image-rendering: pixelated`) — what you want when placing a vertex on an
+  exact pixel.
+
+It changes only how the image is drawn; shapes are vectors and are sharp
+either way. The choice is remembered in the browser across reloads, and
+**Reset** in the same card does not touch it. From the keyboard, <kbd>Tab</kbd>
+to it and press <kbd>Enter</kbd> — <kbd>Space</kbd> is the editor's pan and
+play key and does not activate buttons.
 
 ---
 
@@ -334,12 +377,12 @@ to neutral.
 
 Right-click a microtubule:
 
-| Item                                    | Effect                                                                                                                              |
-| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| **Propagate to following frames**       | Stamps this polyline's exact current shape into **every later frame** of the video. Confirmed; cannot be undone.                    |
-| **Propagate selected microtubules (N)** | The same, for two or more selected microtubules, each keeping its own track. Partial failures are reported.                         |
-| **Delete whole track**                  | For a tracked microtubule, removes it from all frames — the confirmation names the frame count. An untracked one is simply deleted. |
-| **Show kymograph**                      | Opens the kymograph modal (videos only).                                                                                            |
+| Item                                    | Effect                                                                                                                                                                                                                                                                                                                      |
+| --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Propagate to following frames**       | Stamps this polyline's exact current shape into **every later frame** of the video. Confirmed; cannot be undone. A frame that already holds exactly this shape (same points, name and track) is left untouched, and the toast counts only the frames actually written; when none were, it says there was nothing to change. |
+| **Propagate selected microtubules (N)** | The same, for two or more selected microtubules, each keeping its own track. The toast counts the microtubules that changed, or says there was nothing to change. Partial failures are reported.                                                                                                                            |
+| **Delete whole track**                  | For a tracked microtubule, removes it from all frames — the confirmation names the frame count. An untracked one is simply deleted.                                                                                                                                                                                         |
+| **Show kymograph**                      | Opens the kymograph modal (videos only).                                                                                                                                                                                                                                                                                    |
 
 ### The kymograph modal
 
@@ -400,7 +443,8 @@ computed at export time. See
 See [Videos, frames and channels](videos-and-channels.md) for the frame slider,
 channel overlay controls and the per-channel window/level sliders. In brief:
 <kbd>←</kbd>/<kbd>→</kbd> step frames, <kbd>Space</kbd> plays and pauses at a
-fixed 10 fps, and the sidebar gains **Channels** and **Display** sections.
+fixed 10 fps, and the sidebar gains a **Channels** section above the
+**Display** card that stills have too.
 
 ---
 
@@ -410,10 +454,25 @@ Things you will notice, all deliberate:
 
 - **Every visible shape is drawn, always.** There is no viewport culling — an
   earlier culling pass dropped on-screen pieces of fragmented spheroids.
-  Panning and zooming are GPU transforms, so they stay cheap regardless of shape
-  count.
-- **Zoom is lazy.** While the wheel is turning, vertex dots scale with the image
-  and snap back to their correct size about 150 ms after you stop.
+- **Pan and zoom are one plain 2D transform on one container.** A pan moves
+  an already-drawn layer and re-draws nothing. A zoom step re-draws the shapes
+  at the new scale — that is what keeps their edges sharp at 10× — so its cost
+  grows with shape count: measured on a synthetic 2000-polyline frame, about
+  6 ms per step on a workstation GPU (a steady 60 fps).
+- **The view is deliberately not "GPU accelerated" with `will-change`.** That
+  hint makes zooming about ten times cheaper by keeping the layer as a bitmap
+  and stretching it — measured, it turned a 0.6 px stroke edge into a 5 px
+  blur for as long as the hint was on. The earlier `perspective` /
+  `translate3d` hints bought nothing measurable and, with the brightness /
+  contrast filter, bled one screen pixel across every image-pixel boundary.
+- **The drawn position is snapped to whole device pixels.** A view parked on
+  a fractional pixel made the browser resample the whole overlay (stroke edge
+  1.1–1.6 device px instead of about 0.8, at 100 %, 125 %, 150 % and 200 %
+  display scaling). Only what is drawn is snapped; pans still accumulate
+  sub-pixel movement.
+- **A zoom step re-renders no shape.** Stroke widths, vertex handles and the
+  selection glow read the zoom from two CSS custom properties on the overlay,
+  so one style write resizes everything, in the same frame as the zoom.
 - **Vertices are drawn only for the selected shape**, and only those near the
   viewport.
 - **The sidebar list lags the canvas by one render on purpose**, so playback and

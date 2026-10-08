@@ -785,12 +785,16 @@ export default {
     resizeSidebar: 'Změnit šířku panelu',
     trackOps: {
       propagateSelectedSuccess:
-        '{{count}} mikrotubulů propagováno do dalších snímků',
+        'Mikrotubuly propagované do dalších snímků: {{count}}',
       propagateSelectedPartial: 'Propagováno {{done}} z {{total}} mikrotubulů',
       deleteSelectedPartial: 'Smazáno {{done}} z {{total}} mikrotubulů',
       propagateSuccess:
         'Mikrotubulus propagován do {{count}} následujících snímků',
       propagateFailed: 'Propagace mikrotubulu selhala',
+      propagateNoChange:
+        'Není co měnit – následující snímky už tento tvar mají',
+      propagateSelectedNoChange:
+        'Není co měnit – následující snímky už tyto tvary mají',
       deleteTrackSuccess: 'Track odstraněn z {{count}} snímků',
       deleteTrackFailed: 'Smazání tracku selhalo',
       deleteFrameSuccess:
@@ -1799,7 +1803,7 @@ export default {
         'Pokud není žádný název kanálu rozpoznatelný, není označen žádný zdroj a použije se první kanál. U mikrotubulů to má následky: model pracuje jen s IRM, takže na fluorescenčním kanálu vytvoří přesvědčivé polyline, pod nimiž ale nic není.',
       windowLevel: 'Zobrazení 16bitových dat',
       windowLevelDescription:
-        'Snímky s vysokou bitovou hloubkou se pro zobrazení mapují posuvníky Min a Max, doplněnými o Jas a Kontrast. Nad nimi je histogram aktivního kanálu na stejné ose jako posuvníky, s vyznačeným oknem, a tlačítko Auto nastaví Min a Max podle aktuálního snímku stejně jako Auto v ImageJ; každý další stisk saturuje víc. Okno je zvlášť pro každý kanál, nikoli sdílené: kanál se při prvním zobrazení automaticky přizpůsobí vlastním datům, poté si drží vaše meze a rozsah jen rozšiřuje, když přijdou jasnější snímky. Nastavení platí po dobu relace; barvy a krytí kanálů se pamatují.',
+        'Snímky s vysokou bitovou hloubkou se pro zobrazení mapují posuvníky Min a Max, doplněnými o Jas a Kontrast. Nad nimi je histogram aktivního kanálu na stejné ose jako posuvníky, s vyznačeným oknem, a tlačítko Auto nastaví Min a Max podle aktuálního snímku stejně jako Auto v ImageJ; každý další stisk saturuje víc. Okno je zvlášť pro každý kanál, nikoli sdílené: kanál se při prvním zobrazení automaticky přizpůsobí vlastním datům, poté si drží vaše meze a rozsah jen rozšiřuje, když přijdou jasnější snímky. Nastavení platí po dobu relace; barvy a krytí kanálů se pamatují. Přepínač Vyhlazovat obraz nahoře v kartě Zobrazení při přiblížení prolíná sousední pixely; po vypnutí je každý pixel snímku ostrý čtverec. Tento přepínač si prohlížeč pamatuje a Resetovat ho nemění.',
       navigation: 'Pohyb po snímcích',
       keys: {
         step: 'Předchozí / další snímek',
@@ -2035,7 +2039,7 @@ export default {
         saving:
           'Ukládání na povel: tlačítkem Uložit, klávesou Ctrl+S, nebo automaticky při přechodu na jiný snímek.',
         zoomPan:
-          'Přiblížení k ukazateli myši, posun tažením a přizpůsobení snímku klávesou R nebo 0.',
+          'Přiblížení k ukazateli myši, posun tažením a přizpůsobení snímku klávesou R nebo 0. Obrysy, body i jejich zvýraznění mají na obrazovce od přiblížení 0,7× výše stejnou velikost; při větším oddálení se obrysy ztenčují, aby nezakryly velký snímek zobrazený zmenšeně.',
         polygonManagement:
           'Seznam tvarů s vícenásobným výběrem, skrýváním, přejmenováním a mazáním.',
         keyboardShortcuts:
@@ -3028,6 +3032,9 @@ export default {
       auto: 'Auto',
       autoHint:
         'Nastaví Min a Max podle tohoto snímku, jako Auto v ImageJ. Další stisk saturuje víc.',
+      smooth: 'Vyhlazovat obraz',
+      smoothHint:
+        'Při přiblížení prolíná sousední pixely. Po vypnutí je každý pixel snímku ostrý čtverec.',
     },
     frameNavigation: {
       frame: 'Snímek',

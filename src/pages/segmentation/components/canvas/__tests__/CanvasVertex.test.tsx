@@ -6,13 +6,23 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, fireEvent } from '@testing-library/react';
-import CanvasVertex, {
-  calculateVertexRadius,
-  calculateStrokeWidth,
-  defaultConfig,
-  type VertexScalingConfig,
-} from '../CanvasVertex';
+import CanvasVertex from '../CanvasVertex';
 import { Point } from '@/lib/segmentation';
+import { overlayScaleStyle, vertexRadiusPx } from '../../../utils/overlayScale';
+
+// `vertexRadiusPx` is called once per render of CanvasVertex and nowhere
+// else, which makes it a render counter that needs no stub of the component.
+vi.mock('../../../utils/overlayScale', async importOriginal => {
+  const actual =
+    await importOriginal<typeof import('../../../utils/overlayScale')>();
+  return { ...actual, vertexRadiusPx: vi.fn(actual.vertexRadiusPx) };
+});
+
+/** Radius of a vertex handle in SCREEN pixels. It is a CSS custom property on
+ *  the circle (class `overlay-dot` turns it into `r`), not an `r` attribute:
+ *  the size has to follow the zoom without this component re-rendering. */
+const radiusPx = (el: Element) =>
+  parseFloat((el as SVGElement).style.getPropertyValue('--overlay-r'));
 
 describe('CanvasVertex', () => {
   const mockPoint: Point = { x: 100, y: 150 };
@@ -23,7 +33,6 @@ describe('CanvasVertex', () => {
     isSelected: true,
     isHovered: false,
     isDragging: false,
-    zoom: 1,
     type: 'external' as const,
     isStartPoint: false,
     isUndoRedoInProgress: false,
@@ -72,7 +81,15 @@ describe('CanvasVertex', () => {
       );
       const vertex = container.querySelector('circle') as SVGCircleElement;
       expect(vertex).toBeInTheDocument();
-      expect(vertex).toHaveAttribute('r', '5'); // Default base radius
+      // 5 screen px, through the class — and deliberately no `r` attribute,
+      // which would be in user units and grow with the zoom.
+      expect(radiusPx(vertex)).toBe(5);
+      expect(vertex).toHaveClass('overlay-dot');
+      expect(vertex).not.toHaveAttribute('r');
+      expect(vertex).not.toHaveAttribute('stroke-width');
+      expect(vertex.style.strokeWidth).toBe(
+        'calc(var(--overlay-px, 1px) * 1.2)'
+      );
       expect(vertex).toHaveAttribute('fill', '#ea384c'); // External vertex color
       expect(vertex).toHaveAttribute('stroke', '#ffffff');
       expect(vertex).toHaveAttribute('opacity', '1'); // Selected vertex
@@ -182,10 +199,10 @@ describe('CanvasVertex', () => {
       );
       const vertex = container.querySelector('circle') as SVGCircleElement;
       expect(vertex).toBeInTheDocument();
-      const radius = parseFloat(vertex.getAttribute('r') || '0');
+      const radius = radiusPx(vertex);
 
-      // Should be larger than base radius due to hover scaling
-      expect(radius).toBeGreaterThan(5);
+      // 5 px x 1.3 hover scale
+      expect(radius).toBe(6.5);
       expect(vertex).toHaveAttribute('fill', '#e74c3c'); // Hover color
     });
 
@@ -220,10 +237,10 @@ describe('CanvasVertex', () => {
       );
       const vertex = container.querySelector('circle') as SVGCircleElement;
       expect(vertex).toBeInTheDocument();
-      const radius = parseFloat(vertex.getAttribute('r') || '0');
+      const radius = radiusPx(vertex);
 
-      // Should be larger than base radius due to start point scaling
-      expect(radius).toBeGreaterThan(5);
+      // 5 px x 1.2 start-point scale
+      expect(radius).toBe(6);
     });
 
     it('combines multiple interaction states correctly', () => {
@@ -239,70 +256,56 @@ describe('CanvasVertex', () => {
       );
       const vertex = container.querySelector('circle') as SVGCircleElement;
       expect(vertex).toBeInTheDocument();
-      const radius = parseFloat(vertex.getAttribute('r') || '0');
+      const radius = radiusPx(vertex);
 
-      // Should apply all scaling factors
-      expect(radius).toBeGreaterThan(6); // Significantly larger
+      // 5 x 1.3 x 1.1 x 1.2
+      expect(radius).toBe(8.58);
       expect(vertex).toHaveAttribute('fill', '#c0392b'); // Dragging takes precedence
     });
   });
 
   describe('Zoom Scaling', () => {
-    it('scales vertex size correctly with zoom level', () => {
-      const { container, rerender } = render(
-        <svg>
-          <CanvasVertex {...defaultProps} zoom={1} />
-        </svg>
-      );
-      const vertex = container.querySelector('circle') as SVGCircleElement;
-      expect(vertex).toBeInTheDocument();
-      const radius1x = parseFloat(vertex.getAttribute('r') || '0');
-
-      rerender(
-        <svg>
-          <CanvasVertex {...defaultProps} zoom={2} />
-        </svg>
-      );
-
-      const radius2x = parseFloat(vertex.getAttribute('r') || '0');
-
-      // Higher zoom should result in smaller apparent vertex size
-      expect(radius2x).toBeLessThan(radius1x);
-    });
-
-    it('respects minimum and maximum radius bounds', () => {
-      const { container } = render(
-        <svg>
-          <CanvasVertex {...defaultProps} zoom={100} />
-        </svg>
-      );
-      const vertex = container.querySelector('circle') as SVGCircleElement;
-      expect(vertex).toBeInTheDocument();
-      const radius = parseFloat(vertex.getAttribute('r') || '0');
-
-      // Should not go below minimum radius
-      expect(radius).toBeGreaterThanOrEqual(defaultConfig.minRadius);
-    });
-
-    it('handles extreme zoom levels gracefully', () => {
-      const extremeZooms = [0.001, 0.1, 50, 1000];
-
-      extremeZooms.forEach(zoom => {
+    // The handle takes no zoom prop. Its size is `--overlay-r` screen pixels
+    // times the overlay's `--overlay-px` (1 / zoom), resolved by CSS — so the
+    // markup of a vertex is IDENTICAL at every zoom and a zoom step re-renders
+    // none of them. (jsdom does not resolve `calc()`; that the product is a
+    // constant on screen is measured in a real browser, not here.)
+    it('emits the same markup at every zoom', () => {
+      const at = (zoom: number) => {
         const { container, unmount } = render(
-          <svg>
-            <CanvasVertex {...defaultProps} zoom={zoom} />
+          <svg style={overlayScaleStyle(zoom)}>
+            <CanvasVertex {...defaultProps} />
           </svg>
         );
-        const vertex = container.querySelector('circle') as SVGCircleElement;
-        expect(vertex).toBeInTheDocument();
-        const radius = parseFloat(vertex.getAttribute('r') || '0');
-
-        // Should always be within valid bounds
-        expect(radius).toBeGreaterThan(0);
-        expect(radius).toBeLessThanOrEqual(defaultConfig.maxRadius);
-
+        const html = container.querySelector('circle')!.outerHTML;
         unmount();
-      });
+        return html;
+      };
+      const reference = at(1);
+      for (const zoom of [0.1, 2.35, 4.06, 10]) {
+        expect(at(zoom)).toBe(reference);
+      }
+    });
+
+    it('does not re-render when only the overlay zoom changes', () => {
+      const renders = () => vi.mocked(vertexRadiusPx).mock.calls.length;
+      const ui = (zoom: number, extra: Record<string, unknown> = {}) => (
+        <svg style={overlayScaleStyle(zoom)}>
+          <CanvasVertex {...defaultProps} {...extra} />
+        </svg>
+      );
+      const { container, rerender } = render(ui(1));
+      expect(renders()).toBe(1);
+      rerender(ui(4));
+      rerender(ui(10));
+      expect(renders()).toBe(1);
+      // The control: the counter does move for a prop that changes.
+      rerender(ui(10, { isHovered: true }));
+      expect(renders()).toBe(2);
+      // ...while the one write that does happen landed on the <svg>.
+      expect(
+        container.querySelector('svg')!.style.getPropertyValue('--overlay-px')
+      ).toBe('0.1px');
     });
   });
 
@@ -366,9 +369,10 @@ describe('CanvasVertex', () => {
       // Paint only — never `all`. `cx`/`cy` are SVG2 geometry properties and
       // animate under `all`, so a dropped vertex glided into place instead of
       // being there; see `vertexDragRendering.test.tsx`.
+      // `r` is not eased either: it changes with every zoom step now, and a
+      // transition would lag each handle 150 ms behind the wheel.
       expect(vertex).toHaveStyle({
-        transition:
-          'fill 0.15s ease-out, r 0.15s ease-out, opacity 0.15s ease-out',
+        transition: 'fill 0.15s ease-out, opacity 0.15s ease-out',
       });
 
       rerender(
@@ -595,103 +599,6 @@ describe('CanvasVertex', () => {
 
         unmount();
       });
-    });
-  });
-});
-
-describe('Vertex Scaling Utility Functions', () => {
-  describe('calculateVertexRadius', () => {
-    it('calculates radius with adaptive scaling mode', () => {
-      const radius = calculateVertexRadius(2, defaultConfig);
-      expect(radius).toBeLessThan(defaultConfig.baseRadius);
-      expect(radius).toBeGreaterThan(0);
-    });
-
-    it('applies interaction state multipliers correctly', () => {
-      const baseRadius = calculateVertexRadius(1, defaultConfig);
-      const hoveredRadius = calculateVertexRadius(1, defaultConfig, true);
-      const draggingRadius = calculateVertexRadius(
-        1,
-        defaultConfig,
-        false,
-        true
-      );
-      const startPointRadius = calculateVertexRadius(
-        1,
-        defaultConfig,
-        false,
-        false,
-        true
-      );
-
-      expect(hoveredRadius).toBeGreaterThan(baseRadius);
-      expect(draggingRadius).toBeGreaterThan(baseRadius);
-      expect(startPointRadius).toBeGreaterThan(baseRadius);
-    });
-
-    it('enforces minimum and maximum bounds', () => {
-      const config: VertexScalingConfig = {
-        ...defaultConfig,
-        minRadius: 2,
-        maxRadius: 10,
-      };
-
-      const smallRadius = calculateVertexRadius(1000, config);
-      const largeRadius = calculateVertexRadius(0.001, config);
-
-      expect(smallRadius).toBeGreaterThanOrEqual(config.minRadius);
-      expect(largeRadius).toBeLessThanOrEqual(config.maxRadius);
-    });
-
-    it('handles different scaling modes', () => {
-      const modes: VertexScalingConfig['scalingMode'][] = [
-        'adaptive',
-        'constant',
-        'linear',
-        'logarithmic',
-      ];
-
-      modes.forEach(mode => {
-        const config: VertexScalingConfig = {
-          ...defaultConfig,
-          scalingMode: mode,
-        };
-        const radius = calculateVertexRadius(2, config);
-        expect(radius).toBeGreaterThan(0);
-      });
-    });
-  });
-
-  describe('calculateStrokeWidth', () => {
-    it('calculates stroke width proportional to zoom', () => {
-      const width1x = calculateStrokeWidth(1, defaultConfig);
-      const width2x = calculateStrokeWidth(2, defaultConfig);
-
-      expect(width2x).toBeLessThan(width1x);
-      expect(width2x).toBeGreaterThan(0);
-    });
-
-    it('maintains minimum stroke width', () => {
-      const width = calculateStrokeWidth(1000, defaultConfig);
-      // The component enforces a minimum of 0.2 in both modes
-      expect(width).toBeGreaterThanOrEqual(0.2);
-    });
-
-    it('handles constant scaling mode differently', () => {
-      const adaptiveConfig: VertexScalingConfig = {
-        ...defaultConfig,
-        scalingMode: 'adaptive',
-      };
-      const constantConfig: VertexScalingConfig = {
-        ...defaultConfig,
-        scalingMode: 'constant',
-      };
-
-      const adaptiveWidth = calculateStrokeWidth(4, adaptiveConfig);
-      const constantWidth = calculateStrokeWidth(4, constantConfig);
-
-      // Different scaling modes should produce different results
-      expect(adaptiveWidth).not.toBe(constantWidth);
     });
   });
 });

@@ -16,25 +16,14 @@ import {
   type TransformState,
 } from '@/pages/segmentation/types';
 import {
+  OVERLAY_DOT_CLASS,
+  OVERLAY_RADIUS_VAR,
+} from '@/pages/segmentation/utils/overlayScale';
+import {
   createMockPolygon,
   createMockInteractionState,
   createMockTransformState,
 } from '@/test-utils/segmentationTestUtils';
-
-// ---------------------------------------------------------------------------
-// CanvasVertex exports are used by the component for radius calculation –
-// mock them to avoid full canvas setup requirements.
-// ---------------------------------------------------------------------------
-
-vi.mock('../CanvasVertex', async () => {
-  const actual =
-    await vi.importActual<typeof import('../CanvasVertex')>('../CanvasVertex');
-  return {
-    ...actual,
-    calculateVertexRadius: vi.fn(() => 4),
-    defaultConfig: actual.defaultConfig,
-  };
-});
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -639,5 +628,136 @@ describe('renderJoinTargetHighlight', () => {
       hoveredJoinTarget: null,
     });
     expect(joinRing(container)).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Sizes are in SCREEN pixels
+// ---------------------------------------------------------------------------
+
+// Every size in this layer is a `calc()` on the overlay's inverse-zoom custom
+// property, as for the committed shapes. The preview line used to be
+// `Math.max(1, 2 / zoom)` user units — one IMAGE pixel wide above zoom 2,
+// i.e. 10 screen px at zoom 10, over the structure being traced.
+describe('screen-pixel sizes', () => {
+  const preview = (zoom: number) => {
+    const { container, unmount } = renderLayer({
+      transform: makeTransform({ zoom }),
+      editMode: EditMode.CreatePolyline,
+      tempPoints: [
+        { x: 10, y: 10 },
+        { x: 40, y: 30 },
+      ],
+    });
+    const line = container.querySelector('line')!;
+    const circle = container.querySelector('circle')!;
+    const out = {
+      lineWidth: line.style.strokeWidth,
+      dash: line.style.strokeDasharray,
+      lineAttr: line.getAttribute('stroke-width'),
+      dotClass: circle.getAttribute('class'),
+      dotRadius: circle.style.getPropertyValue('--overlay-r'),
+      dotAttr: circle.getAttribute('r'),
+    };
+    unmount();
+    return out;
+  };
+
+  it('draws the preview through the overlay custom property, not user units', () => {
+    expect(preview(1)).toEqual({
+      lineWidth: 'calc(var(--overlay-px, 1px) * 3)',
+      dash: 'calc(var(--overlay-px, 1px) * 5) calc(var(--overlay-px, 1px) * 3)',
+      lineAttr: null,
+      dotClass: 'overlay-dot',
+      // The radius of a committed vertex handle, so a point does not change
+      // size when the shape is finished.
+      dotRadius: '5',
+      dotAttr: null,
+    });
+  });
+
+  it('emits the same sizes at zoom 10 as at zoom 1', () => {
+    expect(preview(10)).toEqual(preview(1));
+  });
+
+  // No circle here has an `r` attribute, so its radius exists only through
+  // the class + `--overlay-r` pair. One site that loses either is a dot of
+  // radius 0 — a slice start point or a join ring that silently is not
+  // there. The test above reads the FIRST circle of one mode; these are all
+  // six sites, each asserted to have rendered before it is checked.
+  describe('every preview circle gets its radius from the overlay class', () => {
+    const tri = [
+      { x: 10, y: 10 },
+      { x: 60, y: 10 },
+      { x: 60, y: 60 },
+    ];
+    const joinTarget = createMockPolygon({
+      id: 'target',
+      geometry: 'polyline',
+      points: [
+        { x: 10, y: 10 },
+        { x: 10, y: 50 },
+      ],
+    });
+    const sites: Array<{
+      name: string;
+      opts: RenderOptions;
+      /** `[fill, stroke]` of the circle -> its radius in screen px. */
+      expected: Record<string, string>;
+      count: number;
+    }> = [
+      {
+        name: 'CreatePolygon points and the close-here ring',
+        opts: {
+          editMode: EditMode.CreatePolygon,
+          tempPoints: tri,
+          cursorPosition: { x: 11, y: 11 }, // within the close distance
+        },
+        expected: {
+          '#3b82f6/none': '5',
+          '#4ade80/none': '5',
+          'none/#22c55e': '6.5',
+        },
+        count: 4,
+      },
+      {
+        name: 'CreatePolyline points',
+        opts: { editMode: EditMode.CreatePolyline, tempPoints: tri },
+        expected: { '#a855f7/none': '5', '#c084fc/none': '5' },
+        count: 3,
+      },
+      {
+        name: 'Slice points',
+        opts: { editMode: EditMode.Slice, tempPoints: tri.slice(0, 2) },
+        expected: { '#ffcc00/none': '5' },
+        count: 2,
+      },
+      {
+        name: 'AddPoints vertices and the join ring',
+        opts: {
+          editMode: EditMode.AddPoints,
+          tempPoints: tri.slice(0, 2),
+          interactionState: makeInteraction({ isAddingPoints: true }),
+          polygons: [joinTarget],
+          hoveredJoinTarget: { polygonId: 'target', endpoint: 'tail' },
+        },
+        expected: { '#60a5fa/none': '5', 'none/#f59e0b': '8' },
+        count: 3,
+      },
+    ];
+
+    it.each(sites)('$name', ({ opts, expected, count }) => {
+      const { container } = renderLayer(opts);
+      const circles = Array.from(container.querySelectorAll('circle'));
+      expect(circles).toHaveLength(count);
+      const seen: Record<string, string> = {};
+      circles.forEach(c => {
+        expect(c.getAttribute('class')).toBe(OVERLAY_DOT_CLASS);
+        expect(c.getAttribute('r')).toBeNull();
+        seen[`${c.getAttribute('fill')}/${c.getAttribute('stroke')}`] =
+          c.style.getPropertyValue(OVERLAY_RADIUS_VAR);
+      });
+      expect(seen).toEqual(expected);
+    });
   });
 });

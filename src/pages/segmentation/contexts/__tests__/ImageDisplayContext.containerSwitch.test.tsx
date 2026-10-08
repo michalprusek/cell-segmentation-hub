@@ -40,6 +40,7 @@ interface Seen {
   irmWindow: boolean;
   irmColour: string | undefined;
   brightness: number;
+  smooth: boolean;
 }
 
 const FRAMES = [
@@ -61,6 +62,7 @@ function Probe({ container }: { container: string | null }) {
     irmWindow: display.channelWindows.irm !== undefined,
     irmColour: display.channelColors.irm,
     brightness: display.brightness,
+    smooth: display.smoothImage,
   });
   return null;
 }
@@ -102,6 +104,7 @@ describe('switching container without unmounting', () => {
     act(() => {
       api!.setChannelColor('irm', '#ff0000');
       api!.setBrightness(140);
+      api!.setSmoothImage(false);
     });
     expect(seen.at(-1)).toMatchObject({
       seeded: true,
@@ -127,6 +130,9 @@ describe('switching container without unmounting', () => {
       irmColour: '#ff0000',
       brightness: 140,
     });
+    // Smooth image is a standing preference, not a property of the video: it
+    // must not flip back on in ANY render of the new container.
+    expect(afterSwitch.map(r => r.smooth)).not.toContain(true);
   });
 
   it("holds the prefetch until the NEW container's frame has decoded", () => {

@@ -878,11 +878,13 @@ export default {
     },
     resizeSidebar: '调整面板宽度',
     trackOps: {
-      propagateSelectedSuccess: '已将 {{count}} 个微管传播到后续帧',
+      propagateSelectedSuccess: '传播到后续帧的微管数：{{count}}',
       propagateSelectedPartial: '已传播 {{done}}/{{total}} 个微管',
       deleteSelectedPartial: '已删除 {{total}} 条中的 {{done}} 条微管',
       propagateSuccess: '微管已传播到 {{count}} 个后续帧',
       propagateFailed: '微管传播失败',
+      propagateNoChange: '无需更改——后续帧已是此形状',
+      propagateSelectedNoChange: '无需更改——后续帧已是这些形状',
       deleteTrackSuccess: '已从 {{count}} 帧中删除轨迹',
       deleteTrackFailed: '删除轨迹失败',
       deleteFrameSuccess: '已从当前帧删除该微管；其余轨迹保持不变',
@@ -1701,7 +1703,7 @@ export default {
         '若没有可识别的通道名称，系统不会标记任何分割源，而是使用第一个通道。对微管来说这很关键：该模型只适用于 IRM，指向荧光通道会得到看似可信、底下却空无一物的折线。',
       windowLevel: '显示 16 位数据',
       windowLevelDescription:
-        '高位深图像需通过「最小值」「最大值」滑块映射后显示，另有「亮度」与「对比度」。滑块上方的直方图与滑块共用同一坐标轴，显示当前通道的数据并标出窗口；「自动」会像 ImageJ 的“自动”一样按当前帧设置最小值和最大值，每多点击一次会饱和更多像素。窗宽窗位按通道分别设置，并不共用：某个通道首次显示时会自动适配其自身数据，之后保留您设定的上下限，仅在出现更亮的帧时扩展范围。这些设置仅在当前会话内有效；通道颜色与不透明度则会被记住。',
+        '高位深图像需通过「最小值」「最大值」滑块映射后显示，另有「亮度」与「对比度」。滑块上方的直方图与滑块共用同一坐标轴，显示当前通道的数据并标出窗口；「自动」会像 ImageJ 的“自动”一样按当前帧设置最小值和最大值，每多点击一次会饱和更多像素。窗宽窗位按通道分别设置，并不共用：某个通道首次显示时会自动适配其自身数据，之后保留您设定的上下限，仅在出现更亮的帧时扩展范围。这些设置仅在当前会话内有效；通道颜色与不透明度则会被记住。「显示」卡片顶部的「平滑图像」开关在放大时混合相邻像素；关闭后，图像的每个像素显示为边缘清晰的方块。该开关会保存在此浏览器中，「重置」不会改变它。',
       navigation: '在帧之间移动',
       keys: {
         step: '上一帧 / 下一帧',
@@ -1917,7 +1919,7 @@ export default {
         saving:
           '按需保存：点击「保存」、按 Ctrl+S，或在切换到其他图像时自动保存。',
         zoomPan:
-          '以鼠标指针为中心缩放、拖动平移，并可用 R 或 0 让图像适应窗口。',
+          '以鼠标指针为中心缩放、拖动平移，并可用 R 或 0 让图像适应窗口。轮廓、顶点及其高亮在缩放 0.7× 及以上时保持相同的屏幕大小；缩得更小时轮廓会变细，以免遮住缩小显示的大图。',
         polygonManagement: '形状列表支持多选、显示与隐藏、重命名与删除。',
         keyboardShortcuts: '完整的键盘操作 — 按 H 或 ? 可查看应用内列表。',
         realTimeFeedback:
@@ -2870,6 +2872,9 @@ export default {
       auto: '自动',
       autoHint:
         '按当前帧设置最小值和最大值，与 ImageJ 的“自动”相同。再次点击会饱和更多像素。',
+      smooth: '平滑图像',
+      smoothHint:
+        '放大时混合相邻像素。关闭后，图像的每个像素显示为边缘清晰的方块。',
     },
     frameNavigation: {
       frame: '帧',

@@ -2038,6 +2038,12 @@ class ApiClient {
    * `fromFrameIndex`, overwriting the same track where present and adding it
    * where missing. The backend returns the (possibly newly-generated) trackId
    * so the editor can patch it onto the source polyline for stable colour.
+   *
+   * A frame that already holds exactly this polyline is not rewritten, and the
+   * result says so: `framesChanged` (rows rewritten or created),
+   * `framesUnchanged` (already identical) and `framesSkipped` (unreadable, left
+   * alone). `framesUpdated` is `framesChanged + framesUnchanged`. "Nothing to
+   * change" is `framesChanged === 0 && framesSkipped === 0`.
    */
   async propagateTrackForward(
     videoId: string,
@@ -2054,15 +2060,31 @@ class ApiClient {
       geometry?: 'polygon' | 'polyline';
       points: Array<{ x: number; y: number }>;
     }
-  ): Promise<{ trackId: string; framesUpdated: number }> {
+  ): Promise<{
+    trackId: string;
+    framesUpdated: number;
+    framesChanged: number;
+    framesUnchanged: number;
+    framesSkipped: number;
+  }> {
     const response = await this.instance.post(
       `/segmentation/videos/${videoId}/tracks/propagate`,
       { fromFrameIndex, polyline }
     );
     const data = this.extractData(response);
+    const framesUpdated = Number(data?.framesUpdated ?? 0);
     return {
       trackId: String(data?.trackId ?? polyline.trackId ?? ''),
-      framesUpdated: Number(data?.framesUpdated ?? 0),
+      framesUpdated,
+      // A backend from before 2026-10-08 sends `framesUpdated` only, and it
+      // rewrote every frame it counted — so for that server "updated" IS
+      // "changed". Reading the missing field as 0 instead would turn every
+      // propagate into a false "nothing to change" for as long as the frontend
+      // is deployed ahead of the backend; this way it degrades to the old
+      // success toast.
+      framesChanged: Number(data?.framesChanged ?? framesUpdated),
+      framesUnchanged: Number(data?.framesUnchanged ?? 0),
+      framesSkipped: Number(data?.framesSkipped ?? 0),
     };
   }
 

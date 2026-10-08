@@ -179,12 +179,12 @@ frame locally, **undo reverts only the current frame**.
 
 ### Track operations
 
-| Right-click item                        | Effect                                                                                          |
-| --------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| **Propagate to following frames**       | Stamps this polyline's exact current shape into every later frame. Confirmed; cannot be undone. |
-| **Propagate selected microtubules (N)** | The same for a multi-selection, each keeping its own track.                                     |
-| **Delete whole track**                  | Removes a tracked microtubule from all frames; the confirmation names the frame count.          |
-| **Show kymograph**                      | Opens the kymograph modal.                                                                      |
+| Right-click item                        | Effect                                                                                                                                                                                                                                   |
+| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Propagate to following frames**       | Stamps this polyline's exact current shape into every later frame. Confirmed; cannot be undone. Frames that already hold exactly this shape are not rewritten; the toast counts the frames written, or says there was nothing to change. |
+| **Propagate selected microtubules (N)** | The same for a multi-selection, each keeping its own track. The toast counts the microtubules that changed.                                                                                                                              |
+| **Delete whole track**                  | Removes a tracked microtubule from all frames; the confirmation names the frame count.                                                                                                                                                   |
+| **Show kymograph**                      | Opens the kymograph modal.                                                                                                                                                                                                               |
 
 ### Kymographs in the editor
 

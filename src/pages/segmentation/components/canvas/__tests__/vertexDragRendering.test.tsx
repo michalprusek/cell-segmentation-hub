@@ -80,7 +80,6 @@ const BASE = {
   isSelected: true,
   isHovered: false,
   hoveredVertex: { polygonId: null, vertexIndex: null },
-  zoom: 1,
   onDeleteVertex: () => {},
 };
 
@@ -251,7 +250,6 @@ describe('the vertex never animates its position', () => {
     isSelected: true,
     isHovered: false,
     isDragging: false,
-    zoom: 1,
   };
 
   /** The property names the element declares a transition for. */
@@ -272,7 +270,10 @@ describe('the vertex never animates its position', () => {
     );
     const circle = container.querySelector('circle')!;
     // `all` covers cx/cy — they are SVG2 geometry properties and animate.
-    expect(transitionedProperties(circle)).toEqual(['fill', 'opacity', 'r']);
+    // `r` is not eased either: it follows the zoom through a custom property
+    // now, and a transition on it would lag every handle 150 ms behind each
+    // wheel step.
+    expect(transitionedProperties(circle)).toEqual(['fill', 'opacity']);
   });
 
   it('does not animate the drop, where the point actually moves', () => {
@@ -298,7 +299,7 @@ describe('the vertex never animates its position', () => {
     const circle = container.querySelector('circle')!;
     expect(circle.getAttribute('cx')).toBe('60');
     expect(circle.getAttribute('cy')).toBe('70');
-    expect(transitionedProperties(circle)).toEqual(['fill', 'opacity', 'r']);
+    expect(transitionedProperties(circle)).toEqual(['fill', 'opacity']);
   });
 
   it('still switches everything off during undo/redo', () => {

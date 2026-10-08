@@ -18,14 +18,39 @@ export function rafThrottle<T extends unknown[]>(
       return; // Already scheduled
     }
 
-    rafId = requestAnimationFrame(currentTime => {
-      if (currentTime - lastTime >= interval && lastArgs) {
-        callback(...lastArgs);
-        lastTime = currentTime;
-        lastArgs = null;
-      }
-      rafId = null;
-    });
+    rafId = requestAnimationFrame(run);
+  };
+
+  // A frame that arrives before `interval` has elapsed must RE-ARM, not just
+  // give up. The old body cleared `rafId` and returned, leaving `lastArgs`
+  // parked until some later call happened to schedule again — so on a
+  // 120 Hz display (8.3 ms frames against the 16 ms default) every other
+  // call was deferred, and the LAST call of a burst was never delivered at
+  // all: the cursor read-out stopped one event short of where the pointer
+  // came to rest.
+  //
+  // The frame's timestamp is NOT trusted to exist. Browsers always pass one,
+  // but a `requestAnimationFrame` stand-in need not — this project's own test
+  // setup is `setTimeout(callback, 16)`, which passes nothing. `undefined -
+  // lastTime` is NaN, NaN is never `>= interval`, and with the re-arm above
+  // that is a frame scheduled every 16 ms for ever with the callback never
+  // delivered (measured: 25 frames armed and 0 calls in 400 ms after one
+  // call). So a non-finite timestamp falls back to the clock it stands for.
+  const run = (timestamp?: number) => {
+    rafId = null;
+    if (!lastArgs) return;
+    const currentTime =
+      typeof timestamp === 'number' && Number.isFinite(timestamp)
+        ? timestamp
+        : performance.now();
+    if (currentTime - lastTime >= interval) {
+      const args = lastArgs;
+      lastArgs = null;
+      lastTime = currentTime;
+      callback(...args);
+    } else {
+      rafId = requestAnimationFrame(run);
+    }
   };
 
   const cancel = () => {

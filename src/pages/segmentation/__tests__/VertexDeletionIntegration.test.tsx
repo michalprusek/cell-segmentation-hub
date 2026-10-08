@@ -209,7 +209,6 @@ describe('Vertex Deletion Integration Tests', () => {
                 isSelected={true}
                 isHovered={false}
                 isDragging={false}
-                zoom={1}
               />
             </VertexContextMenu>
           </svg>
@@ -277,7 +276,6 @@ describe('Vertex Deletion Integration Tests', () => {
                 isSelected={true}
                 isHovered={false}
                 isDragging={false}
-                zoom={1}
               />
             </VertexContextMenu>
           </svg>
@@ -325,7 +323,6 @@ describe('Vertex Deletion Integration Tests', () => {
               isSelected={true}
               isHovered={false}
               isDragging={false}
-              zoom={1}
             />
           </VertexContextMenu>
         </svg>
@@ -375,7 +372,6 @@ describe('Vertex Deletion Integration Tests', () => {
               isSelected={true}
               isHovered={false}
               isDragging={false}
-              zoom={1}
             />
           </VertexContextMenu>
         </svg>
@@ -423,7 +419,6 @@ describe('Vertex Deletion Integration Tests', () => {
               isSelected={true}
               isHovered={false}
               isDragging={false}
-              zoom={1}
             />
           </VertexContextMenu>
         </svg>
@@ -454,7 +449,6 @@ describe('Vertex Deletion Integration Tests', () => {
             isSelected={false}
             isHovered={false}
             isDragging={false}
-            zoom={1}
           />
         </svg>
       );
@@ -489,7 +483,6 @@ describe('Vertex Deletion Integration Tests', () => {
                 isSelected={true}
                 isHovered={false}
                 isDragging={false}
-                zoom={1}
               />
             </VertexContextMenu>
           </g>
@@ -526,7 +519,6 @@ describe('Vertex Deletion Integration Tests', () => {
             isSelected={false}
             isHovered={false}
             isDragging={false}
-            zoom={1}
           />
         </svg>
       );
@@ -581,7 +573,6 @@ describe('Vertex Deletion Integration Tests', () => {
                   isSelected={true}
                   isHovered={false}
                   isDragging={false}
-                  zoom={1}
                 />
               </VertexContextMenu>
             ))}
@@ -641,7 +632,6 @@ describe('Vertex Deletion Integration Tests', () => {
               isSelected={true}
               isHovered={false}
               isDragging={false}
-              zoom={1}
             />
           </VertexContextMenu>
         </svg>
@@ -695,7 +685,6 @@ describe('Vertex Deletion Integration Tests', () => {
               isSelected={true}
               isHovered={false}
               isDragging={false}
-              zoom={1}
             />
           </VertexContextMenu>
         </svg>
@@ -755,7 +744,6 @@ describe('Vertex Deletion Integration Tests', () => {
                 isSelected={true}
                 isHovered={false}
                 isDragging={false}
-                zoom={1}
               />
             </VertexContextMenu>
           ))}

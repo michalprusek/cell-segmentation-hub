@@ -75,6 +75,9 @@ let mockWindowMax = 255;
 const mockWindowRangeMax = 255;
 let mockBrightness = 100;
 let mockContrast = 100;
+// `undefined` on purpose: the default this suite ran under before the setting
+// existed, i.e. a context value that predates it.
+let mockSmoothImage: boolean | undefined = undefined;
 let mockChannelOpacities: Record<string, number> = {};
 // Must be a STABLE reference: it sits in the decode effect's dependency
 // array, so a fresh fn each render would re-trigger the fetch effect forever.
@@ -105,6 +108,7 @@ vi.mock('@/pages/segmentation/contexts/ImageDisplayContext', () => ({
     proxyRangeMax: null,
     brightness: mockBrightness,
     contrast: mockContrast,
+    smoothImage: mockSmoothImage,
     channelOpacities: mockChannelOpacities,
     reportChannelRanges: mockReportChannelRanges,
     reportDisplayedSamples: mockReportDisplayedSamples,
@@ -317,7 +321,8 @@ describe('MultiChannelCanvas', () => {
   // ── CSS filter ────────────────────────────────────────────────────────────
 
   describe('CSS filter reflects context state', () => {
-    it('applies brightness(1) contrast(1) at default values (100/100)', () => {
+    it('emits NO filter at default values (100/100)', () => {
+      // The identity filter is not free — see `displayFilter`.
       const { fetchImpl } = makeSuccessfulFetch();
       global.fetch = fetchImpl;
       mockBrightness = 100;
@@ -326,9 +331,7 @@ describe('MultiChannelCanvas', () => {
       render(<MultiChannelCanvas {...DEFAULT_PROPS} />);
 
       const canvas = screen.getByTestId('multi-channel-canvas');
-      expect(canvas).toHaveStyle({
-        filter: 'brightness(1) contrast(1)',
-      });
+      expect(canvas.style.filter).toBe('');
     });
 
     it('applies custom brightness and contrast from context', () => {
@@ -343,6 +346,45 @@ describe('MultiChannelCanvas', () => {
       expect(canvas).toHaveStyle({
         filter: 'brightness(1.5) contrast(0.8)',
       });
+    });
+  });
+
+  // ── Smooth image ──────────────────────────────────────────────────────────
+
+  describe('image-rendering reflects the Smooth image setting', () => {
+    afterEach(() => {
+      mockSmoothImage = undefined;
+    });
+
+    const canvasEl = () => screen.getByTestId('multi-channel-canvas');
+
+    it('is smooth (auto) when the context value predates the setting', () => {
+      global.fetch = makeSuccessfulFetch().fetchImpl;
+      mockSmoothImage = undefined;
+      render(<MultiChannelCanvas {...DEFAULT_PROPS} />);
+      expect(canvasEl().style.imageRendering).toBe('auto');
+    });
+
+    it('is pixelated — never crisp-edges — when Smooth image is off', () => {
+      global.fetch = makeSuccessfulFetch().fetchImpl;
+      mockSmoothImage = false;
+      render(<MultiChannelCanvas {...DEFAULT_PROPS} />);
+      expect(canvasEl().style.imageRendering).toBe('pixelated');
+    });
+
+    it('toggles on the SAME canvas element', () => {
+      // The canvas is keyed by render path and nothing else: a remount here
+      // recreates the WebGL context and refetches every channel.
+      global.fetch = makeSuccessfulFetch().fetchImpl;
+      mockSmoothImage = true;
+      const { rerender } = render(<MultiChannelCanvas {...DEFAULT_PROPS} />);
+      const before = canvasEl();
+      expect(before.style.imageRendering).toBe('auto');
+
+      mockSmoothImage = false;
+      rerender(<MultiChannelCanvas {...DEFAULT_PROPS} />);
+      expect(canvasEl()).toBe(before);
+      expect(before.style.imageRendering).toBe('pixelated');
     });
   });
 

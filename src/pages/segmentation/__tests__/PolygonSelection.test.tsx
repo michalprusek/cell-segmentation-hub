@@ -133,7 +133,6 @@ describe('Polygon Selection Functionality', () => {
             key={polygon.id}
             polygon={polygon}
             isSelected={selectedPolygonId === polygon.id}
-            zoom={1}
             onSelectPolygon={mockOnSelectPolygon}
             onDeletePolygon={mockOnDeletePolygon}
             onSlicePolygon={mockOnSlicePolygon}
@@ -201,7 +200,6 @@ describe('Polygon Selection Functionality', () => {
               key={polygon.id}
               polygon={polygon}
               isSelected={'polygon-2' === polygon.id}
-              zoom={1}
               onSelectPolygon={mockOnSelectPolygon}
               onDeletePolygon={mockOnDeletePolygon}
               onSlicePolygon={mockOnSlicePolygon}
@@ -272,7 +270,6 @@ describe('Polygon Selection Functionality', () => {
             <CanvasPolygon
               polygon={mockPolygons[0]}
               isSelected={false}
-              zoom={1}
               onSelectPolygon={mockOnSelectPolygon}
               onDeletePolygon={mockOnDeletePolygon}
               onSlicePolygon={mockOnSlicePolygon}
@@ -352,7 +349,6 @@ describe('Polygon Selection Functionality', () => {
               key={polygon.id}
               polygon={polygon}
               isSelected={'polygon-2' === polygon.id}
-              zoom={1}
               onSelectPolygon={mockOnSelectPolygon}
               onDeletePolygon={mockOnDeletePolygon}
               onSlicePolygon={mockOnSlicePolygon}
@@ -490,17 +486,17 @@ describe('Polygon Selection Functionality', () => {
       expect(mockOnSelectPolygon).toHaveBeenCalledWith('top-polygon');
     });
 
-    it('should handle selection during zoom changes', () => {
+    // CanvasPolygon takes no zoom prop (sizes follow the zoom through CSS), so
+    // what is left to pin is that a re-render of the list keeps the handlers.
+    it('should keep selecting after the list re-renders', () => {
       const { rerender } = renderPolygonsInSvg(mockPolygons);
 
-      // Select a polygon at normal zoom
       const polygon = screen.getByTestId('polygon-1');
       const path = polygon.querySelector('path')!;
       fireEvent.click(path);
 
       expect(mockOnSelectPolygon).toHaveBeenCalledWith('polygon-1');
 
-      // Re-render with different zoom
       rerender(
         <svg width="800" height="600" viewBox="0 0 800 600">
           {mockPolygons.map(polygon => (
@@ -508,7 +504,6 @@ describe('Polygon Selection Functionality', () => {
               key={polygon.id}
               polygon={polygon}
               isSelected={false}
-              zoom={2} // Changed zoom
               onSelectPolygon={mockOnSelectPolygon}
               onDeletePolygon={mockOnDeletePolygon}
               onSlicePolygon={mockOnSlicePolygon}
@@ -520,7 +515,6 @@ describe('Polygon Selection Functionality', () => {
         </svg>
       );
 
-      // Selection should still work after zoom change
       const updatedPolygon = screen.getByTestId('polygon-2');
       const updatedPath = updatedPolygon.querySelector('path')!;
       fireEvent.click(updatedPath);

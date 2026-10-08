@@ -1,6 +1,12 @@
-/* eslint-disable react-refresh/only-export-components -- exports zoom helpers next to component */
 import React from 'react';
 import { Point } from '@/lib/segmentation';
+import {
+  OVERLAY_DOT_CLASS,
+  VERTEX_STROKE_PX,
+  dotRadiusStyle,
+  screenPx,
+  vertexRadiusPx,
+} from '../../utils/overlayScale';
 
 interface CanvasVertexProps {
   point: Point;
@@ -10,7 +16,6 @@ interface CanvasVertexProps {
   isHovered: boolean;
   isDragging: boolean;
   dragOffset?: { x: number; y: number };
-  zoom: number;
   type?: 'external' | 'internal';
   isStartPoint?: boolean;
   isUndoRedoInProgress?: boolean;
@@ -21,99 +26,6 @@ interface CanvasVertexProps {
   isInMoveShapeMode?: boolean;
 }
 
-// Vertex scaling configuration
-interface VertexScalingConfig {
-  baseRadius: number;
-  scalingMode: 'adaptive' | 'constant' | 'logarithmic' | 'linear';
-  scalingExponent: number;
-  minRadius: number;
-  maxRadius: number;
-  hoverScale: number;
-  dragScale: number;
-  startPointScale: number;
-  baseStrokeWidth: number;
-}
-
-const defaultConfig: VertexScalingConfig = {
-  baseRadius: 5,
-  scalingMode: 'adaptive',
-  scalingExponent: 0.85, // Increased for more aggressive scaling at high zoom
-  minRadius: 0.5, // Decreased to allow vertices to become very small
-  maxRadius: 12, // Increased for better visibility at low zoom
-  hoverScale: 1.3,
-  dragScale: 1.1,
-  startPointScale: 1.2,
-  baseStrokeWidth: 1.2,
-};
-
-/**
- * Calculate vertex radius based on zoom level and interaction state
- */
-const calculateVertexRadius = (
-  zoom: number,
-  config: VertexScalingConfig,
-  isHovered: boolean = false,
-  isDragging: boolean = false,
-  isStartPoint: boolean = false
-): number => {
-  let baseRadius: number;
-
-  switch (config.scalingMode) {
-    case 'constant':
-      baseRadius = config.baseRadius;
-      break;
-
-    case 'linear':
-      baseRadius = config.baseRadius / zoom;
-      break;
-
-    case 'logarithmic':
-      baseRadius = config.baseRadius / Math.log2(zoom + 1);
-      break;
-
-    case 'adaptive':
-    default:
-      // Scale vertices inversely with zoom - smaller at high zoom, larger at low zoom
-      // At zoom 1: baseRadius stays the same (5px)
-      // At zoom 10: vertices become much smaller
-      // At zoom 100: vertices are tiny but still visible
-      baseRadius = config.baseRadius / Math.pow(zoom, config.scalingExponent);
-      break;
-  }
-
-  // Apply interaction multipliers
-  let radius = baseRadius;
-  if (isHovered) radius *= config.hoverScale;
-  if (isDragging) radius *= config.dragScale;
-  if (isStartPoint) radius *= config.startPointScale;
-
-  // Enforce bounds
-  return Math.max(Math.min(radius, config.maxRadius), config.minRadius);
-};
-
-/**
- * Calculate stroke width to maintain visual consistency with vertex scaling
- */
-const calculateStrokeWidth = (
-  zoom: number,
-  config: VertexScalingConfig
-): number => {
-  switch (config.scalingMode) {
-    case 'constant':
-      // For constant vertex size, scale stroke slightly for visibility
-      return Math.max(config.baseStrokeWidth / Math.pow(zoom, 0.5), 0.2);
-
-    case 'adaptive':
-    default:
-      // Use same scaling approach as radius but slightly less aggressive
-      // This ensures stroke remains visible but scales with vertex
-      return Math.max(
-        config.baseStrokeWidth / Math.pow(zoom, config.scalingExponent * 0.9),
-        0.2
-      );
-  }
-};
-
 const CanvasVertex = React.memo<CanvasVertexProps>(
   ({
     point,
@@ -123,24 +35,19 @@ const CanvasVertex = React.memo<CanvasVertexProps>(
     isHovered,
     isDragging,
     dragOffset,
-    zoom,
     type = 'external',
     isStartPoint = false,
     isUndoRedoInProgress = false,
     isInAddPointsMode = false,
     isInMoveShapeMode = false,
   }) => {
-    // Calculate radius with improved scaling formula
-    const finalRadius = calculateVertexRadius(
-      zoom,
-      defaultConfig,
-      isHovered,
-      isDragging,
-      isStartPoint
-    );
-
-    // Calculate stroke width for consistent visual proportions
-    const strokeWidth = calculateStrokeWidth(zoom, defaultConfig);
+    // Radius in SCREEN pixels for this interaction state. It reaches the DOM
+    // as a CSS `r` (class `overlay-dot`) on the overlay's inverse-zoom property, so the handle is
+    // the same size at every zoom and this component takes no `zoom` prop —
+    // a zoom step re-renders no vertex. (The old `5 / zoom^0.85` attribute
+    // grew the dot from 5 px at zoom 1 to 7 px at zoom 10, and was stale for
+    // the whole wheel gesture.)
+    const radiusPx = vertexRadiusPx(isHovered, isDragging, isStartPoint);
 
     // Color scheme - unchanged from original
     const fillColor =
@@ -193,16 +100,17 @@ const CanvasVertex = React.memo<CanvasVertexProps>(
       <circle
         cx={actualX}
         cy={actualY}
-        r={finalRadius}
+        className={OVERLAY_DOT_CLASS}
         fill={fillColor}
         stroke={strokeColor}
-        strokeWidth={strokeWidth}
         opacity={opacity}
         data-testid={`vertex-${vertexIndex}-${polygonId}`}
         data-polygon-id={polygonId}
         data-vertex-index={vertexIndex}
         onMouseDown={handleMouseDown}
         style={{
+          ...dotRadiusStyle(radiusPx),
+          strokeWidth: screenPx(VERTEX_STROKE_PX),
           cursor: isInMoveShapeMode ? 'move' : isDragging ? 'grabbing' : 'grab',
           // POSITION IS NEVER TRANSITIONED. `cx`/`cy` are SVG2 geometry
           // properties and therefore animatable, so the old `all 0.15s
@@ -211,13 +119,18 @@ const CanvasVertex = React.memo<CanvasVertexProps>(
           // the drop is precisely the commit where `isDragging` goes back to
           // false and the point moves, so the animation ran on every single
           // release and read as lag on top of whatever the drag itself cost.
-          // Naming the properties leaves the hover feedback (colour, radius)
-          // eased and the geometry instant; the drag and undo/redo cases keep
-          // easing nothing at all.
+          // Naming the properties leaves the hover feedback (colour) eased and
+          // the geometry instant; the drag and undo/redo cases keep easing
+          // nothing at all.
+          //
+          // `r` is NOT in the list any more. It now changes on every zoom step
+          // (through the custom property), and a transition on it would make
+          // every handle take 150 ms to reach its size after each wheel tick —
+          // the stale-during-zoom look this file just got rid of.
           transition:
             isDragging || isUndoRedoInProgress
               ? 'none'
-              : 'fill 0.15s ease-out, r 0.15s ease-out, opacity 0.15s ease-out',
+              : 'fill 0.15s ease-out, opacity 0.15s ease-out',
           pointerEvents: 'all',
         }}
       />
@@ -241,7 +154,6 @@ const CanvasVertex = React.memo<CanvasVertexProps>(
       prevProps.isHovered === nextProps.isHovered &&
       prevProps.isDragging === nextProps.isDragging &&
       prevProps.isUndoRedoInProgress === nextProps.isUndoRedoInProgress &&
-      prevProps.zoom === nextProps.zoom &&
       prevProps.type === nextProps.type &&
       prevProps.isStartPoint === nextProps.isStartPoint &&
       prevProps.isInAddPointsMode === nextProps.isInAddPointsMode &&
@@ -254,11 +166,3 @@ const CanvasVertex = React.memo<CanvasVertexProps>(
 CanvasVertex.displayName = 'CanvasVertex';
 
 export default CanvasVertex;
-
-// Export configuration for external customization
-export {
-  type VertexScalingConfig,
-  defaultConfig,
-  calculateVertexRadius,
-  calculateStrokeWidth,
-};

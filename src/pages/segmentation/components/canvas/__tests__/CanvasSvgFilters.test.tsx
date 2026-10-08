@@ -4,8 +4,8 @@
  * CanvasSvgFilters renders a <defs> block with the SVG <filter> elements the
  * canvas references by id. The assertions below are deliberately a *closed*
  * set: a filter nothing names is dead weight, and a name with no filter makes
- * the referencing element vanish under SVG 1.1, so the defs and
- * CanvasPolygon's `pathFilter` must stay in exact correspondence.
+ * the referencing element vanish under SVG 1.1, so the defs and the
+ * `url(#…)` references in CanvasPolygon must stay in exact correspondence.
  *
  * Note: jsdom does not fully implement SVG presentation attributes so we
  * only verify structural ids, not visual correctness.
@@ -44,10 +44,10 @@ describe('CanvasSvgFilters', () => {
   // Rendering inside an SVG
   // -----------------------------------------------------------------------
 
-  function renderInSvg() {
+  function renderInSvg(zoom = 1) {
     return render(
       <svg>
-        <CanvasSvgFilters />
+        <CanvasSvgFilters zoom={zoom} />
       </svg>
     );
   }
@@ -64,7 +64,7 @@ describe('CanvasSvgFilters', () => {
     });
 
     // Deliberately one-directional: every filter defined here must be named by
-    // CanvasPolygon's `pathFilter`, because a definition nothing references is
+    // CanvasPolygon, because a definition nothing references is
     // dead weight. It does NOT assert the reverse, so a filter can always be
     // deleted along with its last reference without this test going red first.
     // That is how `red-glow` left: it was emitted only for selected closed
@@ -113,6 +113,38 @@ describe('CanvasSvgFilters', () => {
       const color =
         flood!.getAttribute('flood-color') ?? flood!.getAttribute('floodColor');
       expect(color?.toLowerCase()).toBe('#0ea5e9');
+    });
+
+    // `stdDeviation` is in SVG user units, which the transform container
+    // multiplies by the zoom. Fixed at 4 the soma highlight was a 40 px blur
+    // at zoom 10, and the hover glow (1.5) a 15 px one.
+    const blurAt = (zoom: number, id = 'soma-highlight') => {
+      const { container, unmount } = renderInSvg(zoom);
+      const blur = container.querySelector(`filter#${id} feGaussianBlur`);
+      const value = Number(
+        blur!.getAttribute('stdDeviation') ?? blur!.getAttribute('stddeviation')
+      );
+      unmount();
+      return value;
+    };
+
+    it('keeps the soma highlight blur at 4 screen px at every zoom', () => {
+      for (const zoom of [0.5, 1, 4, 10]) {
+        expect(blurAt(zoom) * zoom).toBeCloseTo(4, 9);
+      }
+    });
+
+    it('keeps the hover glow blur at 1.5 screen px at every zoom', () => {
+      for (const zoom of [0.5, 1, 4, 10]) {
+        expect(blurAt(zoom, 'blue-glow') * zoom).toBeCloseTo(1.5, 9);
+      }
+    });
+
+    it('falls back to zoom 1 for a nonsensical zoom', () => {
+      for (const zoom of [0, -1, NaN, Infinity]) {
+        expect(blurAt(zoom)).toBe(4);
+        expect(blurAt(zoom, 'blue-glow')).toBe(1.5);
+      }
     });
   });
 });

@@ -7,6 +7,7 @@ import {
 import { decodeGrayPng, type DecodedGray } from '@/lib/png16';
 import { buildLut } from '@/lib/windowLevel';
 import { logger } from '@/lib/logger';
+import { displayFilter, imageRenderingFor } from '../../utils/displayStyle';
 
 interface CanvasImageProps {
   src: string;
@@ -27,16 +28,20 @@ interface CanvasImageProps {
 /**
  * Optional consumer of ImageDisplayContext. The editor wraps both modes in the
  * provider, but this component is also rendered bare in tests, so we read the
- * raw context value (null when unwrapped) and fall back to the identity
- * filter. The full ``useImageDisplay`` hook throws when unwrapped, so we go
- * straight to ``useContext`` here.
+ * raw context value (null when unwrapped) and fall back to the defaults: no
+ * filter, smooth interpolation. The full ``useImageDisplay`` hook throws when
+ * unwrapped, so we go straight to ``useContext`` here.
  */
-function useDisplayFilter(): { filter: string } {
+function useDisplayStyle(): Pick<
+  React.CSSProperties,
+  'filter' | 'imageRendering'
+> {
   const ctx = useContext(ImageDisplayContext);
-  const brightness = ctx?.brightness ?? 100;
-  const contrast = ctx?.contrast ?? 100;
   return {
-    filter: `brightness(${brightness / 100}) contrast(${contrast / 100})`,
+    filter: displayFilter(ctx?.brightness ?? 100, ctx?.contrast ?? 100),
+    // `?? true`, not `!== false`: a hand-built context value in a test that
+    // predates the field reads as the default, and so does a null context.
+    imageRendering: imageRenderingFor(ctx?.smoothImage ?? true),
   };
 }
 
@@ -76,7 +81,7 @@ const CanvasImage = ({
   windowKey,
   onLoad,
 }: CanvasImageProps) => {
-  const { filter } = useDisplayFilter();
+  const { filter, imageRendering } = useDisplayStyle();
   const ctx = useContext(ImageDisplayContext);
   const [deep, setDeep] = useState<DecodedGray | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -103,6 +108,15 @@ const CanvasImage = ({
   // Same reason as above: the key must not re-run the fetch when it changes.
   const keyRef = useRef(windowKey);
   keyRef.current = windowKey;
+  // And `onLoad`, which is the one that actually bit. VideoFrameImage hands a
+  // fresh arrow on every render, and the editor re-renders on every pan and
+  // zoom step — so with `onLoad` in the probe's deps a 16-bit still was
+  // re-fetched and re-decoded on EVERY wheel step, and for the 40-80 ms each
+  // decode took the canvas was replaced by the bare <img>, which shows the
+  // PNG without the window/level LUT. Measured on production over 18 wheel
+  // steps: 18 canvas -> <img> -> canvas swaps; with the ref, none.
+  const onLoadRef = useRef(onLoad);
+  onLoadRef.current = onLoad;
 
   useEffect(() => {
     const owner = samplesOwnerRef.current;
@@ -157,7 +171,7 @@ const CanvasImage = ({
           frameKey: src,
           channels: { [STILL_IMAGE_WINDOW_CHANNEL]: decoded },
         });
-        onLoad?.(decoded.width, decoded.height);
+        onLoadRef.current?.(decoded.width, decoded.height);
       } catch (err) {
         // Never block the picture on this: the <img> path still runs.
         logger.debug?.('16-bit probe failed, using the <img> path', err);
@@ -167,7 +181,7 @@ const CanvasImage = ({
     return () => {
       cancelled = true;
     };
-  }, [src, onLoad]);
+  }, [src]);
 
   // Paint through the window/level LUT whenever the data or the window moves.
   useEffect(() => {
@@ -204,8 +218,12 @@ const CanvasImage = ({
     }
   };
 
+  // Both paths below take the SAME two display properties as plain style.
+  // Neither may ever become a `key` or pick the element type: a remount of
+  // the <img> refires onLoad and a remount of the canvas repaints from
+  // scratch.
   const commonStyle: React.CSSProperties = {
-    imageRendering: 'crisp-edges',
+    imageRendering,
     width: width ? `${width}px` : 'auto',
     height: height ? `${height}px` : 'auto',
     userSelect: 'none',
@@ -239,15 +257,10 @@ const CanvasImage = ({
         loading ? 'opacity-100' : 'opacity-50'
       )}
       style={{
-        imageRendering: 'crisp-edges',
+        ...commonStyle,
         WebkitFontSmoothing: 'none', // Improving text rendering in WebKit browsers
-        width: width ? `${width}px` : 'auto',
-        height: height ? `${height}px` : 'auto',
-        userSelect: 'none',
-        WebkitUserSelect: 'none',
         MozUserSelect: 'none',
         msUserSelect: 'none',
-        filter,
       }}
       onLoad={handleLoad}
       draggable={false}

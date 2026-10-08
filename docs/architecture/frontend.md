@@ -60,11 +60,14 @@ than to carry authoritative data.
 | `UploadContext`       | Upload queue, routing between the image and video endpoints, cancellation |
 | `ExportContext`       | Export job state                                                          |
 | `ModelContext`        | Hole detection only — the model and its threshold moved onto the project  |
-| `ImageDisplayContext` | Per-channel window/level, colours, opacities (editor only)                |
+| `ImageDisplayContext` | Per-channel window/level, colours, opacities, Smooth image (editor only)  |
 
 `ImageDisplayContext` is the one with non-obvious rules — window/level is
-**per channel**, session-only; colours and opacities are persisted per user in
-browser storage. See
+**per channel**, session-only (as are brightness and contrast); colours and
+opacities are persisted per user in browser storage; and `smoothImage` — the
+`image-rendering` mode of the canvas bitmap — is persisted once per browser
+(`spheroseg.editor.smoothImage`) and is not reset by Reset or by a container
+switch. See
 [Videos, frames and channels](../guides/videos-and-channels.md#displaying-16-bit-data-window-and-level).
 
 ---

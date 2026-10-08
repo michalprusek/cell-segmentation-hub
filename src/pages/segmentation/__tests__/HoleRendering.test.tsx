@@ -70,7 +70,6 @@ describe('Polygon Hole Rendering', () => {
         <CanvasPolygon
           polygon={polygon}
           isSelected={isSelected}
-          zoom={1}
           onSelectPolygon={mockOnSelectPolygon}
           onDeletePolygon={mockOnDeletePolygon}
           onSlicePolygon={mockOnSlicePolygon}
@@ -272,7 +271,6 @@ describe('Polygon Hole Rendering', () => {
           <CanvasPolygon
             polygon={externalPolygon}
             isSelected={false}
-            zoom={1}
             onSelectPolygon={mockOnSelectPolygon}
             onDeletePolygon={mockOnDeletePolygon}
             onSlicePolygon={mockOnSlicePolygon}
@@ -283,7 +281,6 @@ describe('Polygon Hole Rendering', () => {
           <CanvasPolygon
             polygon={internalPolygon}
             isSelected={false}
-            zoom={1}
             onSelectPolygon={mockOnSelectPolygon}
             onDeletePolygon={mockOnDeletePolygon}
             onSlicePolygon={mockOnSlicePolygon}
@@ -331,7 +328,6 @@ describe('Polygon Hole Rendering', () => {
           <CanvasPolygon
             polygon={externalPolygon}
             isSelected={false}
-            zoom={1}
             onSelectPolygon={mockOnSelectPolygon}
             onDeletePolygon={mockOnDeletePolygon}
             onSlicePolygon={mockOnSlicePolygon}
@@ -342,7 +338,6 @@ describe('Polygon Hole Rendering', () => {
           <CanvasPolygon
             polygon={internalPolygon}
             isSelected={true} // Internal selected
-            zoom={1}
             onSelectPolygon={mockOnSelectPolygon}
             onDeletePolygon={mockOnDeletePolygon}
             onSlicePolygon={mockOnSlicePolygon}
@@ -371,7 +366,6 @@ describe('Polygon Hole Rendering', () => {
           <CanvasPolygon
             polygon={externalPolygon}
             isSelected={true} // External now selected
-            zoom={1}
             onSelectPolygon={mockOnSelectPolygon}
             onDeletePolygon={mockOnDeletePolygon}
             onSlicePolygon={mockOnSlicePolygon}
@@ -382,7 +376,6 @@ describe('Polygon Hole Rendering', () => {
           <CanvasPolygon
             polygon={internalPolygon}
             isSelected={false} // Internal now unselected
-            zoom={1}
             onSelectPolygon={mockOnSelectPolygon}
             onDeletePolygon={mockOnDeletePolygon}
             onSlicePolygon={mockOnSlicePolygon}
@@ -480,7 +473,6 @@ describe('Polygon Hole Rendering', () => {
           <CanvasPolygon
             polygon={internalPolygon}
             isSelected={false}
-            zoom={1}
             onSelectPolygon={mockOnSelectPolygon}
             onDeletePolygon={mockOnDeletePolygon}
             onSlicePolygon={mockOnSlicePolygon}
@@ -588,7 +580,6 @@ describe('Polygon Hole Rendering', () => {
           <CanvasPolygon
             polygon={externalPolygon}
             isSelected={false}
-            zoom={1}
             onSelectPolygon={mockOnSelectPolygon}
             onDeletePolygon={mockOnDeletePolygon}
             onSlicePolygon={mockOnSlicePolygon}
@@ -600,7 +591,6 @@ describe('Polygon Hole Rendering', () => {
           <CanvasPolygon
             polygon={internalPolygon}
             isSelected={false}
-            zoom={1}
             onSelectPolygon={mockOnSelectPolygon}
             onDeletePolygon={mockOnDeletePolygon}
             onSlicePolygon={mockOnSlicePolygon}
@@ -645,7 +635,6 @@ describe('Polygon Hole Rendering', () => {
               key={polygon.id}
               polygon={polygon}
               isSelected={false}
-              zoom={1}
               onSelectPolygon={mockOnSelectPolygon}
               onDeletePolygon={mockOnDeletePolygon}
               onSlicePolygon={mockOnSlicePolygon}

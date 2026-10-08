@@ -6,7 +6,20 @@ import {
   TransformState,
 } from '../../types';
 import { Point, Polygon } from '@/lib/segmentation';
-import { calculateVertexRadius, defaultConfig } from './CanvasVertex';
+import {
+  OVERLAY_DOT_CLASS,
+  VERTEX_RADIUS_PX,
+  dotRadiusStyle,
+  screenPx,
+} from '../../utils/overlayScale';
+
+/** `on off` dash pattern in screen px. A CSS declaration, like every size in
+ *  this layer, so it follows the overlay's inverse-zoom property. */
+const dash = (on: number, off: number): string =>
+  `${screenPx(on)} ${screenPx(off)}`;
+
+/** Preview line width, screen px. */
+const LINE_PX = 2;
 
 interface CanvasTemporaryGeometryLayerProps {
   transform: TransformState;
@@ -35,9 +48,14 @@ const CanvasTemporaryGeometryLayer: React.FC<
   polygons,
   hoveredJoinTarget,
 }) => {
-  const strokeWidth = Math.max(1, 2 / transform.zoom);
-  // Use the same vertex radius calculation as regular vertices for consistency
-  const vertexRadius = calculateVertexRadius(transform.zoom, defaultConfig);
+  // Every size here is in SCREEN pixels, through the same custom property
+  // the committed shapes use (`utils/overlayScale.ts`). The preview line used
+  // to be `Math.max(1, 2 / zoom)` user units — 2 px up to zoom 2, then one
+  // IMAGE pixel wide: 10 px at zoom 10, hiding the structure being traced.
+  //
+  // Same radius as a committed vertex handle, so a point does not change
+  // size at the moment the shape is finished.
+  const vertexRadius = VERTEX_RADIUS_PX;
 
   const renderCreatePolygonPreview = () => {
     if (editMode !== EditMode.CreatePolygon || tempPoints.length === 0) {
@@ -54,11 +72,10 @@ const CanvasTemporaryGeometryLayer: React.FC<
           key={`temp-vertex-${index}`}
           cx={point.x}
           cy={point.y}
-          r={vertexRadius}
+          className={OVERLAY_DOT_CLASS}
           fill={isFirstPoint ? '#3b82f6' : '#4ade80'}
           stroke="none"
-          strokeWidth={0}
-          style={{ opacity: 0.8 }}
+          style={{ ...dotRadiusStyle(vertexRadius), opacity: 0.8 }}
         />
       );
     });
@@ -75,9 +92,11 @@ const CanvasTemporaryGeometryLayer: React.FC<
           x2={end.x}
           y2={end.y}
           stroke="#4ade80"
-          strokeWidth={strokeWidth}
-          strokeDasharray={`${5 / transform.zoom} ${3 / transform.zoom}`}
-          style={{ opacity: 0.7 }}
+          style={{
+            strokeWidth: screenPx(LINE_PX),
+            strokeDasharray: dash(5, 3),
+            opacity: 0.7,
+          }}
         />
       );
     }
@@ -93,9 +112,11 @@ const CanvasTemporaryGeometryLayer: React.FC<
           x2={cursorPosition.x}
           y2={cursorPosition.y}
           stroke="#4ade80"
-          strokeWidth={strokeWidth}
-          strokeDasharray={`${3 / transform.zoom} ${2 / transform.zoom}`}
-          style={{ opacity: 0.5 }}
+          style={{
+            strokeWidth: screenPx(LINE_PX),
+            strokeDasharray: dash(3, 2),
+            opacity: 0.5,
+          }}
         />
       );
     }
@@ -121,8 +142,7 @@ const CanvasTemporaryGeometryLayer: React.FC<
             x2={firstPoint.x}
             y2={firstPoint.y}
             stroke="#22c55e"
-            strokeWidth={strokeWidth * 1.5}
-            style={{ opacity: 0.8 }}
+            style={{ strokeWidth: screenPx(LINE_PX * 1.5), opacity: 0.8 }}
           />
         );
 
@@ -132,11 +152,14 @@ const CanvasTemporaryGeometryLayer: React.FC<
             key="first-point-highlight"
             cx={firstPoint.x}
             cy={firstPoint.y}
-            r={vertexRadius * 1.3}
+            className={OVERLAY_DOT_CLASS}
             fill="none"
             stroke="#22c55e"
-            strokeWidth={strokeWidth}
-            style={{ opacity: 0.8 }}
+            style={{
+              ...dotRadiusStyle(vertexRadius * 1.3),
+              strokeWidth: screenPx(LINE_PX),
+              opacity: 0.8,
+            }}
           />
         );
       }
@@ -159,11 +182,10 @@ const CanvasTemporaryGeometryLayer: React.FC<
           key={`slice-point-${index}`}
           cx={point.x}
           cy={point.y}
-          r={vertexRadius}
+          className={OVERLAY_DOT_CLASS}
           fill="#ffcc00"
           stroke="none"
-          strokeWidth={0}
-          style={{ opacity: 0.9 }}
+          style={{ ...dotRadiusStyle(vertexRadius), opacity: 0.9 }}
         />
       );
     });
@@ -179,9 +201,11 @@ const CanvasTemporaryGeometryLayer: React.FC<
           x2={cursorPosition.x}
           y2={cursorPosition.y}
           stroke="#ffcc00"
-          strokeWidth={strokeWidth}
-          strokeDasharray={`${4 / transform.zoom} ${2 / transform.zoom}`}
-          style={{ opacity: 0.7 }}
+          style={{
+            strokeWidth: screenPx(LINE_PX),
+            strokeDasharray: dash(4, 2),
+            opacity: 0.7,
+          }}
         />
       );
     } else if (tempPoints.length === 2) {
@@ -194,8 +218,7 @@ const CanvasTemporaryGeometryLayer: React.FC<
           x2={tempPoints[1].x}
           y2={tempPoints[1].y}
           stroke="#ffcc00"
-          strokeWidth={strokeWidth * 1.5}
-          style={{ opacity: 0.9 }}
+          style={{ strokeWidth: screenPx(LINE_PX * 1.5), opacity: 0.9 }}
         />
       );
     }
@@ -217,11 +240,10 @@ const CanvasTemporaryGeometryLayer: React.FC<
           key={`add-point-${index}`}
           cx={point.x}
           cy={point.y}
-          r={vertexRadius}
+          className={OVERLAY_DOT_CLASS}
           fill="#60a5fa"
           stroke="none"
-          strokeWidth={0}
-          style={{ opacity: 0.8 }}
+          style={{ ...dotRadiusStyle(vertexRadius), opacity: 0.8 }}
         />
       );
     });
@@ -238,9 +260,11 @@ const CanvasTemporaryGeometryLayer: React.FC<
           x2={end.x}
           y2={end.y}
           stroke="#60a5fa"
-          strokeWidth={strokeWidth}
-          strokeDasharray={`${4 / transform.zoom} ${2 / transform.zoom}`}
-          style={{ opacity: 0.6 }}
+          style={{
+            strokeWidth: screenPx(LINE_PX),
+            strokeDasharray: dash(4, 2),
+            opacity: 0.6,
+          }}
         />
       );
     }
@@ -269,9 +293,11 @@ const CanvasTemporaryGeometryLayer: React.FC<
             x2={tempPoints[0].x}
             y2={tempPoints[0].y}
             stroke="#60a5fa"
-            strokeWidth={strokeWidth}
-            strokeDasharray={`${4 / transform.zoom} ${2 / transform.zoom}`}
-            style={{ opacity: 0.6 }}
+            style={{
+              strokeWidth: screenPx(LINE_PX),
+              strokeDasharray: dash(4, 2),
+              opacity: 0.6,
+            }}
           />
         );
       }
@@ -288,9 +314,11 @@ const CanvasTemporaryGeometryLayer: React.FC<
           x2={cursorPosition.x}
           y2={cursorPosition.y}
           stroke="#60a5fa"
-          strokeWidth={strokeWidth}
-          strokeDasharray={`${2 / transform.zoom} ${2 / transform.zoom}`}
-          style={{ opacity: 0.4 }}
+          style={{
+            strokeWidth: screenPx(LINE_PX),
+            strokeDasharray: dash(2, 2),
+            opacity: 0.4,
+          }}
         />
       );
     } else if (
@@ -318,9 +346,11 @@ const CanvasTemporaryGeometryLayer: React.FC<
             x2={cursorPosition.x}
             y2={cursorPosition.y}
             stroke="#60a5fa"
-            strokeWidth={strokeWidth}
-            strokeDasharray={`${2 / transform.zoom} ${2 / transform.zoom}`}
-            style={{ opacity: 0.3 }}
+            style={{
+              strokeWidth: screenPx(LINE_PX),
+              strokeDasharray: dash(2, 2),
+              opacity: 0.3,
+            }}
           />
         );
       }
@@ -344,11 +374,10 @@ const CanvasTemporaryGeometryLayer: React.FC<
           key={`temp-polyline-vertex-${index}`}
           cx={point.x}
           cy={point.y}
-          r={vertexRadius}
+          className={OVERLAY_DOT_CLASS}
           fill={isFirstPoint ? '#a855f7' : '#c084fc'}
           stroke="none"
-          strokeWidth={0}
-          style={{ opacity: 0.8 }}
+          style={{ ...dotRadiusStyle(vertexRadius), opacity: 0.8 }}
         />
       );
     });
@@ -365,9 +394,11 @@ const CanvasTemporaryGeometryLayer: React.FC<
           x2={end.x}
           y2={end.y}
           stroke="#a855f7"
-          strokeWidth={strokeWidth * 1.5}
-          strokeDasharray={`${5 / transform.zoom} ${3 / transform.zoom}`}
-          style={{ opacity: 0.7 }}
+          style={{
+            strokeWidth: screenPx(LINE_PX * 1.5),
+            strokeDasharray: dash(5, 3),
+            opacity: 0.7,
+          }}
         />
       );
     }
@@ -383,9 +414,11 @@ const CanvasTemporaryGeometryLayer: React.FC<
           x2={cursorPosition.x}
           y2={cursorPosition.y}
           stroke="#a855f7"
-          strokeWidth={strokeWidth}
-          strokeDasharray={`${3 / transform.zoom} ${2 / transform.zoom}`}
-          style={{ opacity: 0.5 }}
+          style={{
+            strokeWidth: screenPx(LINE_PX),
+            strokeDasharray: dash(3, 2),
+            opacity: 0.5,
+          }}
         />
       );
     }
@@ -410,11 +443,14 @@ const CanvasTemporaryGeometryLayer: React.FC<
         key="join-target-ring"
         cx={p.x}
         cy={p.y}
-        r={vertexRadius * 1.6}
+        className={OVERLAY_DOT_CLASS}
         fill="none"
         stroke="#f59e0b"
-        strokeWidth={Math.max(1.5, 2.5 / transform.zoom)}
-        style={{ opacity: 0.95 }}
+        style={{
+          ...dotRadiusStyle(vertexRadius * 1.6),
+          strokeWidth: screenPx(2.5),
+          opacity: 0.95,
+        }}
       />
     );
   };

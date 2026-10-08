@@ -1034,6 +1034,86 @@ describe('segmentation', () => {
     const [, body] = mockAxiosInstance.post.mock.calls[0];
     expect('channel' in body).toBe(false);
   });
+
+  // The mapper is enumerative: a field the server sends and this does not name
+  // never reaches the editor. Every count below is a DIFFERENT number so that
+  // reading one field into another's slot cannot pass.
+  const bentLine = {
+    trackId: 't7',
+    geometry: 'polyline' as const,
+    points: [
+      { x: 10, y: 40 },
+      { x: 25.5, y: 31.25 },
+      { x: 48, y: 36 },
+    ],
+  };
+
+  it('propagateTrackForward — posts the polyline and maps every count', async () => {
+    mockAxiosInstance.post.mockResolvedValue(
+      ok({
+        trackId: 't7',
+        framesUpdated: 9,
+        framesChanged: 2,
+        framesUnchanged: 7,
+        framesSkipped: 3,
+      })
+    );
+
+    const result = await c().propagateTrackForward('vid-1', 4, bentLine);
+
+    expect(mockAxiosInstance.post).toHaveBeenCalledWith(
+      '/segmentation/videos/vid-1/tracks/propagate',
+      { fromFrameIndex: 4, polyline: bentLine }
+    );
+    expect(result).toEqual({
+      trackId: 't7',
+      framesUpdated: 9,
+      framesChanged: 2,
+      framesUnchanged: 7,
+      framesSkipped: 3,
+    });
+  });
+
+  it('propagateTrackForward — an explicit framesChanged of 0 stays 0', async () => {
+    // The fallback below must key on the field being ABSENT, not falsy: 0 is
+    // the whole "nothing to change" signal.
+    mockAxiosInstance.post.mockResolvedValue(
+      ok({
+        trackId: 't7',
+        framesUpdated: 6,
+        framesChanged: 0,
+        framesUnchanged: 6,
+        framesSkipped: 0,
+      })
+    );
+
+    const result = await c().propagateTrackForward('vid-1', 4, bentLine);
+    expect(result.framesChanged).toBe(0);
+  });
+
+  it('propagateTrackForward — an older server (framesUpdated only) reads as all changed', async () => {
+    // Before 2026-10-08 the server rewrote every frame it counted, so for that
+    // server "updated" is "changed". Reading the missing field as 0 would turn
+    // every propagate into a false "nothing to change".
+    mockAxiosInstance.post.mockResolvedValue(
+      ok({ trackId: 't7', framesUpdated: 6 })
+    );
+
+    const result = await c().propagateTrackForward('vid-1', 4, bentLine);
+    expect(result).toEqual({
+      trackId: 't7',
+      framesUpdated: 6,
+      framesChanged: 6,
+      framesUnchanged: 0,
+      framesSkipped: 0,
+    });
+  });
+
+  it('propagateTrackForward — falls back to the trackId that was sent', async () => {
+    mockAxiosInstance.post.mockResolvedValue(ok({ framesUpdated: 1 }));
+    const result = await c().propagateTrackForward('vid-1', 4, bentLine);
+    expect(result.trackId).toBe('t7');
+  });
 });
 
 // ════════════════════════════════════════════════════════════════════════════
