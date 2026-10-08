@@ -1300,9 +1300,16 @@ const SegmentationEditor = () => {
   // 'failed' means the frame could not be persisted, and the caller must NOT
   // propagate: writing the new shape to later frames while the source frame
   // keeps the old one is exactly the inconsistency above.
+  //
+  // The two 'already-shared' outcomes differ only in what the user has been
+  // TOLD. `handleSave` returns `true` without calling `onSave` when the frame
+  // is clean, and then nothing has toasted: the dialog closed and the gesture
+  // looked broken. `onSave` stores a fresh object in `lastSaveShareRef` every
+  // time it completes, so an unchanged reference is "no save ran in this call".
   const commitBeforePropagate = useCallback(async (): Promise<
-    'ready' | 'already-shared' | 'failed'
+    'ready' | 'already-shared' | 'already-shared-silently' | 'failed'
   > => {
+    const shareBefore = lastSaveShareRef.current;
     const saved = await editorRef.current.handleSave();
     if (!saved) {
       return 'failed';
@@ -1316,7 +1323,9 @@ const SegmentationEditor = () => {
     // directions, so there is nothing left to propagate — and doing it anyway
     // would duplicate a hand-drawn polyline (see `lastSaveShareRef`).
     if (share && share.imageId === imageId && share.frameCount > 0) {
-      return 'already-shared';
+      return share === shareBefore
+        ? 'already-shared-silently'
+        : 'already-shared';
     }
     return 'ready';
   }, [imageId]);
@@ -1362,6 +1371,11 @@ const SegmentationEditor = () => {
           // the work happened twice.
           return;
         }
+        if (commit === 'already-shared-silently') {
+          // Same state, but no save ran, so nothing has been said yet.
+          toast.info(t('segmentation.trackOps.propagateNoChange'));
+          return;
+        }
         const result = await apiClient.propagateTrackForward(
           videoId,
           fromFrameIndex,
@@ -1379,11 +1393,25 @@ const SegmentationEditor = () => {
         if (result.trackId && result.trackId !== source.trackId) {
           handleUpdatePolygonField(polygonId, { trackId: result.trackId });
         }
+        if (result.framesChanged === 0) {
+          // No row was written, so every cached frame is still correct and
+          // there is no status to bump. Unreadable frames are NOT "nothing to
+          // change": the shape did not reach them, and saying otherwise would
+          // tell the user the video is consistent when it is not.
+          if (result.framesSkipped > 0) {
+            toast.error(t('segmentation.trackOps.propagateFailed'));
+          } else {
+            toast.info(t('segmentation.trackOps.propagateNoChange'));
+          }
+          return;
+        }
         evictVideoFrameSegmentationCaches();
         markFollowingFramesSegmented(fromFrameIndex);
+        // Frames actually written — not `framesUpdated`, which also counts the
+        // ones that already had this shape.
         toast.success(
           t('segmentation.trackOps.propagateSuccess', {
-            count: result.framesUpdated,
+            count: result.framesChanged,
           })
         );
       } catch (error) {
@@ -1805,6 +1833,11 @@ const SegmentationEditor = () => {
       // directions — which is strictly more than this loop could do.
       return;
     }
+    if (commit === 'already-shared-silently') {
+      // As above, except no save ran in this call and so nothing has toasted.
+      toast.info(t('segmentation.trackOps.propagateSelectedNoChange'));
+      return;
+    }
 
     // Read the polygons AFTER the save: it is the save that gives a
     // hand-drawn polyline its identity, and propagating the pre-save snapshot
@@ -1821,6 +1854,7 @@ const SegmentationEditor = () => {
     }
 
     let failed = 0;
+    let changed = 0;
     for (const src of sources) {
       try {
         const result = await apiClient.propagateTrackForward(
@@ -1837,19 +1871,34 @@ const SegmentationEditor = () => {
         if (result.trackId && result.trackId !== src.trackId) {
           handleUpdatePolygonField(src.id, { trackId: result.trackId });
         }
+        if (result.framesChanged > 0) {
+          changed++;
+        } else if (result.framesSkipped > 0) {
+          // Nothing written AND frames that could not be read: this
+          // microtubule did not reach them. Same verdict as the single twin.
+          failed++;
+        }
       } catch (error) {
         logger.error('Failed to propagate a selected microtubule', error);
         failed++;
       }
     }
 
-    evictVideoFrameSegmentationCaches();
-    markFollowingFramesSegmented(fromFrameIndex);
+    // Nothing written means nothing cached is stale and no status moved.
+    if (changed > 0) {
+      evictVideoFrameSegmentationCaches();
+      markFollowingFramesSegmented(fromFrameIndex);
+    }
     clearMultiSelect();
-    if (failed === 0) {
+    if (failed === 0 && changed === 0) {
+      toast.info(t('segmentation.trackOps.propagateSelectedNoChange'));
+    } else if (failed === 0) {
+      // The microtubules that CHANGED, not the ones that were sent: reporting
+      // all five when four already had their shape is the false success this
+      // count exists to remove.
       toast.success(
         t('segmentation.trackOps.propagateSelectedSuccess', {
-          count: sources.length,
+          count: changed,
         })
       );
     } else {

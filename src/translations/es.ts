@@ -950,6 +950,10 @@ export default {
       propagateSuccess:
         'Microtúbulo propagado a {{count}} fotogramas siguientes',
       propagateFailed: 'No se pudo propagar el microtúbulo',
+      propagateNoChange:
+        'Nada que cambiar: los fotogramas siguientes ya tienen esta forma',
+      propagateSelectedNoChange:
+        'Nada que cambiar: los fotogramas siguientes ya tienen estas formas',
       deleteTrackSuccess: 'Traza eliminada de {{count}} fotogramas',
       deleteTrackFailed: 'No se pudo eliminar la traza',
       deleteFrameSuccess:

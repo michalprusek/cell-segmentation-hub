@@ -432,6 +432,15 @@ export function upsertTrackPolyline(
     throw new Error('Propagated polyline needs at least 2 finite points');
   }
   const { polygons } = removePolygonsWithTrackId(polys, trackId);
+  // The type label is the one per-polygon field the track owns that the source
+  // frame does not send. The editor and the exports resolve it from EACH
+  // frame's own polygon, so dropping it here un-typed the microtubule on every
+  // later frame whenever its shape was propagated.
+  const priorMtType = (
+    polys.find(p => (p as Record<string, unknown>).trackId === trackId) as
+      | Record<string, unknown>
+      | undefined
+  )?.mtType;
   const copy: Record<string, unknown> = {
     id: makeId(),
     trackId,
@@ -449,8 +458,71 @@ export function upsertTrackPolyline(
   if (polyline.instanceId) {
     copy.instanceId = polyline.instanceId;
   }
+  if (typeof priorMtType === 'string' && priorMtType) {
+    copy.mtType = priorMtType;
+  }
   polygons.push(copy);
   return polygons;
+}
+
+/**
+ * True when a frame ALREADY holds exactly what `upsertTrackPolyline` would
+ * write for this track, so the caller can skip the DB write — the same
+ * "report whether anything changed" contract as `setPolygonsTrackType` and
+ * `setPolygonsSomaId` above. Pure.
+ *
+ * "Already holds" is deliberately narrow:
+ *  - EXACTLY ONE polygon carries the track. Two means the frame has a
+ *    duplicate the upsert would collapse, which is a change.
+ *  - the same geometry kind, and the same points element-wise under strict
+ *    equality. No tolerance: both sides are JSON round-trips of the same
+ *    doubles, and a false "different" only costs one redundant write whereas
+ *    a false "same" would silently refuse the user's edit.
+ *  - the same name and instanceId, compared the way the upsert writes them
+ *    (an empty or missing value is "none"). A propagate after a rename with
+ *    untouched geometry must still land.
+ *
+ * Fields the upsert does not write from the request (`id`, `mtType`, ...) are
+ * not compared: skipping the write keeps them, which is what a no-op means.
+ */
+export function trackPolylineMatches(
+  polys: unknown[],
+  trackId: string,
+  polyline: PropagatedPolyline
+): boolean {
+  const held = polys.filter(
+    p => (p as Record<string, unknown> | null)?.trackId === trackId
+  );
+  if (held.length !== 1) {
+    return false;
+  }
+  const rec = held[0] as Record<string, unknown>;
+  const text = (v: unknown): string | undefined =>
+    typeof v === 'string' && v.length > 0 ? v : undefined;
+  // Absent geometry is 'polygon' on the stored side (backward compat) and
+  // 'polyline' on the request side — each side's own default, as written.
+  const storedGeometry = rec.geometry === 'polyline' ? 'polyline' : 'polygon';
+  const nextGeometry = polyline.geometry === 'polygon' ? 'polygon' : 'polyline';
+  if (
+    storedGeometry !== nextGeometry ||
+    text(rec.name) !== text(polyline.name) ||
+    text(rec.instanceId) !== text(polyline.instanceId)
+  ) {
+    return false;
+  }
+  const stored = rec.points;
+  const next = polyline.points;
+  if (
+    !Array.isArray(stored) ||
+    !Array.isArray(next) ||
+    stored.length !== next.length
+  ) {
+    return false;
+  }
+  return stored.every((pt, i) => {
+    const a = pt as { x?: unknown; y?: unknown } | null;
+    return a?.x === next[i]?.x && a?.y === next[i]?.y;
+  });
 }
 
 export interface SegmentationRequest {
@@ -2965,6 +3037,20 @@ export class SegmentationService {
    * in every following frame. Only a frame whose polygons JSON is unreadable is
    * skipped (it must never be overwritten with just the propagated line).
    *
+   * A frame that already holds exactly this polyline (`trackPolylineMatches`)
+   * is left alone: no write, no `updatedAt` bump, no new polygon id. Until
+   * 2026-10-08 every frame was rewritten regardless, so pressing propagate
+   * twice reported the full frame count both times and the editor could not
+   * tell the user that nothing had changed.
+   *
+   * The result separates the three outcomes a frame can have:
+   *  - `framesChanged`   rows rewritten + rows created
+   *  - `framesUnchanged` frames that already held this exact polyline
+   *  - `framesSkipped`   frames whose polygons JSON could not be read
+   * `framesUpdated` keeps its meaning — frames the microtubule is now on —
+   * and is therefore `framesChanged + framesUnchanged`. An empty
+   * `framesChanged` is "nothing to change" only when `framesSkipped` is 0 too.
+   *
    * @throws {VideoAccessError} if the video is not owned.
    * @throws if the polyline has fewer than 2 points.
    */
@@ -2973,7 +3059,13 @@ export class SegmentationService {
     fromFrameIndex: number,
     polyline: PropagatedPolyline,
     userId: string
-  ): Promise<{ trackId: string; framesUpdated: number }> {
+  ): Promise<{
+    trackId: string;
+    framesUpdated: number;
+    framesChanged: number;
+    framesUnchanged: number;
+    framesSkipped: number;
+  }> {
     const container = await this.imageService.getImageById(videoId, userId);
     if (!container) {
       throw new VideoAccessError();
@@ -2998,8 +3090,9 @@ export class SegmentationService {
     });
 
     const ops: Prisma.PrismaPromise<unknown>[] = [];
-    let framesUpdated = 0;
+    let framesRewritten = 0;
     let framesCreated = 0;
+    let framesUnchanged = 0;
     let corruptFrames = 0;
     for (const frame of frames) {
       if (frame.segmentation) {
@@ -3018,6 +3111,10 @@ export class SegmentationService {
           );
           continue;
         }
+        if (trackPolylineMatches(parsed, trackId, polyline)) {
+          framesUnchanged++;
+          continue;
+        }
         const updated = upsertTrackPolyline(parsed, trackId, polyline, uuidv4);
         ops.push(
           this.prisma.segmentation.update({
@@ -3025,7 +3122,7 @@ export class SegmentationService {
             data: { polygons: JSON.stringify(updated), updatedAt: new Date() },
           })
         );
-        framesUpdated++;
+        framesRewritten++;
       } else {
         // No segmentation row yet — the frame was never segmented or its
         // annotations were deleted. Create a row carrying just the propagated
@@ -3062,13 +3159,19 @@ export class SegmentationService {
       videoId,
       trackId,
       fromFrameIndex,
-      framesUpdated,
+      framesRewritten,
       framesCreated,
+      framesUnchanged,
       corruptFramesSkipped: corruptFrames,
     });
-    // Total frames the microtubule now appears in (existing rows updated + new
-    // rows created) — this is what the editor toast reports.
-    return { trackId, framesUpdated: framesUpdated + framesCreated };
+    const framesChanged = framesRewritten + framesCreated;
+    return {
+      trackId,
+      framesUpdated: framesChanged + framesUnchanged,
+      framesChanged,
+      framesUnchanged,
+      framesSkipped: corruptFrames,
+    };
   }
 
   /**

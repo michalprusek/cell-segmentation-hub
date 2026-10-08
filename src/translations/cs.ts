@@ -791,6 +791,10 @@ export default {
       propagateSuccess:
         'Mikrotubulus propagován do {{count}} následujících snímků',
       propagateFailed: 'Propagace mikrotubulu selhala',
+      propagateNoChange:
+        'Není co měnit – následující snímky už tento tvar mají',
+      propagateSelectedNoChange:
+        'Není co měnit – následující snímky už tyto tvary mají',
       deleteTrackSuccess: 'Track odstraněn z {{count}} snímků',
       deleteTrackFailed: 'Smazání tracku selhalo',
       deleteFrameSuccess:

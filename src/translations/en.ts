@@ -793,6 +793,10 @@ export default {
       propagateSuccess:
         'Microtubule propagated to {{count}} following frame(s)',
       propagateFailed: 'Failed to propagate the microtubule',
+      propagateNoChange:
+        'Nothing to change – the following frames already have this shape',
+      propagateSelectedNoChange:
+        'Nothing to change – the following frames already have these shapes',
       deleteTrackSuccess: 'Track removed from {{count}} frame(s)',
       deleteTrackFailed: 'Failed to delete the track',
       deleteFrameSuccess:

@@ -10,6 +10,7 @@
  *   - diffTrackOps             — rename/delete diff between prev & next frames
  *   - parsePolygonsJsonForDiff — defensive JSON parse for the diff path
  *   - removePolygonsWithTrackId / upsertTrackPolyline — list mutations
+ *   - trackPolylineMatches     — "this frame already holds it" for propagate
  *
  *  Orchestration (mocked Prisma):
  *   - propagateTrackGeometryForward
@@ -26,6 +27,7 @@ import {
   parsePolygonsJsonForDiff,
   removePolygonsWithTrackId,
   upsertTrackPolyline,
+  trackPolylineMatches,
   type PropagatedPolyline,
 } from '../segmentationService';
 import { ImageService } from '../imageService';
@@ -261,6 +263,134 @@ describe('upsertTrackPolyline', () => {
     const out = upsertTrackPolyline([], 't9', noName, () => 'id');
     expect('name' in (out[0] as object)).toBe(false);
   });
+
+  it('keeps the type label the frame already had for that track', () => {
+    // The label is resolved from EACH frame's own polygon (panel, canvas
+    // colour, metrics export) and the request does not carry it, so a rewrite
+    // that dropped it un-typed the microtubule on every later frame.
+    const existing = [
+      poly('t1', { mtType: 'label-dynamic' }),
+      poly('t2', { mtType: 'label-other' }),
+    ];
+    const out = upsertTrackPolyline(existing, 't1', source, () => 'id');
+    const t1 = out.find(p => (p as { trackId?: string }).trackId === 't1');
+    expect((t1 as { mtType?: string }).mtType).toBe('label-dynamic');
+  });
+
+  it('writes no type label when the frame had none for that track', () => {
+    const out = upsertTrackPolyline(
+      [poly('t2', { mtType: 'label-other' })],
+      't1',
+      source,
+      () => 'id'
+    );
+    const t1 = out.find(p => (p as { trackId?: string }).trackId === 't1');
+    expect('mtType' in (t1 as object)).toBe(false);
+  });
+});
+
+describe('trackPolylineMatches', () => {
+  // The fixture BENDS and no two points share a coordinate with their
+  // neighbour: a compare of the length alone, of the first point alone, or of
+  // x without y cannot tell the variants below apart from the original.
+  const bent: PropagatedPolyline = {
+    trackId: 't1',
+    instanceId: 'mt_abc',
+    name: 'MT-A',
+    geometry: 'polyline',
+    points: [
+      { x: 10, y: 40 },
+      { x: 25.5, y: 31.25 },
+      { x: 48, y: 36 },
+      { x: 60.75, y: 12 },
+    ],
+  };
+  /** What `upsertTrackPolyline` leaves on a frame for `bent`. */
+  const held = (over: Record<string, unknown> = {}) => ({
+    ...(upsertTrackPolyline([], 't1', bent, () => 'kept-id')[0] as object),
+    ...over,
+  });
+  const movePoint = (index: number, to: { x: number; y: number }) =>
+    bent.points.map((pt, i) => (i === index ? to : pt));
+
+  it('is true for a frame holding exactly what the upsert would write', () => {
+    expect(trackPolylineMatches([held()], 't1', bent)).toBe(true);
+  });
+
+  it('ignores the frame\u2019s other tracks and fields the upsert does not send', () => {
+    const others = [
+      { id: 'o', trackId: 't2', geometry: 'polyline', points: [] },
+      held({ id: 'another-id', mtType: 'label-1', confidence: 0.4 }),
+    ];
+    expect(trackPolylineMatches(others, 't1', bent)).toBe(true);
+  });
+
+  it.each([
+    ['the last point', 3, { x: 60.75, y: 13 }],
+    ['a middle point', 1, { x: 25.5, y: 31.5 }],
+    ['only the x of a middle point', 2, { x: 48.5, y: 36 }],
+    ['the first point', 0, { x: 11, y: 40 }],
+  ])('is false when %s moved', (_what, index, to) => {
+    const moved = { ...bent, points: movePoint(index, to) };
+    expect(trackPolylineMatches([held()], 't1', moved)).toBe(false);
+  });
+
+  it('is false when the polyline gained or lost a point', () => {
+    const longer = { ...bent, points: [...bent.points, { x: 70, y: 5 }] };
+    const shorter = { ...bent, points: bent.points.slice(0, 3) };
+    expect(trackPolylineMatches([held()], 't1', longer)).toBe(false);
+    expect(trackPolylineMatches([held()], 't1', shorter)).toBe(false);
+  });
+
+  it('is false when the name differs, in either direction', () => {
+    expect(
+      trackPolylineMatches([held()], 't1', { ...bent, name: 'MT-renamed' })
+    ).toBe(false);
+    expect(trackPolylineMatches([held()], 't1', { ...bent, name: null })).toBe(
+      false
+    );
+    expect(trackPolylineMatches([held({ name: undefined })], 't1', bent)).toBe(
+      false
+    );
+  });
+
+  it('is false when the instanceId differs', () => {
+    expect(
+      trackPolylineMatches([held()], 't1', { ...bent, instanceId: 'mt_zzz' })
+    ).toBe(false);
+    expect(
+      trackPolylineMatches([held({ instanceId: undefined })], 't1', bent)
+    ).toBe(false);
+  });
+
+  it('treats a missing name and an empty one as the same "none"', () => {
+    const unnamed = { ...bent, name: '' };
+    expect(
+      trackPolylineMatches([held({ name: undefined })], 't1', unnamed)
+    ).toBe(true);
+  });
+
+  it('is false when the stored shape is a closed polygon', () => {
+    expect(
+      trackPolylineMatches([held({ geometry: 'polygon' })], 't1', bent)
+    ).toBe(false);
+    // Absent geometry means 'polygon' on a stored row.
+    expect(
+      trackPolylineMatches([held({ geometry: undefined })], 't1', bent)
+    ).toBe(false);
+  });
+
+  it('is false when the frame holds the track TWICE, even if both are identical', () => {
+    // The upsert collapses duplicates to one, so this frame would change.
+    expect(trackPolylineMatches([held(), held()], 't1', bent)).toBe(false);
+  });
+
+  it('is false when the frame does not hold the track', () => {
+    expect(trackPolylineMatches([], 't1', bent)).toBe(false);
+    expect(trackPolylineMatches([held({ trackId: 't2' })], 't1', bent)).toBe(
+      false
+    );
+  });
 });
 
 // ─── orchestration: propagate / delete / setType (mocked Prisma) ──────────────
@@ -341,7 +471,12 @@ describe('SegmentationService track ops (orchestration)', () => {
       );
 
       expect(res.trackId).toMatch(/^mt_[0-9a-f]{8}$/);
-      expect(res.framesUpdated).toBe(2);
+      expect(res).toMatchObject({
+        framesUpdated: 2,
+        framesChanged: 2,
+        framesUnchanged: 0,
+        framesSkipped: 0,
+      });
       expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
 
       // Every written frame carries the SAME generated trackId on the new line.
@@ -386,8 +521,14 @@ describe('SegmentationService track ops (orchestration)', () => {
         { ...srcPolyline, trackId: 'x' },
         'user'
       );
-      // Only the good frame is written; the corrupt frame is left untouched.
-      expect(res.framesUpdated).toBe(1);
+      // Only the good frame is written; the corrupt frame is left untouched —
+      // and REPORTED, so the editor cannot read it as "nothing to change".
+      expect(res).toMatchObject({
+        framesUpdated: 1,
+        framesChanged: 1,
+        framesUnchanged: 0,
+        framesSkipped: 1,
+      });
       expect(prismaMock.segmentation.update).toHaveBeenCalledTimes(1);
       expect(prismaMock.segmentation.update.mock.calls[0][0].where.id).toBe(
         'seg-good'
@@ -404,8 +545,9 @@ describe('SegmentationService track ops (orchestration)', () => {
         { ...srcPolyline, trackId: 't' },
         'user'
       );
-      // The microtubule now appears in the previously-empty frame.
-      expect(res.framesUpdated).toBe(1);
+      // The microtubule now appears in the previously-empty frame. A created
+      // row is a change.
+      expect(res).toMatchObject({ framesUpdated: 1, framesChanged: 1 });
       expect(prismaMock.segmentation.update).not.toHaveBeenCalled();
       // A new segmentation row was created carrying just the propagated line...
       expect(prismaMock.segmentation.create).toHaveBeenCalledTimes(1);
@@ -429,8 +571,178 @@ describe('SegmentationService track ops (orchestration)', () => {
         { ...srcPolyline, trackId: 't' },
         'user'
       );
-      expect(res.framesUpdated).toBe(0);
+      expect(res).toMatchObject({
+        framesUpdated: 0,
+        framesChanged: 0,
+        framesUnchanged: 0,
+        framesSkipped: 0,
+      });
       expect(prismaMock.$transaction).not.toHaveBeenCalled();
+    });
+
+    // --- frames that already hold the polyline (2026-10-08) ----------------
+    //
+    // Every frame used to be rewritten whatever it held, so a second press of
+    // "propagate" reported the full frame count again. `bent` has four points
+    // that share no coordinate with a neighbour, so a compare of the length,
+    // of the first point, or of x without y cannot pass these by accident.
+    const bent = {
+      trackId: 't7',
+      instanceId: 'mt_abc',
+      name: 'MT7',
+      geometry: 'polyline' as const,
+      points: [
+        { x: 10, y: 40 },
+        { x: 25.5, y: 31.25 },
+        { x: 48, y: 36 },
+        { x: 60.75, y: 12 },
+      ],
+    };
+    /** The polygon a previous propagate of `bent` left on a frame. */
+    const heldBent = (over: Record<string, unknown> = {}) => ({
+      id: 'kept-id',
+      trackId: 't7',
+      type: 'external',
+      geometry: 'polyline',
+      points: bent.points.map(pt => ({ ...pt })),
+      area: 0,
+      confidence: 1,
+      name: 'MT7',
+      instanceId: 'mt_abc',
+      ...over,
+    });
+
+    it('writes NOTHING when every following frame already holds the polyline', async () => {
+      prismaMock.image.findMany.mockResolvedValue([
+        { id: 'f1', segmentation: seg('1', [line('other'), heldBent()]) },
+        { id: 'f2', segmentation: seg('2', [heldBent({ mtType: 'label-1' })]) },
+      ]);
+
+      const res = await service.propagateTrackGeometryForward(
+        'vid',
+        0,
+        bent,
+        'user'
+      );
+
+      expect(res).toEqual({
+        trackId: 't7',
+        framesUpdated: 2, // the microtubule IS on both frames
+        framesChanged: 0,
+        framesUnchanged: 2,
+        framesSkipped: 0,
+      });
+      // No row touched: no rewrite (which would mint a new polygon id and bump
+      // updatedAt), no create, and no transaction opened for an empty batch.
+      expect(prismaMock.segmentation.update).not.toHaveBeenCalled();
+      expect(prismaMock.segmentation.create).not.toHaveBeenCalled();
+      expect(prismaMock.image.update).not.toHaveBeenCalled();
+      expect(prismaMock.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('rewrites only the frames that differ, and counts each kind', async () => {
+      const moved = heldBent({
+        points: bent.points.map((pt, i) => (i === 3 ? { x: 60.75, y: 13 } : pt)),
+      });
+      prismaMock.image.findMany.mockResolvedValue([
+        { id: 'same', segmentation: seg('same', [heldBent()]) },
+        { id: 'moved', segmentation: seg('moved', [moved]) },
+        { id: 'absent', segmentation: seg('absent', [line('other')]) },
+        { id: 'norow', width: 64, height: 64, segmentation: null },
+        { id: 'bad', segmentation: { id: 'seg-bad', polygons: '{not json' } },
+      ]);
+
+      const res = await service.propagateTrackGeometryForward(
+        'vid',
+        0,
+        bent,
+        'user'
+      );
+
+      expect(res).toEqual({
+        trackId: 't7',
+        framesUpdated: 4, // same + moved + absent + norow
+        framesChanged: 3, // moved + absent rewritten, norow created
+        framesUnchanged: 1,
+        framesSkipped: 1,
+      });
+      expect(
+        prismaMock.segmentation.update.mock.calls.map(
+          (c: any) => c[0].where.id
+        )
+      ).toEqual(['seg-moved', 'seg-absent']);
+      expect(prismaMock.segmentation.create).toHaveBeenCalledTimes(1);
+      // The rewritten frame ends with the NEW last point.
+      expect(
+        writtenPolys(prismaMock.segmentation.update.mock.calls[0]).find(
+          p => p.trackId === 't7'
+        ).points
+      ).toEqual(bent.points);
+      // One transaction carrying exactly the changed frames' operations:
+      // 2 updates + 1 create + its status flip.
+      expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
+      expect(prismaMock.$transaction.mock.calls[0][0]).toHaveLength(4);
+    });
+
+    it.each([
+      ['name', { name: 'MT7-old' }],
+      ['instanceId', { instanceId: 'mt_old' }],
+    ])(
+      'still writes a frame whose geometry matches but whose %s differs',
+      async (_field, over) => {
+        prismaMock.image.findMany.mockResolvedValue([
+          { id: 'f1', segmentation: seg('1', [heldBent(over)]) },
+        ]);
+        const res = await service.propagateTrackGeometryForward(
+          'vid',
+          0,
+          bent,
+          'user'
+        );
+        expect(res).toMatchObject({ framesChanged: 1, framesUnchanged: 0 });
+        const written = writtenPolys(
+          prismaMock.segmentation.update.mock.calls[0]
+        ).find(p => p.trackId === 't7');
+        expect(written).toMatchObject({ name: 'MT7', instanceId: 'mt_abc' });
+      }
+    );
+
+    it('collapses a frame holding the track twice, and counts it as changed', async () => {
+      prismaMock.image.findMany.mockResolvedValue([
+        {
+          id: 'f1',
+          segmentation: seg('1', [heldBent(), heldBent({ id: 'dup' })]),
+        },
+      ]);
+      const res = await service.propagateTrackGeometryForward(
+        'vid',
+        0,
+        bent,
+        'user'
+      );
+      expect(res).toMatchObject({ framesChanged: 1, framesUnchanged: 0 });
+      expect(
+        writtenPolys(prismaMock.segmentation.update.mock.calls[0]).filter(
+          p => p.trackId === 't7'
+        )
+      ).toHaveLength(1);
+    });
+
+    it('logs how many frames were left alone', async () => {
+      prismaMock.image.findMany.mockResolvedValue([
+        { id: 'f1', segmentation: seg('1', [heldBent()]) },
+      ]);
+      await service.propagateTrackGeometryForward('vid', 0, bent, 'user');
+      expect(logger.info).toHaveBeenCalledWith(
+        'Propagated microtubule track forward',
+        'SegmentationService',
+        expect.objectContaining({
+          framesRewritten: 0,
+          framesCreated: 0,
+          framesUnchanged: 1,
+          corruptFramesSkipped: 0,
+        })
+      );
     });
 
     it('throws VideoAccessError when the video is not owned', async () => {
