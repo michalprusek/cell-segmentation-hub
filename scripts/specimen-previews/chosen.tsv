@@ -56,3 +56,6 @@ microcapsule-3	microcapsule	microcapsule	db7c5788-9f69-479d-80b5-071b5bd772b5	0	
 neurite_soma-1	neurite_soma	neurite	infer-neurite_soma-neurite_0	1400	1400	work:infer/neurite_0.png	infer
 neurite_soma-2	neurite_soma	neurite	infer-neurite_soma-neurite_1	1400	1400	work:infer/neurite_1.png	infer
 neurite_soma-3	neurite_soma	neurite	infer-neurite_soma-neurite_2	1400	1400	work:infer/neurite_2.png	infer
+neurite_soma_classical-1	neurite_soma_classical	neurite	infer-neurite_soma_classical-neurite_0	1400	1400	work:infer/neurite_0.png	infer
+neurite_soma_classical-2	neurite_soma_classical	neurite	infer-neurite_soma_classical-neurite_1	1400	1400	work:infer/neurite_1.png	infer
+neurite_soma_classical-3	neurite_soma_classical	neurite	infer-neurite_soma_classical-neurite_2	1400	1400	work:infer/neurite_2.png	infer

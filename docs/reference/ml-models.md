@@ -3,7 +3,7 @@
 Every segmentation model the platform can run: what it is, what it was trained
 on, what it outputs, how fast it is, and what it will not do.
 
-There are **twelve** models. Each one is locked to one or more project types — the
+There are **thirteen** models. Each one is locked to one or more project types — the
 model picker only offers compatible models, and the backend rejects an
 incompatible pair with a 400 even if you post it directly.
 
@@ -57,9 +57,10 @@ incompatible pair with a 400 even if you post it directly.
 | `microtubule`             | Microtubule (ResEnc-M + instancer) | `microtubules`      | **Polylines**   | 0.98, **not read** (`prob_thr` 0.98 in its own params file) | ~0.6 s (p95 ~2 s)             | large       |
 | `microcapsule`            | Microcapsule                       | `microcapsule`      | Closed polygons | 0.5                                                         | ~0.30 s                       | small       |
 | `neurite_soma`            | Neurite / Soma                     | `neurite`           | Closed polygons | 0.5, **not read** (argmax)                                  | ~12 s at 2048²                | large       |
+| `neurite_soma_classical`  | Neurite / Soma (classical)         | `neurite`           | Closed polygons | 0.5, **not read** (cut relative to the image's own noise)   | ~1.3 s at 1024², CPU          | small       |
 
 The threshold column is `defaultThreshold` from the frontend registry — the
-value the request carries. **Five models never read it** (`threshold: null` in
+value the request carries. **Six models never read it** (`threshold: null` in
 `backend/src/api/v1/models.ts`, mirroring
 `backend/segmentation/api/routes.py::_dispatch_inference`): for those the
 registry number changes nothing, and the cell says what decides instead.
@@ -67,7 +68,9 @@ registry number changes nothing, and the cell says what decides instead.
 Timings are the registry's recorded measurements on an NVIDIA A5000 and are
 end-to-end (pre-process → inference → post-process → polygon extraction), not
 raw forward-pass time. On CPU everything is one to two orders of magnitude
-slower; see [GPU configuration](../GPU-CONFIGURATION.md).
+slower; see [GPU configuration](../GPU-CONFIGURATION.md). The exception is
+`neurite_soma_classical`, which has no network and runs on the CPU by design:
+its figure is a CPU measurement.
 
 > **Images are dispatched one at a time.** The registry carries a `batchSize`
 > hint per model, but the queue's `BATCH_LIMITS` pins every model to **1** —
@@ -86,12 +89,15 @@ slower; see [GPU configuration](../GPU-CONFIGURATION.md).
 | `sperm`             | `sperm` (default), `sperm_2part`                                    |
 | `microtubules`      | `microtubule`                                                       |
 | `microcapsule`      | `microcapsule`                                                      |
-| `neurite`           | `neurite_soma`                                                      |
+| `neurite`           | `neurite_soma` (default), `neurite_soma_classical`                  |
 
-Two types offer a real choice: `spheroid` (five models) and `sperm` (two). The
-other five have exactly one, so their picker is a single locked row. A new
-`sperm` project starts on `sperm`; `sperm_2part` is used only when the owner
-picks it.
+Three types offer a real choice: `spheroid` (five models), `sperm` (two) and
+`neurite` (two). The other four have exactly one, so their picker is a single
+locked row. A new `sperm` project starts on `sperm` and a new `neurite` project
+on `neurite_soma`; `sperm_2part` and `neurite_soma_classical` are used only
+when the owner picks them. `neurite_soma_classical` is not a more accurate
+replacement for the learned model — it is for images the learned model cannot
+take.
 
 `spheroid_disintegration` is deliberately **absent** from plain `spheroid`
 projects: core detection is tied to its post-processing path, so anyone who
@@ -507,6 +513,89 @@ More in [Neurite and soma projects](../guides/project-types/neurite.md).
 
 ---
 
+## `neurite_soma_classical` — Neurite / Soma (classical)
+
+Long display name: _Neurite / Soma – classical (merged channels)_.
+
+A classical, training-free segmentation of neurites and somas: **no neural
+network, no weights, CPU only**. It exists for fluorescence images in which a
+cell is only visible when several channels are taken together, which the
+learned `neurite_soma` cannot take — that model reads exactly one tubulin
+channel and rejects a genuinely multi-channel frame. It is **not** the default
+for `neurite` projects; the owner picks it.
+
+- Code: `backend/segmentation/models/neurite_classical.py`. It sits beside the
+  `models` package's heavy members, like `mt_measure.py`, and needs only NumPy,
+  SciPy, scikit-image and OpenCV.
+- Parameters: one fitted set, `PARAMS` in that file. There is nothing to
+  download and nothing to stage.
+- Speed: about **1.3 s per 1024 × 1024 frame** on the CPU (measured 1.13–1.46 s
+  on four production frames, 2026-10-08).
+- Output: closed polygons with the classes `neurite` and `soma` — the same two
+  names the learned model uses, so the editor, the soma assignment and the
+  export treat both models' output alike — plus holes (for example the inside
+  of a neurite loop) as internal polygons.
+
+### The pipeline
+
+1. **Normalise each channel to its own noise.** Every ticked channel is brought
+   to noise units separately, `(x − median) / MAD`, at its native bit depth.
+2. **Merge by pixel-wise maximum** into ONE greyscale image. That image is what
+   is segmented.
+3. **Neurites: Meijering ridge filter** (neuriteness; Meijering et al. 2004),
+   thresholded relative to the image's own noise.
+4. **Discard short isolated fragments.** A ridge component under about 100 px
+   is treated as a background stain, not a neurite.
+5. **Somas: wide, compact structures with neurites leaving them.**
+
+The labelled result is then traced into polygons; with `detect_holes` the holes
+follow as internal polygons.
+
+### Choosing the channels
+
+The channels to merge are chosen per segmentation run, in the channel picker:
+for this model it shows **checkboxes** instead of radio buttons. Nothing is
+ticked by default and Confirm stays disabled until at least one channel is
+ticked. The picker appears on the project page (Segment) and in the editor
+(Resegment), and only when the image has more than one channel; a
+single-channel image is segmented directly.
+
+What drives this is the registry flag `mergesChannels` (both
+`modelRegistry.ts` files), which turns `SegmentChannelDialog` into its
+`multiple` mode.
+
+On the wire the choice is the optional request field **`channels: string[]`**
+(1–8 distinct channel names) on `POST /api/queue/batch` and
+`POST /api/segmentation/batch`. It is a different thing from the single
+`channel` field, which names ONE channel to read instead of the default.
+`channels` is refused with a validation error for any model that does not merge
+channels. The queue row stores it in `segmentation_queue.mergeChannels`
+(`TEXT[]`, empty for every other model). The merge itself happens in the ML
+service: the backend sends the first channel as `file` and the others as
+`extra_channels` on `/api/v1/segment`, a field only this model accepts.
+
+### Its threshold is not a setting
+
+`threshold` does not apply. The registry carries a neutral `0.5` and the
+request echoes it, but the cut is relative to each image's own noise and is
+part of `PARAMS`.
+
+### Known limits
+
+- **Faint, diffuse somas are found only some of the time.** On three dim
+  production frames the model found 2 of 3, 1, and 0 somas. Check and correct
+  the somas in the editor; the export measures the stored polygons.
+- **Images over 64 megapixels are refused.**
+- **One parameter set, chosen on four production frames** (2026-10-08). It has
+  no accuracy figure.
+- **Public API:** `/api/v1/segment` offers the model, but one image is one
+  channel there — channel merging is a feature of the application. It reads
+  `detect_holes`, ignores `threshold`, and uses the image at native bit depth.
+
+More in [Neurite and soma projects](../guides/project-types/neurite.md).
+
+---
+
 ## How a model gets chosen at run time
 
 Rewritten 2026-09-20 (PRs #553/#554). It used to start from a per-user
@@ -528,16 +617,17 @@ segmented and was wrong by construction on six of the seven project types.
    the project's.
 4. **Threshold** — not a choice at all. It is derived read-only from the
    registry entry for the resolved model: 0.98 for `microtubule`, 0.5 for every
-   other model. Five models never read the value they are sent: `microtubule`
+   other model. Six models never read the value they are sent: `microtubule`
    applies `prob_thr` from its own parameter file, `sperm` and `sperm_2part`
-   their own cut-offs, and `spheroid_disintegration` and `neurite_soma` decide
-   by argmax and have no threshold at all.
+   their own cut-offs, `spheroid_disintegration` and `neurite_soma` decide
+   by argmax and have no threshold at all, and `neurite_soma_classical` cuts
+   relative to each image's own noise.
 5. **Hole detection** — offered only on `spheroid` and `wound`
    (`PROJECT_TYPES_WITH_HOLE_DETECTION`). Everywhere else the request carries
    the default `true`, normalised on both sides by `resolveDetectHoles`.
 6. **Enqueue** — the resolved values are stored on the `SegmentationQueue` row
-   (`model`, `threshold`, `detectHoles`, and for multi-channel video frames
-   `channel`). A request that omits `model` is resolved from the project by the
+   (`model`, `threshold`, `detectHoles`, for multi-channel video frames
+   `channel`, and for a model that merges channels `mergeChannels`). A request that omits `model` is resolved from the project by the
    controller, never from a hard-coded fallback.
 7. **Worker** — compatibility is still enforced in the queue worker. The
    interface can no longer produce a mismatch, since the model is resolved from

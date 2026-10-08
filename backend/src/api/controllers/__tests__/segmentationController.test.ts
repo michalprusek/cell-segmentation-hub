@@ -402,6 +402,7 @@ describe('SegmentationController', () => {
         0.5,
         'user-id',
         true,
+        undefined,
         undefined
       );
     });

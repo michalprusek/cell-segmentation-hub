@@ -36,21 +36,32 @@ documents it for people debugging the pipeline or extending it.
 
 `multipart/form-data`:
 
-| Field          | Type   | Default | Notes                                                                                  |
-| -------------- | ------ | ------- | -------------------------------------------------------------------------------------- |
-| `file`         | file   | —       | PNG, JPG, JPEG, TIFF, TIF or BMP. The extension of the filename is checked first       |
-| `model`        | string | `hrnet` | A model id from the registry. An unknown id is a 400                                   |
-| `threshold`    | float  | `0.5`   | Constrained to 0.1–0.99                                                                |
-| `detect_holes` | bool   | `true`  | Detect internal contours                                                               |
-| `page`         | int    | `0`     | Zero-based page of a multi-page image. Past the end is a 400                           |
-| `max_pixels`   | int    | none    | Refuse (413) an image with more pixels, judged from the header before anything decodes |
+| Field            | Type   | Default | Notes                                                                                                         |
+| ---------------- | ------ | ------- | ------------------------------------------------------------------------------------------------------------- |
+| `file`           | file   | —       | PNG, JPG, JPEG, TIFF, TIF or BMP. The extension of the filename is checked first                              |
+| `model`          | string | `hrnet` | A model id from the registry — one of thirteen. An unknown id is a 400                                        |
+| `threshold`      | float  | `0.5`   | Constrained to 0.1–0.99                                                                                       |
+| `detect_holes`   | bool   | `true`  | Detect internal contours                                                                                      |
+| `page`           | int    | `0`     | Zero-based page of a multi-page image. Past the end is a 400                                                  |
+| `max_pixels`     | int    | none    | Refuse (413) an image with more pixels, judged from the header before anything decodes                        |
+| `extra_channels` | files  | none    | Further channels of the same image, merged with `file` before segmentation. `neurite_soma_classical` **only** |
+
+**`extra_channels`** exists for the one model that merges channels,
+`neurite_soma_classical`: `file` is the first channel and each `extra_channels`
+part is another channel of the same image. They are normalised and merged in
+the ML service, at native bit depth, into the one greyscale image that is
+segmented. For any other model the field is **refused with a 400**, not
+ignored — a caller who sent three channels and got the segmentation of the
+first one could not tell. At most 7 extra channels (8 merged in all); every
+channel must have the same size as `file`. `neurite_soma_classical` also
+answers 413 for an image over 64 megapixels.
 
 Returns the polygons (and/or polylines), the model used, `image_size`, `page`,
 `page_count` and timing. The app's queue sends neither `page` nor
 `max_pixels`; the public API (`/api/v1/segment` on the **backend** — a
 different service that happens to share the path) sends both.
 
-**High-bit-depth input.** Ten of the twelve models go through Pillow's
+**High-bit-depth input.** Ten of the thirteen models go through Pillow's
 `convert('RGB')` / `convert('L')`, which **clips** a 16-bit, 32-bit or float
 image at 255 instead of rescaling it. Until 2026-10-06 such a frame reached
 those models as a white rectangle: on every such still in production (three,
@@ -58,11 +69,12 @@ of 3 475 in the affected project types) the model saw 1, 1 and 5 grey levels
 and returned no polygons. They are now stretched first, from the frame's
 0.1–99.9 percentile range to 0–255 (`api/input_depth.py`, which also records
 why it is not min-max), and the response carries `input_conversion` with the
-range used. `microtubule` and `neurite_soma` read the native depth and are not
-converted. An 8-bit image is passed through as the same object — verified on
-62 real results across all twelve models, identical before and after.
+range used. `microtubule`, `neurite_soma` and `neurite_soma_classical` read
+the native depth and are not converted. An 8-bit image is passed through as the
+same object — verified on 62 real results across the twelve models that
+existed on 2026-10-06, identical before and after.
 
-**Five models ignore `threshold`**, because their cut is calibrated
+**Six models ignore `threshold`**, because their cut is calibrated
 differently from the generic one — or does not exist:
 
 - **`sperm`** and **`sperm_2part`** use their own mask threshold (0.3) and
@@ -76,16 +88,21 @@ differently from the generic one — or does not exist:
 - **`neurite_soma`** and **`spheroid_disintegration`** have no threshold at
   all: the classes are an **argmax**, so there is no probability cut to move.
   The request value is accepted and echoed in the response, and then ignored
-  (`spheroid_disintegration` says so: `threshold_applies: false`).
+  (`spheroid_disintegration` says so: `threshold_applies: false`);
+- **`neurite_soma_classical`** cuts relative to each image's own noise, with
+  the parameters in `PARAMS` in `models/neurite_classical.py`. The request
+  value is echoed, not applied.
 
 `wound`, `microcapsule` and the five spheroid models **do** apply it. (This
 page used to list `wound` among the models that ignore it; `WoundModel`
 thresholds its probability map with the request value.)
 
-`detect_holes` changes the output of the five spheroid models and `wound`
-only. It is forwarded to `spheroid_disintegration` and `neurite_soma` but
-their polygoniser keeps one outer contour per region, so no hole is ever
-emitted.
+`detect_holes` changes the output of the five spheroid models, `wound` and
+`neurite_soma_classical` only. `neurite_soma_classical` emits a hole (for
+example the inside of a neurite loop) as its own polygon of `type: 'internal'`
+with a `parent_id` and no class. It is forwarded to `spheroid_disintegration`
+and `neurite_soma` but their polygoniser keeps one outer contour per region, so
+no hole is ever emitted.
 
 All inference is serialised behind one loader-wide lock on a single-slot
 executor.
@@ -202,6 +219,40 @@ no ROI is emitted rather than a misleading one.
 Both are subject to a **workload-scaled timeout** rather than a fixed one; a
 previously hard-coded five-minute limit silently degraded real exports to
 geometry-only sheets.
+
+---
+
+## Neurite measurement
+
+### `POST /api/v1/neurite-intensity`
+
+Intensity of the soma and neurite classes of one frame, one row per
+(channel, class). Called by the neurite export for its `Intensity` table; it
+runs no segmentation — it is handed the stored polygons. JSON body:
+
+| Field              | Type                   | Notes                                                                     |
+| ------------------ | ---------------------- | ------------------------------------------------------------------------- |
+| `frame`            | string                 | Echoed back; the caller's label for the frame                             |
+| `width`, `height`  | int                    | Size of the frame the polygons were drawn on                              |
+| `soma_polygons`    | polygons               | Each a ring of points, with optional `holes`                              |
+| `neurite_polygons` | polygons               | Same shape                                                                |
+| `channels`         | `[{ "name", "path" }]` | 1–16 channels: a label, and the path of that channel's image of the frame |
+
+Response: `{ "frame": …, "rows": [ … ] }`, each row carrying `channel`,
+`class`, `area_px`, `mean_intensity`, `median_intensity`, `std_intensity`,
+`sum_intensity`, `background_median`, `background_area_px` and
+`mean_minus_background`.
+
+- Each class is the union of its polygons with holes subtracted; soma wins
+  where the two overlap. Background is the median of the pixels more than 5 px
+  from any polygon.
+- Channels are read at their native bit depth. A channel file that is a genuine
+  colour image is a 400 rather than an average of its planes, and so is one
+  whose size differs from `width` × `height`; a missing file is a 404.
+- CPU work on a one-slot executor, like `/kymograph`, so it does not block
+  `/health`.
+
+The definitions are in [Metrics](../reference/metrics.md#neurite-projects).
 
 ---
 

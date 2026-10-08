@@ -37,6 +37,13 @@ export type ProjectTypeKey =
 interface BackendModelSpec {
   /** Project types whose picker offers (and whose worker accepts) this model. */
   readonly compatibleProjectTypes: readonly ProjectTypeKey[];
+  /**
+   * The model segments ONE image merged from several channels of a frame, so
+   * a request may name more than one. Every other model reads exactly one and
+   * a list of channels is refused for it. Mirrored by `mergesChannels` in the
+   * frontend registry, which is what turns the channel picker into checkboxes.
+   */
+  readonly mergesChannels?: boolean;
 }
 
 /**
@@ -56,11 +63,28 @@ export const MODEL_REGISTRY = {
   microtubule: { compatibleProjectTypes: ['microtubules'] },
   microcapsule: { compatibleProjectTypes: ['microcapsule'] },
   neurite_soma: { compatibleProjectTypes: ['neurite'] },
+  neurite_soma_classical: {
+    compatibleProjectTypes: ['neurite'],
+    mergesChannels: true,
+  },
 } as const satisfies Record<string, BackendModelSpec>;
 
 /** All known model identifiers — derived, so a typo or a removed model is a
  *  compile error everywhere it is consumed. */
 export type KnownModelId = keyof typeof MODEL_REGISTRY;
+
+/** Whether `model` merges several channels of a frame into the image it segments. */
+export function modelMergesChannels(model: string | null | undefined): boolean {
+  const spec: BackendModelSpec | undefined =
+    model && Object.prototype.hasOwnProperty.call(MODEL_REGISTRY, model)
+      ? MODEL_REGISTRY[model as KnownModelId]
+      : undefined;
+  return spec?.mergesChannels === true;
+}
+
+/** Most channels one request may merge (the ML route accepts one more than
+ *  its own `MAX_EXTRA_CHANNELS`). */
+export const MAX_MERGE_CHANNELS = 8;
 
 /** Ordered list of supported model ids (replaces the hand-maintained whitelist). */
 export const SEGMENTATION_MODELS = Object.keys(

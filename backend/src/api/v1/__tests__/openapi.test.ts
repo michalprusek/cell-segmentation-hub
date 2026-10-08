@@ -20,9 +20,9 @@ const doc = buildOpenApi() as any;
 const schemas = doc.components.schemas;
 
 describe('models', () => {
-  it('describes exactly the models in the registry — all twelve', () => {
+  it('describes exactly the models in the registry — all thirteen', () => {
     expect(Object.keys(V1_MODELS).sort()).toEqual([...SEGMENTATION_MODELS].sort());
-    expect(Object.keys(V1_MODELS)).toHaveLength(12);
+    expect(Object.keys(V1_MODELS)).toHaveLength(13);
     expect(schemas.ModelId.enum).toEqual(Object.keys(MODEL_REGISTRY));
   });
 
@@ -70,6 +70,7 @@ describe('models', () => {
       'cbam_resunet',
       'hrnet',
       'mamba_unet',
+      'neurite_soma_classical',
       'segformer',
       'unet_spherohq',
       'wound',
@@ -77,7 +78,7 @@ describe('models', () => {
     // Mirrors NATIVE_DEPTH_MODELS in backend/segmentation/api/input_depth.py.
     expect(
       SEGMENTATION_MODELS.filter(id => V1_MODELS[id].inputDepth === 'native').sort()
-    ).toEqual(['microtubule', 'neurite_soma']);
+    ).toEqual(['microtubule', 'neurite_soma', 'neurite_soma_classical']);
   });
 });
 

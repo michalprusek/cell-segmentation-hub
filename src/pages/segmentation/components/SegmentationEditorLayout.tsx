@@ -218,7 +218,9 @@ export interface SegmentationEditorLayoutProps {
   isResegmenting: boolean;
   showResegmentChannelDialog: boolean;
   setShowResegmentChannelDialog: (open: boolean) => void;
-  runResegment: (channel: string) => void | Promise<void>;
+  runResegment: (channel: string | string[]) => void | Promise<void>;
+  /** The project's model merges channels: the picker offers checkboxes. */
+  resegmentMergesChannels: boolean;
   handleResegmentCurrentFrame: React.ComponentProps<
     typeof TopToolbar
   >['onResegment'];
@@ -307,6 +309,7 @@ const SegmentationEditorLayout: React.FC<SegmentationEditorLayoutProps> = ({
   hiddenPolygonsCount,
   isResegmenting,
   showResegmentChannelDialog,
+  resegmentMergesChannels,
   setShowResegmentChannelDialog,
   runResegment,
   handleResegmentCurrentFrame,
@@ -549,7 +552,10 @@ const SegmentationEditorLayout: React.FC<SegmentationEditorLayoutProps> = ({
                           // same sperm menu and accidentally re-label or
                           // merge MTs under a sperm-style instanceId.
                           onChangePartClass={
-                            polylineKind === 'sperm'
+                            // ... and a neurite project sets soma / neurite
+                            // on closed polygons through the same handler.
+                            polylineKind === 'sperm' ||
+                            projectType === 'neurite'
                               ? handleChangePartClass
                               : undefined
                           }
@@ -852,6 +858,7 @@ const SegmentationEditorLayout: React.FC<SegmentationEditorLayoutProps> = ({
           apiClient → /segmentation/batch → segmentationService. */}
       <SegmentChannelDialog
         open={showResegmentChannelDialog}
+        multiple={resegmentMergesChannels}
         channels={video.container?.channels?.map(c => c.name) ?? []}
         defaultChannel={
           // The channel the container marks as the segmentation source, so

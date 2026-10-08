@@ -1133,6 +1133,44 @@ describe('queue', () => {
     });
   });
 
+  // A STRING picks one channel to read; an ARRAY is the channels to merge, and
+  // travels under a different key because the backend treats the two
+  // differently (and refuses a list for a model that does not merge).
+  it('requestBatchSegmentation — sends a channel list as `channels`', async () => {
+    mockAxiosInstance.post.mockResolvedValue(
+      ok({ successful: 1, failed: 0, results: [] })
+    );
+
+    await c().requestBatchSegmentation(
+      ['img-1'],
+      'neurite_soma_classical',
+      0.5,
+      true,
+      ['Channel_1', 'Channel_2']
+    );
+    const [, body] = mockAxiosInstance.post.mock.calls[0];
+    expect(body.channels).toEqual(['Channel_1', 'Channel_2']);
+    expect('channel' in body).toBe(false);
+  });
+
+  it('addBatchToQueue — sends a channel list as `channels`, one name as `channel`', async () => {
+    mockAxiosInstance.post.mockResolvedValue(ok({ queuedCount: 1 }));
+    const args = ['p1', 'neurite_soma_classical', 0.5, 0, false, true] as const;
+
+    await c().addBatchToQueue(['i1'], ...args, ['a', 'b']);
+    await c().addBatchToQueue(['i1'], ...args, 'a');
+    await c().addBatchToQueue(['i1'], ...args, []);
+
+    const bodies = mockAxiosInstance.post.mock.calls.map(call => call[1]);
+    expect(bodies[0].channels).toEqual(['a', 'b']);
+    expect('channel' in bodies[0]).toBe(false);
+    expect(bodies[1].channel).toBe('a');
+    expect('channels' in bodies[1]).toBe(false);
+    // An empty list is no choice at all, not a request to merge nothing.
+    expect('channels' in bodies[2]).toBe(false);
+    expect('channel' in bodies[2]).toBe(false);
+  });
+
   it('addBatchToQueue — sends the full batch body', async () => {
     mockAxiosInstance.post.mockResolvedValue(
       ok({

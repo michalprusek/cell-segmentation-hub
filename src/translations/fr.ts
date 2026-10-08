@@ -657,6 +657,11 @@ export default {
           description:
             'Segmentation sémantique à deux classes de neurones en microscopie de fluorescence — neurite (prolongements) et soma (corps cellulaire) — à partir du seul canal tubuline. nnU-Net v2 ResEnc-M, ensemble de 3 folds avec TTA par miroir et terme topologique clDice sur la classe neurite. Dice sur données réservées 0,832 neurite / 0,915 soma.',
         },
+        neurite_soma_classical: {
+          name: 'Neurite / Soma – classique (canaux fusionnés)',
+          description:
+            'Segmentation classique, sans entraînement, des neurites et des somas pour les images de fluorescence où la cellule n’apparaît que lorsque plusieurs canaux sont pris ensemble. Vous cochez les canaux avant de segmenter ; chacun est normalisé par son propre bruit et ils sont fusionnés en une seule image en niveaux de gris. Les neurites proviennent d’un filtre de crêtes de Meijering, les somas d’un test de largeur et de forme. S’exécute sur le CPU en une seconde environ par image de 1024 × 1024. Les somas faibles et diffus ne sont trouvés qu’une partie du temps : vérifiez-les dans l’éditeur.',
+        },
       },
     },
     detectHoles: 'Détecter les Trous',
@@ -694,6 +699,8 @@ export default {
         "U-Net compact (distillé de Meta SAM 3) pour la segmentation d'instances de microcapsules — aire, périmètre et compacité par capsule, les capsules coupées par le bord étant exclues des métriques.",
       neurite_soma:
         'nnU-Net v2 ResEnc-M (2D, ensemble de 3 folds) pour la segmentation des neurites et des somas en microscopie de fluorescence. Lit le canal tubuline ; Dice sur données réservées 0,832 neurite / 0,915 soma. Entraîné sur des données confocales Leica à ~0,180 µm/px : vérifier les comptages de somas à une autre taille de pixel.',
+      neurite_soma_classical:
+        'Segmentation classique des neurites et des somas, sans réseau de neurones et sans poids (filtre de crêtes de Meijering et règles de forme ; CPU uniquement, environ 1,3 s par image de 1024 × 1024). Pour les images de fluorescence où une cellule n’est visible que lorsque plusieurs canaux sont pris ensemble : vous cochez les canaux, chacun est normalisé par son propre bruit de fond et ils sont fusionnés en une seule image en niveaux de gris. Les somas faibles et diffus ne sont trouvés qu’une partie du temps : vérifiez-les dans l’éditeur.',
     },
     dataUsageTitle: 'Utilisation des données et confidentialité',
     dataUsageDescription:
@@ -920,6 +927,8 @@ export default {
   segmentation: {
     // Neurite-only editor controls.
     neurite: {
+      setAsSoma: 'Définir comme soma',
+      setAsNeurite: 'Définir comme neurite',
       assignDone:
         "{{assigned}} neurites attribuées, {{unassigned}} n'ont pas pu l'être",
       assignFailed: "Impossible d'attribuer les neurites",
@@ -969,6 +978,9 @@ export default {
       description:
         'Ce projet contient des images vidéo avec plusieurs canaux. Choisissez le canal à segmenter.',
       confirm: 'Segmenter',
+      titleMerge: 'Sélectionner les canaux à fusionner et segmenter',
+      descriptionMerge:
+        'Cochez un ou plusieurs canaux. Ils sont fusionnés en une seule image en niveaux de gris, et le modèle segmente cette image. À l’export, l’intensité reste mesurée sur chaque canal séparément.',
     },
     mode: {
       view: 'Voir et naviguer',
@@ -1473,7 +1485,7 @@ export default {
     neuriteMetrics: {
       title: 'Métriques des neurites',
       description:
-        'Attribue chaque neurite à un soma et exporte des tableaux par cellule avec le stade de développement.',
+        'Attribue chaque neurite à un soma et exporte des tableaux par cellule avec le stade de développement, ainsi qu’un tableau Intensity avec l’intensité des somas et des neurites sur chaque canal.',
       classify: 'Filtrer les somas non neuronaux',
       classifyHint:
         'Un classifieur affiné rejette les cônes de croissance et les fragments cellulaires. Les objets rejetés restent dans le tableau avec soma_neuronal = 0.',
@@ -1679,7 +1691,7 @@ export default {
       title: 'Introduction',
       whatIs: 'Qu’est-ce que SpheroSeg ?',
       description:
-        'SpheroSeg est une plateforme de segmentation et de mesure assistées par IA d’images de microscopie et de vidéos accélérées. Elle propose sept types de projet appuyés sur douze modèles de segmentation, un éditeur de polygones et de polylignes, un suivi des microtubules d’une image à l’autre et une chaîne d’export par lots.',
+        'SpheroSeg est une plateforme de segmentation et de mesure assistées par IA d’images de microscopie et de vidéos accélérées. Elle propose sept types de projet appuyés sur treize modèles de segmentation, un éditeur de polygones et de polylignes, un suivi des microtubules d’une image à l’autre et une chaîne d’export par lots.',
       developedBy:
         'La plateforme a été développée par Bc. Michal Průšek à la Faculté des sciences nucléaires et de génie physique de l’Université technique tchèque de Prague, sous la direction de l’Ing. Adam Novozámský, Ph.D., en collaboration avec des chercheurs de l’Institut de biochimie et de microbiologie de l’UCT Prague.',
       addresses:
@@ -1761,9 +1773,9 @@ export default {
         neurite: {
           name: 'Neurites et somas',
           bestFor:
-            'Pour : neurones en culture en microscopie de fluorescence, lus dans le canal tubuline. La question est de savoir quelle part de la cellule est le corps et quelle part les prolongements.',
+            'Pour : neurones en culture en microscopie de fluorescence. Il y a deux modèles : le modèle par défaut lit le seul canal tubuline ; le modèle classique segmente une fusion des canaux que vous cochez, pour les images où une cellule n’est visible que lorsque plusieurs canaux sont pris ensemble. La question est de savoir quelle part de la cellule est le corps et quelle part les prolongements.',
           output:
-            'Sortie : polygones fermés en deux classes — soma (le corps cellulaire) et neurite (les prolongements) — tracés en magenta et en cyan.',
+            'Sortie : polygones fermés en deux classes — soma (le corps cellulaire) et neurite (les prolongements) — tracés en magenta et en cyan. L’export mesure chaque cellule ainsi que l’intensité des somas et des neurites sur chaque canal.',
         },
       },
       note: 'Choisissez le type avant d’importer.',
@@ -1857,7 +1869,7 @@ export default {
     modelSelection: {
       title: 'Modèles',
       description:
-        'Douze modèles, chacun rattaché aux types de projet pour lesquels il a été entraîné. Le sélecteur ne propose que des modèles compatibles : les projets sphéroïdes standard choisissent parmi cinq, les projets spermatozoïdes entre deux, et tous les autres types n’en ont qu’un.',
+        'Treize modèles, chacun rattaché aux types de projet pour lesquels il a été conçu. Le sélecteur ne propose que des modèles compatibles : les projets sphéroïdes standard choisissent parmi cinq, les projets spermatozoïdes et les projets neurites et somas entre deux chacun, et tous les autres types n’en ont qu’un.',
       spheroidModels: 'Modèles pour sphéroïdes — à vous de choisir',
       specialisedModels: 'Modèles spécialisés — liés à un type de projet',
       models: {
@@ -1958,6 +1970,15 @@ export default {
           description:
             "Un ensemble de trois plis de nnU-Net v2 ResEnc-M, moyennés dans l'espace des logits, avec augmentation par miroir à l'inférence et un terme topologique clDice qui maintient les prolongements fins connectés plutôt que fragmentés. Dice sur données réservées : 0,832 neurite / 0,915 soma. Entraîné sur des données confocales Leica à environ 0,180 µm/px ; à la moitié de cette taille de pixel, chaque soma revient généralement coupé en deux, validez donc d'abord les comptages de somas.",
         },
+        neuriteSomaClassical: {
+          name: 'Neurite / soma (classique)',
+          inferenceTime:
+            'Environ 1,3 s pour une image de 1024 × 1024, sur le CPU · pas de réglage de seuil : la coupure suit le bruit de l’image elle-même',
+          bestFor:
+            'Utilisé par : les projets neurites et somas, lorsque vous le choisissez à la place du modèle par défaut. Pour les images de fluorescence où une cellule n’est visible que lorsque plusieurs canaux sont pris ensemble.',
+          description:
+            'Une méthode classique : ni réseau de neurones, ni poids, ni entraînement. Avant de segmenter, vous cochez un ou plusieurs canaux ; chacun est normalisé par son propre bruit de fond et ils sont fusionnés par maximum pixel à pixel en une seule image en niveaux de gris, qui est celle que l’on segmente. Les neurites proviennent d’un filtre de crêtes de Meijering avec un seuil relatif au bruit de l’image elle-même, et les fragments courts et isolés (moins de 100 px environ) sont écartés comme des taches du fond. Les somas sont des structures larges et compactes d’où partent des neurites. Les trous, comme l’intérieur d’une boucle de neurite, sont conservés comme trous. Les somas faibles et diffus ne sont trouvés qu’une partie du temps ; vérifiez et corrigez donc les somas dans l’éditeur. Les images de plus de 64 mégapixels sont refusées.',
+        },
       },
       howToSelect: 'Choisir un modèle',
       selectionSteps: {
@@ -1976,7 +1997,7 @@ export default {
       },
       thresholdNote: 'Les seuils de détection sont fixes pour chaque modèle.',
       thresholdNoteText:
-        'Il n’existe aucun réglage de seuil dans l’interface : chaque modèle qui utilise un seuil applique la coupure avec laquelle il a été validé — celle des microtubules étant 0,98 — et deux modèles (Désagrégation des sphéroïdes, Neurite / soma) n’en ont aucun : ils décident par argmax. Abaisser un seuil ne trouve pas davantage d’objets réels : il en trouve davantage avec des indices plus faibles, et sur un canal non IRM la sortie microtubules ne suit l’image à aucun réglage. S’il manque des détections, vérifiez plutôt le canal d’entrée.',
+        'Il n’existe aucun réglage de seuil dans l’interface : chaque modèle qui utilise un seuil applique la coupure avec laquelle il a été validé — celle des microtubules étant 0,98 — et deux modèles (Désagrégation des sphéroïdes, Neurite / soma) n’en ont aucun : ils décident par argmax. Le modèle classique pour les neurites n’a pas de réglage non plus : il tire sa coupure du bruit de chaque image. Abaisser un seuil ne trouve pas davantage d’objets réels : il en trouve davantage avec des indices plus faibles, et sur un canal non IRM la sortie microtubules ne suit l’image à aucun réglage. S’il manque des détections, vérifiez plutôt le canal d’entrée.',
       tip: 'Astuce :',
       tipText:
         'Commencez par le modèle par défaut. Passez à CBAM-ResUNet quand les contours comptent plus que la vitesse, et à Mamba-UNet quand vos images ne ressemblent au jeu d’entraînement de personne.',
@@ -2187,7 +2208,7 @@ export default {
         microcapsule:
           'Microcapsule Metrics + Summary — une ligne par capsule complète ; celles coupées par le bord sont exclues',
         neurite:
-          'Polygon Metrics + Summary — le même rapport par forme que pour les projets sphéroïdes standard, une ligne par polygone de neurite ou de soma',
+          'neurite_metrics — Neurites (une ligne par neurite primaire) et Somas (une ligne par corps cellulaire, avec le stade de développement), qui nécessitent une taille de pixel ; Intensity (intensité des somas et des neurites sur chaque canal en valeurs brutes de la caméra, une ligne par image, canal et classe — sans taille de pixel ; un simple PNG ou JPG compte pour un seul canal nommé image) ; et une feuille README',
       },
       scaleTitle: 'Taille du pixel et unités',
       scaleText:
@@ -2330,10 +2351,10 @@ export default {
         'Étiquettes de segmentation YOLO dans un zip. Modèles à polygones uniquement.',
       modelsHeading: 'Modèles et paramètres',
       modelsText:
-        "Les douze modèles sont disponibles. Tous les modèles ne lisent pas tous les paramètres : threshold et detect_holes s'appliquent à certains et sont refusés pour les autres ; interrogez donc GET /api/v1/models pour savoir ce que chacun accepte et renvoie.",
+        "Les treize modèles sont disponibles. Tous les modèles ne lisent pas tous les paramètres : threshold et detect_holes s'appliquent à certains et sont refusés pour les autres ; interrogez donc GET /api/v1/models pour savoir ce que chacun accepte et renvoie.",
       depthNoteLabel: 'Images 16 bits',
       depthNoteText:
-        "Les modèles microtubules et neurites/somas utilisent l'image 16 bits à pleine profondeur. Pour tous les autres modèles, une image 16 bits est d'abord ramenée à 8 bits, et la réponse le signale par un avertissement.",
+        "Le modèle microtubules et les deux modèles neurites/somas utilisent l'image 16 bits à pleine profondeur. Pour tous les autres modèles, une image 16 bits est d'abord ramenée à 8 bits, et la réponse le signale par un avertissement.",
       jobsHeading: 'Images plus grandes et lots',
       jobsText:
         "Une requête vers /segment garde la connexion ouverte jusqu'à la fin du modèle. Pour une image de plus de 4096 × 4096 pixels, ou pour de nombreuses images, créez un job avec POST /api/v1/jobs : l'envoi répond immédiatement, vous interrogez le job et vous récupérez le résultat de chaque image lorsqu'il est prêt, en choisissant alors le format de sortie. Un job accepte jusqu'à 20 images de 8192 × 8192 pixels au plus (4096 × 4096 pour le modèle spheroid_disintegration), et ses résultats sont conservés 24 heures.",

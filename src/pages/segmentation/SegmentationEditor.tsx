@@ -11,6 +11,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useAuth, useLanguage, useModel } from '@/contexts/exports';
 import { useProjectData } from '@/hooks/useProjectData';
 import { useProjectModel } from '@/hooks/useProjectModel';
+import { modelMergesChannels } from '@/lib/models/modelRegistry';
 import { sortImagesBySettings } from '@/hooks/useImageFilter';
 import { useEnhancedSegmentationEditor } from './hooks/useEnhancedSegmentationEditor';
 import { useSegmentationReload } from './hooks/useSegmentationReload';
@@ -2171,6 +2172,7 @@ const SegmentationEditor = () => {
         showResegmentChannelDialog={showResegmentChannelDialog}
         setShowResegmentChannelDialog={setShowResegmentChannelDialog}
         runResegment={runResegment}
+        resegmentMergesChannels={modelMergesChannels(selectedModel)}
         handleResegmentCurrentFrame={handleResegmentCurrentFrame}
         t={t}
       />

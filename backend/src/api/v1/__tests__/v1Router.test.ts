@@ -115,7 +115,7 @@ describe('authentication', () => {
     expect(res.body.data.map((m: { id: string }) => m.id)).toEqual([
       ...SEGMENTATION_MODELS,
     ]);
-    expect(res.body.data).toHaveLength(12);
+    expect(res.body.data).toHaveLength(13);
   });
 
   it('treats the auth scheme case-insensitively', async () => {

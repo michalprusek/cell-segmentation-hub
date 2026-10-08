@@ -344,6 +344,8 @@ export function buildDocsSections(t: Translate): DocsSection[] {
             'microtubule',
             'microcapsule',
             'neuriteSoma',
+            // The second neurite model (model id `neurite_soma_classical`).
+            'neuriteSomaClassical',
           ].map(key => ({
             title: s(`docs.modelSelection.models.${key}.name`),
             lines: [

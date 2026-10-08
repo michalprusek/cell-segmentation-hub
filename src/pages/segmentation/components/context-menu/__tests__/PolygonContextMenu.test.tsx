@@ -23,6 +23,7 @@
  *    VertexContextMenu pattern which uses the same Radix mock.
  */
 
+import type { EditablePartClass } from '@/lib/segmentation';
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
@@ -822,14 +823,56 @@ describe('PolygonContextMenu', () => {
 
   // ── sperm part-class items ────────────────────────────────────────────────
 
+  describe('neurite class items', () => {
+    // A polygon drawn by hand has no class, and the export measures only
+    // somas and neurites — without these a missed soma could be drawn and
+    // never counted.
+    const neuriteProps = {
+      ...DEFAULT_PROPS,
+      isPolyline: false,
+      projectType: 'neurite' as const,
+      onChangePartClass: vi.fn() as (partClass: EditablePartClass) => void,
+    };
+
+    it('offers Soma and Neurite, and not the sperm parts', () => {
+      render(<PolygonContextMenu {...neuriteProps} />);
+      expect(getMenuItemByText(/neurite.setAsSoma/i)).toBeTruthy();
+      expect(getMenuItemByText(/neurite.setAsNeurite/i)).toBeTruthy();
+      expect(getMenuItemByText(/sperm.setAsHead/i)).toBeUndefined();
+    });
+
+    it('sets the class that was clicked', async () => {
+      const user = userEvent.setup();
+      const onChangePartClass = vi.fn();
+      render(
+        <PolygonContextMenu
+          {...neuriteProps}
+          onChangePartClass={onChangePartClass}
+        />
+      );
+      await user.click(getMenuItemByText(/neurite.setAsSoma/i)!);
+      expect(onChangePartClass).toHaveBeenCalledWith('soma');
+      await user.click(getMenuItemByText(/neurite.setAsNeurite/i)!);
+      expect(onChangePartClass).toHaveBeenLastCalledWith('neurite');
+    });
+
+    it('is not offered outside a neurite project', () => {
+      render(<PolygonContextMenu {...neuriteProps} projectType="spheroid" />);
+      expect(getMenuItemByText(/neurite.setAsSoma/i)).toBeUndefined();
+    });
+
+    it('is not offered on a polyline', () => {
+      render(<PolygonContextMenu {...neuriteProps} isPolyline />);
+      expect(getMenuItemByText(/neurite.setAsSoma/i)).toBeUndefined();
+    });
+  });
+
   describe('sperm part-class items', () => {
     const spermProps = {
       ...DEFAULT_PROPS,
       isPolyline: true,
       projectType: 'sperm' as const,
-      onChangePartClass: vi.fn() as (
-        partClass: 'head' | 'midpiece' | 'tail'
-      ) => void,
+      onChangePartClass: vi.fn() as (partClass: EditablePartClass) => void,
     };
 
     it('shows Head, Midpiece, Tail items for sperm polyline', () => {
@@ -915,9 +958,7 @@ describe('PolygonContextMenu', () => {
       ...DEFAULT_PROPS,
       isPolyline: true,
       projectType: 'sperm' as const,
-      onChangePartClass: vi.fn() as (
-        partClass: 'head' | 'midpiece' | 'tail'
-      ) => void,
+      onChangePartClass: vi.fn() as (partClass: EditablePartClass) => void,
       onChangeInstanceId: vi.fn(),
       availableInstanceIds: ['sperm_1', 'sperm_2', 'sperm_3'],
       currentInstanceId: 'sperm_1',

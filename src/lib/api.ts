@@ -321,6 +321,21 @@ export interface ApiKeySummary {
   expiresAt: string | null;
 }
 
+/**
+ * How a channel choice travels: one name as `channel` (read this channel
+ * instead of the default), a list as `channels` (merge these into the image
+ * that is segmented). An empty list is no choice at all.
+ */
+function channelFields(channel: string | string[] | undefined): {
+  channel?: string;
+  channels?: string[];
+} {
+  if (Array.isArray(channel)) {
+    return channel.length > 0 ? { channels: channel } : {};
+  }
+  return channel ? { channel } : {};
+}
+
 class ApiClient {
   private instance: AxiosInstance;
   private baseURL: string;
@@ -1824,14 +1839,19 @@ class ApiClient {
     // backend's `resolveChannelPath` so a TIRF_640 / TIRF_488 ND2
     // frame gets segmented on the user-picked channel instead of the
     // project's default `isSegmentationSource`.
-    channel?: string
+    //
+    // An ARRAY is a different request: the channels to MERGE into the one
+    // image that is segmented, for a model whose registry entry says
+    // `mergesChannels`. It travels as `channels`; the backend refuses it for
+    // any other model.
+    channel?: string | string[]
   ): Promise<BatchSegmentationResult> {
     const response = await this.instance.post(`/segmentation/batch`, {
       imageIds,
       model: model || 'hrnet',
       threshold: threshold || 0.5,
       detectHoles: detectHoles,
-      ...(channel ? { channel } : {}),
+      ...channelFields(channel),
     });
     return this.extractData(response);
   }
@@ -2492,7 +2512,9 @@ class ApiClient {
     priority?: number,
     forceResegment?: boolean,
     detectHoles?: boolean,
-    channel?: string
+    // A string picks ONE channel; an array is the channels to merge. See
+    // `requestBatchSegmentation`.
+    channel?: string | string[]
   ): Promise<BatchQueueResponse> {
     const response = await this.instance.post('/queue/batch', {
       imageIds,
@@ -2502,7 +2524,7 @@ class ApiClient {
       priority,
       forceResegment,
       detectHoles,
-      ...(channel !== undefined ? { channel } : {}),
+      ...channelFields(channel),
     });
     return this.extractData<BatchQueueResponse>(response);
   }

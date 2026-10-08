@@ -84,6 +84,7 @@ annotations/json/           segmentation_data.json
 annotations/imagej/         <video>_RoiSet.zip          (microtubule projects)
 annotations/cvat/           <video>.xml                 (microtubule projects)
 metrics/                    metrics.xlsx / .csv / .json
+neurite_metrics/            neurite_metrics.xlsx / .json, neurites.csv, somas.csv, intensity.csv   (neurite projects)
 kymographs/  or  profiles/  (microtubule projects, if enabled)
 wound_healing/              wound_area_chart.png        (wound model present)
 documentation/              README.md, metadata.json, metrics_guide.md
@@ -150,7 +151,7 @@ regardless of interface language.
 Units follow the pixel-size field: `px` / `px^2` without a scale, `um` / `um^2`
 with one.
 
-### Spheroid, wound and neurite — sheet `Polygon Metrics`
+### Spheroid and wound — sheet `Polygon Metrics`
 
 One row per polygon:
 
@@ -163,10 +164,8 @@ One row per polygon:
 Plus a **`Summary`** sheet with counts and averages over **external polygons
 only**.
 
-**Neurite** projects use this sheet unchanged: soma and neurite polygons are
-ordinary closed polygons with no extra per-instance columns, so each one is a
-row like any other. The class itself is not a column — read it from the
-annotation export.
+**Neurite** projects do **not** get this sheet. They have a report of their
+own — see [Neurite](#neurite--neurite_metrics) below.
 
 **Wound** projects additionally get a **`WoundTimeSeries`** sheet — `Order`,
 `Image Name`, `Wound Area (%)`, `Polygons`, `Created At (UTC)` — with the
@@ -240,6 +239,75 @@ a two-channel container gives `frames × microtubules × 2` rows.
 `Channel Totals` is whole-image, whole-video per-channel totals independent of
 any microtubule: `video`, `channel`, `totalIntensity`, `meanIntensity`,
 `pixelCount`, `frames`.
+
+### Neurite — `neurite_metrics/`
+
+The polygon report is skipped for neurite projects: the specialised exporter
+owns the metrics files, and writes them to `neurite_metrics/` whenever a
+metrics format is selected. It is the same for both neurite models
+(`neurite_soma` and `neurite_soma_classical`).
+
+| Table     | Sheet in `neurite_metrics.xlsx` | CSV file        | Key in `neurite_metrics.json` |
+| --------- | ------------------------------- | --------------- | ----------------------------- |
+| Neurites  | `Neurites`                      | `neurites.csv`  | `neurites`                    |
+| Somas     | `Somas`                         | `somas.csv`     | `somas`                       |
+| Intensity | `Intensity`                     | `intensity.csv` | `intensity`                   |
+
+The workbook also has a **`README`** sheet — the caveats that change how a
+number reads — and a **`Skipped frames`** sheet when any frame was left out,
+naming the table it was left out of (`Neurites / Somas` or `Intensity`). In the
+JSON those lists are `skipped` and `intensity_skipped`.
+
+**`Neurites`** — one row per primary neurite: `frame`, `soma_id`,
+`neurite_id`, `length_um`, `extent_um`, `staging_length_um`, `bridge_path_um`,
+`n_tips`, `n_branch_points`, `n_root_attachments`, `n_bridged_gaps`,
+`is_bridge`, `bridge_partner_soma`, `connection_id`, `n_bridge_partners`,
+`cost_margin`.
+
+**`Somas`** — one row per soma, beginning `frame`, `soma_id`, `stage`,
+`stage_reason`, `soma_neuronal`, `p_not_soma`, `soma_diameter_um`,
+`soma_area_um2`, `n_neurites`, … The full list is `SOMA_HEADERS` in
+`backend/src/services/export/neuriteMetricsExporter.ts`.
+
+Both need a **pixel size** — every staging threshold is in micrometres — and a
+frame without one is skipped from them.
+
+**`Intensity`** — one row per frame × channel × class (`soma`, `neurite`):
+
+`frame`, `channel`, `class`, `area_px`, `mean_intensity`, `median_intensity`,
+`std_intensity`, `sum_intensity`, `background_median`, `background_area_px`,
+`mean_minus_background`.
+
+Six things to know before comparing anything in it:
+
+1. **A row is a whole class, not one object.** `soma` and `neurite` are each
+   the UNION of every polygon of that class on the frame, holes subtracted.
+   Where a soma and a neurite overlap, the pixel counts as soma.
+2. **It is measured on the stored polygons** — whatever is in the editor when
+   you export, manual corrections included, not the model's original mask.
+3. **It is in raw camera counts**, read from each channel's own image at its
+   native bit depth, on EVERY channel of the file — regardless of which
+   channels were ticked for segmentation.
+4. **`background_median`** is the median of the pixels more than 5 px from any
+   polygon. A median, because what lies outside the masks still contains debris
+   and neurites the model missed.
+5. **`mean_minus_background`** is `mean_intensity` less `background_median`. It
+   removes the camera offset, not the scale: dye, exposure and gain still
+   differ between channels, so compare a channel with itself across conditions,
+   not two channels with each other.
+6. **An empty class has blank statistics.** `area_px` 0 with blank intensities
+   means nothing of that class is segmented on the frame. It is not an
+   intensity of zero.
+
+Intensity does **not** need a pixel size, so a frame skipped from the other two
+tables for lacking one still gets its rows here.
+
+A plain single-channel image (PNG / JPG) is measured as one channel named
+`image`. To get per-protein intensities, upload a **multi-channel TIFF or ND2**
+so each channel is stored on its own.
+
+If the intensity measurement fails, the export still completes: there is no
+`Intensity` sheet and the export carries a warning saying so.
 
 ### Exporting a single image from the editor
 

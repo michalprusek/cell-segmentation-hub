@@ -10,6 +10,7 @@ import {
 import { ResponseHelper } from '../../utils/response';
 import { buildKymograph } from '../../services/kymographService';
 import { logger } from '../../utils/logger';
+import { MAX_MERGE_CHANNELS } from '../../constants/modelRegistry';
 import {
   SEGMENTATION_MODELS,
   SEGMENTATION_MODEL_ERROR_MESSAGE,
@@ -280,6 +281,18 @@ router.post(
       .isLength({ max: 64 })
       .matches(/^[A-Za-z0-9_.-]+$/)
       .withMessage('Channel musí být alfanumerický řetězec do 64 znaků'),
+    // Channels to MERGE into the segmented image — only for a model whose
+    // registry entry says `mergesChannels`; the controller refuses it
+    // otherwise. Same token shape as batchQueueSchema.channels.
+    body('channels')
+      .optional()
+      .isArray({ min: 1, max: MAX_MERGE_CHANNELS })
+      .withMessage(`Channels musí být pole 1 až ${MAX_MERGE_CHANNELS} kanálů`),
+    body('channels.*')
+      .isString()
+      .isLength({ min: 1, max: 64 })
+      .matches(/^[A-Za-z0-9_-]+$/)
+      .withMessage('Každý kanál musí být alfanumerický řetězec do 64 znaků'),
   ],
   handleValidation,
   segmentationController.batchSegment

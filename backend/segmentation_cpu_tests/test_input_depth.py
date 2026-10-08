@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+from fastapi import HTTPException
 from PIL import Image
 
 from test_inference_serialisation import routes  # the real module, torch-safe
@@ -197,7 +198,11 @@ def test_the_models_that_read_native_depth_are_left_alone():
     for model in ("microtubule", "neurite_soma"):
         out, info = prepare_for_model(image, model)
         assert out is image and info is None
-    assert input_depth.NATIVE_DEPTH_MODELS == {"microtubule", "neurite_soma"}
+    assert input_depth.NATIVE_DEPTH_MODELS == {
+        "microtubule",
+        "neurite_soma",
+        "neurite_soma_classical",
+    }
 
 
 class _RecordingLoader:
@@ -231,6 +236,11 @@ class _RecordingLoader:
     def predict_neurite_soma(self, image, *a, **k):
         return self._record("neurite_soma", image)
 
+    def predict_neurite_classical(self, images, *a, **k):
+        # The one branch that is handed a LIST: one image per merged channel.
+        self.channels = list(images)
+        return self._record("neurite_soma_classical", images[0])
+
 
 EIGHT_BIT_MODELS = [
     "hrnet",
@@ -251,7 +261,7 @@ def test_every_model_is_accounted_for():
     # thirteenth must be put on one side or the other deliberately.
     assert len(EIGHT_BIT_MODELS) == 10
     assert not set(EIGHT_BIT_MODELS) & input_depth.NATIVE_DEPTH_MODELS
-    assert len(set(EIGHT_BIT_MODELS) | input_depth.NATIVE_DEPTH_MODELS) == 12
+    assert len(set(EIGHT_BIT_MODELS) | input_depth.NATIVE_DEPTH_MODELS) == 13
 
 
 @pytest.mark.parametrize("model", EIGHT_BIT_MODELS)
@@ -381,11 +391,88 @@ def _segment(loader, data, **form):
         "detect_holes": True,
         "page": 0,
         "max_pixels": None,
+        # Called as a plain function, a parameter left out keeps its FastAPI
+        # `File(None)` marker object as its value instead of None.
+        "extra_channels": None,
     }
     params.update(form)
     return asyncio.run(
         routes.segment_image(file=_Upload(data), loader=loader, **params)
     )
+
+
+class _MergeLoader(_RouteLoader):
+    AVAILABLE_MODELS = {
+        **_RouteLoader.AVAILABLE_MODELS,
+        "neurite_soma_classical": {},
+    }
+
+
+def _png16(seed):
+    return _tiff_stack([_camera_frame() + seed])
+
+
+def test_extra_channels_reach_the_merging_model_in_order():
+    loader = _MergeLoader()
+    first, second, third = _png16(0), _png16(7), _png16(19)
+
+    result = _segment(
+        loader,
+        first,
+        model="neurite_soma_classical",
+        extra_channels=[_Upload(second), _Upload(third)],
+    )
+
+    assert result["success"] is True
+    assert len(loader.channels) == 3
+    # Native depth, untouched, and in the order they were sent.
+    tops = [int(np.asarray(image)[0, 0]) for image in loader.channels]
+    base = int(_camera_frame()[0, 0])
+    assert tops == [base, base + 7, base + 19]
+    assert "input_conversion" not in result
+
+
+def test_extra_channels_are_refused_for_a_model_that_reads_one():
+    # Refused, not ignored: a caller who sent three channels and got the
+    # segmentation of the first could not tell.
+    with pytest.raises(HTTPException) as caught:
+        _segment(_RouteLoader(), _png16(0), extra_channels=[_Upload(_png16(1))])
+    assert caught.value.status_code == 400
+    assert "segments one channel" in caught.value.detail
+
+
+def test_a_channel_of_another_size_is_refused():
+    small = _tiff_stack([_camera_frame()[:50, :60].copy()])
+    with pytest.raises(HTTPException) as caught:
+        _segment(
+            _MergeLoader(),
+            _png16(0),
+            model="neurite_soma_classical",
+            extra_channels=[_Upload(small)],
+        )
+    assert caught.value.status_code == 400
+    assert "same size" in caught.value.detail
+
+
+def test_too_many_channels_are_refused():
+    extras = [_Upload(_png16(i)) for i in range(routes.MAX_EXTRA_CHANNELS + 1)]
+    with pytest.raises(HTTPException) as caught:
+        _segment(
+            _MergeLoader(),
+            _png16(0),
+            model="neurite_soma_classical",
+            extra_channels=extras,
+        )
+    assert caught.value.status_code == 400
+
+
+def test_the_merging_model_refuses_an_oversized_image_from_the_header(monkeypatch):
+    monkeypatch.setattr(routes, "CLASSICAL_MAX_PIXELS", 100)
+    loader = _MergeLoader()
+    with pytest.raises(HTTPException) as caught:
+        _segment(loader, _png16(0), model="neurite_soma_classical")
+    assert caught.value.status_code == 413
+    assert loader.seen == {}
 
 
 def test_the_route_segments_the_requested_page_and_reports_the_count():

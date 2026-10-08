@@ -8,6 +8,7 @@ import { ResponseHelper } from '../../utils/response';
 import { prisma } from '../../db';
 import * as ProjectService from '../../services/projectService';
 import {
+  modelMergesChannels,
   resolveDetectHoles,
   resolveProjectModel,
 } from '../../constants/modelRegistry';
@@ -221,6 +222,7 @@ class QueueController {
         forceResegment = false,
         detectHoles = true,
         channel,
+        channels,
       } = req.body;
 
       const userId = this.validateUser(req, res);
@@ -314,6 +316,16 @@ class QueueController {
       // already loaded here, so it costs nothing.
       const resolvedDetectHoles = resolveDetectHoles(project.type, detectHoles);
 
+      // Judged against the RESOLVED model, not the one in the body: a shared
+      // annotator's `model` is ignored above, so theirs is the project's.
+      if (channels?.length && !modelMergesChannels(resolvedModel)) {
+        ResponseHelper.validationError(
+          res,
+          `Model '${resolvedModel}' segmentuje jeden kanál; seznam kanálů ke sloučení nepřijímá`
+        );
+        return;
+      }
+
       const queueEntries = await this.queueService.addBatchToQueue(
         imageIds,
         projectId,
@@ -323,7 +335,8 @@ class QueueController {
         priority,
         forceResegment,
         resolvedDetectHoles,
-        channel
+        channel,
+        channels
       );
 
       // Emit WebSocket updates

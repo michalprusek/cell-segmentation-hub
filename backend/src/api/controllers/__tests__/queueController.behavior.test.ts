@@ -398,6 +398,84 @@ describe('QueueController — behavioral', () => {
     });
   });
 
+  describe('channels to merge', () => {
+    const wire = (type: string, segmentationModel: string) => {
+      vi.mocked(prisma.user.findUnique).mockResolvedValue({
+        id: USER_ID,
+        email: 'u@t.com',
+      } as any);
+      vi.mocked(prisma.project.findFirst).mockResolvedValue({
+        id: PROJECT_ID,
+        userId: USER_ID,
+        type,
+        segmentationModel,
+      } as any);
+      queueServiceInstance.addBatchToQueue.mockResolvedValue([]);
+    };
+
+    it('reach the queue for the model that merges', async () => {
+      wire('neurite', 'neurite_soma_classical');
+      const app = buildApp(queueController.addBatchToQueue);
+      await request(app)
+        .post('/')
+        .send({
+          imageIds: [IMAGE_ID],
+          projectId: PROJECT_ID,
+          channels: ['Channel_1', 'Channel_2'],
+        })
+        .expect(200);
+
+      const call = queueServiceInstance.addBatchToQueue.mock.calls[0];
+      expect(call?.[3]).toBe('neurite_soma_classical');
+      expect(call?.[8]).toBeUndefined(); // no single-channel override
+      expect(call?.[9]).toEqual(['Channel_1', 'Channel_2']);
+    });
+
+    it('are refused for a model that reads one channel', async () => {
+      // Refused, not ignored: the project's model here is the learned one, and
+      // a caller who named two channels and got one segmented could not tell.
+      wire('neurite', 'neurite_soma');
+      const app = buildApp(queueController.addBatchToQueue);
+      const res = await request(app)
+        .post('/')
+        .send({
+          imageIds: [IMAGE_ID],
+          projectId: PROJECT_ID,
+          channels: ['Channel_1', 'Channel_2'],
+        })
+        .expect(400);
+
+      expect(res.body.success).toBe(false);
+      expect(queueServiceInstance.addBatchToQueue).not.toHaveBeenCalled();
+    });
+
+    it("are judged against the PROJECT's model for a shared annotator", async () => {
+      // Their `model` is ignored, so naming the merging model in the body must
+      // not smuggle a channel list past a project that uses the other one.
+      vi.mocked(prisma.user.findUnique).mockResolvedValue({
+        id: USER_ID,
+        email: 'u@t.com',
+      } as any);
+      vi.mocked(prisma.project.findFirst).mockResolvedValue({
+        id: PROJECT_ID,
+        userId: 'cccccccc-cccc-4ccc-cccc-cccccccccccc',
+        type: 'neurite',
+        segmentationModel: 'neurite_soma',
+      } as any);
+      const app = buildApp(queueController.addBatchToQueue);
+      await request(app)
+        .post('/')
+        .send({
+          imageIds: [IMAGE_ID],
+          projectId: PROJECT_ID,
+          model: 'neurite_soma_classical',
+          channels: ['Channel_1'],
+        })
+        .expect(400);
+      expect(queueServiceInstance.addBatchToQueue).not.toHaveBeenCalled();
+    });
+  });
+
   describe('addBatchToQueue', () => {
     it('returns 401 when unauthenticated', async () => {
       const app = buildUnauthApp(queueController.addBatchToQueue);
@@ -508,7 +586,8 @@ describe('QueueController — behavioral', () => {
         0,
         false,
         true,
-        undefined
+        undefined, // no single-channel override
+        undefined // no channels to merge
       );
     });
   });

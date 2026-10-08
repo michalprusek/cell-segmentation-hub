@@ -122,6 +122,11 @@ except ImportError as e:
     NEURITE_SOMA_CLASSES = ()
     _neurite_soma_import_error = e
 
+# Classical neurite/soma segmentation (ridge filter + shape rules). numpy /
+# scipy / scikit-image / OpenCV only, all of which this module already needs,
+# so unlike its neighbours the import is not optional.
+from models import neurite_classical
+
 # Optional Mamba-UNet spheroid model import (requires mamba_ssm CUDA kernels).
 # OSError is caught alongside ImportError: an ABI-mismatched compiled .so can
 # raise OSError on load, and that must disable only this model, not the service.
@@ -307,6 +312,18 @@ class ModelLoader:
             'class': NeuriteSomaModel,
             'pretrained_path': 'weights/neurite_soma',
             'finetuned_path': 'weights/neurite_soma',
+            'config_path': None
+        },
+        'neurite_soma_classical': {
+            # Classical neurite/soma (Meijering ridge filter + shape rules),
+            # on one image merged from the channels the user picked. It has NO
+            # weights. The "path" is its own source file, which exists exactly
+            # when the model does, so load_model()'s guard and
+            # get_model_info()'s has_pretrained report the truth without a
+            # special case.
+            'class': None,
+            'pretrained_path': 'models/neurite_classical.py',
+            'finetuned_path': 'models/neurite_classical.py',
             'config_path': None
         }
     }
@@ -512,6 +529,12 @@ class ModelLoader:
                 self.loaded_models[model_name] = model
                 logger.info(f"Successfully loaded neurite/soma model from: {weights_full_path}")
                 return model
+            elif model_name == 'neurite_soma_classical':
+                # Nothing to load and nothing to hold: the model is a module of
+                # pure functions. Deliberately NOT put in `loaded_models` --
+                # that dict is what the LRU eviction counts and calls `.cpu()`
+                # on, and this occupies no GPU memory to give back.
+                return neurite_classical
             else:
                 raise ValueError(f"Unknown model architecture: {model_name}")
             
@@ -1743,6 +1766,90 @@ class ModelLoader:
             # essays batch worker and Maptimize.
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
+
+    def predict_neurite_classical(self, images: List[Image.Image],
+                                  threshold: float = 0.5,
+                                  detect_holes: bool = True,
+                                  timeout: Optional[float] = None) -> Dict[str, Any]:
+        """Run the classical neurite/soma model on the channels of ONE image.
+
+        ``images`` is one PIL image per selected channel, all the same size;
+        they are merged inside the model (see ``models/neurite_classical.py``
+        for why the merge must see each channel at its native depth). A single
+        image is simply a one-channel merge.
+
+        ``threshold`` is accepted for interface symmetry and does not apply:
+        the cut is relative to each image's own noise and is part of the
+        fitted parameter set. ``detect_holes`` decides whether a region's
+        holes are emitted as ``internal`` polygons or filled.
+
+        The model holds no GPU memory, so unlike its neighbours this neither
+        calls ``get_model`` (which may evict a loaded network to make room for
+        nothing) nor ``release_model``.
+        """
+        import time as _time
+
+        if not images:
+            raise ValueError("neurite_soma_classical needs at least one channel")
+        original_size = images[0].size  # (width, height)
+
+        self.is_processing = True
+        self.current_model = neurite_classical.MODEL_ID
+        start_time = _time.time()
+        try:
+            channels = []
+            for image in images:
+                # Native depth: `convert('L')` on an 'I;16' frame clips at 255,
+                # and the per-channel noise normalisation needs the real counts.
+                if image.mode in ('I;16', 'I;16B', 'I;16L', 'I;16N'):
+                    channels.append(np.array(image, dtype=np.uint16))
+                elif image.mode == 'I':
+                    channels.append(np.array(image, dtype=np.int32))
+                elif image.mode == 'F':
+                    channels.append(np.array(image, dtype=np.float32))
+                else:
+                    channels.append(np.array(image.convert('L'), dtype=np.uint8))
+
+            label = neurite_classical.segment(channels)
+            polygons = neurite_classical.label_to_polygons(label, detect_holes)
+
+            counts = {
+                name: sum(1 for p in polygons if p.get('partClass') == name)
+                for _, name in neurite_classical.CLASSES
+            }
+            coverage = {
+                name: float((label == class_id).mean()) * 100.0
+                for class_id, name in neurite_classical.CLASSES
+            }
+            processing_time = _time.time() - start_time
+            logger.info(
+                "Neurite/soma classical: %d channel(s), %d polygon(s) [%s] in %.2fs",
+                len(channels),
+                len(polygons),
+                ", ".join(f"{n} {counts[n]} @ {coverage[n]:.2f}%" for n in counts),
+                processing_time,
+            )
+            return {
+                "model_used": neurite_classical.MODEL_ID,
+                "threshold_used": threshold,
+                "image_size": {"width": original_size[0], "height": original_size[1]},
+                "polygons": polygons,
+                "processing_info": {
+                    "device": "cpu",
+                    "num_polygons": len(polygons),
+                    "num_per_class": counts,
+                    "coverage_percent_per_class": coverage,
+                    # How many channels were merged -- the one thing about this
+                    # result a reader cannot recover from the polygons.
+                    "num_channels_merged": len(channels),
+                    "confidence_scores": [p.get("confidence", 1.0) for p in polygons],
+                    "processing_time_s": processing_time,
+                    "batch_size": 1,
+                },
+            }
+        finally:
+            self.is_processing = False
+            self.current_model = None
 
     def predict_microtubule(self, image: Image.Image,
                             threshold: Optional[float] = None,

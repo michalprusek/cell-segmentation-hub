@@ -183,6 +183,21 @@ const DETAILS: Record<KnownModelId, V1Model> = {
       'Holes are never emitted for this model.',
     ],
   },
+  neurite_soma_classical: {
+    name: 'Neurite / Soma (classical)',
+    description:
+      'Neurites and cell bodies (somata) as closed outlines, from a ridge filter and a shape test. No trained network.',
+    geometry: 'polygon',
+    classes: ['neurite', 'soma'],
+    threshold: null,
+    detectHoles: true,
+    inputDepth: 'native',
+    notes: [
+      'One image is one channel here. Merging several channels before segmentation is a feature of the application; this endpoint does not take them.',
+      'A colour image is reduced to its luminance.',
+      'Images over 64 megapixels are refused.',
+    ],
+  },
 };
 
 /** YOLO segmentation labels are closed polygons; a centerline has no area. */

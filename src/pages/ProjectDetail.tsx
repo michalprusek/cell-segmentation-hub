@@ -48,7 +48,10 @@ import {
 } from '@/components/ui/alert-dialog';
 import { getErrorMessage, isMicrotubuleProject } from '@/types';
 import { useProjectModel } from '@/hooks/useProjectModel';
-import type { ModelType } from '@/lib/models/modelRegistry';
+import {
+  modelMergesChannels,
+  type ModelType,
+} from '@/lib/models/modelRegistry';
 
 /**
  * Fraction of add-channel frames whose alignment was rejected above which the
@@ -88,6 +91,8 @@ const ProjectDetail = () => {
   const [pendingChannelChoice, setPendingChannelChoice] = useState<{
     channels: string[];
     defaultChannel: string;
+    /** The project's model merges channels: checkboxes instead of a radio. */
+    multiple: boolean;
   } | null>(null);
   // "Add channel" dialog state (microtubule projects only).
   const [showRemoveChannelDialog, setShowRemoveChannelDialog] = useState(false);
@@ -1615,7 +1620,7 @@ const ProjectDetail = () => {
     }
   };
 
-  const handleSegmentAll = async (channelOverride?: string) => {
+  const handleSegmentAll = async (channelOverride?: string | string[]) => {
     if (!id || !user?.id) {
       toast.error(t('errors.noProjectOrUser'));
       return;
@@ -1642,7 +1647,10 @@ const ProjectDetail = () => {
     // non-string slipped in via an onClick adapter (React passes the
     // SyntheticEvent as the first arg when handleSegmentAll is wired
     // directly, instead of through an arrow wrapper).
-    if (typeof channelOverride !== 'string') {
+    if (
+      typeof channelOverride !== 'string' &&
+      !Array.isArray(channelOverride)
+    ) {
       // Prefer the BE-aggregated `projectChannels` (sourced from the video
       // container's `channels` JSON — all declared channels regardless of
       // which one is the segmentation source). `extractChannelsFromPaths`
@@ -1666,6 +1674,7 @@ const ProjectDetail = () => {
             detectedChannels,
             projectSegmentationSources
           ),
+          multiple: modelMergesChannels(selectedModel),
         });
         return;
       }
@@ -2112,6 +2121,7 @@ const ProjectDetail = () => {
         open={pendingChannelChoice !== null}
         channels={pendingChannelChoice?.channels ?? []}
         defaultChannel={pendingChannelChoice?.defaultChannel ?? ''}
+        multiple={pendingChannelChoice?.multiple ?? false}
         onConfirm={ch => {
           setPendingChannelChoice(null);
           // Defer to next tick so the dialog can fully close before the

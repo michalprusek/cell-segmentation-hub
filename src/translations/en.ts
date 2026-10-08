@@ -658,6 +658,11 @@ export default {
           description:
             'Two-class semantic segmentation of neurons in fluorescence microscopy — neurite (processes) and soma (cell body) — from the tubulin channel alone. nnU-Net v2 ResEnc-M, 3-fold ensemble with mirroring TTA and a clDice topology term on the neurite class. Held-out Dice 0.832 neurite / 0.915 soma.',
         },
+        neurite_soma_classical: {
+          name: 'Neurite / Soma – classical (merged channels)',
+          description:
+            'Classical, training-free segmentation of neurites and somas for fluorescence images where the cell only shows when several channels are taken together. You tick the channels before segmenting; each is normalised to its own noise and they are merged into one greyscale image. Neurites come from a Meijering ridge filter, somas from a width-and-shape test. Runs on the CPU in about a second per 1024 × 1024 frame. Faint, diffuse somas are found only some of the time — check them in the editor.',
+        },
       },
     },
     detectHoles: 'Detect Holes',
@@ -695,6 +700,8 @@ export default {
         'Compact U-Net (distilled from Meta SAM 3) for microcapsule instance segmentation — area, perimeter and compactness per capsule, with border-cut capsules excluded from metrics.',
       neurite_soma:
         'nnU-Net v2 ResEnc-M (2D, 3-fold ensemble) for neurite and soma segmentation in fluorescence microscopy. Reads the tubulin channel; held-out Dice 0.832 neurite / 0.915 soma. Trained on Leica confocal data at ~0.180 µm/px — validate soma counts on a different pixel size.',
+      neurite_soma_classical:
+        'Classical neurite and soma segmentation with no neural network and no weights (Meijering ridge filter plus shape rules; CPU only, about 1.3 s per 1024 × 1024 frame). For fluorescence images where a cell is only visible when several channels are taken together: you tick the channels, each is normalised to its own background noise and they are merged into one greyscale image. Faint, diffuse somas are found only some of the time — check them in the editor.',
     },
     dataUsageTitle: 'Data Usage & Privacy',
     dataUsageDescription:
@@ -763,6 +770,8 @@ export default {
   segmentation: {
     // Neurite-only editor controls.
     neurite: {
+      setAsSoma: 'Set as soma',
+      setAsNeurite: 'Set as neurite',
       assignDone: '{{assigned}} neurites assigned, {{unassigned}} could not be',
       assignFailed: 'Could not assign the neurites',
       somaLabel: 'Soma {{n}}',
@@ -810,6 +819,9 @@ export default {
       description:
         'This project contains video frames with multiple channels. Choose which channel to segment.',
       confirm: 'Segment',
+      titleMerge: 'Select channels to merge and segment',
+      descriptionMerge:
+        'Tick one or more channels. They are merged into one greyscale image and the model segments that. Intensity is still measured on every channel separately at export.',
     },
     mode: {
       view: 'View and navigate',
@@ -1456,7 +1468,7 @@ export default {
     neuriteMetrics: {
       title: 'Neurite metrics',
       description:
-        'Assign each neurite to a soma and export per-cell tables with a developmental stage.',
+        'Assign each neurite to a soma and export per-cell tables with a developmental stage, plus an Intensity table with the intensity of somas and neurites on every channel.',
       classify: 'Filter out non-neuronal somas',
       classifyHint:
         'A fine-tuned classifier rejects growth cones and cell fragments. Rejected objects stay in the table with soma_neuronal = 0.',
@@ -1675,7 +1687,7 @@ export default {
       title: 'Introduction',
       whatIs: 'What is SpheroSeg?',
       description:
-        'SpheroSeg is a platform for AI-assisted segmentation and measurement of microscopy images and time-lapse videos. It ships seven project types backed by twelve segmentation models, a polygon and polyline editor, cross-frame microtubule tracking, and a batch export pipeline.',
+        'SpheroSeg is a platform for AI-assisted segmentation and measurement of microscopy images and time-lapse videos. It ships seven project types backed by thirteen segmentation models, a polygon and polyline editor, cross-frame microtubule tracking, and a batch export pipeline.',
       developedBy:
         'The platform was developed by Bc. Michal Průšek at the Faculty of Nuclear Sciences and Physical Engineering, Czech Technical University in Prague, under the supervision of Ing. Adam Novozámský, Ph.D., in collaboration with researchers from the Institute of Biochemistry and Microbiology at UCT Prague.',
       addresses:
@@ -1757,9 +1769,9 @@ export default {
         neurite: {
           name: 'Neurites & somas',
           bestFor:
-            'For: cultured neurons in fluorescence microscopy, read from the tubulin channel. The question is how much of a cell is body and how much is process.',
+            'For: cultured neurons in fluorescence microscopy. There are two models: the default reads the tubulin channel alone; the classical one segments a merge of the channels you tick, for images where a cell is only visible when several channels are taken together. The question is how much of a cell is body and how much is process.',
           output:
-            'Output: closed polygons in two classes — soma (the cell body) and neurite (the processes) — drawn magenta and cyan.',
+            'Output: closed polygons in two classes — soma (the cell body) and neurite (the processes) — drawn magenta and cyan. The export measures every cell and also the intensity of somas and neurites on every channel.',
         },
       },
       note: 'Pick the type before you upload.',
@@ -1852,7 +1864,7 @@ export default {
     modelSelection: {
       title: 'Models',
       description:
-        'Twelve models, each locked to the project types it was trained for. The picker only offers compatible models: standard spheroid projects choose among five, sperm projects between two, and every other type has exactly one.',
+        'Thirteen models, each locked to the project types it was made for. The picker only offers compatible models: standard spheroid projects choose among five, sperm projects and neurite & soma projects between two each, and every other type has exactly one.',
       spheroidModels: 'Spheroid models — choose one',
       specialisedModels: 'Specialised models — tied to one project type',
       models: {
@@ -1952,6 +1964,15 @@ export default {
           description:
             'An nnU-Net v2 ResEnc-M ensemble of three folds, averaged in logit space with mirroring test-time augmentation and a clDice topology term that keeps thin processes connected rather than beaded. Held-out Dice 0.832 neurite / 0.915 soma. Trained on Leica confocal data at about 0.180 µm/px — at half that pixel size each soma tends to come back split in two, so validate soma counts first.',
         },
+        neuriteSomaClassical: {
+          name: 'Neurite / Soma (classical)',
+          inferenceTime:
+            'About 1.3 s for a 1024 × 1024 frame, on the CPU · no threshold setting — the cut follows the image’s own noise',
+          bestFor:
+            'Used by: Neurite & soma projects, when you pick it instead of the default. For fluorescence images where a cell is only visible when several channels are taken together.',
+          description:
+            'A classical method: no neural network, no weights, no training. Before segmenting you tick one or more channels; each is normalised to its own background noise and they are merged by pixel-wise maximum into one greyscale image, which is what gets segmented. Neurites come from a Meijering ridge filter with a threshold relative to the image’s own noise, and short isolated fragments (under about 100 px) are discarded as background stains. Somas are wide, compact structures with neurites leaving them. Holes, such as the inside of a neurite loop, are kept as holes. Faint, diffuse somas are found only some of the time, so check and correct the somas in the editor. Images over 64 megapixels are refused.',
+        },
       },
       howToSelect: 'Choosing a model',
       selectionSteps: {
@@ -1970,7 +1991,7 @@ export default {
       },
       thresholdNote: 'Detection thresholds are fixed per model.',
       thresholdNoteText:
-        'There is no threshold control in the interface: each model that uses a threshold applies the cut it was validated with — the microtubule model’s is 0.98 — and two models (Spheroid Disintegration, Neurite / Soma) have none at all: they decide by argmax. Lowering a threshold does not find more real objects — it finds more with weaker evidence, and on a non-IRM channel the microtubule output does not follow the image at any setting. If detections are missing, check the input channel instead.',
+        'There is no threshold control in the interface: each model that uses a threshold applies the cut it was validated with — the microtubule model’s is 0.98 — and two models (Spheroid Disintegration, Neurite / Soma) have none at all: they decide by argmax. The classical neurite model has no setting either: it derives its cut from each image’s own noise. Lowering a threshold does not find more real objects — it finds more with weaker evidence, and on a non-IRM channel the microtubule output does not follow the image at any setting. If detections are missing, check the input channel instead.',
       tip: 'Tip:',
       tipText:
         'Start with the default model. Reach for CBAM-ResUNet when boundaries matter more than speed, and for Mamba-UNet when your images do not look like anyone’s training set.',
@@ -2180,7 +2201,7 @@ export default {
         microcapsule:
           'Microcapsule Metrics + Summary — one row per complete capsule; border-cut capsules are excluded',
         neurite:
-          'Polygon Metrics + Summary — the same per-shape report standard spheroid projects get, one row per neurite or soma polygon',
+          'neurite_metrics — Neurites (one row per primary neurite) and Somas (one row per cell body, with a developmental stage), both of which need a pixel size; Intensity (soma and neurite intensity on every channel in raw camera counts, one row per frame, channel and class — no pixel size needed; a plain PNG or JPG counts as one channel named image); and a README sheet',
       },
       scaleTitle: 'Pixel size and units',
       scaleText:
@@ -2317,10 +2338,10 @@ export default {
       formatYolo: 'YOLO segmentation labels in a zip. Polygon models only.',
       modelsHeading: 'Models and their parameters',
       modelsText:
-        'All twelve models are available. Not every model reads every parameter: threshold and detect_holes apply to some models and are refused for the others, so ask GET /api/v1/models what each one accepts and returns.',
+        'All thirteen models are available. Not every model reads every parameter: threshold and detect_holes apply to some models and are refused for the others, so ask GET /api/v1/models what each one accepts and returns.',
       depthNoteLabel: '16-bit images',
       depthNoteText:
-        'The microtubule and neurite/soma models use a 16-bit image at full depth. For every other model a 16-bit image is first stretched to 8 bits, and the response says so in a warning.',
+        'The microtubule model and both neurite/soma models use a 16-bit image at full depth. For every other model a 16-bit image is first stretched to 8 bits, and the response says so in a warning.',
       jobsHeading: 'Larger images and batches',
       jobsText:
         "A request to /segment holds the connection until the model has finished. For an image above 4096 × 4096 pixels, or for many images, create a job with POST /api/v1/jobs: the upload returns at once, you poll the job, and you fetch each image's result when it is ready — choosing the output format then. A job takes up to 20 images of up to 8192 × 8192 pixels (4096 × 4096 for the spheroid_disintegration model), and its results are kept for 24 hours.",

@@ -8,9 +8,22 @@ For cultured neurons in fluorescence microscopy, where the measurement is not
 
 ---
 
-## Model
+## Models
 
-One model, forced: **Neurite / Soma** — nnU-Net v2 **ResEnc-M**, 2D, a 3-fold
+Two models. The picker at the top of the project page offers both; only the
+project's owner can change it.
+
+| Model id                 | Name                       | Use it when                                                                                         |
+| ------------------------ | -------------------------- | --------------------------------------------------------------------------------------------------- |
+| `neurite_soma` (default) | Neurite / Soma             | The cells are visible in ONE channel — tubulin. A trained network with a measured accuracy.         |
+| `neurite_soma_classical` | Neurite / Soma (classical) | A cell is only visible when several channels are taken together. No network; you tick the channels. |
+
+A new project starts on `neurite_soma`. The classical model is not a more
+accurate replacement — it is for images the learned model cannot take.
+
+### `neurite_soma` — the learned model (default)
+
+**Neurite / Soma** — nnU-Net v2 **ResEnc-M**, 2D, a 3-fold
 ensemble averaged in logit space with mirroring TTA and a **clDice** topology
 term on the neurite class, which is what keeps thin processes connected instead
 of beaded.
@@ -28,9 +41,49 @@ count rather than with the number of cells. See
 > as its accuracy was measured. If detections look wrong, the input channel or
 > the pixel size is the thing to check, not a number.
 
+### `neurite_soma_classical` — the classical model (merged channels)
+
+**Neurite / Soma (classical)** — training-free: no neural network, no weights,
+CPU only. About **1.3 s per 1024 × 1024 frame** (measured 1.13–1.46 s on four
+production frames, 2026-10-08).
+
+It is for fluorescence images where a cell is only visible when several
+channels are taken together. What it does:
+
+1. Each channel you ticked is normalised to its own background noise
+   (median / MAD).
+2. The channels are merged by pixel-wise maximum into ONE greyscale image, and
+   that image is segmented.
+3. Neurites come from a Meijering ridge filter (neuriteness, Meijering et al.
+   2004), with a threshold relative to the image's own noise.
+4. Short isolated fragments (under about 100 px) are discarded as background
+   stains.
+5. Somas are wide, compact structures with neurites leaving them.
+
+`threshold` does not apply to this model either: its cut follows each image's
+own noise and is not a setting. See
+[ML models](../../reference/ml-models.md#neurite_soma_classical--neurite--soma-classical).
+
+### Choosing the channels (classical model only)
+
+With the classical model the channel picker shows **checkboxes** instead of
+radio buttons. Tick one or more channels; nothing is ticked by default, and
+**Confirm is disabled until at least one is ticked**.
+
+The picker appears on the project page (**Segment**) and in the editor
+(**Resegment**), and only when the image has more than one channel. A
+single-channel image is segmented directly.
+
+The channels you tick decide what is _segmented_. They do not limit what is
+_measured_: the export's Intensity table covers every channel of the file.
+
 ---
 
 ## Input expectations
+
+This section is about the learned `neurite_soma`. The classical model takes
+whichever channels you tick, at their native bit depth, and refuses an image
+over 64 megapixels.
 
 The **tubulin channel**, single channel, fluorescence (confocal). The model
 applies a 1–99.5 percentile stretch and then a z-score, because the training
@@ -51,13 +104,23 @@ microtubule model at a fluorescence channel.
 ## What you get
 
 **Closed polygons**, not polylines — a process is outlined, not centre-lined.
-Every polygon is `type: 'external'`; neither class is nested inside the other,
-because a soma and a neurite are two different biological objects rather than a
-whole and its part.
+Neither class is nested inside the other, because a soma and a neurite are two
+different biological objects rather than a whole and its part.
 
-Each polygon carries a **`partClass`** of `neurite` or `soma`. That is the only
-extra field: there is no instance id and no cross-frame track, so a soma and the
-processes touching it are separate shapes with nothing linking them.
+Each neurite or soma polygon carries a **`partClass`** of `neurite` or `soma` —
+the same two classes from both models.
+
+**Holes.** The learned model never emits holes. The classical model does: a
+hole — for example the inside of a neurite loop — is stored as its own polygon
+of `type: 'internal'`, pointing at the region it belongs to through
+`parent_id`, and it carries **no class**. The export subtracts it from its
+parent, so a loop is measured as a ring rather than a filled disc.
+
+**Which soma a neurite belongs to.** A neurite can be assigned to one or more
+somas; the assignment is stored on the neurite as **`somaIds`**, the ids of
+those somas' polygons. (`somaId`, singular, is the older field: still read,
+never written.) A neurite bridging two cells legitimately carries two. There is
+no cross-frame track.
 
 ---
 
@@ -74,19 +137,83 @@ editor screenshot and a `predict.py` overlay can be compared directly:
 The shape list shows each polygon's class with a matching dot. Everything else
 is standard: the same seven edit modes, the same undo/redo, the same save.
 
-The class is written by the model and there is **no control for changing it**.
-A polygon you draw by hand therefore has no class and is drawn in the ordinary
-external red; correcting a misclassified shape means deleting it and
-re-segmenting, not relabelling it.
+Three controls exist only in neurite projects:
+
+- **Assign neurites to cells** runs the assignment on the polygons as they are
+  now, corrections included, and reports how many neurites could not be
+  assigned to a cell.
+- **Colour: Class / Cell** switches the canvas between colouring by class
+  (every neurite cyan, every soma magenta) and by cell (a soma and every
+  neurite assigned to it share one colour; a neurite shared by several somas is
+  striped).
+- **Assign neurites** is an edit mode for doing it by hand: click a neurite to
+  pick it up, then click each soma it belongs to; clicking an assigned soma
+  again removes it. A neurite's context menu also offers one "remove" entry per
+  assigned soma.
+
+With the classical model, **check the somas**: faint, diffuse somas are found
+only some of the time (see Known limits), and everything the export measures is
+measured on the polygons stored in the editor.
+
+The class is written by the model, and you can set it yourself: right-click a
+closed polygon and choose **Set as soma** or **Set as neurite**. That is how a
+soma the model missed is added — draw the polygon, then give it its class —
+and how a region filed under the wrong class is moved to the other.
+
+> **A polygon with no class is not measured.** A polygon you draw by hand
+> starts with none and is drawn in the ordinary external red. The export keeps
+> only polygons whose class is `neurite` or `soma` (`classOf` in
+> `backend/src/services/export/neuriteMetricsExporter.ts`); anything else is
+> ignored by the Neurites, Somas and Intensity tables alike. Reshaping an
+> existing soma keeps its class; a soma drawn from scratch needs **Set as
+> soma** before it counts.
 
 ---
 
 ## Metrics and export
 
-Metrics sheets **`Polygon Metrics`** + **`Summary`** — the same comprehensive
-per-polygon report standard spheroid and wound projects get. Neurite/soma output
-is ordinary closed polygons with no extra per-instance fields, so it needs no
-report of its own.
+A neurite project has a report of its own, written to **`neurite_metrics/`**
+whenever metrics are requested. The generic `Polygon Metrics` + `Summary`
+report that spheroid and wound projects get is **not** written for this type.
+It is the same for both models.
+
+| Table                               | Excel sheet      | CSV file        | Key in `neurite_metrics.json`  |
+| ----------------------------------- | ---------------- | --------------- | ------------------------------ |
+| One row per primary neurite         | `Neurites`       | `neurites.csv`  | `neurites`                     |
+| One row per soma, with its stage    | `Somas`          | `somas.csv`     | `somas`                        |
+| One row per frame × channel × class | `Intensity`      | `intensity.csv` | `intensity`                    |
+| What to know before averaging       | `README`         | —               | —                              |
+| Frames left out, and why            | `Skipped frames` | —               | `skipped`, `intensity_skipped` |
+
+The workbook is `neurite_metrics.xlsx`. `Skipped frames` is present only when a
+frame was skipped, and names the table it was skipped from.
+
+**Neurites and Somas** come from assigning each neurite to a soma and staging
+each cell. They **need a pixel size**: every staging threshold is in
+micrometres, so a frame without one is skipped from these two tables. Read the
+`README` sheet before averaging — a bridging neurite appears twice, and somas
+the classifier rejected are kept with `soma_neuronal = 0`. Columns are listed
+in [Metrics](../../reference/metrics.md#neurite-projects).
+
+**Intensity** is the intensity of the soma and neurite classes, one row per
+frame × channel × class (`soma`, `neurite`):
+
+`frame, channel, class, area_px, mean_intensity, median_intensity,
+std_intensity, sum_intensity, background_median, background_area_px,
+mean_minus_background`
+
+- The regions are the **union of all stored polygons** of the class — manual
+  edits included — with holes subtracted. Where a soma and a neurite overlap,
+  the pixel counts as soma.
+- It is measured on **every channel of the file**, at native bit depth (raw
+  camera counts), regardless of which channels were ticked for segmentation.
+- `background_median` is the median of the pixels more than 5 px from any
+  polygon; `mean_minus_background` is `mean_intensity` less that.
+- It does **not** need a pixel size, so a frame skipped from Neurites / Somas
+  for lacking one still gets its Intensity rows.
+- A plain single-channel image (PNG / JPG) is measured as one channel named
+  `image`. **To get per-protein intensities, upload a multi-channel TIFF or
+  ND2** so each channel is stored on its own.
 
 Annotation exports: COCO, YOLO and custom JSON — but **only COCO and the custom
 JSON carry the class**.
@@ -107,6 +234,15 @@ JSON carry the class**.
 
 ## Known limits — read before trusting a number
 
+The classical model:
+
+- **Faint, diffuse somas are found only some of the time.** On three dim
+  production frames it found 2 of 3, 1, and 0 somas. Check and correct the
+  somas in the editor.
+- **Images over 64 megapixels are refused.**
+
+The learned model:
+
 - **Pixel size.** The model was trained at ~0.180 µm/px. At ~0.090 µm/px each
   soma tends to come back split into roughly two pieces — measured, not
   suspected. Validate soma counts before trusting them at a different pixel
@@ -121,5 +257,6 @@ JSON carry the class**.
 ## Related
 
 - [ML models](../../reference/ml-models.md#neurite_soma--neurite--soma)
+- [ML models — the classical model](../../reference/ml-models.md#neurite_soma_classical--neurite--soma-classical)
 - [Metrics](../../reference/metrics.md)
 - [Export](../export.md)

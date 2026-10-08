@@ -5,13 +5,14 @@ import {
   BASIC_MODEL_INFO,
   keyMap,
   MODEL_TYPE_COMPATIBILITY,
+  modelMergesChannels,
   type ModelInfo,
   type ModelType,
 } from '@/lib/models/modelRegistry';
 
 /**
  * SSOT contract tests for the frontend model registry. These assert the
- * canonical 12-model set, declaration order, the verified project-type
+ * canonical 13-model set, declaration order, the verified project-type
  * compatibility matrix, and the full derived `ModelInfo` shape — guarding
  * against drift between the registry and what consumers expect.
  */
@@ -29,6 +30,7 @@ const CANONICAL_IDS: ModelType[] = [
   'microtubule',
   'microcapsule',
   'neurite_soma',
+  'neurite_soma_classical',
 ];
 
 const MODEL_INFO_KEYS: Array<keyof ModelInfo> = [
@@ -43,10 +45,10 @@ const MODEL_INFO_KEYS: Array<keyof ModelInfo> = [
 ];
 
 describe('model registry SSOT', () => {
-  it('registry keys are exactly the canonical 12 models, in order', () => {
+  it('registry keys are exactly the canonical 13 models, in order', () => {
     expect(Object.keys(MODEL_REGISTRY)).toEqual(CANONICAL_IDS);
     expect(ALL_MODEL_IDS).toEqual(CANONICAL_IDS);
-    expect(ALL_MODEL_IDS).toHaveLength(12);
+    expect(ALL_MODEL_IDS).toHaveLength(13);
   });
 
   it('MODEL_TYPE_COMPATIBILITY deep-equals the verified matrix (incl. order)', () => {
@@ -63,7 +65,7 @@ describe('model registry SSOT', () => {
       sperm: ['sperm', 'sperm_2part'],
       microtubules: ['microtubule'],
       microcapsule: ['microcapsule'],
-      neurite: ['neurite_soma'],
+      neurite: ['neurite_soma', 'neurite_soma_classical'],
     });
   });
 
@@ -281,6 +283,22 @@ describe('model registry SSOT', () => {
           batchSize: 1,
         },
       },
+      neurite_soma_classical: {
+        id: 'neurite_soma_classical',
+        name: 'Neurite / Soma (classical)',
+        displayName: 'Neurite / Soma – classical (merged channels)',
+        description:
+          'Classical, training-free segmentation of neurites and somas for fluorescence images where the cell only shows when several channels are taken together. You tick the channels before segmenting; each is normalised to its own noise and they are merged into one greyscale image. Neurites come from a Meijering ridge filter, somas from a width-and-shape test. Runs on the CPU in about a second per 1024 x 1024 frame. Faint, diffuse somas are found only some of the time — check them in the editor.',
+        size: 'small',
+        defaultThreshold: 0.5,
+        category: 'neurite',
+        performance: {
+          avgTimePerImage: 1.3,
+          throughput: 0.75,
+          p95Latency: 1.5,
+          batchSize: 1,
+        },
+      },
     });
   });
 
@@ -298,6 +316,19 @@ describe('model registry SSOT', () => {
       microtubule: 'microtubule',
       microcapsule: 'microcapsule',
       neurite_soma: 'neurite_soma',
+      neurite_soma_classical: 'neurite_soma_classical',
     });
+  });
+
+  it('only the classical neurite model merges channels', () => {
+    // The flag is what turns the channel picker into checkboxes and what the
+    // backend accepts a `channels` list for; a second model gaining it by
+    // accident would start sending lists its ML branch never reads.
+    expect(ALL_MODEL_IDS.filter(id => modelMergesChannels(id))).toEqual([
+      'neurite_soma_classical',
+    ]);
+    expect(modelMergesChannels(undefined)).toBe(false);
+    expect(modelMergesChannels('toString')).toBe(false);
+    expect(modelMergesChannels('not-a-model')).toBe(false);
   });
 });
