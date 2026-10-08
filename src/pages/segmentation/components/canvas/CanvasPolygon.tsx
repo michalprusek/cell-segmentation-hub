@@ -19,13 +19,19 @@ import {
   NEUTRAL_COLOR,
 } from '@/pages/segmentation/utils/instanceColors';
 import { isMembranePolygon, MEMBRANE_COLOR } from '@/lib/microcapsuleMembrane';
+import {
+  POLYLINE_HIT_BAND_MULTIPLIER,
+  STROKE_MULTIPLIER,
+  dotRadiusStyle,
+  screenPx,
+  strokeUnits,
+} from '../../utils/overlayScale';
 
 interface CanvasPolygonProps {
   polygon: Polygon;
   isSelected: boolean;
   hoveredVertex?: { polygonId: string | null; vertexIndex: number | null };
   vertexDragState?: VertexDragState;
-  zoom: number;
   viewportBounds?: { x: number; y: number; width: number; height: number };
   hideVertices?: boolean;
   isHovered?: boolean;
@@ -86,8 +92,6 @@ interface CanvasPolygonProps {
   editMode?: EditMode;
   /** Gates polyline context-menu items by project (sperm parts vs. MT kymograph). */
   projectType?: ProjectType;
-  /** Wheel-zoom in progress. Skips per-vertex 1/zoom re-compute. */
-  isZooming?: boolean;
   /** Microtubule canvas colour mode: 'instance' = per-trackId hash colour,
    *  'semantic' = the assigned type-label's colour. Non-MT projects pass
    *  'instance' (the default). */
@@ -112,13 +116,25 @@ const SOMA_HIGHLIGHT_STYLE: React.CSSProperties = {
   filter: 'url(#soma-highlight)',
 };
 
+/** Module-level so the object identity is stable across renders. */
+const HIT_BAND_STYLE: React.CSSProperties = {
+  strokeWidth: strokeUnits(POLYLINE_HIT_BAND_MULTIPLIER),
+};
+
+/** Sperm head/tail orientation dots: 3 px radius, 1 px white ring, on screen.
+ *  The old `Math.max(3 / zoom, 1.5)` floor was in user units, so the dot was
+ *  3 px only up to zoom 2 and 15 px at zoom 10. */
+const ENDPOINT_MARKER_STYLE: React.CSSProperties = {
+  ...dotRadiusStyle(3),
+  strokeWidth: screenPx(1),
+};
+
 const CanvasPolygon = React.memo(
   ({
     polygon,
     isSelected,
     hoveredVertex,
     vertexDragState,
-    zoom,
     viewportBounds,
     hideVertices = false,
     isHovered = false,
@@ -149,7 +165,6 @@ const CanvasPolygon = React.memo(
     onHover,
     editMode,
     projectType,
-    isZooming,
     colorMode = 'instance',
     semanticColor,
     mtTypeLabels,
@@ -237,21 +252,11 @@ const CanvasPolygon = React.memo(
       return `M${parts.join(' L')}${isPolyline ? '' : ' Z'}`;
     }, [validPoints, validPointIndices, vertexDragState, id, isPolyline]);
 
-    // For the path stroke width, we need to adjust based on zoom level
-    // When zoomed in, the stroke appears thicker so we need to make it thinner
-    const strokeWidth = useMemo(() => {
-      if (zoom > 4) {
-        return 1.5 / zoom;
-      } else if (zoom > 3) {
-        return 2 / zoom;
-      } else if (zoom < 0.5) {
-        return 0.8 / zoom;
-      } else if (zoom < 0.7) {
-        return 1.2 / zoom;
-      } else {
-        return 2 / zoom;
-      }
-    }, [zoom]);
+    // There is no `zoom` prop and no stroke-width arithmetic here, on
+    // purpose. Every size below is a `calc()` on the custom properties the
+    // overlay <svg> carries (`utils/overlayScale.ts`), so a zoom step restyles
+    // the canvas with one style write and this component — one per polygon,
+    // each inside a Radix context menu — does not re-render for it.
 
     // Determine if polygon is internal based on parent_id or type
     const isInternal = parent_id || type === 'internal';
@@ -398,17 +403,22 @@ const CanvasPolygon = React.memo(
     // Compute hover-dependent stroke width multiplier
     const hoverStrokeMultiplier = isPolyline
       ? isHovered
-        ? 2.5
-        : 1.5
+        ? STROKE_MULTIPLIER.polylineHovered
+        : STROKE_MULTIPLIER.polyline
       : isSomaHighlighted
         ? // Pointed at from a menu the user is reading, so it has to be found
           // at a glance and it lasts only as long as the cursor stays on the
           // entry. Bigger than the 2.5 a hovered polyline gets, because a
           // closed shape starts from 1 rather than 1.5.
-          3
+          STROKE_MULTIPLIER.somaHighlighted
         : isHovered
-          ? 1.3
-          : 1;
+          ? STROKE_MULTIPLIER.polygonHovered
+          : STROKE_MULTIPLIER.polygon;
+    // A CSS declaration, not the `stroke-width` attribute: `var()` is not
+    // allowed in a presentation attribute. No floor — the old
+    // `Math.max(…, 0.5)` was in user units and is what made an idle polyline
+    // 5 px wide at zoom 10.
+    const strokeWidthCss = strokeUnits(hoverStrokeMultiplier);
 
     // Compute SVG filter for glow effects.
     //
@@ -416,14 +426,17 @@ const CanvasPolygon = React.memo(
     // whatever its specificity, and every selected shape carries
     // `.polygon-selected`, whose `filter: drop-shadow(...)` therefore wins. So
     // `blue-glow` is emitted only where it actually paints: a hovered polyline
-    // that is NOT selected. That is also why the old red/blue selection split
-    // never once reached the screen — selection has always glowed the single
-    // colour `--polygon-selected-glow` names in `src/index.css`, and that is
-    // where to change it, not here.
+    // that is NOT selected. Selection has always glowed the single colour
+    // `--polygon-selected-glow` names in `src/index.css`, and that is where to
+    // change it, not here.
+    //
+    // Its blur stays constant on screen through CanvasSvgFilters' `zoom`
+    // prop, not through this component — see there for why it is not a CSS
+    // class like the selection glow (WebKit paints none on an SVG child).
     const pathFilter =
       isPolyline && isHovered && !isEffectivelySelected
         ? 'url(#blue-glow)'
-        : '';
+        : undefined;
 
     // The soma highlight is the one case that must survive selection, so it
     // goes through an inline STYLE rather than the attribute above: the menu
@@ -442,9 +455,11 @@ const CanvasPolygon = React.memo(
       !isPolyline && polygon.partClass === 'core'
         ? { fill: 'rgba(34, 197, 94, 0.25)', stroke: '#22c55e' }
         : undefined;
-    const pathStyle = isSomaHighlighted
-      ? { ...coreStyle, ...SOMA_HIGHLIGHT_STYLE }
-      : coreStyle;
+    const pathStyle: React.CSSProperties = {
+      ...coreStyle,
+      ...(isSomaHighlighted ? SOMA_HIGHLIGHT_STYLE : undefined),
+      strokeWidth: strokeWidthCss,
+    };
 
     // Memoized click handlers
     // The somas this neurite belongs to, named for the context menu. Empty for
@@ -553,8 +568,8 @@ const CanvasPolygon = React.memo(
     // shape under the cursor — in CreatePolyline / AddPoints that threw away
     // the microtubule extension the double-click was meant to COMMIT, and in
     // CreatePolygon it abandoned the in-progress polygon outright. The
-    // polyline hit stroke is 12x the rendered width (min 6 px), so a
-    // double-click "in open space" lands on it far more often than it looks.
+    // polyline hit stroke is 12x the base stroke width (24 px on screen), so
+    // a double-click "in open space" lands on it far more often than it looks.
     const canvasOwnsDoubleClick =
       editMode === EditMode.CreatePolyline ||
       editMode === EditMode.AddPoints ||
@@ -642,15 +657,16 @@ const CanvasPolygon = React.memo(
               visible path. Polylines are 1-D — the visible stroke is only
               a couple of pixels wide, so right-click / hover would
               otherwise demand pixel-perfect aim. A 12× wider transparent
-              stroke makes the click target comfortable without changing
-              the rendered look. Pointer-events confined to the stroke so
-              the surrounding canvas drag/zoom still works. */}
+              stroke (24 screen px at any zoom from 0.7 up — see
+              POLYLINE_HIT_BAND_MULTIPLIER) makes the click target
+              comfortable without changing the rendered look.
+              Pointer-events confined to the stroke so the surrounding
+              canvas drag/zoom still works. */}
           {isPolyline && pathString && (
             <path
               d={pathString}
               fill="none"
               stroke="transparent"
-              strokeWidth={Math.max(strokeWidth * 12, 6)}
               strokeLinecap="round"
               strokeLinejoin="round"
               onClick={handleClick}
@@ -668,7 +684,9 @@ const CanvasPolygon = React.memo(
               // MoveShape may advertise it. Painting `move` in every mode
               // promised a gesture that six of the eight modes do not have.
               style={
-                editMode === EditMode.MoveShape ? { cursor: 'move' } : undefined
+                editMode === EditMode.MoveShape
+                  ? { ...HIT_BAND_STYLE, cursor: 'move' }
+                  : HIT_BAND_STYLE
               }
             />
           )}
@@ -706,7 +724,6 @@ const CanvasPolygon = React.memo(
                       : 'rgba(239, 68, 68, 0.1)'
             }
             stroke={pathColor}
-            strokeWidth={Math.max(strokeWidth * hoverStrokeMultiplier, 0.5)}
             strokeOpacity={pathString ? 1 : 0}
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -736,7 +753,7 @@ const CanvasPolygon = React.memo(
                 d={pathString}
                 fill="none"
                 stroke={color}
-                strokeWidth={Math.max(strokeWidth * hoverStrokeMultiplier, 0.5)}
+                style={{ strokeWidth: strokeWidthCss }}
                 strokeOpacity={pathString ? 1 : 0}
                 strokeLinecap="butt"
                 strokeDasharray={`${dash} ${dash * (total - 1)}`}
@@ -764,20 +781,20 @@ const CanvasPolygon = React.memo(
                 <circle
                   cx={validPoints[0].x}
                   cy={validPoints[0].y}
-                  r={Math.max(3 / zoom, 1.5)}
+                  className="overlay-dot"
                   fill={pathColor}
                   stroke="white"
-                  strokeWidth={Math.max(1 / zoom, 0.3)}
+                  style={ENDPOINT_MARKER_STYLE}
                   opacity={0.9}
                   pointerEvents="none"
                 />
                 <circle
                   cx={validPoints[validPoints.length - 1].x}
                   cy={validPoints[validPoints.length - 1].y}
-                  r={Math.max(3 / zoom, 1.5)}
+                  className="overlay-dot"
                   fill={pathColor}
                   stroke="white"
-                  strokeWidth={Math.max(1 / zoom, 0.3)}
+                  style={ENDPOINT_MARKER_STYLE}
                   opacity={0.9}
                   pointerEvents="none"
                 />
@@ -796,13 +813,11 @@ const CanvasPolygon = React.memo(
               isHovered={isHovered}
               hoveredVertex={hoveredVertex}
               vertexDragState={vertexDragState}
-              zoom={zoom}
               viewportBounds={viewportBounds}
               isUndoRedoInProgress={isUndoRedoInProgress}
               onDeleteVertex={onDeleteVertex}
               onDuplicateVertex={onDuplicateVertex}
               editMode={editMode}
-              isZooming={isZooming}
             />
           )}
         </g>
@@ -889,9 +904,9 @@ const CanvasPolygon = React.memo(
       prevProps.isSelected === nextProps.isSelected &&
       prevProps.isHovered === nextProps.isHovered &&
       prevProps.isUndoRedoInProgress === nextProps.isUndoRedoInProgress &&
-      // Defer zoom-driven re-renders while the wheel is active — the
-      // parent SVG transform handles visual scaling.
-      (prevProps.zoom === nextProps.zoom || nextProps.isZooming === true) &&
+      // No `zoom` term: the component has no zoom prop. Sizes follow the
+      // zoom through CSS (see `utils/overlayScale.ts`), which is what lets a
+      // zoom step skip this comparator's owner entirely.
       prevProps.hideVertices === nextProps.hideVertices &&
       sameViewport &&
       prevProps.hoveredVertex?.polygonId ===

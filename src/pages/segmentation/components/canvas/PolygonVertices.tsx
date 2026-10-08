@@ -15,14 +15,10 @@ interface PolygonVerticesProps {
   isHovered: boolean;
   hoveredVertex: { polygonId: string | null; vertexIndex: number | null };
   vertexDragState: VertexDragState;
-  zoom: number;
   viewportBounds?: { x: number; y: number; width: number; height: number };
   isUndoRedoInProgress?: boolean;
   onDeleteVertex?: (polygonId: string, vertexIndex: number) => void;
   editMode?: EditMode;
-  /** True while the wheel is actively zooming. Comparator-only —
-   *  not read at render time; suppresses zoom-driven re-renders. */
-  isZooming?: boolean;
 }
 
 interface VertexWithMenuProps {
@@ -34,7 +30,6 @@ interface VertexWithMenuProps {
   isHovered: boolean;
   isDragging: boolean;
   dragOffset?: { x: number; y: number };
-  zoom: number;
   isStartPoint: boolean;
   isUndoRedoInProgress: boolean;
   isInAddPointsMode: boolean;
@@ -74,7 +69,6 @@ const VertexWithMenu = React.memo(function VertexWithMenu({
   isHovered,
   isDragging,
   dragOffset,
-  zoom,
   isStartPoint,
   isUndoRedoInProgress,
   isInAddPointsMode,
@@ -101,7 +95,6 @@ const VertexWithMenu = React.memo(function VertexWithMenu({
           isHovered={isHovered}
           isDragging={isDragging}
           dragOffset={dragOffset}
-          zoom={zoom}
           type={polygonType}
           isStartPoint={isStartPoint}
           isUndoRedoInProgress={isUndoRedoInProgress}
@@ -123,7 +116,6 @@ const PolygonVertices = React.memo(
     isHovered: _isHovered,
     hoveredVertex,
     vertexDragState,
-    zoom,
     viewportBounds,
     isUndoRedoInProgress = false,
     onDeleteVertex,
@@ -215,7 +207,6 @@ const PolygonVertices = React.memo(
               isHovered={isVertexHovered}
               isDragging={isDragging}
               dragOffset={dragOffset}
-              zoom={zoom}
               isStartPoint={originalIndex === 0}
               isUndoRedoInProgress={isUndoRedoInProgress}
               isInAddPointsMode={editMode === EditMode.AddPoints}
@@ -248,10 +239,8 @@ const PolygonVertices = React.memo(
     ) {
       return false;
     }
-    // Skip zoom-only re-render while the wheel is active (see CanvasPolygon).
-    if (prevProps.zoom !== nextProps.zoom && !nextProps.isZooming) {
-      return false;
-    }
+    // No zoom term: a vertex's size follows the zoom through CSS (see
+    // `utils/overlayScale.ts`), so a zoom step reaches no vertex at all.
 
     // Compare points array (deep comparison)
     if (prevProps.points !== nextProps.points) {

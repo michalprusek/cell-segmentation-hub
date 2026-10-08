@@ -26,6 +26,10 @@ import {
   constrainTransform,
 } from '@/lib/coordinateUtils';
 import { rafThrottle } from '@/lib/performanceUtils';
+import {
+  createWheelZoomAccumulator,
+  wheelZoomFactor,
+} from '../utils/wheelZoom';
 import { useLanguage } from '@/contexts/exports';
 import { useAbortController } from '@/hooks/shared/useAbortController';
 import { handleCancelledError } from '@/lib/errorUtils';
@@ -185,12 +189,6 @@ export const useEnhancedSegmentationEditor = ({
     polygonId: null,
     vertexIndex: null,
   });
-
-  // Zoom-in-progress flag. Set true on every wheel event, debounced
-  // false 150 ms after the last wheel. Polygon/vertex memo comparators
-  // short-circuit zoom-only re-renders while true.
-  const [isZooming, setIsZooming] = useState(false);
-  const zoomEndTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Transform state
   const [transform, setTransform] = useState<TransformState>(() =>
@@ -1046,28 +1044,26 @@ export const useEnhancedSegmentationEditor = ({
     setInteractionState,
   ]);
 
-  // Enhanced wheel handler with throttling for performance
+  // Wheel zoom: exponential in the wheel delta, every event of a frame
+  // folded into one transform update. See `utils/wheelZoom.ts` for the step
+  // and for what the previous `rafThrottle`-based handler lost.
+  //
+  // There is no "zoom in progress" state any more. It existed so the polygon
+  // memo comparators could skip zoom-only re-renders during the gesture; the
+  // polygons no longer take a zoom prop at all (`utils/overlayScale.ts`), so
+  // a wheel event costs one transform write and one custom-property write.
   useEffect(() => {
-    // Create throttled zoom handler using RAF for smooth 60fps updates
-    const throttledZoom = rafThrottle((e: WheelEvent) => {
+    const zoomer = createWheelZoomAccumulator<Point>((factor, clientPoint) => {
+      // Read at apply time, not per event: getBoundingClientRect is a forced
+      // layout, and this runs at most once per frame.
       const rect = canvasRef.current?.getBoundingClientRect();
       if (!rect) return;
-
-      const mousePoint = {
-        x: e.clientX - rect.left,
-        y: e.clientY - rect.top,
-      };
-
-      const zoomFactor =
-        e.deltaY < 0
-          ? EDITING_CONSTANTS.ZOOM_FACTOR
-          : 1 / EDITING_CONSTANTS.ZOOM_FACTOR;
 
       // Use transformRef.current to get latest transform value
       const newTransform = calculateFixedPointZoom(
         transformRef.current,
-        mousePoint,
-        zoomFactor,
+        { x: clientPoint.x - rect.left, y: clientPoint.y - rect.top },
+        factor,
         effectiveMinZoom,
         EDITING_CONSTANTS.MAX_ZOOM,
         rect.width,
@@ -1083,22 +1079,14 @@ export const useEnhancedSegmentationEditor = ({
           canvasHeight
         )
       );
-    }, 16); // ~60fps throttle
+    });
 
     const handleWheel = (e: WheelEvent) => {
       e.preventDefault();
-      // Flag "zoom in progress" so PolygonVertices can skip re-rendering
-      // the (potentially hundreds of) vertex circles while the wheel is
-      // active. The SVG container CSS-scales for free, so vertices appear
-      // to grow/shrink with the image; they snap back to the proper
-      // 1/zoom screen size when the wheel stops (150ms idle below).
-      setIsZooming(true);
-      if (zoomEndTimerRef.current) clearTimeout(zoomEndTimerRef.current);
-      zoomEndTimerRef.current = setTimeout(() => {
-        setIsZooming(false);
-        zoomEndTimerRef.current = null;
-      }, 150);
-      throttledZoom.fn(e);
+      zoomer.push(wheelZoomFactor(e, EDITING_CONSTANTS.ZOOM_FACTOR), {
+        x: e.clientX,
+        y: e.clientY,
+      });
     };
 
     const element = canvasRef.current;
@@ -1108,11 +1096,7 @@ export const useEnhancedSegmentationEditor = ({
 
       return () => {
         element.removeEventListener('wheel', handleWheel);
-        throttledZoom.cancel();
-        if (zoomEndTimerRef.current) {
-          clearTimeout(zoomEndTimerRef.current);
-          zoomEndTimerRef.current = null;
-        }
+        zoomer.cancel();
       };
     }
   }, [imageWidth, imageHeight, canvasWidth, canvasHeight, effectiveMinZoom]);
@@ -1305,7 +1289,6 @@ export const useEnhancedSegmentationEditor = ({
     // State
     ...editorState,
     vertexDragState,
-    isZooming,
 
     // Refs
     canvasRef,

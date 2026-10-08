@@ -1846,7 +1846,7 @@ export default {
         'Ist kein Kanalname erkennbar, wird keine Quelle markiert und der erste Kanal verwendet. Bei Mikrotubuli hat das Folgen: Das Modell arbeitet nur mit IRM, auf einem Fluoreszenzkanal erzeugt es überzeugend aussehende Polylinien, unter denen nichts liegt.',
       windowLevel: '16-Bit-Daten darstellen',
       windowLevelDescription:
-        'Bilder mit hoher Bittiefe werden über die Regler Min und Max dargestellt, ergänzt um Helligkeit und Kontrast. Darüber zeigt ein Histogramm des aktiven Kanals die Daten auf derselben Achse wie die Regler, mit dem Fenster darüber, und Auto passt Min und Max wie Auto in ImageJ an das aktuelle Bild an; jedes weitere Drücken sättigt stärker. Das Fenster gilt je Kanal und nicht gemeinsam: Ein Kanal wird beim ersten Anzeigen automatisch an seine eigenen Daten angepasst, behält danach Ihre Grenzen und erweitert seinen Bereich nur, wenn hellere Bilder auftauchen. Diese Einstellungen gelten für die Sitzung; Kanalfarben und Deckkraft werden gespeichert.',
+        'Bilder mit hoher Bittiefe werden über die Regler Min und Max dargestellt, ergänzt um Helligkeit und Kontrast. Darüber zeigt ein Histogramm des aktiven Kanals die Daten auf derselben Achse wie die Regler, mit dem Fenster darüber, und Auto passt Min und Max wie Auto in ImageJ an das aktuelle Bild an; jedes weitere Drücken sättigt stärker. Das Fenster gilt je Kanal und nicht gemeinsam: Ein Kanal wird beim ersten Anzeigen automatisch an seine eigenen Daten angepasst, behält danach Ihre Grenzen und erweitert seinen Bereich nur, wenn hellere Bilder auftauchen. Diese Einstellungen gelten für die Sitzung; Kanalfarben und Deckkraft werden gespeichert. Bild glätten, oben in der Karte Anzeige, mischt beim Vergrößern benachbarte Pixel; ausgeschaltet erscheint jedes Bildpixel als scharfes Quadrat. Dieser Schalter wird in diesem Browser gespeichert, und Zurücksetzen ändert ihn nicht.',
       navigation: 'Durch Einzelbilder navigieren',
       keys: {
         step: 'Vorheriges / nächstes Einzelbild',
@@ -2085,7 +2085,7 @@ export default {
         saving:
           'Speichern auf Zuruf: Schaltfläche Speichern, Strg+S, oder automatisch beim Wechsel zu einem anderen Bild.',
         zoomPan:
-          'Zoom am Mauszeiger, Verschieben per Ziehen und Einpassen mit R oder 0.',
+          'Zoom am Mauszeiger, Verschieben per Ziehen und Einpassen mit R oder 0. Konturen, Punkte und ihre Hervorhebung behalten bei jedem Zoom dieselbe Größe auf dem Bildschirm.',
         polygonManagement:
           'Eine Formenliste mit Mehrfachauswahl, Ein- und Ausblenden, Umbenennen und Löschen.',
         keyboardShortcuts:
@@ -3090,6 +3090,9 @@ export default {
       auto: 'Auto',
       autoHint:
         'Passt Min und Max an dieses Bild an, wie Auto in ImageJ. Erneutes Drücken sättigt stärker.',
+      smooth: 'Bild glätten',
+      smoothHint:
+        'Mischt beim Vergrößern benachbarte Pixel. Ausgeschaltet erscheint jedes Bildpixel als scharfes Quadrat.',
     },
     frameNavigation: {
       frame: 'Bild',

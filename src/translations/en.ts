@@ -1831,7 +1831,7 @@ export default {
         'When no channel name is recognisable, none is marked as the source and the first channel is used. For microtubule work that matters: the model is IRM-only, so pointing it at a fluorescence channel produces confident polylines with nothing underneath them.',
       windowLevel: 'Displaying 16-bit data',
       windowLevelDescription:
-        'High-bit-depth frames are windowed for display with Min and Max sliders, plus Brightness and Contrast. Above them, a histogram of the active channel shares the axis of the sliders and draws the window over the data, and Auto fits Min and Max to the current frame the way Auto does in ImageJ; each further press saturates more. The window is per channel, not shared: a channel is auto-fitted to its own data the first time you see it, keeps your cutoffs afterwards, and only widens its range as brighter frames arrive. These settings last for the session; channel colours and opacities are remembered.',
+        'High-bit-depth frames are windowed for display with Min and Max sliders, plus Brightness and Contrast. Above them, a histogram of the active channel shares the axis of the sliders and draws the window over the data, and Auto fits Min and Max to the current frame the way Auto does in ImageJ; each further press saturates more. The window is per channel, not shared: a channel is auto-fitted to its own data the first time you see it, keeps your cutoffs afterwards, and only widens its range as brighter frames arrive. These settings last for the session; channel colours and opacities are remembered. Smooth image, at the top of the Display card, blends neighbouring pixels when you zoom in; turn it off to see each image pixel as a sharp square. That switch is remembered in this browser, and Reset leaves it alone.',
       navigation: 'Moving through frames',
       keys: {
         step: 'Previous / next frame',
@@ -2068,7 +2068,7 @@ export default {
         saving:
           'Saving on demand: the Save button, Ctrl+S, or automatically when you move to another image.',
         zoomPan:
-          'Zoom at the mouse pointer, pan with a drag, and fit the image with R or 0.',
+          'Zoom at the mouse pointer, pan with a drag, and fit the image with R or 0. Outlines, points and their highlight keep the same size on screen at every zoom.',
         polygonManagement:
           'A shape list with multi-select, hide and show, rename and delete.',
         keyboardShortcuts:
@@ -3086,6 +3086,9 @@ export default {
       auto: 'Auto',
       autoHint:
         "Fit Min and Max to this frame, like ImageJ's Auto. Press again to saturate more.",
+      smooth: 'Smooth image',
+      smoothHint:
+        'Blend neighbouring pixels when zoomed in. Turn off to see each image pixel as a sharp square.',
     },
     frameNavigation: {
       frame: 'Frame',

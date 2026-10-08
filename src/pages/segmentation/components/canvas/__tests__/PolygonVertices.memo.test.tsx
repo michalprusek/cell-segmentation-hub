@@ -12,8 +12,8 @@
  * is called after a re-render (each render produces one call per vertex).
  *
  * Branches targeted (not covered by primary test):
- *  1. isZooming=true suppresses zoom-only re-renders (zoom changed but isZooming).
- *  2. zoom change with isZooming=false triggers re-render.
+ *  1. (gone) the isZooming guard — there is no zoom prop any more.
+ *  2. a change of the overlay zoom re-renders no vertex.
  *  3. viewportBounds: one side null → false (re-render).
  *  4. viewportBounds: prev null, next non-null → false (re-render).
  *  5. hoveredVertex: one side null → false (re-render).
@@ -31,6 +31,7 @@ import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render } from '@testing-library/react';
 import PolygonVertices from '../PolygonVertices';
+import { overlayScaleStyle } from '../../../utils/overlayScale';
 import { Point } from '@/lib/segmentation';
 import { VertexDragState } from '@/pages/segmentation/types';
 
@@ -124,7 +125,6 @@ const DEFAULT_PROPS = {
   isHovered: false,
   hoveredVertex: { polygonId: null, vertexIndex: null },
   vertexDragState: emptyDragState,
-  zoom: 1,
 };
 
 // ── tests ─────────────────────────────────────────────────────────────────────
@@ -135,47 +135,38 @@ describe('PolygonVertices – memo comparator branches', () => {
     vi.clearAllMocks();
   });
 
-  // ── zoom changes ────────────────────────────────────────────────────────────
+  // ── zoom ────────────────────────────────────────────────────────────────────
 
-  describe('zoom change and isZooming guard', () => {
-    it('does NOT re-render when zoom changes while isZooming=true', () => {
+  // There is no zoom prop and therefore no zoom branch in the comparator: a
+  // vertex's size follows the zoom through CSS custom properties on the
+  // overlay <svg> (utils/overlayScale.ts). What used to be tested here — the
+  // `isZooming` guard that skipped zoom-only re-renders during the wheel
+  // gesture and left every handle stale until 150 ms after it — is gone with
+  // the prop. This pins the replacement: the zoom changes on the <svg> and no
+  // vertex renders.
+  describe('zoom is not a prop', () => {
+    it('does NOT re-render any vertex when the overlay zoom changes', () => {
       const { rerender } = render(
-        <svg>
-          <PolygonVertices {...DEFAULT_PROPS} zoom={1} isZooming={true} />
+        <svg style={overlayScaleStyle(1)}>
+          <PolygonVertices {...DEFAULT_PROPS} />
         </svg>
       );
 
       const firstRenderCount = renderCount;
+      expect(firstRenderCount).toBeGreaterThan(0);
 
-      // Change zoom but keep isZooming=true — comparator returns true (skip)
       rerender(
-        <svg>
-          <PolygonVertices {...DEFAULT_PROPS} zoom={2} isZooming={true} />
+        <svg style={overlayScaleStyle(2)}>
+          <PolygonVertices {...DEFAULT_PROPS} />
+        </svg>
+      );
+      rerender(
+        <svg style={overlayScaleStyle(10)}>
+          <PolygonVertices {...DEFAULT_PROPS} />
         </svg>
       );
 
-      // No additional CanvasVertex renders (same count as after first render)
       expect(renderCount).toBe(firstRenderCount);
-    });
-
-    it('re-renders when zoom changes with isZooming=false', () => {
-      const { rerender } = render(
-        <svg>
-          <PolygonVertices {...DEFAULT_PROPS} zoom={1} isZooming={false} />
-        </svg>
-      );
-
-      const firstRenderCount = renderCount;
-
-      // Change zoom with isZooming=false → comparator returns false (re-render)
-      rerender(
-        <svg>
-          <PolygonVertices {...DEFAULT_PROPS} zoom={2} isZooming={false} />
-        </svg>
-      );
-
-      // CanvasVertex should have been called again (3 vertices × re-render)
-      expect(renderCount).toBeGreaterThan(firstRenderCount);
     });
   });
 
@@ -552,8 +543,8 @@ describe('PolygonVertices – memo comparator branches', () => {
     });
 
     it('costs no vertex render when isHovered changes', () => {
-      // `isHovered` is destructured as `_isHovered` — it is comparator-only,
-      // exactly like `isZooming`, and reaches no vertex. Before the per-vertex
+      // `isHovered` is destructured as `_isHovered` — it is comparator-only
+      // and reaches no vertex. Before the per-vertex
       // memo boundary a hover over the polygon re-rendered every vertex and
       // its whole Radix context-menu tree for nothing. The set below is
       // asserted too, so this cannot pass by rendering nothing.

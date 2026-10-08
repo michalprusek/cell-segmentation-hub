@@ -275,7 +275,6 @@
 
   /* Optimized polygon rendering styles */
   .polygon-path {
-    image-rendering: crisp-edges;
     shape-rendering: geometricPrecision;
     pointer-events: visiblePainted;
   }
@@ -309,23 +308,30 @@
   }
 
   /* The single source of the selection glow. CanvasPolygon also sets a
-     `filter="url(#red-glow|#blue-glow)"` presentation attribute on the same
-     path, but a presentation attribute loses to any CSS declaration, so this
-     rule wins on every selected path and those SVG filters only ever paint a
-     hovered, unselected polyline. Make selection glow type-aware by varying
-     `--polygon-selected-glow` here — changing the SVG filter ids does nothing. */
+     `filter="url(#blue-glow)"` presentation attribute on a hovered polyline,
+     but a presentation attribute loses to any CSS declaration, so this rule
+     wins on every selected path. Make selection glow type-aware by varying
+     `--polygon-selected-glow` here.
+
+     The blur is 8 SCREEN pixels. `--overlay-px` is one screen pixel in SVG
+     user units (1 / zoom), set on the editor's overlay <svg> by
+     `overlayScaleStyle`; without it the 8px was in user units and the halo
+     grew with the image — at zoom 10 it was still measurable 80-120 px from
+     the stroke, a wash over everything near a selected shape. The `1px`
+     fallback is zoom 1, for a path rendered outside that <svg>. */
   .polygon-selected {
-    filter: drop-shadow(0 0 8px var(--polygon-selected-glow, #3b82f6));
+    filter: drop-shadow(
+      0 0 calc(var(--overlay-px, 1px) * 8) var(--polygon-selected-glow, #3b82f6)
+    );
   }
 
-  /* Performance optimizations for large datasets */
-  .polygon-collection {
-    will-change: transform;
-    contain: layout style paint;
-  }
-
-  .polygon-vertex {
-    will-change: transform;
-    contain: strict;
+  /* Every circle of the editor overlay: vertex handles, sperm endpoint
+     markers, drawing previews. The radius is `--overlay-r` SCREEN pixels
+     (set per element by `dotRadiusStyle`), converted to user units by the
+     overlay's `--overlay-px`. `r` is a CSS geometry property, so there is no
+     `r` attribute on these elements at all; the fallbacks give a 5 px dot at
+     zoom 1 to a circle rendered outside the editor's <svg>. */
+  .overlay-dot {
+    r: calc(var(--overlay-px, 1px) * var(--overlay-r, 5));
   }
 }

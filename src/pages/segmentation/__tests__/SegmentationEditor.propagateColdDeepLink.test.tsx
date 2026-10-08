@@ -52,7 +52,6 @@ const mockEditor = vi.hoisted(() => ({
   transform: { zoom: 1, translateX: 0, translateY: 0 },
   hoveredVertex: null,
   vertexDragState: null,
-  isZooming: false,
   tempPoints: [],
   cursorPosition: null,
   interactionState: null,

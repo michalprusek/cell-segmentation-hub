@@ -103,7 +103,6 @@ const renderVertexWithMenu = (
           isSelected={true}
           isHovered={false}
           isDragging={false}
-          zoom={1}
         />
       </VertexContextMenu>
     </svg>
@@ -276,7 +275,6 @@ describe('Vertex Context Menu E2E Tests', () => {
               isSelected={true}
               isHovered={false}
               isDragging={false}
-              zoom={1}
             />
           </VertexContextMenu>
         </svg>
@@ -349,7 +347,6 @@ describe('Vertex Context Menu E2E Tests', () => {
                 isSelected={true}
                 isHovered={false}
                 isDragging={false}
-                zoom={1}
               />
             </VertexContextMenu>
           ))}
@@ -445,7 +442,6 @@ describe('Vertex Context Menu E2E Tests', () => {
                 isSelected={true}
                 isHovered={false}
                 isDragging={false}
-                zoom={1}
               />
             </VertexContextMenu>
           ))}

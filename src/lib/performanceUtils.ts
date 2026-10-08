@@ -18,14 +18,27 @@ export function rafThrottle<T extends unknown[]>(
       return; // Already scheduled
     }
 
-    rafId = requestAnimationFrame(currentTime => {
-      if (currentTime - lastTime >= interval && lastArgs) {
-        callback(...lastArgs);
-        lastTime = currentTime;
-        lastArgs = null;
-      }
-      rafId = null;
-    });
+    rafId = requestAnimationFrame(run);
+  };
+
+  // A frame that arrives before `interval` has elapsed must RE-ARM, not just
+  // give up. The old body cleared `rafId` and returned, leaving `lastArgs`
+  // parked until some later call happened to schedule again — so on a
+  // 120 Hz display (8.3 ms frames against the 16 ms default) every other
+  // call was deferred, and the LAST call of a burst was never delivered at
+  // all: the cursor read-out stopped one event short of where the pointer
+  // came to rest.
+  const run = (currentTime: number) => {
+    rafId = null;
+    if (!lastArgs) return;
+    if (currentTime - lastTime >= interval) {
+      const args = lastArgs;
+      lastArgs = null;
+      lastTime = currentTime;
+      callback(...args);
+    } else {
+      rafId = requestAnimationFrame(run);
+    }
   };
 
   const cancel = () => {

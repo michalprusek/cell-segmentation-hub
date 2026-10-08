@@ -1829,7 +1829,7 @@ export default {
         'Cuando ningún nombre de canal resulta reconocible no se marca ninguna fuente y se usa el primer canal. Para los microtúbulos eso importa: el modelo solo funciona con IRM, así que apuntarlo a un canal de fluorescencia produce polilíneas convincentes sin nada debajo.',
       windowLevel: 'Mostrar datos de 16 bits',
       windowLevelDescription:
-        'Los fotogramas de alta profundidad de bits se ajustan para su visualización con los deslizadores Mín y Máx, más Brillo y Contraste. Sobre ellos, un histograma del canal activo comparte el eje de los deslizadores y dibuja la ventana sobre los datos, y Auto ajusta Mín y Máx al fotograma actual como el Auto de ImageJ; cada pulsación adicional satura más. La ventana es por canal, no compartida: un canal se ajusta automáticamente a sus propios datos la primera vez que lo ve, después conserva sus límites y solo amplía su rango cuando llegan fotogramas más brillantes. Estos ajustes duran la sesión; los colores y las opacidades de los canales sí se recuerdan.',
+        'Los fotogramas de alta profundidad de bits se ajustan para su visualización con los deslizadores Mín y Máx, más Brillo y Contraste. Sobre ellos, un histograma del canal activo comparte el eje de los deslizadores y dibuja la ventana sobre los datos, y Auto ajusta Mín y Máx al fotograma actual como el Auto de ImageJ; cada pulsación adicional satura más. La ventana es por canal, no compartida: un canal se ajusta automáticamente a sus propios datos la primera vez que lo ve, después conserva sus límites y solo amplía su rango cuando llegan fotogramas más brillantes. Estos ajustes duran la sesión; los colores y las opacidades de los canales sí se recuerdan. Suavizar imagen, en la parte superior de la tarjeta Visualización, mezcla los píxeles vecinos al ampliar; desactívelo para ver cada píxel de la imagen como un cuadrado nítido. Ese interruptor se recuerda en este navegador y Restablecer no lo cambia.',
       navigation: 'Moverse por los fotogramas',
       keys: {
         step: 'Fotograma anterior / siguiente',
@@ -2067,7 +2067,7 @@ export default {
         saving:
           'Guardado a petición: el botón Guardar, Ctrl+S, o automáticamente al pasar a otra imagen.',
         zoomPan:
-          'Zoom en el puntero del ratón, desplazamiento arrastrando y ajuste a la vista con R o 0.',
+          'Zoom en el puntero del ratón, desplazamiento arrastrando y ajuste a la vista con R o 0. Los contornos, los puntos y su resaltado mantienen el mismo tamaño en pantalla con cualquier zoom.',
         polygonManagement:
           'Una lista de formas con selección múltiple, mostrar y ocultar, renombrar y eliminar.',
         keyboardShortcuts:
@@ -3068,6 +3068,9 @@ export default {
       auto: 'Auto',
       autoHint:
         'Ajusta Mín y Máx a este fotograma, como Auto en ImageJ. Pulse de nuevo para saturar más.',
+      smooth: 'Suavizar imagen',
+      smoothHint:
+        'Mezcla los píxeles vecinos al ampliar. Desactívelo para ver cada píxel de la imagen como un cuadrado nítido.',
     },
     frameNavigation: {
       frame: 'Cuadro',

@@ -1,15 +1,23 @@
 /**
- * Session-only display state for the editor.
+ * Display state for the editor.
  *
  * Holds the currently-selected channel, the active video frame index,
- * the min/max window-level cutoffs (ImageJ-style LUT remap), and the
+ * the min/max window-level cutoffs (ImageJ-style LUT remap), the
  * brightness/contrast values applied via a CSS filter on the rendered
- * canvas. None of it is persisted across reloads. Brightness/Contrast
- * persist across both frame and channel changes; the Min/Max window
- * is held PER CHANNEL: it persists across frame scrubs (so scrubbing a
- * 300-frame video keeps the user's adjustment) and each channel auto-refits to
- * its own data the first time that channel is seen, or whenever the video
- * changes, ImageJ-style.
+ * canvas, and the "Smooth image" interpolation switch.
+ *
+ * What survives a reload, and what does not:
+ *  - SESSION-ONLY: frame, channel, window/level, brightness, contrast.
+ *    Brightness/Contrast persist across both frame and channel changes; the
+ *    Min/Max window is held PER CHANNEL: it persists across frame scrubs (so
+ *    scrubbing a 300-frame video keeps the user's adjustment) and each channel
+ *    auto-refits to its own data the first time that channel is seen, or
+ *    whenever the video changes, ImageJ-style.
+ *  - PERSISTED PER USER (localStorage, keyed by user id): channel colours and
+ *    opacities.
+ *  - PERSISTED PER BROWSER (localStorage, one key): `smoothImage`. It is a
+ *    preference about how the user likes pixels drawn, not a property of an
+ *    image, so neither Reset nor a container switch touches it.
  */
 
 import {
@@ -137,6 +145,11 @@ interface ImageDisplayState {
   /** Contrast as a percentage (0..200, 100 = unchanged). Applied via
    *  CSS `filter: contrast(c/100)` on the rendered image. */
   contrast: number;
+  /** "Smooth image", CVAT's setting of the same name and with CVAT's default
+   *  (on): interpolate between image pixels when zoomed in. Off draws each
+   *  image pixel as a hard-edged block. Applied as `image-rendering` on the
+   *  bitmap element — see `imageRenderingFor`. */
+  smoothImage: boolean;
 }
 
 interface ImageDisplayContextValue extends ImageDisplayState {
@@ -214,12 +227,16 @@ interface ImageDisplayContextValue extends ImageDisplayState {
   windowChannel: string;
   setBrightness: (brightness: number) => void;
   setContrast: (contrast: number) => void;
+  /** Persisted per browser; survives reload, Reset and container switches. */
+  setSmoothImage: (smooth: boolean) => void;
   /** Reset window/level back to the auto-scaled data range (ImageJ-style
    *  full-data view), or 0..255 before any frame has reported a range. */
   resetWindow: () => void;
   /** Reset brightness/contrast back to 100/100. */
   resetBrightnessContrast: () => void;
-  /** Reset all four display parameters at once. */
+  /** Reset all four display parameters at once. `smoothImage` is not one of
+   *  them: Reset undoes adjustments made to see THIS image, and the
+   *  interpolation mode is a standing preference. */
   resetDisplay: () => void;
 }
 
@@ -236,6 +253,7 @@ const DEFAULT_STATE: ImageDisplayState = {
   activeWindowChannel: null,
   brightness: 100,
   contrast: 100,
+  smoothImage: true,
 };
 
 /**
@@ -457,6 +475,25 @@ function loadOpacityPrefs(userId: string | undefined): Record<string, number> {
   }
 }
 
+/** One key for the whole browser, like the editor's other view preferences
+ *  (`mtColorMode`, `spheroseg.editor.sidebarWidth`): it describes how this
+ *  person wants pixels drawn on this screen, and unlike the channel colours
+ *  it means the same thing for every user of the machine. */
+export const SMOOTH_IMAGE_PREF_KEY = 'spheroseg.editor.smoothImage';
+
+/** Anything but an explicit stored `'false'` is the default, ON — a missing
+ *  key, a corrupt value and blocked storage must all behave like a first
+ *  visit. */
+function loadSmoothImagePref(): boolean {
+  if (typeof window === 'undefined') return true;
+  try {
+    return window.localStorage.getItem(SMOOTH_IMAGE_PREF_KEY) !== 'false';
+  } catch (err) {
+    logger.debug('loadSmoothImagePref: storage unavailable', err);
+    return true;
+  }
+}
+
 export function ImageDisplayProvider({
   children,
   initialChannel = null,
@@ -481,6 +518,7 @@ export function ImageDisplayProvider({
     channel: initialChannel,
     channelColors: loadColorPrefs(userId),
     channelOpacities: loadOpacityPrefs(userId),
+    smoothImage: loadSmoothImagePref(),
   }));
 
   // Channels whose colour the user explicitly changed this session (via the
@@ -712,6 +750,22 @@ export function ImageDisplayProvider({
     setState(s => ({ ...s, contrast: clampPercent(contrast) }));
   }, []);
 
+  // Written in the setter, not in an effect on the state: an effect would
+  // also run on mount and stamp the default into storage on a first visit,
+  // which would then outlive a later change of that default.
+  const setSmoothImage = useCallback((smooth: boolean) => {
+    setState(s =>
+      s.smoothImage === smooth ? s : { ...s, smoothImage: smooth }
+    );
+    if (typeof window === 'undefined') return;
+    try {
+      window.localStorage.setItem(SMOOTH_IMAGE_PREF_KEY, String(smooth));
+    } catch (err) {
+      // Best-effort, like the colour prefs (Safari private mode / quota).
+      logger.debug('Persisting smoothImage failed', err);
+    }
+  }, []);
+
   /** Re-fit EVERY channel to its own data range. Per-channel windows mean a
    *  reset that only touched the selected channel would leave the composite
    *  half-adjusted, which is not what "Reset" reads as. */
@@ -755,7 +809,8 @@ export function ImageDisplayProvider({
   // `useEnhancedSegmentationEditor` binds through a ref would stay on the
   // detached element.
   //
-  // What the user chose is kept: colours, opacities, brightness, contrast.
+  // What the user chose is kept: colours, opacities, brightness, contrast,
+  // smoothImage.
   const [scopedContainerId, setScopedContainerId] = useState(containerId);
   if (containerId !== scopedContainerId) {
     setScopedContainerId(containerId);
@@ -817,6 +872,7 @@ export function ImageDisplayProvider({
       setActiveWindowChannel,
       setBrightness,
       setContrast,
+      setSmoothImage,
       resetWindow,
       resetBrightnessContrast,
       resetDisplay,
@@ -844,6 +900,7 @@ export function ImageDisplayProvider({
       setActiveWindowChannel,
       setBrightness,
       setContrast,
+      setSmoothImage,
       resetWindow,
       resetBrightnessContrast,
       resetDisplay,

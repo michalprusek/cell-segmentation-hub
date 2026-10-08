@@ -112,7 +112,9 @@ Default colours follow emission wavelength: unknown → grey `#cccccc`,
 otherwise red.
 
 Channel **colours and opacities are remembered** per user, in browser storage.
-Window/level, brightness and contrast are **not** — see below.
+Window/level, brightness and contrast are **not** — see below. The **Smooth
+image** switch at the top of the Display card is remembered too, once per
+browser rather than per user.
 
 ---
 
@@ -121,7 +123,11 @@ Window/level, brightness and contrast are **not** — see below.
 Frames are stored at their native bit depth, so a 16-bit frame must be _windowed_
 down to something a screen can show. Two sliders per channel — **Min** and
 **Max** — set that window, plus a **Brightness** and **Contrast** pair (0–200 %,
-100 % = unchanged) applied to the finished composite.
+100 % = unchanged) applied to the finished composite. Above them, **Smooth
+image** chooses how the image is magnified when you zoom in: interpolated (on,
+the default) or one hard square per image pixel (off) — see
+[Smooth image](segmentation-editor.md#smooth-image). It applies to every
+channel and to stills as well.
 
 **The window is per channel, not global**, and the tab row above the sliders
 selects which channel you are adjusting — defaulting to the segmentation source.
@@ -155,6 +161,9 @@ nominal bit depth — a channel that never exceeds 4095 gets a 0–4095 slider.
 
 **Window, brightness and contrast are session-only.** They survive frame scrubs
 (and brightness/contrast survive channel switches), but not a page reload.
+**Smooth image is the exception**: it is kept in browser storage, survives a
+reload and a move to another video, and **Reset** leaves it alone — it is a
+preference about how you like pixels drawn, not an adjustment to one image.
 
 ---
 

@@ -145,7 +145,6 @@ describe('Event Handling Conflict Resolution', () => {
           <CanvasPolygon
             polygon={polygon}
             isSelected={isSelected}
-            zoom={1}
             onSelectPolygon={mockOnSelectPolygon}
             onDeletePolygon={mockOnDeletePolygon}
             onSlicePolygon={mockOnSlicePolygon}
@@ -399,7 +398,6 @@ describe('Event Handling Conflict Resolution', () => {
             <CanvasPolygon
               polygon={polygon1}
               isSelected={false}
-              zoom={1}
               onSelectPolygon={mockOnSelectPolygon}
               onDeletePolygon={mockOnDeletePolygon}
               onSlicePolygon={mockOnSlicePolygon}
@@ -410,7 +408,6 @@ describe('Event Handling Conflict Resolution', () => {
             <CanvasPolygon
               polygon={polygon2}
               isSelected={false}
-              zoom={1}
               onSelectPolygon={mockOnSelectPolygon}
               onDeletePolygon={mockOnDeletePolygon}
               onSlicePolygon={mockOnSlicePolygon}
@@ -531,7 +528,6 @@ describe('Event Handling Conflict Resolution', () => {
           <CanvasPolygon
             polygon={polygon}
             isSelected={false}
-            zoom={1}
             onSelectPolygon={undefined as any}
             onDeletePolygon={undefined as any}
             onSlicePolygon={undefined as any}

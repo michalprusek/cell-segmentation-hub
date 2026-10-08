@@ -22,21 +22,6 @@ import {
 } from '@/test-utils/segmentationTestUtils';
 
 // ---------------------------------------------------------------------------
-// CanvasVertex exports are used by the component for radius calculation –
-// mock them to avoid full canvas setup requirements.
-// ---------------------------------------------------------------------------
-
-vi.mock('../CanvasVertex', async () => {
-  const actual =
-    await vi.importActual<typeof import('../CanvasVertex')>('../CanvasVertex');
-  return {
-    ...actual,
-    calculateVertexRadius: vi.fn(() => 4),
-    defaultConfig: actual.defaultConfig,
-  };
-});
-
-// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
@@ -639,5 +624,55 @@ describe('renderJoinTargetHighlight', () => {
       hoveredJoinTarget: null,
     });
     expect(joinRing(container)).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Sizes are in SCREEN pixels
+// ---------------------------------------------------------------------------
+
+// Every size in this layer is a `calc()` on the overlay's inverse-zoom custom
+// property, as for the committed shapes. The preview line used to be
+// `Math.max(1, 2 / zoom)` user units — one IMAGE pixel wide above zoom 2,
+// i.e. 10 screen px at zoom 10, over the structure being traced.
+describe('screen-pixel sizes', () => {
+  const preview = (zoom: number) => {
+    const { container, unmount } = renderLayer({
+      transform: makeTransform({ zoom }),
+      editMode: EditMode.CreatePolyline,
+      tempPoints: [
+        { x: 10, y: 10 },
+        { x: 40, y: 30 },
+      ],
+    });
+    const line = container.querySelector('line')!;
+    const circle = container.querySelector('circle')!;
+    const out = {
+      lineWidth: line.style.strokeWidth,
+      dash: line.style.strokeDasharray,
+      lineAttr: line.getAttribute('stroke-width'),
+      dotClass: circle.getAttribute('class'),
+      dotRadius: circle.style.getPropertyValue('--overlay-r'),
+      dotAttr: circle.getAttribute('r'),
+    };
+    unmount();
+    return out;
+  };
+
+  it('draws the preview through the overlay custom property, not user units', () => {
+    expect(preview(1)).toEqual({
+      lineWidth: 'calc(var(--overlay-px, 1px) * 3)',
+      dash: 'calc(var(--overlay-px, 1px) * 5) calc(var(--overlay-px, 1px) * 3)',
+      lineAttr: null,
+      dotClass: 'overlay-dot',
+      // The radius of a committed vertex handle, so a point does not change
+      // size when the shape is finished.
+      dotRadius: '5',
+      dotAttr: null,
+    });
+  });
+
+  it('emits the same sizes at zoom 10 as at zoom 1', () => {
+    expect(preview(10)).toEqual(preview(1));
   });
 });

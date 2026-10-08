@@ -121,7 +121,6 @@ describe('Polygon Data Edge Cases and Invalid Data Handling', () => {
           <CanvasPolygon
             polygon={polygon}
             isSelected={false}
-            zoom={1}
             onSelectPolygon={mockOnSelectPolygon}
             onDeletePolygon={mockOnDeletePolygon}
             onSlicePolygon={mockOnSlicePolygon}
@@ -655,7 +654,6 @@ describe('Polygon Data Edge Cases and Invalid Data Handling', () => {
           <CanvasPolygon
             polygon={workingPolygon}
             isSelected={false}
-            zoom={1}
             onSelectPolygon={mockOnSelectPolygon}
             onDeletePolygon={mockOnDeletePolygon}
             onSlicePolygon={mockOnSlicePolygon}
@@ -682,7 +680,6 @@ describe('Polygon Data Edge Cases and Invalid Data Handling', () => {
             <CanvasPolygon
               polygon={corruptedPolygon}
               isSelected={false}
-              zoom={1}
               onSelectPolygon={mockOnSelectPolygon}
               onDeletePolygon={mockOnDeletePolygon}
               onSlicePolygon={mockOnSlicePolygon}
@@ -732,7 +729,6 @@ describe('Polygon Data Edge Cases and Invalid Data Handling', () => {
           <CanvasPolygon
             polygon={polygon}
             isSelected={false}
-            zoom={1}
             onSelectPolygon={mockOnSelectPolygon}
             onDeletePolygon={mockOnDeletePolygon}
             onSlicePolygon={mockOnSlicePolygon}
@@ -758,7 +754,6 @@ describe('Polygon Data Edge Cases and Invalid Data Handling', () => {
               <CanvasPolygon
                 polygon={corruptedPolygon}
                 isSelected={false}
-                zoom={1}
                 onSelectPolygon={mockOnSelectPolygon}
                 onDeletePolygon={mockOnDeletePolygon}
                 onSlicePolygon={mockOnSlicePolygon}
@@ -820,7 +815,6 @@ describe('Polygon Data Edge Cases and Invalid Data Handling', () => {
               key={polygon.id || `fallback-${index}`}
               polygon={polygon}
               isSelected={false}
-              zoom={1}
               onSelectPolygon={mockOnSelectPolygon}
               onDeletePolygon={mockOnDeletePolygon}
               onSlicePolygon={mockOnSlicePolygon}

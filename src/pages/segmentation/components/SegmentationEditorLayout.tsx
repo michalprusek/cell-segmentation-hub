@@ -22,6 +22,7 @@ import KeyboardShortcutsHelp from './KeyboardShortcutsHelp';
 
 import CanvasContainer from './canvas/CanvasContainer';
 import CanvasContent from './canvas/CanvasContent';
+import { overlayScaleStyle } from '../utils/overlayScale';
 import VideoFrameImage from './canvas/VideoFrameImage';
 import FrameWindowPrefetcher from './canvas/FrameWindowPrefetcher';
 import FrameLoadingGate from './canvas/FrameLoadingGate';
@@ -479,6 +480,12 @@ const SegmentationEditorLayout: React.FC<SegmentationEditorLayoutProps> = ({
                         maxWidth: 'none',
                         pointerEvents: 'auto',
                         zIndex: 10,
+                        // THE zoom write for everything drawn below: stroke
+                        // widths, vertex handles, hit bands and the selection
+                        // glow all read these two custom properties, so a
+                        // zoom step restyles the overlay here and re-renders
+                        // no CanvasPolygon. See `utils/overlayScale.ts`.
+                        ...overlayScaleStyle(editor.transform.zoom),
                       }}
                       // Clearing the selection on an empty-canvas click, with
                       // the press remembered so the release that ends a PAN is
@@ -491,7 +498,7 @@ const SegmentationEditorLayout: React.FC<SegmentationEditorLayoutProps> = ({
                       data-polygon-count={editor.polygons.length}
                     >
                       {/* SVG Filters for glow effects */}
-                      <CanvasSvgFilters />
+                      <CanvasSvgFilters zoom={editor.transform.zoom} />
 
                       {/* Render all polygons */}
                       {visiblePolygons.map(polygon => (
@@ -506,8 +513,6 @@ const SegmentationEditorLayout: React.FC<SegmentationEditorLayoutProps> = ({
                             editor.hoveredVertex || EMPTY_HOVERED_VERTEX
                           }
                           vertexDragState={editor.vertexDragState}
-                          zoom={editor.transform.zoom}
-                          isZooming={editor.isZooming}
                           isUndoRedoInProgress={editor.isUndoRedoInProgress}
                           isHovered={polygon.id === hoveredPolygonId}
                           isSomaHighlighted={polygon.id === highlightedSomaId}
