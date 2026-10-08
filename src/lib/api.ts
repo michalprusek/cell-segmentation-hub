@@ -2109,6 +2109,49 @@ class ApiClient {
   }
 
   /**
+   * `propagateTrackForward` for several microtubules in ONE request: the
+   * server reads each following frame once and writes it at most once,
+   * where one call per microtubule rewrote every frame every time. One
+   * result per polyline, in the order sent.
+   *
+   * A reply that does not carry one result per polyline is an error, not a
+   * partial success: the caller pairs results with its sources by position.
+   */
+  async propagateTracksForward(
+    videoId: string,
+    fromFrameIndex: number,
+    polylines: Array<{
+      trackId?: string | null;
+      instanceId?: string | null;
+      name?: string | null;
+      geometry?: 'polygon' | 'polyline';
+      points: Array<{ x: number; y: number }>;
+    }>
+  ): Promise<
+    Array<{
+      trackId: string;
+      framesChanged: number;
+      framesUnchanged: number;
+      framesSkipped: number;
+    }>
+  > {
+    const response = await this.instance.post(
+      `/segmentation/videos/${videoId}/tracks/propagate-batch`,
+      { fromFrameIndex, polylines }
+    );
+    const results = this.extractData(response)?.results;
+    if (!Array.isArray(results) || results.length !== polylines.length) {
+      throw new Error('Propagate reply does not match the request');
+    }
+    return results.map((r, i) => ({
+      trackId: String(r?.trackId ?? polylines[i]?.trackId ?? ''),
+      framesChanged: Number(r?.framesChanged ?? 0),
+      framesUnchanged: Number(r?.framesUnchanged ?? 0),
+      framesSkipped: Number(r?.framesSkipped ?? 0),
+    }));
+  }
+
+  /**
    * Delete a whole microtubule track: remove every polyline carrying `trackId`
    * from all frames of the video. Returns how many frames were affected.
    */

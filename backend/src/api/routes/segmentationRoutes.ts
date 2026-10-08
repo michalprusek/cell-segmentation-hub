@@ -151,6 +151,59 @@ router.post(
   segmentationController.propagateTrack
 );
 
+// Far above any real field (the densest production frame holds 84
+// microtubules) and far below what the 50 MB JSON limit would admit.
+const MAX_PROPAGATED_POLYLINES = 2000;
+
+/**
+ * @route POST /api/segmentation/videos/:videoId/tracks/propagate-batch
+ * @description Propagate several microtubule polylines into all following frames
+ *   in one pass (one read and at most one write per frame)
+ * @access Private
+ */
+router.post(
+  '/videos/:videoId/tracks/propagate-batch',
+  [
+    param('videoId').isUUID().withMessage('ID videa musí být platné UUID'),
+    body('fromFrameIndex')
+      .isInt({ min: 0 })
+      .withMessage('fromFrameIndex musí být nezáporné číslo'),
+    body('polylines')
+      .isArray({ min: 1, max: MAX_PROPAGATED_POLYLINES })
+      .withMessage(
+        `polylines musí být pole s 1 až ${MAX_PROPAGATED_POLYLINES} položkami`
+      ),
+    body('polylines.*').isObject().withMessage('polyline musí být objekt'),
+    body('polylines.*.points')
+      .isArray({ min: 2 })
+      .withMessage('polyline musí mít alespoň 2 body'),
+    body('polylines.*.points.*.x')
+      .isNumeric()
+      .withMessage('Souřadnice x musí být číslo'),
+    body('polylines.*.points.*.y')
+      .isNumeric()
+      .withMessage('Souřadnice y musí být číslo'),
+    body('polylines.*.trackId')
+      .optional({ nullable: true })
+      .isString()
+      .withMessage('trackId musí být řetězec'),
+    body('polylines.*.instanceId')
+      .optional({ nullable: true })
+      .isString()
+      .withMessage('instanceId musí být řetězec'),
+    body('polylines.*.name')
+      .optional({ nullable: true })
+      .isString()
+      .withMessage('name musí být řetězec'),
+    body('polylines.*.geometry')
+      .optional()
+      .isIn(['polygon', 'polyline'])
+      .withMessage('geometry musí být polygon nebo polyline'),
+  ],
+  handleValidation,
+  segmentationController.propagateTracks
+);
+
 /**
  * @route DELETE /api/segmentation/videos/:videoId/tracks/:trackId
  * @description Delete a whole microtubule track across every frame of the video

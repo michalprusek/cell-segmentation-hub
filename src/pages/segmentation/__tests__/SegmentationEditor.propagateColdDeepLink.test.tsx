@@ -124,7 +124,20 @@ const mockApiClient = vi.hoisted(() => ({
   deleteMtTypeLabel: vi.fn().mockResolvedValue([]),
   setTrackType: vi.fn().mockResolvedValue({ framesAffected: 0 }),
   propagateTrackForward: vi.fn().mockResolvedValue(PROPAGATED_TO_FOUR),
+  propagateTracksForward: vi.fn(),
 }));
+
+/** The batch endpoint's default answer: every polyline sent changed four
+ *  frames, and the server echoes the trackId it was handed. */
+const batchAnswer = async (
+  _videoId: string,
+  _fromFrameIndex: number,
+  polylines: Array<{ trackId?: string | null }>
+) =>
+  polylines.map(p => ({
+    ...PROPAGATED_TO_FOUR,
+    trackId: p.trackId ?? 'track-new',
+  }));
 
 /** `t` echoes the key, so a toast is asserted by key — and, being a spy, by
  *  the params it was asked to interpolate, which the toast itself never sees. */
@@ -469,6 +482,8 @@ beforeEach(() => {
   mockApiClient.getSegmentationResults.mockResolvedValue(null);
   mockApiClient.propagateTrackForward.mockReset();
   mockApiClient.propagateTrackForward.mockResolvedValue(PROPAGATED_TO_FOUR);
+  mockApiClient.propagateTracksForward.mockReset();
+  mockApiClient.propagateTracksForward.mockImplementation(batchAnswer);
   mockApiClient.updateSegmentationResults.mockResolvedValue({ polygons: [] });
   mockEditor.handleSave.mockReset();
   mockEditor.handleSave.mockResolvedValue(true);
@@ -554,7 +569,7 @@ describe('propagate on a cold deep-link (video.container still null)', () => {
     await clickAndSettle('shift-select-poly-1', () => {});
     await clickAndSettle('shift-select-poly-2', () => {});
     await clickAndSettle('propagate-selected-poly-1', () => {
-      expect(mockApiClient.propagateTrackForward).toHaveBeenCalledTimes(2);
+      expect(mockApiClient.propagateTracksForward).toHaveBeenCalledTimes(1);
     });
 
     expect(mockEditor.handleSave).toHaveBeenCalledTimes(1);
@@ -604,16 +619,9 @@ describe('propagate on a cold deep-link (video.container still null)', () => {
     expect(toast.info).not.toHaveBeenCalled();
   });
 
-  it('propagates EVERY Shift-selected microtubule from the same frame index', async () => {
+  it('propagates EVERY Shift-selected microtubule in ONE request from the same frame index', async () => {
     // Two already-tracked microtubules; the server echoes back the trackId it
     // was handed, so nothing is re-stamped locally.
-    mockApiClient.propagateTrackForward.mockImplementation(
-      async (
-        _videoId: string,
-        _fromFrameIndex: number,
-        p: { trackId?: string | null }
-      ) => ({ ...PROPAGATED_TO_FOUR, trackId: p.trackId ?? 'track-new' })
-    );
     const sources = () =>
       [
         polyline({ id: 'poly-1', trackId: 'track-1' }),
@@ -628,17 +636,21 @@ describe('propagate on a cold deep-link (video.container still null)', () => {
     fireEvent.click(screen.getByTestId('shift-select-poly-2'));
 
     await clickAndSettle('propagate-selected-poly-1', () => {
-      expect(mockApiClient.propagateTrackForward).toHaveBeenCalledTimes(2);
+      expect(mockApiClient.propagateTracksForward).toHaveBeenCalledTimes(1);
     });
 
-    const calls = mockApiClient.propagateTrackForward.mock.calls as Array<
-      [string, number, { trackId?: string | null }]
-    >;
-    expect(calls.map(c => [c[0], c[1]])).toEqual([
-      ['vid-9', 7],
-      ['vid-9', 7],
-    ]);
-    expect(calls.map(c => c[2].trackId).sort()).toEqual(['track-1', 'track-2']);
+    // One call per microtubule rewrote every following frame once per
+    // microtubule — two minutes for 83 of them on a real video.
+    expect(mockApiClient.propagateTrackForward).not.toHaveBeenCalled();
+    const [videoId, fromFrameIndex, sent] = mockApiClient.propagateTracksForward
+      .mock.calls[0] as [
+      string,
+      number,
+      Array<{ trackId?: string | null; points: unknown[] }>,
+    ];
+    expect([videoId, fromFrameIndex]).toEqual(['vid-9', 7]);
+    expect(sent.map(p => p.trackId).sort()).toEqual(['track-1', 'track-2']);
+    expect(sent.every(p => p.points.length >= 2)).toBe(true);
   });
 
   it('bumps the FOLLOWING frames out of the listing, not the container fetch', async () => {
@@ -850,14 +862,19 @@ describe('propagate that changes nothing', () => {
     mockEditor.polygons = sources();
     mockEditor.getPolygons.mockImplementation(sources);
   };
-  /** Per-track server answers for the bulk loop, echoing the trackId sent. */
+  /** Per-track server answers for the bulk request, echoing the trackId sent. */
   const answerByTrack = (byTrack: Record<string, Record<string, number>>) =>
-    mockApiClient.propagateTrackForward.mockImplementation(
-      async (_v: string, _f: number, p: { trackId?: string | null }) => ({
-        ...NOTHING_CHANGED,
-        ...byTrack[p.trackId ?? ''],
-        trackId: p.trackId ?? 'track-new',
-      })
+    mockApiClient.propagateTracksForward.mockImplementation(
+      async (
+        _v: string,
+        _f: number,
+        polylines: Array<{ trackId?: string | null }>
+      ) =>
+        polylines.map(p => ({
+          ...NOTHING_CHANGED,
+          ...byTrack[p.trackId ?? ''],
+          trackId: p.trackId ?? 'track-new',
+        }))
     );
 
   it('says "nothing to change" as INFO, and evicts and marks nothing', async () => {
@@ -939,7 +956,7 @@ describe('propagate that changes nothing', () => {
     selectBoth();
 
     await clickAndSettle('propagate-selected-poly-1', () => {
-      expect(mockApiClient.propagateTrackForward).toHaveBeenCalledTimes(2);
+      expect(mockApiClient.propagateTracksForward).toHaveBeenCalledTimes(1);
     });
 
     const toast = await toasts();
@@ -961,7 +978,7 @@ describe('propagate that changes nothing', () => {
     selectBoth();
 
     await clickAndSettle('propagate-selected-poly-1', () => {
-      expect(mockApiClient.propagateTrackForward).toHaveBeenCalledTimes(2);
+      expect(mockApiClient.propagateTracksForward).toHaveBeenCalledTimes(1);
     });
 
     const toast = await toasts();
@@ -978,29 +995,6 @@ describe('propagate that changes nothing', () => {
     expect(mockProjectData.updateImages).toHaveBeenCalledTimes(1);
   });
 
-  it('BULK: a request that failed is a WARNING even when nothing else changed', async () => {
-    mockApiClient.propagateTrackForward
-      .mockRejectedValueOnce(new Error('500'))
-      .mockResolvedValueOnce({ ...NOTHING_CHANGED, trackId: 'track-2' });
-    twoTracked();
-    renderEditor();
-    selectBoth();
-
-    await clickAndSettle('propagate-selected-poly-1', () => {
-      expect(mockApiClient.propagateTrackForward).toHaveBeenCalledTimes(2);
-    });
-
-    const toast = await toasts();
-    expect(toast.warning).toHaveBeenCalledWith(
-      'segmentation.trackOps.propagateSelectedPartial'
-    );
-    expect(mockT).toHaveBeenCalledWith(
-      'segmentation.trackOps.propagateSelectedPartial',
-      { done: 1, total: 2 }
-    );
-    expect(toast.info).not.toHaveBeenCalled();
-  });
-
   it('BULK: a microtubule stopped by unreadable frames counts as failed', async () => {
     answerByTrack({
       'track-1': { framesUnchanged: 0, framesUpdated: 0, framesSkipped: 4 },
@@ -1013,7 +1007,7 @@ describe('propagate that changes nothing', () => {
     selectBoth();
 
     await clickAndSettle('propagate-selected-poly-1', () => {
-      expect(mockApiClient.propagateTrackForward).toHaveBeenCalledTimes(2);
+      expect(mockApiClient.propagateTracksForward).toHaveBeenCalledTimes(1);
     });
 
     const toast = await toasts();
@@ -1033,8 +1027,8 @@ describe('propagate that changes nothing', () => {
   // `changed` is counted from answers, so it is 0 here — and gating the
   // refresh on it alone left every following frame showing its cached
   // pre-propagate shape until a reload.
-  it('BULK: refreshes the following frames when no request was ANSWERED', async () => {
-    mockApiClient.propagateTrackForward.mockRejectedValue(
+  it('BULK: refreshes the following frames when the request was not ANSWERED', async () => {
+    mockApiClient.propagateTracksForward.mockRejectedValue(
       new Error('timeout of 120000ms exceeded')
     );
     twoFrames();
@@ -1045,17 +1039,16 @@ describe('propagate that changes nothing', () => {
     selectBoth();
 
     await clickAndSettle('propagate-selected-poly-1', () => {
-      expect(mockApiClient.propagateTrackForward).toHaveBeenCalledTimes(2);
+      expect(mockApiClient.propagateTracksForward).toHaveBeenCalledTimes(1);
     });
 
+    // One request carries the whole selection, so nothing is known to have
+    // landed: an error, not "0 of 2".
     const toast = await toasts();
-    expect(toast.warning).toHaveBeenCalledWith(
-      'segmentation.trackOps.propagateSelectedPartial'
+    expect(toast.error).toHaveBeenCalledWith(
+      'segmentation.trackOps.propagateFailed'
     );
-    expect(mockT).toHaveBeenCalledWith(
-      'segmentation.trackOps.propagateSelectedPartial',
-      { done: 0, total: 2 }
-    );
+    expect(toast.warning).not.toHaveBeenCalled();
     const evicted = removeQueries.mock.calls.map(
       c => ((c[0] as { queryKey?: unknown[] })?.queryKey ?? [])[1]
     );

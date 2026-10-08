@@ -1801,8 +1801,8 @@ const SegmentationEditor = () => {
   });
 
   // Right-click "Propagate selected MTs (N)": propagate every Shift-selected
-  // microtubule forward. Loops the single-track endpoint so each keeps its own
-  // trackId + colour; ids read via ref to keep this handler stable.
+  // microtubule forward, each keeping its own trackId + colour; ids read via
+  // ref to keep this handler stable.
   const handlePropagateSelected = useCallback(async () => {
     // Same cold-deep-link reasoning as `handlePropagateTrack` above.
     const videoId = videoContainerId;
@@ -1856,24 +1856,30 @@ const SegmentationEditor = () => {
 
     let failed = 0;
     let changed = 0;
-    // Requests that produced no ANSWER. Not the same as "nothing written":
-    // the server commits the propagate in one transaction, and a 502 during
-    // a backend recreate, a dropped connection or the 120 s client timeout
-    // can all lose the response to a write that happened.
-    let unanswered = 0;
-    for (const src of sources) {
-      try {
-        const result = await apiClient.propagateTrackForward(
-          videoId,
-          fromFrameIndex,
-          {
-            trackId: src.trackId,
-            instanceId: src.instanceId,
-            name: src.name,
-            geometry: 'polyline',
-            points: src.points.map(p => ({ x: p.x, y: p.y })),
-          }
-        );
+    // The request produced no ANSWER. Not the same as "nothing written": the
+    // server commits the propagate in one transaction, and a 502 during a
+    // backend recreate, a dropped connection or the 120 s client timeout can
+    // all lose the response to a write that happened.
+    let unanswered = false;
+    // ONE request for the whole selection. A frame's polygons are a single
+    // JSON column, so a call per microtubule rewrote every following frame
+    // once per microtubule: 83 calls, two minutes, and later frames showing
+    // only the microtubules the loop had reached so far.
+    try {
+      const results = await apiClient.propagateTracksForward(
+        videoId,
+        fromFrameIndex,
+        sources.map(src => ({
+          trackId: src.trackId,
+          instanceId: src.instanceId,
+          name: src.name,
+          geometry: 'polyline' as const,
+          points: src.points.map(p => ({ x: p.x, y: p.y })),
+        }))
+      );
+      results.forEach((result, i) => {
+        const src = sources[i];
+        if (!src) return;
         if (result.trackId && result.trackId !== src.trackId) {
           handleUpdatePolygonField(src.id, { trackId: result.trackId });
         }
@@ -1884,11 +1890,11 @@ const SegmentationEditor = () => {
           // microtubule did not reach them. Same verdict as the single twin.
           failed++;
         }
-      } catch (error) {
-        logger.error('Failed to propagate a selected microtubule', error);
-        failed++;
-        unanswered++;
-      }
+      });
+    } catch (error) {
+      logger.error('Failed to propagate the selected microtubules', error);
+      failed = sources.length;
+      unanswered = true;
     }
 
     // Nothing written means nothing cached is stale and no status moved —
@@ -1897,12 +1903,16 @@ const SegmentationEditor = () => {
     // load would keep showing the old one until a reload, so they are
     // refreshed as if it had landed: a refetch of an unchanged frame costs one
     // request, a stale frame costs the user's trust in what they see.
-    if (changed > 0 || unanswered > 0) {
+    if (changed > 0 || unanswered) {
       evictVideoFrameSegmentationCaches();
       markFollowingFramesSegmented(fromFrameIndex);
     }
     clearMultiSelect();
-    if (failed === 0 && changed === 0) {
+    if (unanswered) {
+      // One request carries the whole selection, so there is no "some of
+      // them": nothing is known to have landed.
+      toast.error(t('segmentation.trackOps.propagateFailed'));
+    } else if (failed === 0 && changed === 0) {
       toast.info(t('segmentation.trackOps.propagateSelectedNoChange'));
     } else if (failed === 0) {
       // The microtubules that CHANGED, not the ones that were sent: reporting
