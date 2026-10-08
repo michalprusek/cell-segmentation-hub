@@ -70,6 +70,7 @@ describe('models', () => {
       'cbam_resunet',
       'hrnet',
       'mamba_unet',
+      'neurite_soma',
       'neurite_soma_classical',
       'segformer',
       'unet_spherohq',

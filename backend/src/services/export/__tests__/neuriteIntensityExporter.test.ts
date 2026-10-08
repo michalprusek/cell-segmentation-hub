@@ -154,6 +154,83 @@ describe('splitNeuritePolygons', () => {
     expect(split?.neurite[0]?.holes).toHaveLength(1);
   });
 
+  describe('a polygon with no class, nested in a region, is a hole of it', () => {
+    const neurite = (id: string, x: number, y: number, size: number) => ({
+      id,
+      partClass: 'neurite',
+      points: square(x, y, size),
+    });
+    const split = (polygons: unknown[]) =>
+      splitNeuritePolygons(JSON.stringify(polygons));
+
+    it('cuts the hole out of the region that contains it', () => {
+      const out = split([
+        neurite('n1', 0, 0, 100),
+        { id: 'drawn', points: square(30, 30, 20) },
+      ]);
+      expect(out?.neurite).toHaveLength(1);
+      expect(out?.neurite[0]?.holes).toEqual([
+        [
+          [30, 30],
+          [50, 30],
+          [50, 50],
+          [30, 50],
+        ],
+      ]);
+    });
+
+    it('gives it to the SMALLEST region around it', () => {
+      // Two regions contain it; the hole is in the inner one.
+      const out = split([
+        neurite('big', 0, 0, 200),
+        { id: 's', partClass: 'soma', points: square(40, 40, 60) },
+        { id: 'drawn', points: square(60, 60, 10) },
+      ]);
+      expect(out?.soma[0]?.holes).toHaveLength(1);
+      expect(out?.neurite[0]?.holes).toBeUndefined();
+    });
+
+    it('never reads a nested polygon that HAS a class as a hole', () => {
+      // A soma inside the outline of a neurite network, and a neurite island
+      // inside a loop: real structure, not background.
+      const out = split([
+        neurite('net', 0, 0, 200),
+        { id: 's', partClass: 'soma', points: square(20, 20, 30) },
+        neurite('island', 100, 100, 30),
+      ]);
+      expect(out?.soma.map(p => p.polygon_id)).toEqual(['s']);
+      expect(out?.neurite.map(p => p.polygon_id)).toEqual(['net', 'island']);
+      expect(out?.neurite[0]?.holes).toBeUndefined();
+    });
+
+    it('ignores one that only partly overlaps, or lies outside everything', () => {
+      const out = split([
+        neurite('n1', 0, 0, 100),
+        { id: 'straddles', points: square(90, 90, 40) },
+        { id: 'elsewhere', points: square(300, 300, 20) },
+      ]);
+      expect(out?.neurite).toHaveLength(1);
+      expect(out?.neurite[0]?.holes).toBeUndefined();
+    });
+
+    it('works for a region that has no id', () => {
+      const out = split([
+        { partClass: 'neurite', points: square(0, 0, 100) },
+        { points: square(30, 30, 20) },
+      ]);
+      expect(out?.neurite[0]?.holes).toHaveLength(1);
+    });
+
+    it('keeps a stored hole and a drawn one side by side', () => {
+      const out = split([
+        neurite('n1', 0, 0, 200),
+        { id: 'h', type: 'internal', parent_id: 'n1', points: square(10, 10, 20) },
+        { id: 'drawn', points: square(100, 100, 20) },
+      ]);
+      expect(out?.neurite[0]?.holes).toHaveLength(2);
+    });
+  });
+
   it('answers null for JSON it cannot read', () => {
     expect(splitNeuritePolygons('{not json')).toBeNull();
   });

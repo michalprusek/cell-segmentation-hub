@@ -14,8 +14,8 @@ import {
  *
  * The `threshold` / `detectHoles` flags are not preferences. They record
  * what `backend/segmentation/api/routes.py::_dispatch_inference` does with
- * each parameter, model by model — five models never read `threshold` and
- * six never read `detect_holes`. A parameter a model ignores is REFUSED by
+ * each parameter, model by model — six models never read `threshold` and
+ * five never read `detect_holes`. A parameter a model ignores is REFUSED by
  * the API rather than accepted and dropped, so these must stay true; change
  * one only together with the dispatch.
  */
@@ -176,11 +176,10 @@ const DETAILS: Record<KnownModelId, V1Model> = {
     geometry: 'polygon',
     classes: ['neurite', 'soma'],
     threshold: null,
-    detectHoles: false,
+    detectHoles: true,
     inputDepth: 'native',
     notes: [
       'Single-channel images. A colour image is accepted only if its channels are identical.',
-      'Holes are never emitted for this model.',
     ],
   },
   neurite_soma_classical: {

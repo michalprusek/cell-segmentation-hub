@@ -164,7 +164,9 @@ the shape list colour them by it: **cyan** for `neurite` (the processes) and
 **magenta** for `soma` (the cell body), the same two colours the model's own
 overlay uses. The class can be set from the context menu: right-click a closed
 polygon and choose **Set as soma** or **Set as neurite**. A drawn polygon needs
-this before the export measures it — a polygon with no class is ignored there.
+this before the export measures it as a region. Left without a class, a polygon
+that lies wholly inside a soma or a neurite is read as a **hole** of it — that
+is how you cut one by hand — and one that does not is ignored.
 
 ### Adding vertices
 

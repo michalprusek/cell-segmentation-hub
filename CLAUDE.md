@@ -779,7 +779,7 @@ Bearer sseg_…` only. A key in the query string is refused with 400 rather
 - **A parameter a model does not read is REFUSED (422), never dropped.**
   `v1/models.ts` records, per model, what
   `segmentation/api/routes.py::_dispatch_inference` does with `threshold` and
-  `detect_holes` (six models ignore the first, seven read the second). Those
+  `detect_holes` (six models ignore the first, eight read the second). Those
   flags are facts about the dispatch; change them only together with it.
   `openapi.test.ts` pins both lists.
 - **Objects own their holes.** The ML service returns a flat list where a
@@ -871,9 +871,16 @@ Bearer sseg_…` only. A key in the query string is refused with 400 rather
   refused for a model that does not merge) and the column
   `segmentation_queue.mergeChannels` are **separate from the single
   `channel`**. Holes are emitted as `type:'internal'` polygons with a
-  `parent_id` and **NO class**, and `splitNeuritePolygons` folds them into the
-  parent's `holes` — so a neurite loop is not measured with the background
-  inside it. Known limit: faint, diffuse somas are found only some of the time
+  `parent_id` and **NO class** — by BOTH neurite models (the learned one via
+  `PostprocessingService.mask_to_polygons(emit_holes=True)` +
+  `holes_to_internal`; without the flag that shared polygoniser keeps a
+  region's outer ring only, which is what every other caller wants). On the
+  read side `splitNeuritePolygons` folds two things into the parent's `holes`:
+  those internal polygons, and any polygon with NO class that lies wholly
+  inside a soma or a neurite (the way to cut a hole by hand; it goes to the
+  smallest region around it). A nested polygon that HAS a class is never a
+  hole. So a loop closed by crossing neurites is not measured — or
+  skeletonised — with the background inside it. Known limit: faint, diffuse somas are found only some of the time
   (2 of 3, 1 and 0 on three dim production frames), so the user is expected to
   add them — and a polygon drawn by hand has NO class and is ignored by every
   neurite table until it is given one, which is what the context menu's

@@ -110,11 +110,23 @@ different biological objects rather than a whole and its part.
 Each neurite or soma polygon carries a **`partClass`** of `neurite` or `soma` —
 the same two classes from both models.
 
-**Holes.** The learned model never emits holes. The classical model does: a
-hole — for example the inside of a neurite loop — is stored as its own polygon
-of `type: 'internal'`, pointing at the region it belongs to through
-`parent_id`, and it carries **no class**. The export subtracts it from its
-parent, so a loop is measured as a ring rather than a filled disc.
+**Holes.** Crossing neurites close loops, and the background inside a loop is
+not neurite. Both models report it: a hole is stored as its own polygon of
+`type: 'internal'`, pointing at the region it belongs to through `parent_id`,
+and it carries **no class**. The export subtracts it from its parent, so a loop
+is measured as a ring rather than a filled disc. (The learned model emits holes
+since 2026-10-08; a frame segmented with it before that has none until it is
+segmented again.) Holes under 30 px² are closed rather than reported.
+
+**Cutting a hole by hand.** Draw a polygon over the background and leave it
+without a class. A polygon with no class that lies **wholly inside** a soma or
+a neurite is read as a hole of the smallest region that contains it. A nested
+polygon that _has_ a class is never a hole — a soma inside the outline of a
+neurite network is a soma, a neurite island inside a loop is a neurite. A
+classless polygon that only partly overlaps a region, or lies outside all of
+them, is ignored. The consequence to keep in mind: a soma drawn on top of a
+neurite and left without a class is subtracted from that neurite until you set
+its class.
 
 **Which soma a neurite belongs to.** A neurite can be assigned to one or more
 somas; the assignment is stored on the neurite as **`somaIds`**, the ids of
@@ -160,13 +172,14 @@ closed polygon and choose **Set as soma** or **Set as neurite**. That is how a
 soma the model missed is added — draw the polygon, then give it its class —
 and how a region filed under the wrong class is moved to the other.
 
-> **A polygon with no class is not measured.** A polygon you draw by hand
-> starts with none and is drawn in the ordinary external red. The export keeps
-> only polygons whose class is `neurite` or `soma` (`classOf` in
-> `backend/src/services/export/neuriteMetricsExporter.ts`); anything else is
-> ignored by the Neurites, Somas and Intensity tables alike. Reshaping an
-> existing soma keeps its class; a soma drawn from scratch needs **Set as
-> soma** before it counts.
+> **A polygon with no class is not measured as a region.** A polygon you draw
+> by hand starts with none and is drawn in the ordinary external red. The
+> export keeps only polygons whose class is `neurite` or `soma` (`classOf` in
+> `backend/src/services/export/neuriteMetricsExporter.ts`) as regions of the
+> Neurites, Somas and Intensity tables; a classless one is either a hole (when
+> it lies wholly inside a region — see **Cutting a hole by hand** above) or
+> ignored. Reshaping an existing soma keeps its class; a soma drawn from
+> scratch needs **Set as soma** before it counts.
 
 ---
 

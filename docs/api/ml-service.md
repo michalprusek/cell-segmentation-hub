@@ -97,12 +97,13 @@ differently from the generic one — or does not exist:
 page used to list `wound` among the models that ignore it; `WoundModel`
 thresholds its probability map with the request value.)
 
-`detect_holes` changes the output of the five spheroid models, `wound` and
-`neurite_soma_classical` only. `neurite_soma_classical` emits a hole (for
-example the inside of a neurite loop) as its own polygon of `type: 'internal'`
-with a `parent_id` and no class. It is forwarded to `spheroid_disintegration`
-and `neurite_soma` but their polygoniser keeps one outer contour per region, so
-no hole is ever emitted.
+`detect_holes` changes the output of the five spheroid models, `wound` and the
+two neurite models. Both neurite models emit a hole (for example the inside of
+a loop closed by crossing neurites) as its own polygon of `type: 'internal'`
+with a `parent_id` and no class; `neurite_soma` does so since 2026-10-08, and
+holes under 30 px² are closed instead. It is forwarded to
+`spheroid_disintegration` too, but that model's polygoniser keeps one outer
+contour per region, so no hole is ever emitted there.
 
 All inference is serialised behind one loader-wide lock on a single-slot
 executor.
