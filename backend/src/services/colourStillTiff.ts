@@ -20,6 +20,8 @@
  */
 
 import * as fs from 'fs/promises';
+import * as path from 'path';
+import { VIDEO_UPLOAD_TMP_DIR } from '../config/videoUploadTmpDir';
 import { prisma } from '../db/prismaClient';
 import { logger } from '../utils/logger';
 import { ImageService, type ImageWithUrls } from './imageService';
@@ -56,9 +58,18 @@ export async function storeColourStillTiff(options: {
     return null;
   }
 
+  // The path is multer's own (a random token under its temp dir), but it
+  // arrives here through the request object. Everything below opens it, so
+  // hold it to the one directory an upload can legitimately be in.
+  const tempRoot = path.resolve(VIDEO_UPLOAD_TMP_DIR);
+  const sourcePath = path.resolve(tempFilePath);
+  if (!sourcePath.startsWith(tempRoot + path.sep)) {
+    throw new Error('Upload temp file is outside the upload temp directory');
+  }
+
   let classification;
   try {
-    classification = await classifyTiff(tempFilePath);
+    classification = await classifyTiff(sourcePath);
   } catch (err) {
     logger.warn(
       `TIFF classification failed, leaving the file to the extractor: ${(err as Error).message}`,
@@ -71,31 +82,38 @@ export async function storeColourStillTiff(options: {
     return null;
   }
 
-  const { size } = await fs.stat(tempFilePath);
-  if (size > COLOUR_STILL_MAX_BYTES) {
-    throw new Error(
-      `${originalName} is a single colour image of ${Math.round(size / 1024 / 1024)} MB; ` +
-        `colour images are accepted up to ${COLOUR_STILL_MAX_BYTES / 1024 / 1024} MB. ` +
-        'Save it compressed (LZW TIFF, PNG or JPEG) or at a lower resolution.'
-    );
-  }
+  // One handle for the size check and the read, so the file that is measured
+  // is the file that is loaded.
+  const handle = await fs.open(sourcePath, 'r');
+  try {
+    const { size } = await handle.stat();
+    if (size > COLOUR_STILL_MAX_BYTES) {
+      throw new Error(
+        `${originalName} is a single colour image of ${Math.round(size / 1024 / 1024)} MB; ` +
+          `colour images are accepted up to ${COLOUR_STILL_MAX_BYTES / 1024 / 1024} MB. ` +
+          'Save it compressed (LZW TIFF, PNG or JPEG) or at a lower resolution.'
+      );
+    }
 
-  logger.info(
-    'Single-page colour TIFF on the video route, storing it as an image',
-    'ColourStillTiff',
-    { originalName, size, ...classification }
-  );
-  const [image] = await new ImageService(prisma).uploadImages(
-    projectId,
-    userId,
-    [
-      {
-        originalname: originalName,
-        buffer: await fs.readFile(tempFilePath),
-        mimetype: mimeType,
-        size,
-      },
-    ]
-  );
-  return image;
+    logger.info(
+      'Single-page colour TIFF on the video route, storing it as an image',
+      'ColourStillTiff',
+      { originalName, size, ...classification }
+    );
+    const [image] = await new ImageService(prisma).uploadImages(
+      projectId,
+      userId,
+      [
+        {
+          originalname: originalName,
+          buffer: await handle.readFile(),
+          mimetype: mimeType,
+          size,
+        },
+      ]
+    );
+    return image;
+  } finally {
+    await handle.close();
+  }
 }

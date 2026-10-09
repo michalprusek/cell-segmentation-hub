@@ -24,6 +24,8 @@ const {
   uploadVideoFromFileMock,
   uploadImagesMock,
   classifyTiffMock,
+  openMock,
+  closeMock,
   statMock,
   readFileMock,
   rmMock,
@@ -33,6 +35,8 @@ const {
   uploadVideoFromFileMock: vi.fn(),
   uploadImagesMock: vi.fn(),
   classifyTiffMock: vi.fn(),
+  openMock: vi.fn(),
+  closeMock: vi.fn(),
   statMock: vi.fn(),
   readFileMock: vi.fn(),
   rmMock: vi.fn(),
@@ -41,11 +45,10 @@ const {
 }));
 
 vi.mock('fs/promises', () => ({
-  default: { access: vi.fn(), rm: rmMock, stat: statMock, readFile: readFileMock },
+  default: { access: vi.fn(), rm: rmMock, open: openMock },
   access: vi.fn(),
   rm: rmMock,
-  stat: statMock,
-  readFile: readFileMock,
+  open: openMock,
 }));
 
 vi.mock('../../../db/prismaClient', () => ({
@@ -58,6 +61,10 @@ vi.mock('../../../db/prismaClient', () => ({
 
 vi.mock('../../../utils/config', () => ({
   config: { UPLOAD_DIR: '/tmp/test-uploads' },
+}));
+
+vi.mock('../../../config/videoUploadTmpDir', () => ({
+  VIDEO_UPLOAD_TMP_DIR: '/tmp/test-uploads',
 }));
 
 vi.mock('../../../utils/logger', () => ({
@@ -137,6 +144,12 @@ describe('VideoController.upload — a colour photograph is not a video', () => 
     uploadImagesMock.mockResolvedValue([{ id: 'img-1' }]);
     statMock.mockResolvedValue({ size: BYTES.length });
     readFileMock.mockResolvedValue(BYTES);
+    closeMock.mockResolvedValue(undefined);
+    openMock.mockResolvedValue({
+      stat: statMock,
+      readFile: readFileMock,
+      close: closeMock,
+    });
     rmMock.mockResolvedValue(undefined);
   });
 
@@ -148,7 +161,8 @@ describe('VideoController.upload — a colour photograph is not a video', () => 
     expect(res.status).toBe(200);
     expect(res.body.data).toEqual({ storedAs: 'image', imageId: 'img-1' });
     expect(classifyTiffMock).toHaveBeenCalledWith(TMP);
-    expect(readFileMock).toHaveBeenCalledWith(TMP);
+    expect(openMock).toHaveBeenCalledWith(TMP, 'r');
+    expect(closeMock).toHaveBeenCalledTimes(1);
     expect(uploadImagesMock).toHaveBeenCalledTimes(1);
     expect(uploadImagesMock).toHaveBeenCalledWith('proj-1', UPLOADER, [
       {
@@ -227,6 +241,7 @@ describe('VideoController.upload — a colour photograph is not a video', () => 
     expect(readFileMock).not.toHaveBeenCalled();
     expect(uploadImagesMock).not.toHaveBeenCalled();
     expect(uploadVideoFromFileMock).not.toHaveBeenCalled();
+    expect(closeMock, 'the refusal must not leak the descriptor').toHaveBeenCalledTimes(1);
     expect(rmMock).toHaveBeenCalledWith(TMP, { force: true });
   });
 
@@ -240,6 +255,32 @@ describe('VideoController.upload — a colour photograph is not a video', () => 
     expect(uploadImagesMock).toHaveBeenCalledTimes(1);
   });
 
+  it('touches nothing when the temp path is outside the upload temp dir', async () => {
+    classifyTiffMock.mockResolvedValue(COLOUR);
+    const app = express();
+    app.use((req, _res, next) => {
+      (req as unknown as { user: { id: string } }).user = { id: UPLOADER };
+      (req as unknown as { file: unknown }).file = {
+        originalname: 'test.tif',
+        mimetype: 'image/tiff',
+        // resolves to /etc/passwd.tif — a prefix test on the raw string passes
+        path: '/tmp/test-uploads/../../etc/passwd.tif',
+      };
+      next();
+    });
+    app.post('/projects/:id/videos', (req, res) =>
+      VideoController.upload(req, res)
+    );
+
+    const res = await request(app).post('/projects/proj-1/videos').send();
+
+    expect(res.status).toBe(500);
+    expect(classifyTiffMock).not.toHaveBeenCalled();
+    expect(openMock).not.toHaveBeenCalled();
+    expect(uploadImagesMock).not.toHaveBeenCalled();
+    expect(uploadVideoFromFileMock).not.toHaveBeenCalled();
+  });
+
   it('reports a failed image store and still removes the temp file', async () => {
     classifyTiffMock.mockResolvedValue(COLOUR);
     uploadImagesMock.mockRejectedValue(new Error('disk full'));
@@ -248,6 +289,7 @@ describe('VideoController.upload — a colour photograph is not a video', () => 
 
     expect(res.status).toBe(500);
     expect(uploadVideoFromFileMock).not.toHaveBeenCalled();
+    expect(closeMock).toHaveBeenCalledTimes(1);
     expect(rmMock).toHaveBeenCalledWith(TMP, { force: true });
   });
 });
