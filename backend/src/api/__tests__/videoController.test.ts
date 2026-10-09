@@ -87,6 +87,14 @@ vi.mock('../../services/videoUploadService', () => ({
   uploadVideoFromFile: uploadVideoFromFileMock,
 }));
 
+// The colour-photograph hand-off has its own suite
+// (controllers/__tests__/videoController.colourStill.test.ts). Here every
+// upload is a stack, so the probe answers "not mine" and the real module —
+// which spawns Python and checks the temp path — stays out of these tests.
+vi.mock('../../services/colourStillTiff', () => ({
+  storeColourStillTiff: vi.fn().mockResolvedValue(null),
+}));
+
 vi.mock('../../services/video/videoExtractor', () => ({
   isVideoFilename: isVideoFilenameMock,
 }));
