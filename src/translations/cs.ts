@@ -1779,7 +1779,7 @@ export default {
       },
       tiffNote: 'TIFF může být obojí.',
       tiffNoteText:
-        'TIFF se zpracuje jako stack, když je větší než 20 MB nebo skutečně obsahuje víc stránek — hlavička souboru se kontroluje, takže i malý vícekanálový TIFF se zpracuje správně.',
+        'TIFF se zpracuje jako stack, když je větší než 20 MB nebo skutečně obsahuje víc stránek — hlavička souboru se kontroluje, takže i malý vícekanálový TIFF se zpracuje správně. Jedinou výjimkou je jednostránkový barevný (RGB) TIFF: to je fotografie a zůstává obyčejným snímkem při jakékoli velikosti až do 512 MB.',
       note: 'Pro nejlepší výsledky:',
       noteText:
         'dbejte na dobrý kontrast mezi objektem a pozadím a na to, aby soubor nesl kalibraci pixelu, chcete-li měření v mikrometrech. Nahrání videa je jeden dlouhý požadavek — přenos i extrakce snímků probíhají společně, takže velký ND2 chvíli trvá.',
@@ -2344,7 +2344,7 @@ export default {
         uploadRejected: {
           symptom: 'Soubor je odmítnut ještě před zahájením nahrávání',
           cause:
-            'Samostatné snímky mají strop 20 MB. Větší TIFF se zpracuje jako stack a platí pro něj limit 100 GB. Názvy kanálů delší než 64 znaků se odmítají — vyexportujte data s kratšími popisky.',
+            'Samostatné snímky mají strop 20 MB. Větší TIFF se zpracuje jako stack a platí pro něj limit 100 GB — s výjimkou jednostránkového barevného TIFFu, který zůstává snímkem (do 512 MB). Názvy kanálů delší než 64 znaků se odmítají — vyexportujte data s kratšími popisky.',
         },
         darkFrames: {
           symptom: 'Snímky vypadají skoro černé',

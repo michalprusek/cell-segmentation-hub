@@ -16,6 +16,12 @@ const MULTI_PAGE_TIFF_EXTENSIONS = ['.tif', '.tiff'];
 // single-page stills, so the only cheap sync signal is size: a .tif over
 // the image cap is assumed to be a stack.
 //
+// That assumption is wrong for one real kind of file, and the SERVER corrects
+// it: an uncompressed colour photograph passes 20 MB at about 6.7 Mpx. The
+// /videos endpoint recognises a single-page colour TIFF and stores it as an
+// ordinary image (backend `colourStillTiff.ts`). Do not "fix" it here by
+// sending such a file to /images — that multer would refuse it for its size.
+//
 // This is NOT the full routing decision — UploadContext routes via the
 // async `shouldRouteAsVideo` below, which additionally sniffs the IFD
 // chain so a *small* multi-page TIFF still reaches the extractor. The two

@@ -1822,7 +1822,7 @@ export default {
       },
       tiffNote: 'Ein TIFF kann beides sein.',
       tiffNoteText:
-        'Ein TIFF wird als Stapel behandelt, wenn es größer als 20 MB ist oder tatsächlich mehrere Seiten enthält — der Dateikopf wird geprüft, sodass auch ein kleines Mehrkanal-TIFF korrekt verarbeitet wird.',
+        'Ein TIFF wird als Stapel behandelt, wenn es größer als 20 MB ist oder tatsächlich mehrere Seiten enthält — der Dateikopf wird geprüft, sodass auch ein kleines Mehrkanal-TIFF korrekt verarbeitet wird. Die einzige Ausnahme ist ein einseitiges Farb-TIFF (RGB): Es ist eine Fotografie und bleibt unabhängig von der Größe ein gewöhnliches Bild, bis 512 MB.',
       note: 'Für beste Ergebnisse:',
       noteText:
         'achten Sie auf guten Kontrast zwischen Objekt und Hintergrund und darauf, dass die Datei ihre Pixelkalibrierung mitbringt, wenn Sie Messwerte in Mikrometern möchten. Ein Video-Upload ist eine einzige lange Anfrage — Übertragung und Einzelbildextraktion laufen gemeinsam, eine große ND2-Datei braucht also Zeit.',
@@ -2396,7 +2396,7 @@ export default {
         uploadRejected: {
           symptom: 'Eine Datei wird schon vor dem Hochladen abgelehnt',
           cause:
-            'Einzelbilder sind auf 20 MB begrenzt. Ein größeres TIFF gilt als Stapel und fällt unter die 100-GB-Grenze. Kanalnamen mit mehr als 64 Zeichen werden abgelehnt — exportieren Sie mit kürzeren Bezeichnungen neu.',
+            'Einzelbilder sind auf 20 MB begrenzt. Ein größeres TIFF gilt als Stapel und fällt unter die 100-GB-Grenze — außer einem einseitigen Farb-TIFF, das ein Bild bleibt (bis 512 MB). Kanalnamen mit mehr als 64 Zeichen werden abgelehnt — exportieren Sie mit kürzeren Bezeichnungen neu.',
         },
         darkFrames: {
           symptom: 'Bilder wirken fast schwarz',

@@ -23,6 +23,7 @@ const ALL_SUPPORTED_EXTENSIONS = [
   ...SUPPORTED_VIDEO_EXTENSIONS,
 ] as readonly string[];
 import { getUploadLimitsForEnvironment } from '../config/uploadLimits';
+import { VIDEO_UPLOAD_TMP_DIR } from '../config/videoUploadTmpDir';
 import { ResponseHelper } from '../utils/response';
 import { logger } from '../utils/logger';
 
@@ -154,8 +155,6 @@ export const uploadSingleImage = upload.single('image');
 // RAM. The videoUploadService then renames the temp file into the
 // canonical projects/<pid>/images/<vid>/original.<ext> location and the
 // extractor runs from there.
-const VIDEO_UPLOAD_TMP_DIR =
-  process.env.VIDEO_UPLOAD_TMP_DIR ?? path.join(os.tmpdir(), 'spheroseg-uploads');
 
 const videoUpload = multer({
   storage: multer.diskStorage({

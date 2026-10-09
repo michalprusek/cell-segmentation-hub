@@ -41,6 +41,14 @@ TIFF (say a 1 MB two-channel 512² IRM+TIRF frame) is still handled as a video.
 That matters: without it the single-image path would read only page 0 and
 render 16-bit data near-black.
 
+**One exception, decided on the server.** A single-page **colour** (RGB) TIFF
+is a photograph, not a stack, and uncompressed colour passes 20 MB at about
+6.7 megapixels — one 4104 × 2174 brightfield camera frame is 26.8 MB. Rule 3
+sends it to the video path, where the server reads its header, recognises it
+and stores it as an ordinary **image** instead, up to 512 MB. It then looks and
+behaves like every other still in the project. A colour TIFF with more than one
+page is still a stack, and the stack extractor does not read colour.
+
 > **If the sniff fails** — a truncated or corrupt stack, or a browser without
 > the `Blob` API — a real stack is handled as a single image and renders very
 > dark. There is no user-visible warning; only a debug log line. Re-uploading
@@ -148,7 +156,7 @@ extraction; each of the P containers instead owns a self-contained single-positi
 | Situation                                                          | What happens                                                                                                                                                                                                                                                                                                                                       |
 | ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Image over 20 MB                                                   | Rejected before upload starts.                                                                                                                                                                                                                                                                                                                     |
-| TIFF over 20 MB                                                    | Routed as a video, so the 100 GB limit applies instead.                                                                                                                                                                                                                                                                                            |
+| TIFF over 20 MB                                                    | Routed as a video, so the 100 GB limit applies instead. A single-page colour TIFF is the exception: it is stored as an image (up to 512 MB).                                                                                                                                                                                                       |
 | ND2 with more than **1536 positions**                              | Rejected. That is a hard cap.                                                                                                                                                                                                                                                                                                                      |
 | Channel name longer than 64 characters, or with unusual characters | **The upload fails, loudly.** Channel names are restricted to `A–Z a–z 0–9 _ -`, max 64. In August 2026 a Fiji/Bio-Formats export that embedded a ~140-character source filename in every slice label made nine containers permanently unreadable; uploads now refuse rather than persist such a container. Re-export with shorter channel labels. |
 | Upload interrupted                                                 | Nothing is committed for that file; re-upload it.                                                                                                                                                                                                                                                                                                  |

@@ -865,6 +865,71 @@ def _load_and_resolve(src: Path) -> tuple[np.ndarray, dict]:
     }
 
 
+# TIFF PhotometricInterpretation values that mean "the samples of a pixel are
+# one COLOUR", as opposed to several measurements that share a page.
+_PHOTOMETRIC_RGB = 2
+_PHOTOMETRIC_YCBCR = 6
+
+
+def classify_tiff(src: str | Path) -> dict:
+    """Say whether ``src`` is a colour PHOTOGRAPH rather than a stack, reading
+    the header only.
+
+    A single-page RGB TIFF is a still image. It reaches this extractor anyway,
+    because the browser can only route by size: a ``.tif`` over the still-image
+    cap is assumed to be a stack. Uncompressed colour gets there quickly — the
+    file this was written for is one 4104 x 2174 brightfield frame from an
+    Olympus DP28, 26.8 MB against a 20 MB cap — and ``_load_and_resolve`` has
+    no branch for it, nor should it grow one: every frame this module writes is
+    one grayscale plane per channel, so a photograph would come out as three
+    unrelated "channels" of a one-frame video. The caller stores it as an
+    ordinary image instead.
+
+    ``kind`` is ``"colour_still"`` only when ALL of these hold for series 0,
+    which is the series ``tf.asarray()`` — and therefore the extractor — reads:
+
+    - its axes are exactly ``Y``, ``X`` and ``S``. tifffile reports contiguous colour as ``YXS`` and planar as ``SYX``;
+      anything with a further axis (``QYXS`` for plain pages, ``CYXS`` for an
+      ImageJ RGB stack) is a sequence and stays ``"stack"``;
+    - there are 3 or 4 samples (RGB / RGBA). A colour page may carry further
+      extra samples; what the image path makes of those is unmeasured, so such
+      a file is left where it was;
+    - the photometric interpretation is RGB or YCbCr. The ``S`` axis alone is
+      not enough: a page of three ``minisblack`` samples is three measurements,
+      not a colour, and has the same ``YXS`` axes.
+
+    Nothing is decoded. That is deliberate, not an optimisation: this image has
+    no ``imagecodecs``, so tifffile cannot decode an LZW- or JPEG-compressed
+    page at all, while the still-image path (libvips) can. Classifying from the
+    tags is what lets such a file be stored.
+
+    Returns ``{"kind", "axes", "shape", "photometric"}``; the last three are
+    there for the log line, so a misrouted file can be diagnosed from it.
+    """
+    import tifffile
+
+    with tifffile.TiffFile(str(src)) as tf:
+        if not tf.series:
+            return {"kind": "stack", "axes": "", "shape": [], "photometric": None}
+        series = tf.series[0]
+        axes = series.axes.upper()
+        shape = [int(n) for n in series.shape]
+        photometric = int(tf.pages[0].photometric)
+
+    samples = shape[axes.index("S")] if "S" in axes else 0
+    is_colour_still = (
+        sorted(axes) == ["S", "X", "Y"]
+        and samples in (3, 4)
+        and photometric in (_PHOTOMETRIC_RGB, _PHOTOMETRIC_YCBCR)
+    )
+    return {
+        "kind": "colour_still" if is_colour_still else "stack",
+        "axes": axes,
+        "shape": shape,
+        "photometric": photometric,
+    }
+
+
 def resolve_channels_for_file(src: str | Path) -> list[dict]:
     """Read-only repair helper: derive the per-channel
     name/displayName/wavelengthNm metadata this extractor would produce
@@ -927,6 +992,23 @@ def main() -> int:
             print(str(exc), file=sys.stderr)
             return 4
         print(json.dumps({"channels": channels}))
+        return 0
+
+    # Header-only routing probe — see `classify_tiff`. One positional arg,
+    # one JSON line on stdout, nothing written anywhere.
+    if "--classify" in argv:
+        positional = [a for a in argv if not a.startswith("--")]
+        if len(positional) != 1:
+            print(
+                "usage: extract_tiff_stack.py --classify <src.tif>",
+                file=sys.stderr,
+            )
+            return 2
+        try:
+            print(json.dumps(classify_tiff(positional[0])))
+        except ImportError:
+            print("tifffile not installed in this Python env", file=sys.stderr)
+            return 3
         return 0
 
     # Opt-in multimodal channel registration (translation-only); the backend
