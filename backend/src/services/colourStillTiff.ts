@@ -23,6 +23,7 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import { VIDEO_UPLOAD_TMP_DIR } from '../config/videoUploadTmpDir';
 import { prisma } from '../db/prismaClient';
+import { ApiError } from '../middleware/error';
 import { logger } from '../utils/logger';
 import { ImageService, type ImageWithUrls } from './imageService';
 import { classifyTiff } from './video/pythonExtractor';
@@ -88,10 +89,12 @@ export async function storeColourStillTiff(options: {
   try {
     const { size } = await handle.stat();
     if (size > COLOUR_STILL_MAX_BYTES) {
-      throw new Error(
+      throw new ApiError(
         `${originalName} is a single colour image of ${Math.round(size / 1024 / 1024)} MB; ` +
           `colour images are accepted up to ${COLOUR_STILL_MAX_BYTES / 1024 / 1024} MB. ` +
-          'Save it compressed (LZW TIFF, PNG or JPEG) or at a lower resolution.'
+          'Save it compressed (LZW TIFF, PNG or JPEG) or at a lower resolution.',
+        413,
+        'COLOUR_STILL_TOO_LARGE'
       );
     }
 

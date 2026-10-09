@@ -236,7 +236,8 @@ describe('VideoController.upload — a colour photograph is not a video', () => 
 
     const res = await post('huge.tif');
 
-    expect(res.status).toBe(500);
+    // the client's to fix, so not a 500
+    expect(res.status).toBe(413);
     expect(res.body.message ?? res.body.error).toMatch(/huge\.tif.*512 MB/);
     expect(readFileMock).not.toHaveBeenCalled();
     expect(uploadImagesMock).not.toHaveBeenCalled();

@@ -27,6 +27,7 @@ import { logger } from '../../utils/logger';
 import { ResponseHelper } from '../../utils/response';
 import { uploadVideoFromFile } from '../../services/videoUploadService';
 import { storeColourStillTiff } from '../../services/colourStillTiff';
+import { ApiError } from '../../middleware/error';
 import type { VideoUploadProgressEvent } from '../../services/videoUploadService';
 import { removeChannelFromFrames } from '../../services/removeChannelService';
 import { addChannelToFrames } from '../../services/addChannelService';
@@ -359,7 +360,13 @@ export class VideoController {
         err as Error,
         'VideoController'
       );
-      ResponseHelper.error(res, message, 500);
+      // A refusal that is the client's to fix (a colour still over its
+      // ceiling) keeps its own status; everything else is ours.
+      ResponseHelper.error(
+        res,
+        message,
+        err instanceof ApiError ? err.statusCode : 500
+      );
     }
   }
 

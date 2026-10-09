@@ -626,7 +626,9 @@ export const UploadProvider: React.FC<{ children: React.ReactNode }> = ({
                   : undefined
               );
             } else if (videoFailed === 0 && videoSuccess > 0) {
-              toast.success(`${videoSuccess} video(s) uploaded successfully`);
+              // "file(s)", not "video(s)": the server stores a single-page
+              // colour TIFF sent this way as an ordinary image.
+              toast.success(`${videoSuccess} file(s) uploaded successfully`);
             } else if (videoFailed > 0) {
               toast.error(
                 `Video upload failed: ${videoFailed} file(s)`,
