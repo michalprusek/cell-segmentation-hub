@@ -1807,7 +1807,7 @@ export default {
       },
       tiffNote: 'A TIFF can be either.',
       tiffNoteText:
-        'A TIFF is handled as a stack when it is larger than 20 MB or actually contains more than one page — the file header is inspected, so even a small multi-channel TIFF is handled correctly.',
+        'A TIFF is handled as a stack when it is larger than 20 MB or actually contains more than one page — the file header is inspected, so even a small multi-channel TIFF is handled correctly. The one exception is a single-page colour (RGB) TIFF: that is a photograph and stays an ordinary image whatever its size, up to 512 MB.',
       note: 'For the best results:',
       noteText:
         'make sure your images have good contrast between the object and the background, and that the file carries its pixel calibration if you want measurements in micrometres. A video upload is one long request — transfer and frame extraction happen together, so a large ND2 takes time.',
@@ -2371,7 +2371,7 @@ export default {
         uploadRejected: {
           symptom: 'A file is rejected before the upload starts',
           cause:
-            'Still images are capped at 20 MB. A larger TIFF is treated as a stack instead and gets the 100 GB limit. Channel names longer than 64 characters are refused outright — re-export with shorter labels.',
+            'Still images are capped at 20 MB. A larger TIFF is treated as a stack instead and gets the 100 GB limit — except a single-page colour TIFF, which stays an image (up to 512 MB). Channel names longer than 64 characters are refused outright — re-export with shorter labels.',
         },
         darkFrames: {
           symptom: 'Frames look almost black',

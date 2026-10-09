@@ -1435,7 +1435,10 @@ class ApiClient {
    * callers wanting to upload multiple videos should loop.
    *
    * Returns the backend's container-creation response so callers can
-   * surface the frame count and channel list in the UI.
+   * surface the frame count and channel list in the UI — or, for the one
+   * file the server stores differently, `{ storedAs: 'image', imageId }`: a
+   * single-page COLOUR TIFF over the still-image cap is a photograph, not a
+   * stack, and becomes an ordinary image.
    */
   async uploadVideo(
     projectId: string,
@@ -1443,17 +1446,21 @@ class ApiClient {
     onProgress?: (progressPercent: number) => void,
     registerChannels?: boolean,
     signal?: AbortSignal
-  ): Promise<{
-    videoContainerId: string;
-    frameCount: number;
-    channels: Array<{
-      name: string;
-      type: 'irm' | 'fluorescent';
-      wavelengthNm?: number;
-      displayColor?: string;
-      isSegmentationSource: boolean;
-    }>;
-  }> {
+  ): Promise<
+    | {
+        storedAs?: undefined;
+        videoContainerId: string;
+        frameCount: number;
+        channels: Array<{
+          name: string;
+          type: 'irm' | 'fluorescent';
+          wavelengthNm?: number;
+          displayColor?: string;
+          isSegmentationSource: boolean;
+        }>;
+      }
+    | { storedAs: 'image'; imageId: string }
+  > {
     const formData = new FormData();
     const normalizedName = file.name.normalize('NFC');
     const payload =

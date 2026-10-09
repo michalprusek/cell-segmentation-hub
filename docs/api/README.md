@@ -206,24 +206,24 @@ different users.
 Mounted twice, so the same handlers are reachable as
 `/api/projects/:id/...` and as `/api/images/...`.
 
-| Method | Path                                             |  Auth  | Purpose                                                                      |
-| ------ | ------------------------------------------------ | :----: | ---------------------------------------------------------------------------- |
-| GET    | `/api/images/:imageId/display`                   | **no** | The image's pixels, for `<img>`                                              |
-| GET    | `/api/images/:imageId/frame-data?channel=&repr=` | **no** | One frame of one channel; `repr=proxy` requests the fast 8-bit playback copy |
-| GET    | `/api/projects/:id/images`                       |  yes   | List images (paginated, filterable)                                          |
-| GET    | `/api/projects/:id/images-with-thumbnails`       |  yes   | List with thumbnail URLs                                                     |
-| GET    | `/api/projects/:id/images/stats`                 |  yes   | Counts by segmentation status                                                |
-| GET    | `/api/projects/:projectId/images/:imageId`       |  yes   | One image                                                                    |
-| GET    | `/api/images/:imageId`                           |  yes   | One image **with** its segmentation                                          |
-| POST   | `/api/projects/:id/images`                       |  yes   | Upload still images (field `images`, max 100 files, 20 MB each)              |
-| POST   | `/api/projects/:id/videos`                       |  yes   | Upload one video / ND2 / TIFF stack (field `video`, 100 GB)                  |
-| POST   | `/api/projects/:id/images/add-channel`           |  yes   | Add a channel to selected frames (microtubule projects)                      |
-| PATCH  | `/api/projects/:id/images/reorder`               |  yes   | Set display order (time series)                                              |
-| PATCH  | `/api/images/:imageId/channels`                  |  yes   | Replace the container's channel list                                         |
-| GET    | `/api/images/:imageId/video-frames`              |  yes   | Frames of a video container                                                  |
-| POST   | `/api/projects/:id/regenerate-thumbnails`        |  yes   | Rebuild thumbnails                                                           |
-| DELETE | `/api/projects/:projectId/images/:imageId`       |  yes   | Delete one image                                                             |
-| DELETE | `/api/images/batch`                              |  yes   | Delete many by id                                                            |
+| Method | Path                                             |  Auth  | Purpose                                                                                                                                                                |
+| ------ | ------------------------------------------------ | :----: | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `/api/images/:imageId/display`                   | **no** | The image's pixels, for `<img>`                                                                                                                                        |
+| GET    | `/api/images/:imageId/frame-data?channel=&repr=` | **no** | One frame of one channel; `repr=proxy` requests the fast 8-bit playback copy                                                                                           |
+| GET    | `/api/projects/:id/images`                       |  yes   | List images (paginated, filterable)                                                                                                                                    |
+| GET    | `/api/projects/:id/images-with-thumbnails`       |  yes   | List with thumbnail URLs                                                                                                                                               |
+| GET    | `/api/projects/:id/images/stats`                 |  yes   | Counts by segmentation status                                                                                                                                          |
+| GET    | `/api/projects/:projectId/images/:imageId`       |  yes   | One image                                                                                                                                                              |
+| GET    | `/api/images/:imageId`                           |  yes   | One image **with** its segmentation                                                                                                                                    |
+| POST   | `/api/projects/:id/images`                       |  yes   | Upload still images (field `images`, max 100 files, 20 MB each)                                                                                                        |
+| POST   | `/api/projects/:id/videos`                       |  yes   | Upload one video / ND2 / TIFF stack (field `video`, 100 GB). A single-page colour TIFF is stored as a still image instead and answers `{ storedAs: 'image', imageId }` |
+| POST   | `/api/projects/:id/images/add-channel`           |  yes   | Add a channel to selected frames (microtubule projects)                                                                                                                |
+| PATCH  | `/api/projects/:id/images/reorder`               |  yes   | Set display order (time series)                                                                                                                                        |
+| PATCH  | `/api/images/:imageId/channels`                  |  yes   | Replace the container's channel list                                                                                                                                   |
+| GET    | `/api/images/:imageId/video-frames`              |  yes   | Frames of a video container                                                                                                                                            |
+| POST   | `/api/projects/:id/regenerate-thumbnails`        |  yes   | Rebuild thumbnails                                                                                                                                                     |
+| DELETE | `/api/projects/:projectId/images/:imageId`       |  yes   | Delete one image                                                                                                                                                       |
+| DELETE | `/api/images/batch`                              |  yes   | Delete many by id                                                                                                                                                      |
 
 > **`/display` and `/frame-data` are intentionally unauthenticated.** A browser
 > `<img>` cannot carry a bearer token, so the image UUID _is_ the capability.

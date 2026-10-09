@@ -55,6 +55,7 @@ import {
   extractTiffStack,
   extractNd2,
   correctDriftInContainer,
+  classifyTiff,
 } from '../pythonExtractor';
 import { logger } from '../../../utils/logger';
 
@@ -155,6 +156,28 @@ describe('pythonExtractor', () => {
       await extractTiffStack('/a', '/b');
 
       expect(mockSpawn.mock.calls[0][0]).toBe('python3');
+    });
+  });
+
+  describe('classifyTiff', () => {
+    it('runs the extractor in --classify mode on the source alone, and returns its verdict', async () => {
+      const fake = makeFakeChild();
+      setupSpawn(fake);
+      const verdict = {
+        kind: 'colour_still',
+        axes: 'YXS',
+        shape: [2174, 4104, 3],
+        photometric: 2,
+      };
+      resolveWith(fake, [JSON.stringify(verdict)]);
+
+      await expect(classifyTiff('/tmp/upload.tif')).resolves.toEqual(verdict);
+
+      const [, scriptArgs] = mockSpawn.mock.calls[0];
+      expect(scriptArgs[0]).toMatch(/extract_tiff_stack\.py$/);
+      // Without the flag the same script takes two positionals and EXTRACTS;
+      // with one positional and no flag it exits 2.
+      expect(scriptArgs.slice(1)).toEqual(['--classify', '/tmp/upload.tif']);
     });
   });
 

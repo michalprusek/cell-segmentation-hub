@@ -1812,7 +1812,7 @@ export default {
       },
       tiffNote: 'Un TIFF peut être l’un ou l’autre.',
       tiffNoteText:
-        'Un TIFF est traité comme une pile lorsqu’il dépasse 20 Mo ou qu’il contient réellement plusieurs pages : l’en-tête du fichier est inspecté, si bien qu’un petit TIFF multicanal est lui aussi traité correctement.',
+        'Un TIFF est traité comme une pile lorsqu’il dépasse 20 Mo ou qu’il contient réellement plusieurs pages : l’en-tête du fichier est inspecté, si bien qu’un petit TIFF multicanal est lui aussi traité correctement. Seule exception : un TIFF couleur (RVB) d’une seule page est une photographie et reste une image ordinaire quelle que soit sa taille, jusqu’à 512 Mo.',
       note: 'Pour de meilleurs résultats :',
       noteText:
         'veillez à un bon contraste entre l’objet et le fond, et à ce que le fichier porte sa calibration de pixel si vous voulez des mesures en micromètres. L’import d’une vidéo est une seule longue requête — le transfert et l’extraction des images se font ensemble, un gros fichier ND2 prend donc du temps.',
@@ -2385,7 +2385,7 @@ export default {
         uploadRejected: {
           symptom: 'Un fichier est refusé avant même le début de l’import',
           cause:
-            'Les images isolées sont plafonnées à 20 Mo. Un TIFF plus gros est traité comme une pile et relève alors de la limite de 100 Go. Les noms de canaux de plus de 64 caractères sont refusés d’emblée : réexportez avec des libellés plus courts.',
+            'Les images isolées sont plafonnées à 20 Mo. Un TIFF plus gros est traité comme une pile et relève alors de la limite de 100 Go, sauf un TIFF couleur d’une seule page, qui reste une image (jusqu’à 512 Mo). Les noms de canaux de plus de 64 caractères sont refusés d’emblée : réexportez avec des libellés plus courts.',
         },
         darkFrames: {
           symptom: 'Les images paraissent presque noires',

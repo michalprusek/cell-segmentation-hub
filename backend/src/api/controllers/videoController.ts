@@ -26,6 +26,7 @@ import { config } from '../../utils/config';
 import { logger } from '../../utils/logger';
 import { ResponseHelper } from '../../utils/response';
 import { uploadVideoFromFile } from '../../services/videoUploadService';
+import { storeColourStillTiff } from '../../services/colourStillTiff';
 import type { VideoUploadProgressEvent } from '../../services/videoUploadService';
 import { removeChannelFromFrames } from '../../services/removeChannelService';
 import { addChannelToFrames } from '../../services/addChannelService';
@@ -232,9 +233,10 @@ export class VideoController {
    * POST /projects/:id/videos
    *
    * Accepts a single video upload (mp4/avi/mov/mkv/webm/nd2 or multi-page
-   * TIFF). The uploaded file is streamed to a tmp path by multer
-   * (diskStorage) so the backend container never buffers a 100 GB ND2
-   * into RAM. The extractor service then renames the tmp file into the
+   * TIFF). One exception: a single-page COLOUR TIFF is a photograph, and is
+   * stored as a still image instead (`{ storedAs: 'image', imageId }`).
+   * The uploaded file is streamed to a tmp path by multer (diskStorage) so
+   * the backend container never buffers a 100 GB ND2 into RAM. The extractor service then renames the tmp file into the
    * canonical project storage layout before extracting frames.
    */
   static async upload(req: Request, res: Response): Promise<void> {
@@ -268,6 +270,23 @@ export class VideoController {
           `Not a recognised video format: ${path.extname(file.originalname)}`,
           400
         );
+        return;
+      }
+
+      // A single-page colour TIFF is a photograph that only came this way
+      // because it is over the still-image cap. It is stored as an ordinary
+      // image and never reaches the extractor — see `colourStillTiff.ts`.
+      const still = await storeColourStillTiff({
+        projectId,
+        userId,
+        originalName: file.originalname,
+        mimeType: file.mimetype,
+        tempFilePath: file.path,
+      });
+      if (still) {
+        // The image path copied the bytes into storage; the temp file is ours.
+        await cleanupTmp();
+        ResponseHelper.success(res, { storedAs: 'image', imageId: still.id });
         return;
       }
 

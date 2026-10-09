@@ -1806,7 +1806,7 @@ export default {
       },
       tiffNote: 'Un TIFF puede ser cualquiera de las dos cosas.',
       tiffNoteText:
-        'Un TIFF se trata como pila cuando supera los 20 MB o cuando realmente contiene más de una página: se inspecciona la cabecera del archivo, así que incluso un TIFF multicanal pequeño se procesa correctamente.',
+        'Un TIFF se trata como pila cuando supera los 20 MB o cuando realmente contiene más de una página: se inspecciona la cabecera del archivo, así que incluso un TIFF multicanal pequeño se procesa correctamente. La única excepción es un TIFF en color (RGB) de una sola página: es una fotografía y sigue siendo una imagen normal sea cual sea su tamaño, hasta 512 MB.',
       note: 'Para obtener los mejores resultados:',
       noteText:
         'procure un buen contraste entre el objeto y el fondo, y que el archivo lleve su calibración de píxel si quiere medidas en micrómetros. La subida de un vídeo es una única petición larga: la transferencia y la extracción de fotogramas ocurren juntas, así que un ND2 grande tarda.',
@@ -2376,7 +2376,7 @@ export default {
         uploadRejected: {
           symptom: 'Un archivo se rechaza antes de empezar la subida',
           cause:
-            'Las imágenes sueltas están limitadas a 20 MB. Un TIFF mayor se trata como pila y le aplica el límite de 100 GB. Los nombres de canal de más de 64 caracteres se rechazan de plano: vuelva a exportar con etiquetas más cortas.',
+            'Las imágenes sueltas están limitadas a 20 MB. Un TIFF mayor se trata como pila y le aplica el límite de 100 GB, salvo un TIFF en color de una sola página, que sigue siendo una imagen (hasta 512 MB). Los nombres de canal de más de 64 caracteres se rechazan de plano: vuelva a exportar con etiquetas más cortas.',
         },
         darkFrames: {
           symptom: 'Los fotogramas se ven casi negros',

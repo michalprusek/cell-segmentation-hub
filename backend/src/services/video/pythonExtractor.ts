@@ -270,6 +270,27 @@ export async function extractTiffStack(
   };
 }
 
+/** What `extract_tiff_stack.py --classify` says a TIFF is. `axes`, `shape` and
+ *  `photometric` are tifffile's own reading of series 0, carried for the log. */
+export interface TiffClassification {
+  kind: 'colour_still' | 'stack';
+  axes: string;
+  shape: number[];
+  photometric: number | null;
+}
+
+/** Header-only: is this TIFF a colour photograph, which the stack extractor
+ *  cannot read and should not, or a stack? The rule and its reasons live in
+ *  the helper's `classify_tiff`, beside the axis chain it complements. */
+export async function classifyTiff(
+  sourcePath: string
+): Promise<TiffClassification> {
+  return runHelper<TiffClassification>('extract_tiff_stack.py', [
+    '--classify',
+    sourcePath,
+  ]);
+}
+
 /** Map a single Python result object to an ExtractionResult (builds channel
  *  metadata + IRM source detection). Shared by the single and per-position
  *  ND2 branches. */
