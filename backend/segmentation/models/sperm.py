@@ -34,7 +34,7 @@ class SpermModel:
         """Initialize without loading — model is loaded separately via load_weights().
 
         num_parts: 3 = head/midpiece/tail (model `sperm`), 2 = head/tail
-        (model `sperm_2part`, trained on the 'Dva segmenty' dataset).
+        (model `sperm_2part`, trained on sperm annotated as head and tail only).
         """
         if num_parts not in (2, 3):
             raise ValueError(f"num_parts must be 2 or 3, got {num_parts}")

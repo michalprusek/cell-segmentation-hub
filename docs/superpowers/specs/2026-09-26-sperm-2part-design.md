@@ -4,6 +4,13 @@ Date: 2026-09-26. Requested by Michal Průšek after Jana Albrechtová prepared 
 SpheroSeg folder **"Dva segmenty"** (her account, 2026-09-24) for retraining so
 that sperm can be measured as **two segments only: head and tail**.
 
+> **Superseded in two places (2026-10-10).** The head is no longer a 3-point
+> polyline: the two-part head is traced by its bends, because the arc
+> under-measures an S-shaped head. And the model was retrained on a second
+> annotated folder. Both are described, with the measured accuracy, in
+> [ML models](../../reference/ml-models.md#sperm_2part--sperm-morphology-head--tail).
+> The text below is the design as it was agreed on 2026-09-26.
+
 ## Goal
 
 A sperm project can pick "Sperm Morphology (head + tail)" in its model picker; the

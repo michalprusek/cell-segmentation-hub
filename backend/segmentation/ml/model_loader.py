@@ -268,8 +268,9 @@ class ModelLoader:
             'finetuned_path': 'sperm_final/best_model.pth',
             'config_path': None
         },
-        # Two-part sperm (head + tail only): v8 fine-tuned on the 'Dva segmenty'
-        # dataset. Same architecture and pipeline as 'sperm', different part chain.
+        # Two-part sperm (head + tail only): v8 fine-tuned on sperm annotated
+        # in two parts. Same architecture and pipeline as 'sperm', different
+        # part chain, and its head is traced instead of reduced to a 3-point arc.
         'sperm_2part': {
             'class': SpermModel,
             'pretrained_path': 'weights/sperm_2part.pth',
