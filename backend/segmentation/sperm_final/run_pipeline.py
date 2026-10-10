@@ -18,6 +18,7 @@ Usage:
 
 import argparse
 from pathlib import Path
+from typing import Optional
 
 import cv2
 import numpy as np
@@ -133,11 +134,17 @@ def process_image(
     mask_threshold: float = 0.3,
     score_threshold: float = 0.95,
     scheme: PartScheme = THREE_PART,
+    head_arc: Optional[bool] = None,
 ) -> tuple:
     """Run full pipeline on one image.
 
     `scheme` selects the part chain: THREE_PART (head/midpiece/tail) or
-    TWO_PART (head/tail, the 'Dva segmenty' model).
+    TWO_PART (head/tail, the two-part model).
+
+    `head_arc` is whether the head polyline is the fixed 3-point arc. None
+    lets the scheme decide: a blob head (three-part) is an arc, the elongated
+    two-part head is traced by its bends like the tail. On S-shaped two-part
+    heads the arc is a median 12 % shorter than the hand-drawn head.
 
     Returns:
         (sperm_list, connected_polylines_list)
@@ -161,9 +168,11 @@ def process_image(
     sperm_list = assemble_sperm_graph(instances, mask_threshold, config, scheme)
 
     # Step 3: Connected polylines
+    if head_arc is None:
+        head_arc = 1 in scheme.blob_classes
     polylines_list = []
     for sperm in sperm_list:
-        polys = connect_sperm_polylines(sperm, mask_threshold=mask_threshold)
+        polys = connect_sperm_polylines(sperm, mask_threshold=mask_threshold, head_arc=head_arc)
         polylines_list.append(polys)
 
     return sperm_list, polylines_list

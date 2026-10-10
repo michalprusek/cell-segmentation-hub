@@ -253,15 +253,17 @@ def mask_to_polyline(
     simplify_eps: float = 1.5,
     pts_per_100px: float = 32.0,
     min_pts: int = 2,
+    head_arc: bool = True,
 ) -> List[Tuple[float, float]]:
     """Convert instance mask to a polyline.
 
     Pipeline: skeleton → prune → BFS longest path → RDP simplify.
 
-    Head (cls=1) is uniformly resampled to a fixed 3-point arc. Midpiece
-    (cls=2) and tail (cls=3) return the RDP-simplified path directly, so
-    points are placed adaptively by curvature (dense at bends, sparse on
-    straight runs) like the microtubule pipeline — no uniform resampling.
+    Head (cls=1) is uniformly resampled to a fixed 3-point arc unless
+    `head_arc` is False. Midpiece (cls=2) and tail (cls=3) return the
+    RDP-simplified path directly, so points are placed adaptively by
+    curvature (dense at bends, sparse on straight runs) like the microtubule
+    pipeline — no uniform resampling.
 
     Args:
         mask: Soft mask (float32).
@@ -272,6 +274,10 @@ def mask_to_polyline(
         pts_per_100px: Unused (legacy uniform-resample density). Kept for
             signature compatibility with connect_sperm_polylines.
         min_pts: Unused (legacy minimum-point floor). Kept for compatibility.
+        head_arc: True for a short blob head (three-part model). False traces
+            the head like the other parts: a two-part head is the whole
+            elongated, often S-shaped part, and a 3-point arc cuts its bends
+            and under-measures its length.
     """
     bin_mask = (mask >= mask_threshold).astype(np.uint8)
     area = bin_mask.sum()
@@ -303,13 +309,13 @@ def mask_to_polyline(
 
     simplified = rdp_simplify(path, simplify_eps)
 
-    # Head (cls=1): always a clean 3-point arc (start, midpoint, end).
-    # Uniform resample to exactly 3 — a short head reads best as a fixed
-    # simple arc and stays cheap to nudge by hand.
-    if cls == 1:
+    # Blob head (cls=1, three-part model): a clean 3-point arc (start,
+    # midpoint, end). Uniform resample to exactly 3 — a short head reads best
+    # as a fixed simple arc and stays cheap to nudge by hand.
+    if cls == 1 and head_arc:
         return resample_polyline(simplified, 3)
 
-    # Midpiece (cls=2) / tail (cls=3): adaptive sampling by curvature,
+    # Midpiece (cls=2) / tail (cls=3) / elongated head: adaptive sampling by curvature,
     # mirroring the microtubule polyline pipeline. The RDP-simplified path
     # already places vertices densely at bends and sparsely on straight
     # runs, so return it directly instead of re-densifying with a uniform
@@ -376,6 +382,7 @@ def connect_sperm_polylines(
     mask_threshold: float = 0.3,
     simplify_eps: float = 1.5,
     pts_per_100px: float = 32.0,
+    head_arc: bool = True,
 ) -> dict:
     """Generate connected polylines for a complete sperm (H+M+T).
 
@@ -386,6 +393,8 @@ def connect_sperm_polylines(
     Args:
         sperm: Dict with "head", "midpiece", "tail" instance dicts.
         mask_threshold: Threshold for binary masks.
+        head_arc: Passed to mask_to_polyline: False traces the head by its
+            bends instead of reducing it to a 3-point arc.
 
     Returns:
         Dict with "head", "midpiece", "tail" polylines (list of (x,y) tuples).
@@ -406,6 +415,7 @@ def connect_sperm_polylines(
             mask_threshold=mask_threshold,
             simplify_eps=simplify_eps,
             pts_per_100px=pts_per_100px,
+            head_arc=head_arc,
         )
         polylines[part_key] = poly
         # Compute centroid for orientation reference

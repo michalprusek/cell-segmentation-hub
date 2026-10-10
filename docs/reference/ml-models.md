@@ -269,9 +269,10 @@ behaviour built on those fields.
 
 ## `sperm_2part` — Sperm Morphology (head + tail)
 
-The second model for `sperm` projects (added 2026-09-28, PR #566), for material
-that is annotated and measured as **two parts only: head and tail**, with no
-separate midpiece.
+The second model for `sperm` projects (added 2026-09-28, PR #566; retrained
+2026-10-10), for material that is annotated and measured as **two parts only:
+head and tail**, with no separate midpiece. It is **one general model** for
+every species measured that way — there is no per-species checkpoint.
 
 - Architecture: the same as `sperm` — Mask2Former with a DINOv3 ConvNeXt-L
   backbone — **fine-tuned from the deployed `sperm` checkpoint**. It is one
@@ -283,16 +284,69 @@ separate midpiece.
   `sperm_final/inference/graph_assembly.py`), and the post-processing welds the
   head to the tail by their closest endpoints, since there is no midpiece to
   join them.
+- **The head is traced by its bends, like the tail** (since 2026-10-10): the
+  simplified path along the skeleton of its mask, 2–13 points on the evaluation
+  images. The three-part `sperm` head keeps its fixed 3-point arc. Which one a
+  model gets follows its part scheme (`blob_classes` of `PartScheme`): the
+  three-part head is a short blob, the two-part head is the whole elongated
+  part. An arc runs start → middle → end, and the middle of an S-shaped head
+  lies on its chord, so the arc is nearly a straight line through the S.
+  Resampling 40 hand-drawn S-shaped heads to 3 points shortens them by a median
+  11.8 % (IQR 7.9–16.9 %) — an error no checkpoint could get under, because it
+  is made after the network.
 - Every emitted shape carries `partClass` (`head` / `tail` — never `midpiece`)
   and an `instanceId`, exactly as for `sperm`.
-- Checkpoint: `weights/sperm_2part.pth`.
+- Checkpoint: `weights/sperm_2part.pth`. Its sha256 is **not pinned** by the
+  loader; the file deployed on 2026-10-10 is
+  `1f397c62cb1ed06e0fc30e2fe470e320b2500dd2636f3bcd25da5508a978587f`.
 - Like `sperm`, it ignores the request's threshold: the `/segment` route passes
   none, and the pipeline applies its own mask and score thresholds.
-- Trained on one dataset of 80 images / 115 annotated sperm (see the design
-  spec). **No accuracy figure is quoted here**: the spec defines the evaluation
-  but records no result.
+- Trained on **100 images / 144 annotated sperm from 16 specimens**, in two
+  groups: sperm with a roughly straight head (104 sperm, heads annotated as
+  3-point polylines) and a species with a long S-shaped head and a tail 2–2.5
+  times as long (40 sperm from 5 specimens, heads annotated as curves). The
+  first checkpoint (2026-09-27) saw 80 images of the first group only.
 - The registry's timing for it (0.30 s, p95 0.45 s) is **copied from `sperm`**,
   not measured separately.
+
+### Measured accuracy
+
+Held out **by specimen**: four specimens (24 images) the network never saw, two
+of each group. The figures come from a checkpoint trained on 63 of the other
+images (the remaining 13 only monitored its training). **The deployed
+checkpoint is the same recipe trained on all 100 images, so it has no held-out
+figure of its own**; on sperm both find, the two agree to a median 1.4–1.6 % in
+head length and 1.0–1.1 % in tail length.
+
+| Held-out sperm                          | Found | Head length | Tail length | Junction |
+| --------------------------------------- | ----- | ----------- | ----------- | -------- |
+| S-shaped heads, 15 sperm of 2 specimens | 14    | 4.6 %       | 1.5 %       | 3.7 px   |
+| Straight heads, 22 sperm of 2 specimens | 22    | 2.1 %       | 1.9 %       | 2.0 px   |
+
+Lengths are the median of |predicted − annotated| / annotated over the sperm
+found; the junction is the distance between the predicted and the annotated
+head–tail split, in pixels at the inference scale (long side 2048). No
+precision is quoted: only clean, untangled sperm are annotated, so an extra
+detection is not known to be wrong.
+
+With the 3-point arc the same checkpoint measured the S-shaped heads 15.9 % off
+and the straight ones 1.7 %. Tracing therefore costs the straight heads a
+little: over the 35 straight-headed sperm of the validation and test specimens
+the median error moves from 2.0 % to 2.2 %, and the traced head is the further
+one on 23 of them (Wilcoxon signed-rank p = 0.008). Their annotation is itself
+a 3-point arc, so that comparison favours the arc.
+
+**Sperm that touch or cross are assembled wrongly.** Of the 15 held-out
+S-shaped sperm one was missed and three got a wrong head — two crossing tails, a
+head fragment attached to the far end of a tail, a truncated head. On one image
+where three sperm nearly touch, the deployed checkpoint fails on all three
+although that image was in its training set, so this is the graph assembly and
+not a shortage of training data. On the one dense tangle that was checked it
+returned a single clean sperm where the previous checkpoint returned seven,
+most of them fragments.
+
+It is **out of domain** for sperm that are measured in three parts (a long
+midpiece): use `sperm` there.
 
 ### When to use it instead of `sperm`
 
