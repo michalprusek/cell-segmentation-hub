@@ -4,7 +4,8 @@
  * Covers SegmentationThumbnailService (currently 7% coverage):
  *
  *   1. generateSegmentationThumbnail — Prisma not-found → null,
- *      no image → null, empty polygon array → null, non-existent path → null,
+ *      no image → null, empty polygon array → rendered, non-array → null,
+ *      non-existent path → null,
  *      VisualizationGenerator called with correct args, sharp resize called,
  *      DB updated with relative path, return value prefixed with /uploads/.
  *   2. generateSegmentationThumbnail error paths — viz throws → null,
@@ -282,15 +283,43 @@ describe('SegmentationThumbnailService — generateSegmentationThumbnail (early 
     expect(await service.generateSegmentationThumbnail('seg-1')).toBeNull();
   });
 
-  it('returns null for empty polygon array', async () => {
+  // A user who deletes every false detection saves `[]`. Returning early here
+  // kept the model's original overlay in the project grid (2026-10-12), so an
+  // empty list must produce a fresh thumbnail and repoint the image row at it.
+  it('renders and records a new thumbnail for an empty polygon array', async () => {
     const seg = makeSegmentation();
     (seg as { polygons: string }).polygons = '[]';
+    const mockUpdate = vi.fn(async () => undefined);
     const service = new SegmentationThumbnailService(
       makePrisma({
         segmentationFindUnique: vi.fn().mockResolvedValue(seg),
+        imageUpdate: mockUpdate,
+      })
+    );
+
+    const result = await service.generateSegmentationThumbnail('seg-1');
+
+    expect(getVizSpy()).toHaveBeenCalledOnce();
+    expect(getVizSpy().mock.calls[0][1]).toEqual([]);
+    expect(mockUpdate).toHaveBeenCalledOnce();
+    expect(result).toMatch(
+      /^\/uploads\/user-1\/proj-1\/segmentation_thumbnails\/seg_\d+_/
+    );
+  });
+
+  it('returns null when stored polygons are not an array', async () => {
+    const seg = makeSegmentation();
+    (seg as { polygons: string }).polygons = 'null';
+    const mockUpdate = vi.fn(async () => undefined);
+    const service = new SegmentationThumbnailService(
+      makePrisma({
+        segmentationFindUnique: vi.fn().mockResolvedValue(seg),
+        imageUpdate: mockUpdate,
       })
     );
     expect(await service.generateSegmentationThumbnail('seg-1')).toBeNull();
+    expect(getVizSpy()).not.toHaveBeenCalled();
+    expect(mockUpdate).not.toHaveBeenCalled();
   });
 
   it('returns null when original image does not exist on disk', async () => {
