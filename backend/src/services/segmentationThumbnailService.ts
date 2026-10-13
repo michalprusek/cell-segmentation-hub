@@ -82,9 +82,13 @@ export class SegmentationThumbnailService {
       // Parse polygons from JSON
       const polygons = JSON.parse(segmentation.polygons as string) as Polygon[];
 
-      if (!polygons || polygons.length === 0) {
+      // An EMPTY list is still rendered: it is what a user saves after deleting
+      // every false detection, and returning early here left the project grid
+      // showing the model's original overlay for those images (26 of one
+      // user's images on 2026-10-12). Only a non-array is unusable.
+      if (!Array.isArray(polygons)) {
         logger.warn(
-          'No polygons found for segmentation',
+          'Segmentation polygons are not an array',
           'SegmentationThumbnailService',
           {
             segmentationId,
