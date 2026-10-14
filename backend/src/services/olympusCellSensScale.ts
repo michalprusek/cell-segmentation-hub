@@ -375,14 +375,21 @@ function readSisUm(
 /** `PhysicalSize*Unit` values of OME's UnitsLength that a pixel can sensibly
  *  have, in µm. OME's default when the attribute is absent is µm. Both the
  *  micro sign (U+00B5) and the Greek mu (U+03BC) occur in the wild. */
-const OME_UNIT_UM: Record<string, number> = {
-  'µm': 1,
-  'μm': 1,
-  um: 1,
-  nm: 1e-3,
-  mm: 1e3,
-  m: 1e6,
-};
+const OME_UNIT_UM = new Map<string, number>([
+  ['µm', 1],
+  ['μm', 1],
+  ['um', 1],
+  ['nm', 1e-3],
+  ['mm', 1e3],
+  ['m', 1e6],
+]);
+
+/** The longest ImageDescription that is parsed at all. Measured 2026-10-14:
+ *  the 140 cellSens XV files in production have at most 2 213 characters, the
+ *  `<Pixels>` element at most 277. The text is the uploader's, so this bound —
+ *  ~30x headroom — is what keeps the regular expressions below on small
+ *  input whatever a crafted file holds. */
+const MAX_DESCRIPTION_BYTES = 64 * 1024;
 
 /** The one OME `<Pixels>` element's size and µm pixel size, or a reason. A
  *  file describing several images is refused: which one is page 0 is not
@@ -397,19 +404,23 @@ function readOme(
   if (!elements || elements.length !== 1) {
     return 'no-ome';
   }
-  const attrs: Record<string, string> = {};
-  for (const m of elements[0].matchAll(/([\w:]+)="([^"]*)"/g)) {
-    attrs[m[1]] = m[2];
+  // A Map, not an object: attribute names are the uploader's text, and one
+  // called `__proto__` must not reach a prototype. Each match must start after
+  // whitespace, so a long run of name characters is scanned once, not once
+  // per start position.
+  const attrs = new Map<string, string>();
+  for (const m of elements[0].matchAll(/\s([A-Za-z_][\w:.-]*)="([^"]*)"/g)) {
+    attrs.set(m[1], m[2]);
   }
-  const sizeX = Number(attrs.SizeX);
-  const sizeY = Number(attrs.SizeY);
+  const sizeX = Number(attrs.get('SizeX'));
+  const sizeY = Number(attrs.get('SizeY'));
   const axis = (v?: string, unit?: string): number | null => {
-    const f = OME_UNIT_UM[unit ?? 'µm'];
+    const f = OME_UNIT_UM.get(unit ?? 'µm');
     const n = v === undefined ? NaN : Number(v);
     return f !== undefined && Number.isFinite(n) ? n * f : null;
   };
-  const x = axis(attrs.PhysicalSizeX, attrs.PhysicalSizeXUnit);
-  const y = axis(attrs.PhysicalSizeY, attrs.PhysicalSizeYUnit);
+  const x = axis(attrs.get('PhysicalSizeX'), attrs.get('PhysicalSizeXUnit'));
+  const y = axis(attrs.get('PhysicalSizeY'), attrs.get('PhysicalSizeYUnit'));
   if (!Number.isInteger(sizeX) || !Number.isInteger(sizeY)) {
     return 'no-ome';
   }
@@ -448,14 +459,21 @@ function readTiff(buf: Buffer, dims: Dims): CellSensScaleResult {
   }
 
   const desc = ifd0.get(IMAGE_DESCRIPTION_TAG);
-  if (!desc || desc.valueOffset + desc.count > buf.length) {
+  if (
+    !desc ||
+    desc.count > MAX_DESCRIPTION_BYTES ||
+    desc.valueOffset + desc.count > buf.length
+  ) {
     return reject('no-ome');
   }
-  const ome = readOme(
-    buf
-      .toString('utf8', desc.valueOffset, desc.valueOffset + desc.count)
-      .replace(/\0+$/, '')
+  // An ASCII tag ends at its first NUL; nothing after it is part of the text.
+  const text = buf.toString(
+    'utf8',
+    desc.valueOffset,
+    desc.valueOffset + desc.count
   );
+  const nul = text.indexOf('\0');
+  const ome = readOme(nul >= 0 ? text.slice(0, nul) : text);
   if (typeof ome === 'string') {
     return reject(ome);
   }

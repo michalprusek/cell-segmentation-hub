@@ -308,3 +308,43 @@ describe('readCellSensPixelSizeUm — cellSens XV TIFF', () => {
     }
   });
 });
+
+// CodeQL findings on the first version (2026-10-14): the description is the
+// uploader's text. These assert the deterministic part — the bound, and that a
+// hostile attribute name reaches no prototype — not a timing.
+describe('readCellSensPixelSizeUm — hostile TIFF descriptions', () => {
+  const XV = { width: 2052, height: 1086 };
+
+  it('does not parse a description over the 64 KiB bound', () => {
+    const description = omeXml() + ' '.repeat(64 * 1024);
+    expect(
+      readCellSensPixelSizeUm(cellSensTiff({ description }), XV).reason
+    ).toBe('no-ome');
+  });
+
+  it('reads up to the first NUL only', () => {
+    const description = omeXml() + '\0' + omeXml();
+    expect(
+      readCellSensPixelSizeUm(cellSensTiff({ description }), XV).pixelSizeUm
+    ).toBe(0.1725);
+  });
+
+  it('still reads a <Pixels> element carrying attributes named like Object members', () => {
+    const description = omeXml().replace(
+      'ID="Pixels:0"',
+      'ID="Pixels:0" __proto__="x" constructor="y"'
+    );
+    expect(
+      readCellSensPixelSizeUm(cellSensTiff({ description }), XV).pixelSizeUm
+    ).toBe(0.1725);
+  });
+
+  it('treats a unit named like an Object member as unknown', () => {
+    expect(
+      readCellSensPixelSizeUm(
+        cellSensTiff({ description: omeXml({ unit: 'constructor' }) }),
+        XV
+      ).reason
+    ).toBe('bad-unit');
+  });
+});
