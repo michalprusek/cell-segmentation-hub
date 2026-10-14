@@ -897,7 +897,8 @@ Each image is converted by **its own** pixel size, shown on every row in the
 **Pixel Size (µm/px)** column. The pixel size is taken from, in order:
 
 1. the image file itself — read at upload from Olympus cellSens metadata
-   (JPEG), and only when its calibration matches the image's pixel size;
+   (JPEG or TIFF), and only when its calibration matches the image's pixel
+   size;
 2. the pixel size entered in the export dialog;
 3. the pixel size set on the project.
 

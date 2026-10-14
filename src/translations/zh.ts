@@ -2044,7 +2044,7 @@ export default {
         wound:
           'Polygon Metrics + Summary + WoundTimeSeries — 愈合曲线，并内嵌图表',
         sperm:
-          'Sperm Metrics — 头部、中段、尾部与总长度，每个细胞一行。每张图像按其自身的像素尺寸换算（见 Pixel Size 列）：Olympus cellSens JPEG 的像素尺寸在上传时读取，导出时输入的数值用于没有像素尺寸的图像',
+          'Sperm Metrics — 头部、中段、尾部与总长度，每个细胞一行。每张图像按其自身的像素尺寸换算（见 Pixel Size 列）：Olympus cellSens JPEG 或 TIFF 的像素尺寸在上传时读取，导出时输入的数值用于没有像素尺寸的图像',
         microtubules:
           'Microtubule Metrics + Channel Totals — 长度与各通道强度，按帧、纤维与通道各一行',
         microcapsule:

@@ -217,7 +217,7 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
 
       // Auto-fill the pixel-to-µm scale from the first image carrying
       // upload-time calibration (ND2 voxel_size, OME-TIFF
-      // PhysicalSizeX, ImageJ TIFF, Olympus cellSens JPEG). The backend bubbles each frame
+      // PhysicalSizeX, ImageJ TIFF, Olympus cellSens JPEG/TIFF). The backend bubbles each frame
       // row's calibration down from its parent video container, so any
       // image — frame or standalone — with a positive pixelSizeUm is
       // a valid source. Skipped once the user has interacted with the

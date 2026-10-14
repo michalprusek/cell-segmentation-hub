@@ -2166,7 +2166,7 @@ export default {
         wound:
           'Polygon Metrics + Summary + WoundTimeSeries — křivka uzavírání rány s vloženým grafem',
         sperm:
-          'Sperm Metrics — délka hlavičky, krčku, bičíku a celková, jeden řádek na buňku. Každý snímek se přepočítá vlastní velikostí pixelu (sloupec Pixel Size): z JPEGu Olympus cellSens se přečte při nahrání a hodnota zadaná při exportu platí pro snímky bez ní',
+          'Sperm Metrics — délka hlavičky, krčku, bičíku a celková, jeden řádek na buňku. Každý snímek se přepočítá vlastní velikostí pixelu (sloupec Pixel Size): z JPEGu nebo TIFFu Olympus cellSens se přečte při nahrání a hodnota zadaná při exportu platí pro snímky bez ní',
         microtubules:
           'Microtubule Metrics + Channel Totals — délka a intenzita po kanálech, jeden řádek na snímek, vlákno a kanál',
         microcapsule:

@@ -114,11 +114,19 @@ Lengths are the sum of consecutive segment distances along each polyline (open
 paths — the loop is not closed). **Each image is converted by its own pixel
 size**, written on every row, taken from — in order:
 
-1. **the file itself.** An Olympus cellSens JPEG carries its calibration in the
-   Exif MakerNote and it is read at upload. It is used only when the
-   calibration was written for the image's actual pixel size, so a JPEG resized
-   after export is treated as uncalibrated rather than mis-scaled. (A DP28 at
-   40x is 0.08625 µm/px at 4104 × 2174 and 3840 × 2160.)
+1. **the file itself**, read at upload from Olympus cellSens metadata:
+   - a **JPEG** carries it in the Exif MakerNote (a DP28 at 40x is 0.08625
+     µm/px at 4104 × 2174 and 3840 × 2160);
+   - a **TIFF** from cellSens XV carries it twice — in the Olympus SIS block and
+     in the OME-XML description — and both must agree (2052 × 1086 is 0.1725
+     µm/px: the same field at half the resolution).
+
+   It is used only when the calibration was written for the image's actual
+   pixel size, so a file resized after export is treated as uncalibrated rather
+   than mis-scaled. TIFFs written by the older **analySIS** software carry only
+   the SIS block, with nothing that ties it to the pixel size, and are not
+   read.
+
 2. **the pixel size entered at export,**
 3. **the pixel size set on the project.**
 
@@ -126,10 +134,6 @@ Columns are in µm when any image has a pixel size and in px when none does. In
 a µm export an image with no pixel size at all gets **empty** length cells and
 is named in the export's warnings — a pixel count under a µm header would read
 as a length about 12x too large.
-
-Colour TIFFs from cellSens XV are not read yet; give them a pixel size at export
-or on the project (the lab's 2052 × 1086 TIFFs are 0.1725 µm/px — half the
-JPEG resolution over the same field).
 
 Polylines with no `instanceId` are excluded as orphans. If a project has no
 polyline data at all, the export falls back to the standard polygon report.
