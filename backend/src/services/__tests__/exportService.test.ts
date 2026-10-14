@@ -216,7 +216,9 @@ function makeService(): ExportService {
     this.calculateAllMetrics = vi.fn().mockResolvedValue([]);
     this.calculateAllImageMetrics = vi.fn().mockResolvedValue([]);
     this.exportPolygonMetricsToExcel = vi.fn().mockResolvedValue(undefined);
-    this.exportSpermToExcel = vi.fn().mockResolvedValue(true);
+    this.exportSpermToExcel = vi
+      .fn()
+      .mockResolvedValue({ written: true, unscaledImageNames: [] });
     this.exportToExcel = vi.fn().mockResolvedValue(undefined);
     this.exportToCSV = vi.fn().mockResolvedValue(undefined);
   });
@@ -885,5 +887,70 @@ describe('ExportService — updateJobProgress', () => {
   it('is a no-op for an unknown jobId', () => {
     callUpdate('no-such-job', 50);
     expect(emitToUser).not.toHaveBeenCalled();
+  });
+});
+
+// ─── Sperm per-image scale wiring (2026-10-14) ───────────────────────────────
+// The project query must SELECT the image's own pixelSizeUm, and the project's
+// calibration must reach the sperm report as its fallback. Until 2026-10-14
+// the column was not selected at all, so a stored per-image scale could never
+// reach any export.
+
+describe('ExportService — sperm per-image scale (via startExportJob)', () => {
+  afterEach(() => {
+    resetSingleton();
+  });
+
+  it("selects images.pixelSizeUm and hands the project calibration to generateMetrics", async () => {
+    vi.clearAllMocks();
+    mockHasProjectAccess.mockResolvedValue({ hasAccess: true });
+    const service = makeService();
+    const generateMetrics = vi
+      .spyOn(
+        service as unknown as { generateMetrics: () => Promise<void> },
+        'generateMetrics'
+      )
+      .mockResolvedValue(undefined);
+
+    const image = {
+      id: 'img-1',
+      name: 'Image_1.jpg',
+      pixelSizeUm: 0.08625,
+      segmentation: { polygons: '[]', model: 'sperm', threshold: 0.5 },
+    };
+    // Not `Once`: the title lookup in startExportJob takes the first call.
+    vi.mocked(prisma.project.findUnique).mockResolvedValue({
+      id: 'proj-1',
+      title: 'Sperm',
+      type: 'sperm',
+      pixelSizeUm: 0.1725,
+      images: [image],
+    } as never);
+
+    await service.startExportJob('proj-1', 'user-1', {
+      metricsFormats: ['excel'],
+    });
+    await vi.waitFor(() => expect(generateMetrics).toHaveBeenCalled());
+
+    type Query = {
+      select: {
+        pixelSizeUm?: boolean;
+        images?: { select: Record<string, unknown> };
+      };
+    };
+    const query = vi
+      .mocked(prisma.project.findUnique)
+      .mock.calls.map(c => c[0] as Query)
+      .find(q => q.select.images);
+    expect(query?.select.images?.select.pixelSizeUm).toBe(true);
+    expect(query?.select.pixelSizeUm).toBe(true);
+
+    const args = generateMetrics.mock.calls[0] as unknown[];
+    expect((args[0] as Array<{ pixelSizeUm: number }>)[0].pixelSizeUm).toBe(
+      0.08625
+    );
+    expect(args[4]).toBe('sperm');
+    expect(args[7]).toBe(0.1725);
+    service.destroy();
   });
 });

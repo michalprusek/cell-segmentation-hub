@@ -111,7 +111,7 @@ export function generateMetricsGuide(
   const ctx = buildUnitContext(options);
   switch (projectType) {
     case 'sperm':
-      return buildSpermGuide(ctx);
+      return buildSpermGuide();
     case 'spheroid_invasive':
       return buildSpheroidInvasiveGuide(ctx);
     case 'wound':
@@ -868,9 +868,32 @@ or similar) for clean time-series plots.
 `;
 }
 
-function buildSpermGuide({ lengthUnit, scaleInfo }: UnitContext): string {
+// The sperm report converts every image by its own scale, so the export-wide
+// `scaleInfo` / `lengthUnit` of the other guides would misdescribe it: an
+// export with no scale typed can still be in µm (from the images' metadata),
+// and one with a scale typed can still have rows at another scale.
+const SPERM_SCALE_INFO = `
+## Units and Scale
+
+Each image is converted by **its own** pixel size, shown on every row in the
+**Pixel Size (µm/px)** column. The pixel size is taken from, in order:
+
+1. the image file itself — read at upload from Olympus cellSens metadata
+   (JPEG), and only when its calibration matches the image's pixel size;
+2. the pixel size entered in the export dialog;
+3. the pixel size set on the project.
+
+Lengths are in micrometres (µm) when any exported image has a pixel size, and
+in pixels (px) when none does — the column headers name the unit. In a µm
+export, rows of an image without any pixel size have **empty** length cells
+(and the export lists the image as a warning) rather than a pixel count under
+a µm header.
+`;
+
+function buildSpermGuide(): string {
+  const lengthUnit = 'µm, or px when no image has a pixel size';
   return `# Sperm Morphology Metrics Reference Guide
-${scaleInfo}
+${SPERM_SCALE_INFO}
 Sperm projects export **per-instance morphology** — one row per detected
 sperm cell, with separate length measurements for each anatomical part
 (head, midpiece, tail) plus the combined total length. Geometric polygon

@@ -265,7 +265,9 @@ function resetMockImpls(): void {
   mockExportToExcel = vi.fn().mockResolvedValue(undefined);
   mockExportToCSV = vi.fn().mockResolvedValue(undefined);
   mockExportPolygonMetricsToExcel = vi.fn().mockResolvedValue(undefined);
-  mockExportSpermToExcel = vi.fn().mockResolvedValue(false);
+  mockExportSpermToExcel = vi
+    .fn()
+    .mockResolvedValue({ written: false, unscaledImageNames: [] });
   MockMetricsCalculator.mockImplementation(function (
     this: Record<string, unknown>
   ) {
@@ -431,7 +433,8 @@ const callGenerateMetrics = (
   formats: string[],
   images: Record<string, unknown>[],
   opts: Record<string, unknown> = {},
-  jobId?: string
+  jobId?: string,
+  projectPixelSizeUm?: number | null
 ) =>
   (
     svc as unknown as {
@@ -442,7 +445,8 @@ const callGenerateMetrics = (
         projectName: string,
         projectType: string,
         options: Record<string, unknown>,
-        jobId?: string
+        jobId?: string,
+        projectPixelSizeUm?: number | null
       ): Promise<void>;
     }
   ).generateMetrics(
@@ -452,8 +456,11 @@ const callGenerateMetrics = (
     'Test Project',
     projectType,
     opts,
-    jobId
+    jobId,
+    projectPixelSizeUm
   );
+
+const SPERM_WRITTEN = { written: true, unscaledImageNames: [] as string[] };
 
 const callGenerateAnnotations = (
   svc: ExportService,
@@ -949,7 +956,7 @@ describe('ExportService — generateMetrics sperm orchestration', () => {
   });
 
   it('routes sperm projects to exportSpermToExcel when it succeeds', async () => {
-    mockExportSpermToExcel.mockResolvedValue(true);
+    mockExportSpermToExcel.mockResolvedValue(SPERM_WRITTEN);
     await callGenerateMetrics(service, 'sperm', ['excel'], [
       makeSpermImage('img1', [
         spermPolyline('head'),
@@ -964,7 +971,10 @@ describe('ExportService — generateMetrics sperm orchestration', () => {
   });
 
   it('falls back to polygon-metrics Excel and warns when sperm export returns false', async () => {
-    mockExportSpermToExcel.mockResolvedValue(false);
+    mockExportSpermToExcel.mockResolvedValue({
+      written: false,
+      unscaledImageNames: [],
+    });
     await callGenerateMetrics(
       service,
       'sperm',
@@ -979,7 +989,7 @@ describe('ExportService — generateMetrics sperm orchestration', () => {
   });
 
   it('propagates pixelToMicrometerScale to exportSpermToExcel', async () => {
-    mockExportSpermToExcel.mockResolvedValue(true);
+    mockExportSpermToExcel.mockResolvedValue(SPERM_WRITTEN);
     await callGenerateMetrics(
       service,
       'sperm',
@@ -996,7 +1006,7 @@ describe('ExportService — generateMetrics sperm orchestration', () => {
   });
 
   it('passes scale=undefined when no scale option is provided', async () => {
-    mockExportSpermToExcel.mockResolvedValue(true);
+    mockExportSpermToExcel.mockResolvedValue(SPERM_WRITTEN);
     await callGenerateMetrics(service, 'sperm', ['excel'], [
       makeSpermImage('img1', [spermPolyline('head')]),
     ]);
@@ -1009,7 +1019,7 @@ describe('ExportService — generateMetrics sperm orchestration', () => {
   });
 
   it('forwards the image segmentation JSON unchanged to exportSpermToExcel', async () => {
-    mockExportSpermToExcel.mockResolvedValue(true);
+    mockExportSpermToExcel.mockResolvedValue(SPERM_WRITTEN);
     const polylines = [spermPolyline('head'), spermPolyline('tail')];
     await callGenerateMetrics(service, 'sperm', ['excel'], [
       makeSpermImage('img-x', polylines),
@@ -1023,8 +1033,89 @@ describe('ExportService — generateMetrics sperm orchestration', () => {
     );
   });
 
+  // ── Per-image scale wiring (2026-10-14) ────────────────────────────────
+  it("hands each image's own pixelSizeUm to the sperm report", async () => {
+    mockExportSpermToExcel.mockResolvedValue(SPERM_WRITTEN);
+    await callGenerateMetrics(service, 'sperm', ['excel'], [
+      { ...makeSpermImage('jpg', [spermPolyline('head')]), pixelSizeUm: 0.08625 },
+      { ...makeSpermImage('tif', [spermPolyline('head')]), pixelSizeUm: 0.1725 },
+      makeSpermImage('png', [spermPolyline('head')]),
+    ]);
+
+    const passed = mockExportSpermToExcel.mock.calls[0]?.[0] as Array<{
+      id: string;
+      pixelSizeUm?: number | null;
+    }>;
+    expect(passed.map(i => [i.id, i.pixelSizeUm])).toEqual([
+      ['jpg', 0.08625],
+      ['tif', 0.1725],
+      ['png', null],
+    ]);
+  });
+
+  it('falls back to the project calibration when the dialog sent no scale', async () => {
+    mockExportSpermToExcel.mockResolvedValue(SPERM_WRITTEN);
+    await callGenerateMetrics(
+      service,
+      'sperm',
+      ['excel'],
+      [makeSpermImage('img1', [spermPolyline('head')])],
+      {},
+      undefined,
+      0.1725
+    );
+
+    expect(mockExportSpermToExcel).toHaveBeenCalledWith(
+      expect.any(Array),
+      expect.any(String),
+      0.1725
+    );
+  });
+
+  it('prefers the dialog scale over the project calibration as the fallback', async () => {
+    mockExportSpermToExcel.mockResolvedValue(SPERM_WRITTEN);
+    await callGenerateMetrics(
+      service,
+      'sperm',
+      ['excel'],
+      [makeSpermImage('img1', [spermPolyline('head')])],
+      { pixelToMicrometerScale: 0.087 },
+      undefined,
+      0.1725
+    );
+
+    expect(mockExportSpermToExcel).toHaveBeenCalledWith(
+      expect.any(Array),
+      expect.any(String),
+      0.087
+    );
+  });
+
+  it('surfaces images left without a scale as a job warning', async () => {
+    seedProcessingJob(service, 'sperm-unscaled');
+    mockExportSpermToExcel.mockResolvedValue({
+      written: true,
+      unscaledImageNames: ['a.png', 'b.png'],
+    });
+    await callGenerateMetrics(
+      service,
+      'sperm',
+      ['excel'],
+      [makeSpermImage('img1', [spermPolyline('head')])],
+      {},
+      'sperm-unscaled'
+    );
+
+    const warnings = getJobs(service).get('sperm-unscaled')?.warnings ?? [];
+    expect(warnings).toEqual([
+      expect.stringMatching(/^2 sperm image\(s\) have no pixel size.*a\.png, b\.png$/),
+    ]);
+    // Written means no polygon-metrics fallback.
+    expect(mockExportPolygonMetricsToExcel).not.toHaveBeenCalled();
+  });
+
   it('handles multiple metrics formats (excel + csv + json) in one call', async () => {
-    mockExportSpermToExcel.mockResolvedValue(true);
+    mockExportSpermToExcel.mockResolvedValue(SPERM_WRITTEN);
     await callGenerateMetrics(service, 'sperm', ['excel', 'csv', 'json'], [
       makeSpermImage('img1', [spermPolyline('head')]),
     ]);

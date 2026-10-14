@@ -143,6 +143,7 @@ vi.mock('fs/promises', () => ({
 }));
 
 import { ImageService } from '../imageService';
+import { cellSensJpeg } from './fixtures/cellSensJpeg';
 import { logger } from '../../utils/logger';
 import { getStorageProvider } from '../../storage/index';
 import * as fsModule from 'fs';
@@ -349,6 +350,63 @@ describe('ImageService — uploadImagesWithProgress', () => {
         vi.fn()
       )
     ).rejects.toThrow();
+  });
+});
+
+// ─── Upload reads the cellSens calibration (2026-10-14) ───────────────────────
+
+describe('ImageService — upload stores the pixel size read from the file', () => {
+  const dp28 = { ...mockUploadResult, width: 4104, height: 2174 };
+  const jpegFile = (buffer: Buffer) => ({ ...makeFile('Image_1.jpg'), buffer });
+  const createdPixelSize = () =>
+    (prismaMock.image.create.mock.calls[0]?.[0] as { data: Record<string, unknown> })
+      .data.pixelSizeUm;
+
+  beforeEach(() => {
+    prismaMock.project.findFirst.mockResolvedValue(mockProject);
+    prismaMock.image.create.mockResolvedValue(makeImage());
+  });
+
+  it('uploadImages writes the cellSens scale onto the new row', async () => {
+    storageMock.upload.mockResolvedValueOnce(dp28);
+    await makeService().uploadImages('proj-1', 'user-1', [
+      jpegFile(cellSensJpeg()),
+    ]);
+    expect(createdPixelSize()).toBe(0.08625);
+  });
+
+  it('uploadImagesWithProgress writes the cellSens scale onto the new row', async () => {
+    storageMock.upload.mockResolvedValueOnce(dp28);
+    await makeService().uploadImagesWithProgress(
+      'proj-1',
+      'user-1',
+      [jpegFile(cellSensJpeg())],
+      'batch-1',
+      vi.fn()
+    );
+    expect(createdPixelSize()).toBe(0.08625);
+  });
+
+  // The calibration is checked against the size the STORED file decodes to,
+  // so the stored dimensions must be what reaches the reader.
+  it('stores null when the stored size does not match the calibration', async () => {
+    storageMock.upload.mockResolvedValueOnce({
+      ...dp28,
+      width: 2052,
+      height: 1087,
+    });
+    await makeService().uploadImages('proj-1', 'user-1', [
+      jpegFile(cellSensJpeg()),
+    ]);
+    expect(createdPixelSize()).toBeNull();
+  });
+
+  it('stores null for a file without cellSens metadata, and still uploads it', async () => {
+    const result = await makeService().uploadImages('proj-1', 'user-1', [
+      makeFile(),
+    ]);
+    expect(result).toHaveLength(1);
+    expect(createdPixelSize()).toBeNull();
   });
 });
 

@@ -64,10 +64,12 @@ const mockedLogger = logger as Mocked<typeof logger>;
 const buildImage = (
   id: string,
   name: string,
-  polygons: unknown
+  polygons: unknown,
+  pixelSizeUm?: number | null
 ): ImageWithSegmentation => ({
   id,
   name,
+  pixelSizeUm,
   segmentation: {
     polygons:
       typeof polygons === 'string' ? polygons : JSON.stringify(polygons),
@@ -148,7 +150,7 @@ describe('MetricsCalculator.exportSpermToExcel', () => {
       outputPath
     );
 
-    expect(result).toBe(false);
+    expect(result).toEqual({ written: false, unscaledImageNames: [] });
     expect(mockWriteFile).not.toHaveBeenCalled();
     expect(mockWorksheet.addRow).not.toHaveBeenCalled();
   });
@@ -159,7 +161,7 @@ describe('MetricsCalculator.exportSpermToExcel', () => {
       outputPath
     );
 
-    expect(result).toBe(true);
+    expect(result.written).toBe(true);
     expect(mockWriteFile).toHaveBeenCalledWith(outputPath);
     expect(mockWorksheet.addRow).toHaveBeenCalledTimes(1);
     expect(mockWorksheet.addRow).toHaveBeenCalledWith({
@@ -169,6 +171,7 @@ describe('MetricsCalculator.exportSpermToExcel', () => {
       midpieceLength: 4,
       tailLength: 5,
       totalLength: 12,
+      pixelSizeUm: null,
     });
     // Headers carry px units when no pixel scale is supplied.
     const headers = mockWorksheet.columns.map(c => c.header);
@@ -179,6 +182,7 @@ describe('MetricsCalculator.exportSpermToExcel', () => {
       'Midpiece Length (px)',
       'Tail Length (px)',
       'Total Length (px)',
+      'Pixel Size (µm/px)',
     ]);
   });
 
@@ -199,6 +203,7 @@ describe('MetricsCalculator.exportSpermToExcel', () => {
       midpieceLength: 8,
       tailLength: 10,
       totalLength: 24,
+      pixelSizeUm: 2,
     });
   });
 
@@ -222,7 +227,7 @@ describe('MetricsCalculator.exportSpermToExcel', () => {
       outputPath
     );
 
-    expect(result).toBe(true);
+    expect(result.written).toBe(true);
     expect(mockWorksheet.addRow).toHaveBeenCalledWith({
       imageName: 'a.png',
       instanceId: 'sperm_1',
@@ -230,6 +235,7 @@ describe('MetricsCalculator.exportSpermToExcel', () => {
       midpieceLength: 0,
       tailLength: 0,
       totalLength: 3,
+      pixelSizeUm: null,
     });
   });
 
@@ -247,7 +253,7 @@ describe('MetricsCalculator.exportSpermToExcel', () => {
       outputPath
     );
 
-    expect(result).toBe(true);
+    expect(result.written).toBe(true);
     expect(mockWorksheet.addRow).toHaveBeenCalledTimes(2);
     const rows = mockWorksheet.addRow.mock.calls.map(c => c[0]);
     expect(rows).toEqual(
@@ -271,7 +277,7 @@ describe('MetricsCalculator.exportSpermToExcel', () => {
       outputPath
     );
 
-    expect(result).toBe(true);
+    expect(result.written).toBe(true);
     expect(mockedLogger.warn).toHaveBeenCalledWith(
       expect.stringContaining('Failed to parse polygons'),
       'MetricsCalculator',
@@ -290,7 +296,7 @@ describe('MetricsCalculator.exportSpermToExcel', () => {
       outputPath
     );
 
-    expect(result).toBe(true);
+    expect(result.written).toBe(true);
     expect(mockedLogger.warn).toHaveBeenCalledWith(
       expect.stringContaining('without instanceId'),
       'MetricsCalculator',
@@ -332,7 +338,7 @@ describe('MetricsCalculator.exportSpermToExcel', () => {
       outputPath
     );
 
-    expect(result).toBe(true);
+    expect(result.written).toBe(true);
     expect(mockWorksheet.addRow).toHaveBeenCalledWith(
       expect.objectContaining({
         instanceId: 'sperm_1',
@@ -353,7 +359,118 @@ describe('MetricsCalculator.exportSpermToExcel', () => {
       outputPath
     );
 
-    expect(result).toBe(true);
+    expect(result.written).toBe(true);
     expect(mockWorksheet.addRow).toHaveBeenCalledTimes(1);
+  });
+
+  // ── Per-image scale (2026-10-14) ────────────────────────────────────────
+  // The sperm lab's JPEGs are 0.08625 µm/px and its TIFFs 0.1725 — the same
+  // field at half the resolution — and both were exported with one typed
+  // 0.087, so every TIFF length came out at about half its real value.
+
+  const fullSperm = () => [headPart(), midPart(), tailPart()]; // 3 + 4 + 5 px
+
+  it('converts every image by its own pixel size, not by the dialog value', async () => {
+    const result = await calculator.exportSpermToExcel(
+      [
+        buildImage('img1', 'jpeg.jpg', fullSperm(), 0.5),
+        buildImage('img2', 'tiff.tif', fullSperm(), 2),
+      ],
+      outputPath,
+      10
+    );
+
+    expect(result).toEqual({ written: true, unscaledImageNames: [] });
+    const rows = mockWorksheet.addRow.mock.calls.map(c => c[0]);
+    expect(rows).toEqual([
+      expect.objectContaining({
+        imageName: 'jpeg.jpg',
+        headLength: 1.5,
+        totalLength: 6,
+        pixelSizeUm: 0.5,
+      }),
+      expect.objectContaining({
+        imageName: 'tiff.tif',
+        headLength: 6,
+        totalLength: 24,
+        pixelSizeUm: 2,
+      }),
+    ]);
+    expect(mockWorksheet.columns.map(c => c.header)).toContain(
+      'Total Length (µm)'
+    );
+  });
+
+  it('falls back to the export-wide scale only for images without their own', async () => {
+    await calculator.exportSpermToExcel(
+      [
+        buildImage('img1', 'own.jpg', fullSperm(), 0.5),
+        buildImage('img2', 'none.png', fullSperm(), null),
+      ],
+      outputPath,
+      3
+    );
+
+    const rows = mockWorksheet.addRow.mock.calls.map(c => c[0]);
+    expect(rows[0]).toEqual(
+      expect.objectContaining({ totalLength: 6, pixelSizeUm: 0.5 })
+    );
+    expect(rows[1]).toEqual(
+      expect.objectContaining({ totalLength: 36, pixelSizeUm: 3 })
+    );
+  });
+
+  it('reports µm from image metadata even when no scale was entered', async () => {
+    await calculator.exportSpermToExcel(
+      [buildImage('img1', 'own.jpg', fullSperm(), 0.5)],
+      outputPath
+    );
+
+    expect(mockWorksheet.columns.map(c => c.header)).toContain(
+      'Head Length (µm)'
+    );
+    expect(mockWorksheet.addRow).toHaveBeenCalledWith(
+      expect.objectContaining({ totalLength: 6, pixelSizeUm: 0.5 })
+    );
+  });
+
+  it('leaves lengths empty for an unscaled image in a µm export, and names it', async () => {
+    const result = await calculator.exportSpermToExcel(
+      [
+        buildImage('img1', 'own.jpg', fullSperm(), 0.5),
+        buildImage('img2', 'none.png', fullSperm(), null),
+      ],
+      outputPath
+    );
+
+    expect(result).toEqual({
+      written: true,
+      unscaledImageNames: ['none.png'],
+    });
+    const rows = mockWorksheet.addRow.mock.calls.map(c => c[0]);
+    expect(rows[1]).toEqual({
+      imageName: 'none.png',
+      instanceId: 'sperm_1',
+      headLength: null,
+      midpieceLength: null,
+      tailLength: null,
+      totalLength: null,
+      pixelSizeUm: null,
+    });
+  });
+
+  it('ignores a non-positive or non-finite stored scale', async () => {
+    await calculator.exportSpermToExcel(
+      [
+        buildImage('img1', 'zero.jpg', fullSperm(), 0),
+        buildImage('img2', 'nan.jpg', fullSperm(), Number.NaN),
+      ],
+      outputPath,
+      2
+    );
+
+    const rows = mockWorksheet.addRow.mock.calls.map(c => c[0]);
+    expect(rows.map(r => r.pixelSizeUm)).toEqual([2, 2]);
+    expect(rows.map(r => r.totalLength)).toEqual([24, 24]);
   });
 });

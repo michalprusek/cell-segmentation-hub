@@ -309,8 +309,23 @@ export interface ImageWithSegmentation {
   name: string;
   width?: number;
   height?: number;
+  /** The image's own calibration in µm/px (null/undefined: none). Read only
+   *  by the sperm report, which converts every image by its own scale. */
+  pixelSizeUm?: number | null;
   segmentation?: SegmentationData;
 }
+
+export interface SpermExportResult {
+  /** False when no image held a sperm polyline; no file is written then. */
+  written: boolean;
+  /** Images that contributed rows but had no scale while others did. Their
+   *  length cells are left empty rather than filled with pixels under a µm
+   *  header. Empty unless the export mixes calibrated and uncalibrated images. */
+  unscaledImageNames: string[];
+}
+
+const isUsableScale = (v: number | null | undefined): v is number =>
+  typeof v === 'number' && Number.isFinite(v) && v > 0;
 
 export type SummaryStatisticsRow = (string | number)[];
 
@@ -1562,19 +1577,34 @@ export class MetricsCalculator {
   /**
    * Export sperm morphology metrics to Excel.
    * One row per sperm instance with head/midpiece/tail lengths.
-   * Returns true if sperm data was found and the Excel file was written,
-   * false if no polyline data exists (no file is created in that case).
+   *
+   * Every image is converted by its OWN scale: `image.pixelSizeUm` when the
+   * image carries one, else `fallbackScale` (the export dialog's entry, else
+   * the project's). The scale used is written on each row. Lengths are in µm
+   * when any image has a scale and in px when none does; an image without a
+   * scale in an otherwise calibrated export gets empty length cells and is
+   * listed in `unscaledImageNames`, because a pixel count under a µm header
+   * reads as a real length — 11.6x too large at 0.08625 µm/px.
+   *
+   * `written` is false if no polyline data exists (no file is created then).
    */
   async exportSpermToExcel(
     images: ImageWithSegmentation[],
     outputPath: string,
-    pixelToMicrometerScale?: number
-  ): Promise<boolean> {
+    fallbackScale?: number
+  ): Promise<SpermExportResult> {
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('Sperm Metrics');
 
-    const scale = (pixelToMicrometerScale && pixelToMicrometerScale > 0) ? pixelToMicrometerScale : 1;
-    const unit = scale !== 1 ? 'µm' : 'px';
+    const scaleOf = (image: ImageWithSegmentation): number | null =>
+      isUsableScale(image.pixelSizeUm)
+        ? image.pixelSizeUm
+        : isUsableScale(fallbackScale)
+          ? fallbackScale
+          : null;
+    const anyScaled = images.some(image => scaleOf(image) !== null);
+    const unit = anyScaled ? 'µm' : 'px';
+    const unscaledImageNames: string[] = [];
 
     // Headers
     const columns: Partial<ExcelJS.Column>[] = [
@@ -1584,6 +1614,7 @@ export class MetricsCalculator {
       { header: `Midpiece Length (${unit})`, key: 'midpieceLength', width: 18 },
       { header: `Tail Length (${unit})`, key: 'tailLength', width: 16 },
       { header: `Total Length (${unit})`, key: 'totalLength', width: 16 },
+      { header: 'Pixel Size (µm/px)', key: 'pixelSizeUm', width: 18 },
     ];
     worksheet.columns = columns;
 
@@ -1625,6 +1656,16 @@ export class MetricsCalculator {
         );
       }
 
+      const imageScale = scaleOf(image);
+      // Calibrated export, uncalibrated image: no number is honest here.
+      const blank = anyScaled && imageScale === null;
+      if (blank && groups.length > 0) {
+        unscaledImageNames.push(image.name);
+      }
+      const scale = imageScale ?? 1;
+      const cell = (v: number): number | null =>
+        blank ? null : parseFloat(v.toFixed(2));
+
       for (const { instanceId, parts } of groups) {
         hasData = true;
         const head = findPart(parts, 'head');
@@ -1638,15 +1679,16 @@ export class MetricsCalculator {
         worksheet.addRow({
           imageName: image.name,
           instanceId,
-          headLength: parseFloat(headLen.toFixed(2)),
-          midpieceLength: parseFloat(midLen.toFixed(2)),
-          tailLength: parseFloat(tailLen.toFixed(2)),
-          totalLength: parseFloat((headLen + midLen + tailLen).toFixed(2)),
+          headLength: cell(headLen),
+          midpieceLength: cell(midLen),
+          tailLength: cell(tailLen),
+          totalLength: cell(headLen + midLen + tailLen),
+          pixelSizeUm: imageScale,
         });
       }
     }
 
-    if (!hasData) {return false;}
+    if (!hasData) {return { written: false, unscaledImageNames: [] };}
 
     // Style header
     const headerRow = worksheet.getRow(1);
@@ -1666,7 +1708,7 @@ export class MetricsCalculator {
       `Sperm metrics Excel created: ${outputPath}`,
       'MetricsCalculator'
     );
-    return true;
+    return { written: true, unscaledImageNames };
   }
 
   /**
