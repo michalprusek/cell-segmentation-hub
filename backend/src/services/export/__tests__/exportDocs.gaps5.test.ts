@@ -68,6 +68,23 @@ describe('generateReadme', () => {
     expect(result).toContain('0.5 um/pixel');
   });
 
+  it('states a per-image scale for a sperm project, not one export-wide value', () => {
+    const sperm = { ...makeProject(), type: 'sperm' } as ReturnType<
+      typeof makeProject
+    >;
+    const withScale = generateReadme(sperm, {
+      pixelToMicrometerScale: 0.087,
+    } as ExportOptions);
+    expect(withScale).toContain('**Scale**: per image');
+    expect(withScale).toContain(
+      '0.087 um/pixel entered at export applies only to images without their own'
+    );
+    expect(withScale).not.toContain('Scale Conversion');
+    expect(generateReadme(sperm, {} as ExportOptions)).toContain(
+      '**Scale**: per image'
+    );
+  });
+
   it('includes pixel units line when no scale', () => {
     const result = generateReadme(makeProject(), {} as ExportOptions);
     expect(result).toContain('**Units**: All measurements in pixels');

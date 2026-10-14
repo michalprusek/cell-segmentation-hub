@@ -17,6 +17,28 @@ import {
 } from '../../types/validation';
 import { buildYoloClassMap } from './formatConverter';
 
+/** The README's one-line statement of units. The sperm report converts each
+ *  image by its own pixel size, so a single "Scale Conversion" value there
+ *  would be false for every image that carries its own. */
+function readmeScaleLine(
+  projectType: string | null | undefined,
+  scale: number | undefined
+): string {
+  const entered = scale !== undefined && scale > 0;
+  if (projectType === 'sperm') {
+    return (
+      '- **Scale**: per image — see the Pixel Size (µm/px) column of the ' +
+      'metrics workbook' +
+      (entered
+        ? `; ${scale} um/pixel entered at export applies only to images without their own`
+        : '')
+    );
+  }
+  return entered
+    ? `- **Scale Conversion**: ${scale} um/pixel (measurements converted to micrometers)`
+    : '- **Units**: All measurements in pixels';
+}
+
 export function generateReadme(
   project: ProjectWithImages,
   options: ExportOptions
@@ -27,11 +49,7 @@ export function generateReadme(
 - **Date**: ${new Date().toISOString()}
 - **Total Images**: ${project.images?.length || 0}
 - **Project ID**: ${project.id}
-${
-options.pixelToMicrometerScale && options.pixelToMicrometerScale > 0
-  ? `- **Scale Conversion**: ${options.pixelToMicrometerScale} um/pixel (measurements converted to micrometers)`
-  : '- **Units**: All measurements in pixels'
-}
+${readmeScaleLine(project.type, options.pixelToMicrometerScale)}
 
 ## Export Contents
 
