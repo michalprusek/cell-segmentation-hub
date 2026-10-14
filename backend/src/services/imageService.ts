@@ -19,6 +19,7 @@ import {
 import * as UserService from './userService';
 import { resolveSegmentationSource } from './video/types';
 import { convertImageForDisplay } from './video/pythonExtractor';
+import { readCellSensPixelSizeUm } from './olympusCellSensScale';
 
 async function pathExists(p: string): Promise<boolean> {
   try {
@@ -66,6 +67,50 @@ export interface PaginatedImages {
     hasNext: boolean;
     hasPrev: boolean;
   };
+}
+
+/**
+ * The pixel size a still image carries in its own file, or null.
+ *
+ * Only Olympus cellSens JPEGs and TIFFs are read (see `olympusCellSensScale.ts`).
+ * Never throws: a calibration that cannot be read must not cost the user the
+ * upload, and null is the state every consumer already handles — the export
+ * then falls back to the scale typed in the dialog or set on the project.
+ */
+function readUploadPixelSizeUm(
+  file: UploadImageData,
+  stored: { width?: number; height?: number }
+): number | null {
+  try {
+    const result = readCellSensPixelSizeUm(file.buffer, stored);
+    if (result.pixelSizeUm !== null) {
+      logger.info('Read pixel size from cellSens metadata', 'ImageService', {
+        filename: file.originalname,
+        pixelSizeUm: result.pixelSizeUm,
+      });
+      return result.pixelSizeUm;
+    }
+    // A cellSens file whose scale was refused is worth a line: it looked
+    // calibrated and is not being treated as such. Every other reason just
+    // means "no cellSens calibration here", which is most files.
+    if (
+      result.reason !== 'unsupported-format' &&
+      result.reason !== 'no-exif' &&
+      result.reason !== 'no-makernote' &&
+      result.reason !== 'not-cellsens'
+    ) {
+      logger.warn('cellSens calibration present but refused', 'ImageService', {
+        filename: file.originalname,
+        reason: result.reason,
+      });
+    }
+  } catch (error) {
+    logger.warn('Reading cellSens calibration failed', 'ImageService', {
+      filename: file.originalname,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+  return null;
 }
 
 export class ImageService {
@@ -326,6 +371,7 @@ export class ImageService {
             height: uploadResult.height,
             mimeType: uploadResult.mimeType,
             segmentationStatus: 'no_segmentation',
+            pixelSizeUm: readUploadPixelSizeUm(file, uploadResult),
           },
         });
 
@@ -487,6 +533,7 @@ export class ImageService {
             height: uploadResult.height,
             mimeType: uploadResult.mimeType,
             segmentationStatus: 'no_segmentation',
+            pixelSizeUm: readUploadPixelSizeUm(file, uploadResult),
           },
         });
 

@@ -227,7 +227,9 @@ function makeService(): ExportService {
     this.calculateAllMetrics = vi.fn().mockResolvedValue([]);
     this.calculateAllImageMetrics = vi.fn().mockResolvedValue([]);
     this.exportPolygonMetricsToExcel = vi.fn().mockResolvedValue(undefined);
-    this.exportSpermToExcel = vi.fn().mockResolvedValue(true);
+    this.exportSpermToExcel = vi
+      .fn()
+      .mockResolvedValue({ written: true, unscaledImageNames: [] });
     this.exportToExcel = vi.fn().mockResolvedValue(undefined);
     this.exportToCSV = vi.fn().mockResolvedValue(undefined);
   });

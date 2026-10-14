@@ -516,6 +516,11 @@ export class ExportService {
               segmentationStatus: true,
               createdAt: true,
               updatedAt: true,
+              // The image's OWN calibration (read at upload from cellSens
+              // metadata). Until 2026-10-14 this was not selected, so the
+              // `img.pixelSizeUm ?? …` reads below were always undefined and a
+              // stored per-image scale could never reach an export.
+              pixelSizeUm: true,
               // Video-frame fields needed by the MT metrics exporter so it
               // can group frames by their parent container and resolve
               // the original ND2/TIFF on disk.
@@ -719,7 +724,8 @@ export class ExportService {
             project.title,
             project.type || 'spheroid',
             options,
-            jobId
+            jobId,
+            project.pixelSizeUm
           ).then(() => {
             progressStep++;
             this.updateJobProgress(jobId, 5 + progressStep * progressIncrement);
@@ -1588,7 +1594,10 @@ export class ExportService {
     _projectName: string,
     projectType: string,
     options?: ExportOptions,
-    jobId?: string
+    jobId?: string,
+    /** The project's calibration. Read by the sperm report only, as the last
+     *  fallback for an image that carries no scale of its own. */
+    projectPixelSizeUm?: number | null
   ): Promise<void> {
     // Check if job was cancelled before starting metrics calculation
     if (jobId && this.isJobCancelled(jobId)) {
@@ -1704,6 +1713,8 @@ export class ExportService {
       }
     }
 
+    const containerScales = await this.containerPixelSizes(images);
+
     // Convert images to the format expected by metrics calculator
     const metricsImages: MetricsImageInput[] = images.map(image => {
       const cached = dimsCache.get(image.id);
@@ -1712,6 +1723,15 @@ export class ExportService {
         name: image.name,
         width: image.width || cached?.width || undefined,
         height: image.height || cached?.height || undefined,
+        // A video frame's calibration lives on its container, exactly as the
+        // image listing resolves it (`imageController` getImages) — and so as
+        // the export dialog shows it.
+        pixelSizeUm:
+          (image.parentVideoId
+            ? containerScales.get(image.parentVideoId)
+            : null) ??
+          image.pixelSizeUm ??
+          null,
         segmentation: image.segmentation
           ? {
               polygons: image.segmentation.polygons,
@@ -1766,12 +1786,30 @@ export class ExportService {
         // (sperm polylines / wound model) is kept as a fallback for legacy
         // projects that pre-date the explicit type field.
         if (projectType === 'sperm') {
-          const exportedSperm = await this.metricsCalculator.exportSpermToExcel(
+          // Each image is converted by ITS OWN scale: the one in its file
+          // (cellSens metadata, read at upload) first, then the scale typed in
+          // the export dialog, then the project's. One number for the whole
+          // export was wrong as soon as a project mixed microscopes or
+          // resolutions — the sperm lab's 4104 px JPEGs are 0.08625 µm/px and
+          // its 2052 px TIFFs 0.1725, the same field at half the resolution.
+          const sperm = await this.metricsCalculator.exportSpermToExcel(
             metricsImages,
             excelPath,
-            options?.pixelToMicrometerScale
+            options?.pixelToMicrometerScale ?? projectPixelSizeUm ?? undefined
           );
-          if (!exportedSperm) {
+          if (sperm.unscaledImageNames.length > 0 && jobId) {
+            const job = this.exportJobs.get(jobId);
+            if (job) {
+              const names = sperm.unscaledImageNames;
+              job.warnings = [
+                ...(job.warnings ?? []),
+                `${names.length} sperm image(s) have no pixel size (none in the file, none entered at export, none set on the project), so their lengths are left empty: ` +
+                  names.slice(0, 10).join(', ') +
+                  (names.length > 10 ? ', …' : ''),
+              ];
+            }
+          }
+          if (!sperm.written) {
             logger.warn(
               `Project flagged as sperm but no polyline data — falling back to standard polygon metrics`,
               'ExportService',
@@ -1852,6 +1890,29 @@ export class ExportService {
     }
   }
 
+  /** µm/px of each video container the given frames belong to. Read from the
+   *  DB rather than from `images`, which holds only the SELECTED rows — the
+   *  container is usually not among them. */
+  private async containerPixelSizes(
+    images: ImageWithSegmentation[]
+  ): Promise<Map<string, number | null>> {
+    const parentIds = [
+      ...new Set(
+        images
+          .map(i => i.parentVideoId)
+          .filter((id): id is string => typeof id === 'string' && id !== '')
+      ),
+    ];
+    if (parentIds.length === 0) {
+      return new Map();
+    }
+    const parents = await prisma.image.findMany({
+      where: { id: { in: parentIds } },
+      select: { id: true, pixelSizeUm: true },
+    });
+    return new Map(parents.map(p => [p.id, p.pixelSizeUm]));
+  }
+
   /**
    * Microtubule metrics exporter — owns the `metrics.{csv,xlsx,json}` files
    * for MT projects (the standard closed-polygon report is skipped upstream
@@ -1885,14 +1946,17 @@ export class ExportService {
     mlGate?: Semaphore,
     /** The scale the user typed on the export modal. This is the ONLY source
      *  of a pixel size in practice: measured 2026-09-07, not one of the 10 857
-     *  production images carries `pixelSizeUm` — the column is null for every
-     *  row of every project type. Reading only the column would make this
-     *  export skip every frame with "pixel size unknown".
+     *  production images carried `pixelSizeUm` — the column was null for
+     *  every row of every project type (since 2026-10-14 an Olympus cellSens
+     *  JPEG or TIFF fills it at upload). Reading only the column would make
+     *  this export skip every frame with "pixel size unknown".
      *
-     *  The caller resolves modal-entry THEN project calibration, so a scale
-     *  typed for this one export still wins over the stored one; the stored
-     *  value is what makes the export work without typing anything. Absent
-     *  both, the frame is skipped rather than guessed. */
+     *  Precedence is image row, then this value, then nothing: the caller
+     *  resolves modal-entry THEN project calibration, so a scale typed for
+     *  this one export wins over the PROJECT's stored one — but not over an
+     *  image's own, which describes that image's pixels (the same order as the
+     *  sperm report). Absent all of them, the frame is skipped rather than
+     *  guessed. */
     pixelToMicrometerScale?: number,
     /** Lets a failure reach `job.warnings` — the list the completion WebSocket
      *  event and the status endpoint carry, i.e. the part the user sees. */

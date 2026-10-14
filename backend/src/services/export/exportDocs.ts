@@ -17,6 +17,28 @@ import {
 } from '../../types/validation';
 import { buildYoloClassMap } from './formatConverter';
 
+/** The README's one-line statement of units. The sperm report converts each
+ *  image by its own pixel size, so a single "Scale Conversion" value there
+ *  would be false for every image that carries its own. */
+function readmeScaleLine(
+  projectType: string | null | undefined,
+  scale: number | undefined
+): string {
+  const entered = scale !== undefined && scale > 0;
+  if (projectType === 'sperm') {
+    return (
+      '- **Scale**: per image — see the Pixel Size (µm/px) column of the ' +
+      'metrics workbook' +
+      (entered
+        ? `; ${scale} um/pixel entered at export applies only to images without their own`
+        : '')
+    );
+  }
+  return entered
+    ? `- **Scale Conversion**: ${scale} um/pixel (measurements converted to micrometers)`
+    : '- **Units**: All measurements in pixels';
+}
+
 export function generateReadme(
   project: ProjectWithImages,
   options: ExportOptions
@@ -27,11 +49,7 @@ export function generateReadme(
 - **Date**: ${new Date().toISOString()}
 - **Total Images**: ${project.images?.length || 0}
 - **Project ID**: ${project.id}
-${
-options.pixelToMicrometerScale && options.pixelToMicrometerScale > 0
-  ? `- **Scale Conversion**: ${options.pixelToMicrometerScale} um/pixel (measurements converted to micrometers)`
-  : '- **Units**: All measurements in pixels'
-}
+${readmeScaleLine(project.type, options.pixelToMicrometerScale)}
 
 ## Export Contents
 
@@ -111,7 +129,7 @@ export function generateMetricsGuide(
   const ctx = buildUnitContext(options);
   switch (projectType) {
     case 'sperm':
-      return buildSpermGuide(ctx);
+      return buildSpermGuide();
     case 'spheroid_invasive':
       return buildSpheroidInvasiveGuide(ctx);
     case 'wound':
@@ -868,9 +886,33 @@ or similar) for clean time-series plots.
 `;
 }
 
-function buildSpermGuide({ lengthUnit, scaleInfo }: UnitContext): string {
+// The sperm report converts every image by its own scale, so the export-wide
+// `scaleInfo` / `lengthUnit` of the other guides would misdescribe it: an
+// export with no scale typed can still be in µm (from the images' metadata),
+// and one with a scale typed can still have rows at another scale.
+const SPERM_SCALE_INFO = `
+## Units and Scale
+
+Each image is converted by **its own** pixel size, shown on every row in the
+**Pixel Size (µm/px)** column. The pixel size is taken from, in order:
+
+1. the image file itself — read at upload from Olympus cellSens metadata
+   (JPEG or TIFF), and only when its calibration matches the image's pixel
+   size;
+2. the pixel size entered in the export dialog;
+3. the pixel size set on the project.
+
+Lengths are in micrometres (µm) when any exported image has a pixel size, and
+in pixels (px) when none does — the column headers name the unit. In a µm
+export, rows of an image without any pixel size have **empty** length cells
+(and the export lists the image as a warning) rather than a pixel count under
+a µm header.
+`;
+
+function buildSpermGuide(): string {
+  const lengthUnit = 'µm, or px when no image has a pixel size';
   return `# Sperm Morphology Metrics Reference Guide
-${scaleInfo}
+${SPERM_SCALE_INFO}
 Sperm projects export **per-instance morphology** — one row per detected
 sperm cell, with separate length measurements for each anatomical part
 (head, midpiece, tail) plus the combined total length. Geometric polygon
@@ -947,12 +989,13 @@ polyline of each part is used; subsequent ones are silently skipped.
 - **Polyline length**: \`backend/src/services/metrics/polylineLength.ts\`
 - **Instance grouping**: \`backend/src/services/metrics/spermGrouping.ts\`
 - **Excel writer**: \`backend/src/services/metrics/metricsCalculator.ts\`
-(\`exportSpermToExcel\` — emits Image Name, Instance ID, Head/Midpiece/Tail/Total Length)
+(\`exportSpermToExcel\` — emits Image Name, Instance ID, Head/Midpiece/Tail/Total Length, Pixel Size)
 
 ## Notes for Researchers
 
-1. **Units**: Always verify scale conversion for cross-microscope or
-cross-magnification comparisons.
+1. **Units**: Check the Pixel Size column before comparing rows — each image
+is converted by its own pixel size, so rows from different microscopes or
+magnifications are comparable only when every one of them has a value.
 2. **Manual completion**: A sperm cell with one missing part is still
 exported with the present parts — useful for partially occluded cells.
 3. **Polyline ordering**: Length is order-independent (Euclidean

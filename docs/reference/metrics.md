@@ -50,6 +50,11 @@ When you give a pixel size _s_ (µm/px) at export:
 An out-of-range or unparseable scale (outside 0.001–1000) causes a **silent
 fallback to pixel units**. The unit is always in the column header — check it.
 
+The **sperm** report is the exception: it converts each image by that image's
+own pixel size (from its file, else the export value, else the project) and
+writes it on every row — see
+[Sperm → Metrics and export](../guides/project-types/sperm.md#metrics-and-export).
+
 ---
 
 ## Outside-core fraction (Index B)

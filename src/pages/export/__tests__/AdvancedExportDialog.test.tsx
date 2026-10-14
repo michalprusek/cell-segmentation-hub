@@ -901,6 +901,37 @@ describe('AdvancedExportDialog', () => {
       );
     });
 
+    // Wiring of `resolveScalePrefill` (2026-10-14): which images and project
+    // type actually reach it from the dialog's props.
+    it('does not auto-fill an image scale for a sperm project', () => {
+      renderDialog({
+        projectType: 'sperm',
+        images: [
+          { ...BASE_PROPS.images[0], pixelSizeUm: 0.08625 },
+        ] as unknown as typeof BASE_PROPS.images,
+      });
+      expect(
+        _mockUpdateExportOptions.mock.calls.some(
+          c => 'pixelToMicrometerScale' in c[0]
+        )
+      ).toBe(false);
+    });
+
+    it('does not auto-fill when calibrated images disagree', () => {
+      renderDialog({
+        projectType: 'spheroid',
+        images: [
+          { ...BASE_PROPS.images[0], id: 'a', pixelSizeUm: 0.08625 },
+          { ...BASE_PROPS.images[0], id: 'b', pixelSizeUm: 0.1725 },
+        ] as unknown as typeof BASE_PROPS.images,
+      });
+      expect(
+        _mockUpdateExportOptions.mock.calls.some(
+          c => 'pixelToMicrometerScale' in c[0]
+        )
+      ).toBe(false);
+    });
+
     it('does not auto-fill when exportOptions already has a scale value', () => {
       overrideHookState({
         exportOptions: { pixelToMicrometerScale: 0.1 },
