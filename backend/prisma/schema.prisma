@@ -104,7 +104,8 @@ model Project {
   // Image scale in micrometres per pixel, for the whole project.
   //
   // Lives on the PROJECT, not the image, because almost nothing fills it per
-  // image (since 2026-10-14 only an Olympus cellSens JPEG does, at upload):
+  // image (since 2026-10-14 an Olympus cellSens JPEG or TIFF does, at upload;
+  // a video's calibration sits on its container row):
   // measured 2026-09-07, all 10 857 production images had `images.pixelSizeUm`
   // null, in every project type. The only scale a user ever supplies is the one
   // they type on the export modal, which meant it had to be retyped for every

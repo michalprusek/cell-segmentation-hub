@@ -1602,24 +1602,12 @@ export class MetricsCalculator {
         : isUsableScale(fallbackScale)
           ? fallbackScale
           : null;
-    const anyScaled = images.some(image => scaleOf(image) !== null);
-    const unit = anyScaled ? 'µm' : 'px';
-    const unscaledImageNames: string[] = [];
-
-    // Headers
-    const columns: Partial<ExcelJS.Column>[] = [
-      { header: 'Image Name', key: 'imageName', width: 25 },
-      { header: 'Instance ID', key: 'instanceId', width: 15 },
-      { header: `Head Length (${unit})`, key: 'headLength', width: 16 },
-      { header: `Midpiece Length (${unit})`, key: 'midpieceLength', width: 18 },
-      { header: `Tail Length (${unit})`, key: 'tailLength', width: 16 },
-      { header: `Total Length (${unit})`, key: 'totalLength', width: 16 },
-      { header: 'Pixel Size (µm/px)', key: 'pixelSizeUm', width: 18 },
-    ];
-    worksheet.columns = columns;
-
-    let hasData = false;
-
+    // Parse first: the unit depends only on images that produce rows, or an
+    // unsegmented calibrated image would blank every other image's lengths.
+    const withRows: Array<{
+      image: ImageWithSegmentation;
+      groups: ReturnType<typeof groupPolylinesByInstanceId>['groups'];
+    }> = [];
     for (const image of images) {
       if (!image.segmentation?.polygons) {continue;}
 
@@ -1655,11 +1643,32 @@ export class MetricsCalculator {
           { imageId: image.id }
         );
       }
+      if (groups.length > 0) {
+        withRows.push({ image, groups });
+      }
+    }
 
+    const anyScaled = withRows.some(({ image }) => scaleOf(image) !== null);
+    const unit = anyScaled ? 'µm' : 'px';
+    const unscaledImageNames: string[] = [];
+
+    // Headers
+    const columns: Partial<ExcelJS.Column>[] = [
+      { header: 'Image Name', key: 'imageName', width: 25 },
+      { header: 'Instance ID', key: 'instanceId', width: 15 },
+      { header: `Head Length (${unit})`, key: 'headLength', width: 16 },
+      { header: `Midpiece Length (${unit})`, key: 'midpieceLength', width: 18 },
+      { header: `Tail Length (${unit})`, key: 'tailLength', width: 16 },
+      { header: `Total Length (${unit})`, key: 'totalLength', width: 16 },
+      { header: 'Pixel Size (µm/px)', key: 'pixelSizeUm', width: 18 },
+    ];
+    worksheet.columns = columns;
+
+    for (const { image, groups } of withRows) {
       const imageScale = scaleOf(image);
       // Calibrated export, uncalibrated image: no number is honest here.
       const blank = anyScaled && imageScale === null;
-      if (blank && groups.length > 0) {
+      if (blank) {
         unscaledImageNames.push(image.name);
       }
       const scale = imageScale ?? 1;
@@ -1667,7 +1676,6 @@ export class MetricsCalculator {
         blank ? null : parseFloat(v.toFixed(2));
 
       for (const { instanceId, parts } of groups) {
-        hasData = true;
         const head = findPart(parts, 'head');
         const mid = findPart(parts, 'midpiece');
         const tail = findPart(parts, 'tail');
@@ -1688,7 +1696,7 @@ export class MetricsCalculator {
       }
     }
 
-    if (!hasData) {return { written: false, unscaledImageNames: [] };}
+    if (withRows.length === 0) {return { written: false, unscaledImageNames: [] };}
 
     // Style header
     const headerRow = worksheet.getRow(1);

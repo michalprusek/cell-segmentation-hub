@@ -50,6 +50,7 @@ import {
 } from './components/MicrotubuleKymographsSection';
 import { projectCanBuildKymograph } from './utils/kymographGating';
 import { UniversalCancelButton } from '@/components/ui/universal-cancel-button';
+import { resolveScalePrefill } from './utils/scalePrefill';
 
 /** Accepted range for the pixel→µm scale, in µm per pixel.
  *  0.001 is 1 nm/px, finer than any light microscope resolves; 1000 is a
@@ -215,33 +216,27 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
         }
       }, [selectedImageIds, updateExportOptions]);
 
-      // Auto-fill the pixel-to-µm scale from the first image carrying
-      // upload-time calibration (ND2 voxel_size, OME-TIFF
-      // PhysicalSizeX, ImageJ TIFF, Olympus cellSens JPEG/TIFF). The backend bubbles each frame
-      // row's calibration down from its parent video container, so any
-      // image — frame or standalone — with a positive pixelSizeUm is
-      // a valid source. Skipped once the user has interacted with the
-      // input (see `hasUserTouchedScaleRef`).
+      // Auto-fill the pixel-to-µm scale from upload-time calibration (ND2
+      // voxel_size, OME-TIFF PhysicalSizeX, ImageJ TIFF, Olympus cellSens
+      // JPEG/TIFF) or the project's — see `resolveScalePrefill` for when an
+      // image's value is offered and when it must not be. The backend bubbles
+      // each frame row's calibration down from its parent video container, so
+      // frames and standalone images count alike. Skipped once the user has
+      // interacted with the input (see `hasUserTouchedScaleRef`).
       useEffect(() => {
         if (hasUserTouchedScaleRef.current) return;
         if (exportOptions.pixelToMicrometerScale != null) return;
-        const calibrated = images.find(
-          img => typeof img.pixelSizeUm === 'number' && img.pixelSizeUm > 0
-        );
-        // Image first, project second — an image that carries its own
-        // calibration is more specific than the project's. The backend applies
-        // the same precedence, so prefilling here shows the user the number the
-        // export would have used anyway rather than changing the outcome.
-        const prefill =
-          calibrated?.pixelSizeUm ??
-          (typeof projectPixelSizeUm === 'number' && projectPixelSizeUm > 0
-            ? projectPixelSizeUm
-            : undefined);
+        const prefill = resolveScalePrefill({
+          projectType,
+          images,
+          projectPixelSizeUm,
+        });
         if (prefill) {
           updateExportOptions({ pixelToMicrometerScale: prefill });
         }
       }, [
         images,
+        projectType,
         projectPixelSizeUm,
         exportOptions.pixelToMicrometerScale,
         updateExportOptions,

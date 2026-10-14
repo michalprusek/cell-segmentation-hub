@@ -197,6 +197,16 @@ describe('readCellSensPixelSizeUm — cellSens XV TIFF', () => {
     ).toBe(0.08625);
   });
 
+  // tifffile reads the SIS tag's value field as the block's offset whatever
+  // its declared type (`TiffTag.fromfile`, TAG_READERS), so a block declared
+  // as UNDEFINED x its length must read the same as cellSens' LONG x1.
+  it('finds the SIS block from the value field whatever the tag type', () => {
+    expect(
+      readCellSensPixelSizeUm(cellSensTiff({ sisTag: 'undefined-block' }), XV)
+        .pixelSizeUm
+    ).toBe(0.1725);
+  });
+
   it('applies the SIS length exponent', () => {
     const buf = cellSensTiff({ sis: { xCal: 1.725e-7, lenExp: 0 } });
     expect(readCellSensPixelSizeUm(buf, XV).pixelSizeUm).toBe(0.1725);

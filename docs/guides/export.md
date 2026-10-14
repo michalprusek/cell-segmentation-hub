@@ -49,12 +49,15 @@ microtubule metrics sheet.**
 | **Pixel size (µm/pixel)**          | auto    | Converts every length and area to micrometres                       |
 | Selected images                    | all     | Restrict the export to a subset                                     |
 
-**The pixel size field is auto-filled** from the first image that carries a
-calibration (ND2 voxel size, OME-TIFF `PhysicalSizeX`, ImageJ TIFF metadata,
-Olympus cellSens JPEG and TIFF), and stops auto-filling once you type in it. **Sperm
-projects** go further and convert every image by its own pixel size; the value
-here covers only the images that carry none (see
-[Sperm → Metrics and export](project-types/sperm.md#metrics-and-export)). Accepted range **0.001 – 1000**, and
+**The pixel size field is auto-filled** from the images' own calibration (ND2
+voxel size, OME-TIFF `PhysicalSizeX`, ImageJ TIFF metadata, Olympus cellSens
+JPEG and TIFF) when every calibrated image agrees on one value, otherwise from
+the project's pixel size; it stops auto-filling once you type in it. Images at
+different scales are not given one of them. **Sperm projects** convert every
+image by its own pixel size, so there the field offers only the project's
+value and covers just the images that carry none (see
+[Sperm → Metrics and export](project-types/sperm.md#metrics-and-export)).
+Accepted range **0.001 – 1000**, and
 it accepts any number of decimals — a real calibration like `0.072222` is not
 rounded. An out-of-range or unparseable value falls back to **pixel units**
 silently, so check the units in the header row of the result.

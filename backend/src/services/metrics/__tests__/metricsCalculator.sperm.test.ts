@@ -459,6 +459,26 @@ describe('MetricsCalculator.exportSpermToExcel', () => {
     });
   });
 
+  // Review finding (2026-10-14): the unit used to be decided over EVERY
+  // image, so one unsegmented calibrated image blanked every other row.
+  it('decides the unit only from images that produce rows', async () => {
+    const result = await calculator.exportSpermToExcel(
+      [
+        buildImage('img1', 'calibrated-unsegmented.jpg', [], 0.08625),
+        buildImage('img2', 'plain.png', fullSperm(), null),
+      ],
+      outputPath
+    );
+
+    expect(result).toEqual({ written: true, unscaledImageNames: [] });
+    expect(mockWorksheet.columns.map(c => c.header)).toContain(
+      'Total Length (px)'
+    );
+    expect(mockWorksheet.addRow).toHaveBeenCalledWith(
+      expect.objectContaining({ imageName: 'plain.png', totalLength: 12 })
+    );
+  });
+
   it('ignores a non-positive or non-finite stored scale', async () => {
     await calculator.exportSpermToExcel(
       [

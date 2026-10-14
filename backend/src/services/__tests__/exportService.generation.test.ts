@@ -28,7 +28,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 vi.mock('../../db', () => ({
   prisma: {
     project: { findUnique: vi.fn() },
-    image: { update: vi.fn() },
+    image: { update: vi.fn(), findMany: vi.fn() },
   },
 }));
 
@@ -1050,6 +1050,36 @@ describe('ExportService — generateMetrics sperm orchestration', () => {
       ['jpg', 0.08625],
       ['tif', 0.1725],
       ['png', null],
+    ]);
+  });
+
+  // Review finding (2026-10-14): a frame's calibration lives on its video
+  // container; the listing (and so the dialog) bubbles it down, the export
+  // did not.
+  it("gives a video frame its container's pixel size", async () => {
+    mockExportSpermToExcel.mockResolvedValue(SPERM_WRITTEN);
+    vi.mocked(prisma.image.findMany).mockResolvedValueOnce([
+      { id: 'video-1', pixelSizeUm: 0.1725 },
+    ] as never);
+    await callGenerateMetrics(service, 'sperm', ['excel'], [
+      {
+        ...makeSpermImage('frame-0', [spermPolyline('head')]),
+        parentVideoId: 'video-1',
+        pixelSizeUm: null,
+      },
+      makeSpermImage('still', [spermPolyline('head')]),
+    ]);
+
+    expect(vi.mocked(prisma.image.findMany)).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: { in: ['video-1'] } } })
+    );
+    const passed = mockExportSpermToExcel.mock.calls[0]?.[0] as Array<{
+      id: string;
+      pixelSizeUm?: number | null;
+    }>;
+    expect(passed.map(i => [i.id, i.pixelSizeUm])).toEqual([
+      ['frame-0', 0.1725],
+      ['still', null],
     ]);
   });
 

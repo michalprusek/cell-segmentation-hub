@@ -1713,6 +1713,8 @@ export class ExportService {
       }
     }
 
+    const containerScales = await this.containerPixelSizes(images);
+
     // Convert images to the format expected by metrics calculator
     const metricsImages: MetricsImageInput[] = images.map(image => {
       const cached = dimsCache.get(image.id);
@@ -1721,7 +1723,15 @@ export class ExportService {
         name: image.name,
         width: image.width || cached?.width || undefined,
         height: image.height || cached?.height || undefined,
-        pixelSizeUm: image.pixelSizeUm ?? null,
+        // A video frame's calibration lives on its container, exactly as the
+        // image listing resolves it (`imageController` getImages) — and so as
+        // the export dialog shows it.
+        pixelSizeUm:
+          (image.parentVideoId
+            ? containerScales.get(image.parentVideoId)
+            : null) ??
+          image.pixelSizeUm ??
+          null,
         segmentation: image.segmentation
           ? {
               polygons: image.segmentation.polygons,
@@ -1880,6 +1890,29 @@ export class ExportService {
     }
   }
 
+  /** µm/px of each video container the given frames belong to. Read from the
+   *  DB rather than from `images`, which holds only the SELECTED rows — the
+   *  container is usually not among them. */
+  private async containerPixelSizes(
+    images: ImageWithSegmentation[]
+  ): Promise<Map<string, number | null>> {
+    const parentIds = [
+      ...new Set(
+        images
+          .map(i => i.parentVideoId)
+          .filter((id): id is string => typeof id === 'string' && id !== '')
+      ),
+    ];
+    if (parentIds.length === 0) {
+      return new Map();
+    }
+    const parents = await prisma.image.findMany({
+      where: { id: { in: parentIds } },
+      select: { id: true, pixelSizeUm: true },
+    });
+    return new Map(parents.map(p => [p.id, p.pixelSizeUm]));
+  }
+
   /**
    * Microtubule metrics exporter — owns the `metrics.{csv,xlsx,json}` files
    * for MT projects (the standard closed-polygon report is skipped upstream
@@ -1914,14 +1947,16 @@ export class ExportService {
     /** The scale the user typed on the export modal. This is the ONLY source
      *  of a pixel size in practice: measured 2026-09-07, not one of the 10 857
      *  production images carried `pixelSizeUm` — the column was null for
-     *  every row of every project type (since 2026-10-14 a cellSens JPEG
-     *  fills it at upload; nothing else does). Reading only the column would make this
-     *  export skip every frame with "pixel size unknown".
+     *  every row of every project type (since 2026-10-14 an Olympus cellSens
+     *  JPEG or TIFF fills it at upload). Reading only the column would make
+     *  this export skip every frame with "pixel size unknown".
      *
-     *  The caller resolves modal-entry THEN project calibration, so a scale
-     *  typed for this one export still wins over the stored one; the stored
-     *  value is what makes the export work without typing anything. Absent
-     *  both, the frame is skipped rather than guessed. */
+     *  Precedence is image row, then this value, then nothing: the caller
+     *  resolves modal-entry THEN project calibration, so a scale typed for
+     *  this one export wins over the PROJECT's stored one — but not over an
+     *  image's own, which describes that image's pixels (the same order as the
+     *  sperm report). Absent all of them, the frame is skipped rather than
+     *  guessed. */
     pixelToMicrometerScale?: number,
     /** Lets a failure reach `job.warnings` — the list the completion WebSocket
      *  event and the status endpoint carry, i.e. the part the user sees. */

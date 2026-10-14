@@ -166,6 +166,9 @@ export function cellSensTiff(
     le?: boolean;
     magic?: number;
     extraTags?: Array<[number, number, number, number]>;
+    /** How the SIS tag is declared: cellSens writes LONG x1; a writer may
+     *  instead declare the block as UNDEFINED x its length. */
+    sisTag?: 'long' | 'undefined-block';
   } = {}
 ): Buffer {
   const le = opts.le ?? true;
@@ -192,7 +195,11 @@ export function cellSensTiff(
   const entries: Array<[number, number, number, number]> = [
     ...tags,
     desc ? [270, 2, desc.length, descOff] : [270, 2, 0, 0],
-    sis ? [33560, 4, 1, sisOff] : [305, 2, 0, 0],
+    sis
+      ? opts.sisTag === 'undefined-block'
+        ? [33560, 7, sis.length, sisOff]
+        : [33560, 4, 1, sisOff]
+      : [305, 2, 0, 0],
   ];
   u16(entries.length, 8);
   entries

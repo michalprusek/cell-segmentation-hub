@@ -98,6 +98,9 @@ const TIFF_TYPE_BYTES: Record<number, number> = {
   13: 4,
 };
 
+const inRange = (v: number): boolean =>
+  v >= MIN_PIXEL_SIZE_UM && v <= MAX_PIXEL_SIZE_UM;
+
 const reject = (reason: CellSensRejectReason): CellSensScaleResult => ({
   pixelSizeUm: null,
   reason,
@@ -142,13 +145,22 @@ function findExifTiff(buf: Buffer): Buffer | null {
   return null;
 }
 
+/** An IFD entry. `valueOffset` is where the value's bytes are (the entry
+ *  itself when they fit in 4); `field` is the raw 4-byte value field. */
+interface IfdEntry {
+  type: number;
+  count: number;
+  valueOffset: number;
+  field: number;
+}
+
 /** One IFD entry's value bytes, or null when out of bounds. Offsets are
  *  relative to the start of the TIFF header, per TIFF 6.0 / Exif 2.3. */
 function readIfd(
   tiff: Buffer,
   ifdOffset: number,
   le: boolean
-): Map<number, { type: number; count: number; valueOffset: number }> | null {
+): Map<number, IfdEntry> | null {
   if (ifdOffset + 2 > tiff.length) {
     return null;
   }
@@ -158,7 +170,7 @@ function readIfd(
   }
   const entries = new Map<
     number,
-    { type: number; count: number; valueOffset: number }
+    IfdEntry
   >();
   for (let i = 0; i < n; i++) {
     const e = ifdOffset + 2 + i * 12;
@@ -168,12 +180,9 @@ function readIfd(
     // A value of at most 4 bytes is stored in the entry itself.
     const size = (TIFF_TYPE_BYTES[type] ?? 0) * count;
     const inline = size > 0 && size <= 4;
-    const valueOffset = inline
-      ? e + 8
-      : le
-        ? tiff.readUInt32LE(e + 8)
-        : tiff.readUInt32BE(e + 8);
-    entries.set(tag, { type, count, valueOffset });
+    const field = le ? tiff.readUInt32LE(e + 8) : tiff.readUInt32BE(e + 8);
+    const valueOffset = inline ? e + 8 : field;
+    entries.set(tag, { type, count, valueOffset, field });
   }
   return entries;
 }
@@ -323,7 +332,7 @@ function readJpeg(buf: Buffer, dims: Dims): CellSensScaleResult {
     return reject('size-mismatch');
   }
 
-  if (!(sx >= MIN_PIXEL_SIZE_UM && sx <= MAX_PIXEL_SIZE_UM)) {
+  if (!inRange(sx)) {
     return reject('out-of-range');
   }
   // cellSens writes 0.08625 as 0.08625000000000002; 12 significant digits drop
@@ -332,8 +341,6 @@ function readJpeg(buf: Buffer, dims: Dims): CellSensScaleResult {
   return { pixelSizeUm: Number(sx.toPrecision(12)) };
 }
 
-const finiteRange = (v: number): boolean =>
-  v >= MIN_PIXEL_SIZE_UM && v <= MAX_PIXEL_SIZE_UM;
 
 /** OlympusSIS pixel size in µm, per tifffile `read_sis`: a little-endian
  *  `SIS0` header of 60 bytes whose last int16 is the entry count, then 8-byte
@@ -444,16 +451,12 @@ function readTiff(buf: Buffer, dims: Dims): CellSensScaleResult {
   if (!ifd0 || !sisEntry) {
     return reject('not-cellsens');
   }
-  // The tag is a LONG whose (inline) value is the absolute offset of the block.
-  const sis =
-    sisEntry.valueOffset + 4 <= buf.length
-      ? readSisUm(
-          buf,
-          le
-            ? buf.readUInt32LE(sisEntry.valueOffset)
-            : buf.readUInt32BE(sisEntry.valueOffset)
-        )
-      : null;
+  // The value FIELD is the absolute offset of the block, whatever the tag's
+  // type and count say — tifffile reads every tag with a custom reader that
+  // way (`TiffTag.fromfile`: `code in TIFF.TAG_READERS` forces the field to be
+  // an offset). cellSens writes a LONG of count 1; following `valueOffset`
+  // would differ the moment a writer declared the block's own byte count.
+  const sis = readSisUm(buf, sisEntry.field);
   if (!sis) {
     return reject('no-sis');
   }
@@ -492,7 +495,7 @@ function readTiff(buf: Buffer, dims: Dims): CellSensScaleResult {
   ) {
     return reject('size-mismatch');
   }
-  if (!finiteRange(ome.x)) {
+  if (!inRange(ome.x)) {
     return reject('out-of-range');
   }
   return { pixelSizeUm: Number(ome.x.toPrecision(12)) };

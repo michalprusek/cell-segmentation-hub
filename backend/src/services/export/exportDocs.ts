@@ -989,12 +989,13 @@ polyline of each part is used; subsequent ones are silently skipped.
 - **Polyline length**: \`backend/src/services/metrics/polylineLength.ts\`
 - **Instance grouping**: \`backend/src/services/metrics/spermGrouping.ts\`
 - **Excel writer**: \`backend/src/services/metrics/metricsCalculator.ts\`
-(\`exportSpermToExcel\` — emits Image Name, Instance ID, Head/Midpiece/Tail/Total Length)
+(\`exportSpermToExcel\` — emits Image Name, Instance ID, Head/Midpiece/Tail/Total Length, Pixel Size)
 
 ## Notes for Researchers
 
-1. **Units**: Always verify scale conversion for cross-microscope or
-cross-magnification comparisons.
+1. **Units**: Check the Pixel Size column before comparing rows — each image
+is converted by its own pixel size, so rows from different microscopes or
+magnifications are comparable only when every one of them has a value.
 2. **Manual completion**: A sperm cell with one missing part is still
 exported with the present parts — useful for partially occluded cells.
 3. **Polyline ordering**: Length is order-independent (Euclidean

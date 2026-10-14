@@ -3366,7 +3366,7 @@ export class SegmentationService {
 
     // The scale, image first then project. Little fills the image column —
     // measured 2026-09-07, all 10 857 production rows had it null; since
-    // 2026-10-14 an Olympus cellSens JPEG fills it at upload — so the project's
+    // 2026-10-14 an Olympus cellSens JPEG or TIFF fills it at upload — so the project's
     // value is what usually arrives, and the image's wins when it has one.
     const projectScale = await this.prisma.project.findUnique({
       where: { id: image.projectId },
