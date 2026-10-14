@@ -2214,7 +2214,7 @@ export default {
         wound:
           'Polygon Metrics + Summary + WoundTimeSeries — die Verschlusskurve mit eingebettetem Diagramm',
         sperm:
-          'Sperm Metrics — Länge von Kopf, Mittelstück, Schwanz und gesamt, eine Zeile je Zelle',
+          'Sperm Metrics — Länge von Kopf, Mittelstück, Schwanz und gesamt, eine Zeile je Zelle. Jedes Bild wird mit seiner eigenen Pixelgröße umgerechnet (Spalte Pixel Size): Bei einem Olympus-cellSens-JPEG wird sie beim Hochladen gelesen, der beim Export eingegebene Wert gilt für Bilder ohne eigene',
         microtubules:
           'Microtubule Metrics + Channel Totals — Länge und Intensität je Kanal, eine Zeile je Einzelbild, Filament und Kanal',
         microcapsule:

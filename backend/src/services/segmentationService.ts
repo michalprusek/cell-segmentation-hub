@@ -3364,10 +3364,10 @@ export class SegmentationService {
       throw new Error('Image not found');
     }
 
-    // The scale, image first then project. Nothing fills the image column —
-    // measured 2026-09-07, all 10 857 production rows have it null — so the
-    // project's value is what actually arrives; the image's is kept ahead of it
-    // so a calibrated ND2 can win in future without a second change here.
+    // The scale, image first then project. Little fills the image column —
+    // measured 2026-09-07, all 10 857 production rows had it null; since
+    // 2026-10-14 an Olympus cellSens JPEG fills it at upload — so the project's
+    // value is what usually arrives, and the image's wins when it has one.
     const projectScale = await this.prisma.project.findUnique({
       where: { id: image.projectId },
       select: { pixelSizeUm: true },

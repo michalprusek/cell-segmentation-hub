@@ -140,12 +140,20 @@ describe('generateMetricsGuide — type-specific dispatch', () => {
       expect(guide).not.toContain('Time-Series Analysis');
     });
 
-    it('reports micrometer units when scale is configured', () => {
+    // The sperm report converts each image by its own pixel size, so its guide
+    // must not claim one export-wide scale — not even when one was entered,
+    // because an image's own calibration still wins over it.
+    it('describes the per-image scale instead of one export-wide value', () => {
       const scaled = generateMetricsGuide('sperm', scaledOptions);
-      expect(scaled).toContain('## Scale Conversion');
-      expect(scaled).toContain('0.5 um/pixel');
-      // Each length metric carries an explicit Units bullet.
-      expect(scaled).toMatch(/### Head Length[\s\S]+?\*\*Units\*\*: um/);
+      expect(scaled).toContain('## Units and Scale');
+      expect(scaled).toContain('Pixel Size (µm/px)');
+      expect(scaled).toContain('Olympus cellSens');
+      expect(scaled).not.toContain('## Scale Conversion');
+      expect(scaled).not.toContain('0.5 um/pixel');
+      expect(scaled).toMatch(
+        /### Head Length[\s\S]+?\*\*Units\*\*: µm, or px when no image has a pixel size/
+      );
+      expect(generateMetricsGuide('sperm', baseOptions)).toBe(scaled);
     });
   });
 

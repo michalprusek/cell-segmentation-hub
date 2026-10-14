@@ -143,7 +143,7 @@ vi.mock('fs/promises', () => ({
 }));
 
 import { ImageService } from '../imageService';
-import { cellSensJpeg } from './fixtures/cellSensJpeg';
+import { cellSensJpeg } from '../../test/fixtures/cellSensJpeg';
 import { logger } from '../../utils/logger';
 import { getStorageProvider } from '../../storage/index';
 import * as fsModule from 'fs';

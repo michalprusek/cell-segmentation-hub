@@ -8,7 +8,7 @@ import {
   jpeg,
   makerNote,
   um,
-} from './fixtures/cellSensJpeg';
+} from '../../test/fixtures/cellSensJpeg';
 
 const DIMS = { width: 4104, height: 2174 };
 

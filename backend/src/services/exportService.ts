@@ -1913,8 +1913,9 @@ export class ExportService {
     mlGate?: Semaphore,
     /** The scale the user typed on the export modal. This is the ONLY source
      *  of a pixel size in practice: measured 2026-09-07, not one of the 10 857
-     *  production images carries `pixelSizeUm` — the column is null for every
-     *  row of every project type. Reading only the column would make this
+     *  production images carried `pixelSizeUm` — the column was null for
+     *  every row of every project type (since 2026-10-14 a cellSens JPEG
+     *  fills it at upload; nothing else does). Reading only the column would make this
      *  export skip every frame with "pixel size unknown".
      *
      *  The caller resolves modal-entry THEN project calibration, so a scale

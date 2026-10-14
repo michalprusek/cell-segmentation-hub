@@ -108,18 +108,31 @@ frame of that track** when you save.
 Metrics sheet **`Sperm Metrics`**, one row per cell:
 
 `Image Name`, `Instance ID`, `Head Length`, `Midpiece Length`, `Tail Length`,
-`Total Length`.
+`Total Length`, `Pixel Size (µm/px)`.
 
 Lengths are the sum of consecutive segment distances along each polyline (open
-paths — the loop is not closed), converted to micrometres when you supply a
-pixel size at export.
+paths — the loop is not closed). **Each image is converted by its own pixel
+size**, written on every row, taken from — in order:
+
+1. **the file itself.** An Olympus cellSens JPEG carries its calibration in the
+   Exif MakerNote and it is read at upload. It is used only when the
+   calibration was written for the image's actual pixel size, so a JPEG resized
+   after export is treated as uncalibrated rather than mis-scaled. (A DP28 at
+   40x is 0.08625 µm/px at 4104 × 2174 and 3840 × 2160.)
+2. **the pixel size entered at export,**
+3. **the pixel size set on the project.**
+
+Columns are in µm when any image has a pixel size and in px when none does. In
+a µm export an image with no pixel size at all gets **empty** length cells and
+is named in the export's warnings — a pixel count under a µm header would read
+as a length about 12x too large.
+
+Colour TIFFs from cellSens XV are not read yet; give them a pixel size at export
+or on the project (the lab's 2052 × 1086 TIFFs are 0.1725 µm/px — half the
+JPEG resolution over the same field).
 
 Polylines with no `instanceId` are excluded as orphans. If a project has no
 polyline data at all, the export falls back to the standard polygon report.
-
-The editor also offers a per-image **sperm** export tab producing
-`sperm_metrics_<image>_<date>.xlsx`; unlike the project export it lists pixel
-columns and adds micrometre columns only when you enter a calibration.
 
 ### Annotation exports
 
