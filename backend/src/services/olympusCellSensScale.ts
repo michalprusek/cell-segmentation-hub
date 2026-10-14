@@ -1,5 +1,8 @@
 /**
- * Reads the µm-per-pixel calibration that Olympus cellSens writes into a JPEG.
+ * Reads the µm-per-pixel calibration that Olympus cellSens writes into a JPEG
+ * or a TIFF.
+ *
+ * ── JPEG ──────────────────────────────────────────────────────────────────
  *
  * Where it lives. cellSens (Standard 4.2, measured on an Olympus DP28) puts an
  * EXIF MakerNote (tag 0x927C in the Exif sub-IFD) that starts with the 8 bytes
@@ -25,6 +28,27 @@
  * In particular a calibration whose `length` differs from the image's own size
  * means the file was resampled after cellSens wrote it, so its scale no longer
  * describes these pixels.
+ *
+ * ── TIFF ──────────────────────────────────────────────────────────────────
+ *
+ * cellSens XV writes the calibration TWICE: in the proprietary `OlympusSIS`
+ * block (tag 33560; layout from tifffile 2025.5.10 `read_sis`, the only
+ * reader there is — "No specification is available. Only few fields are
+ * known.") and as OME-XML `PhysicalSizeX/Y` in `ImageDescription`, whose
+ * `<Pixels>` element also carries `SizeX`/`SizeY`. Both are required and must
+ * agree, and the OME size must equal the decoded size — the TIFF counterpart
+ * of the JPEG's calibration `length` check. Measured 2026-10-14 on every TIFF
+ * in production (1 148 files): 141 carry both and every one agrees — 2052x1086
+ * and 4096x3000 at 0.1725 µm/px, 4104x2174 at 0.08625 (one of those with its
+ * OME in nm). 211 more carry the SIS block alone, written by analySIS 5.0;
+ * with no OME there is nothing that ties their scale to the pixel grid, so
+ * they are refused (`no-ome`) rather than trusted.
+ *
+ * Deliberately NOT a source: TIFF `XResolution`/`ResolutionUnit`. Nearly every
+ * TIFF carries one, usually a display resolution (96 or 72 dpi on most files
+ * here), and 72 dpi reads as 352.8 µm/px — inside the accepted range, so no
+ * bound would catch it. (The video stack extractor's `_detect_pixel_size_um`
+ * does fall back to it; a still image does not.)
  */
 import { inflateSync } from 'zlib';
 
@@ -33,7 +57,7 @@ export type CellSensScaleResult =
   | { pixelSizeUm: null; reason: CellSensRejectReason };
 
 export type CellSensRejectReason =
-  | 'not-jpeg'
+  | 'unsupported-format'
   | 'no-exif'
   | 'no-makernote'
   | 'not-cellsens'
@@ -43,9 +67,14 @@ export type CellSensRejectReason =
   | 'anisotropic'
   | 'no-calibration'
   | 'size-mismatch'
-  | 'out-of-range';
+  | 'out-of-range'
+  | 'no-sis'
+  | 'no-ome'
+  | 'sources-disagree';
 
 const MAKERNOTE_TAG = 0x927c;
+const IMAGE_DESCRIPTION_TAG = 270;
+const OLYMPUS_SIS_TAG = 33560;
 const EXIF_IFD_POINTER_TAG = 0x8769;
 const CELLSENS_MAGIC = Buffer.from('OLYXV\0', 'latin1');
 /** The two bytes after the magic. Only 2 has been observed; another value may
@@ -201,8 +230,11 @@ function toMicrometres(q: Quantity | undefined): number | null {
 const sameScale = (a: number, b: number): boolean =>
   Math.abs(a - b) <= ISOTROPY_REL_TOL * Math.max(Math.abs(a), Math.abs(b));
 
+type Dims = { width?: number | null; height?: number | null };
+
 /**
- * The image's pixel size in µm, read from an Olympus cellSens MakerNote.
+ * The image's pixel size in µm, read from Olympus cellSens metadata in a JPEG
+ * (Exif MakerNote) or a TIFF (OlympusSIS + OME-XML).
  *
  * `width`/`height` are the decoded pixel dimensions of the same bytes; without
  * them the calibration cannot be tied to this pixel grid and nothing is
@@ -210,11 +242,22 @@ const sameScale = (a: number, b: number): boolean =>
  */
 export function readCellSensPixelSizeUm(
   buf: Buffer,
-  dims: { width?: number | null; height?: number | null }
+  dims: Dims
 ): CellSensScaleResult {
-  if (buf.length < 4 || buf[0] !== 0xff || buf[1] !== 0xd8) {
-    return reject('not-jpeg');
+  if (buf.length >= 4 && buf[0] === 0xff && buf[1] === 0xd8) {
+    return readJpeg(buf, dims);
   }
+  if (
+    buf.length >= 8 &&
+    ((buf[0] === 0x49 && buf[1] === 0x49) ||
+      (buf[0] === 0x4d && buf[1] === 0x4d))
+  ) {
+    return readTiff(buf, dims);
+  }
+  return reject('unsupported-format');
+}
+
+function readJpeg(buf: Buffer, dims: Dims): CellSensScaleResult {
   const tiff = findExifTiff(buf);
   if (!tiff) {
     return reject('no-exif');
@@ -287,4 +330,152 @@ export function readCellSensPixelSizeUm(
   // that binary noise (which would otherwise surface verbatim in the export
   // dialog) and change no measurement.
   return { pixelSizeUm: Number(sx.toPrecision(12)) };
+}
+
+const finiteRange = (v: number): boolean =>
+  v >= MIN_PIXEL_SIZE_UM && v <= MAX_PIXEL_SIZE_UM;
+
+/** OlympusSIS pixel size in µm, per tifffile `read_sis`: a little-endian
+ *  `SIS0` header of 60 bytes whose last int16 is the entry count, then 8-byte
+ *  entries (int16 type, int16 count, uint32 absolute offset). Type 1 is
+ *  "general data": int16 length exponent at +10, float64 x / y calibration at
+ *  +12 / +20, in metres after `* 10^exponent`. */
+function readSisUm(
+  buf: Buffer,
+  sisOffset: number
+): { x: number; y: number } | null {
+  if (
+    sisOffset + 60 > buf.length ||
+    buf.toString('latin1', sisOffset, sisOffset + 4) !== 'SIS0'
+  ) {
+    return null;
+  }
+  const count = buf.readInt16LE(sisOffset + 58);
+  if (count <= 0 || sisOffset + 60 + count * 8 > buf.length) {
+    return null;
+  }
+  for (let i = 0; i < count; i++) {
+    const e = sisOffset + 60 + i * 8;
+    if (buf.readInt16LE(e) !== 1) {
+      continue;
+    }
+    const off = buf.readUInt32LE(e + 4);
+    if (off + 28 > buf.length) {
+      return null;
+    }
+    const scale = 10 ** buf.readInt16LE(off + 10) * 1e6; // metres -> µm
+    return {
+      x: buf.readDoubleLE(off + 12) * scale,
+      y: buf.readDoubleLE(off + 20) * scale,
+    };
+  }
+  return null;
+}
+
+/** `PhysicalSize*Unit` values of OME's UnitsLength that a pixel can sensibly
+ *  have, in µm. OME's default when the attribute is absent is µm. Both the
+ *  micro sign (U+00B5) and the Greek mu (U+03BC) occur in the wild. */
+const OME_UNIT_UM: Record<string, number> = {
+  'µm': 1,
+  'μm': 1,
+  um: 1,
+  nm: 1e-3,
+  mm: 1e3,
+  m: 1e6,
+};
+
+/** The one OME `<Pixels>` element's size and µm pixel size, or a reason. A
+ *  file describing several images is refused: which one is page 0 is not
+ *  something to guess. */
+function readOme(
+  description: string
+):
+  | { sizeX: number; sizeY: number; x: number; y: number }
+  | 'no-ome'
+  | 'bad-unit' {
+  const elements = description.match(/<(?:[\w-]+:)?Pixels\b[^>]*>/g);
+  if (!elements || elements.length !== 1) {
+    return 'no-ome';
+  }
+  const attrs: Record<string, string> = {};
+  for (const m of elements[0].matchAll(/([\w:]+)="([^"]*)"/g)) {
+    attrs[m[1]] = m[2];
+  }
+  const sizeX = Number(attrs.SizeX);
+  const sizeY = Number(attrs.SizeY);
+  const axis = (v?: string, unit?: string): number | null => {
+    const f = OME_UNIT_UM[unit ?? 'µm'];
+    const n = v === undefined ? NaN : Number(v);
+    return f !== undefined && Number.isFinite(n) ? n * f : null;
+  };
+  const x = axis(attrs.PhysicalSizeX, attrs.PhysicalSizeXUnit);
+  const y = axis(attrs.PhysicalSizeY, attrs.PhysicalSizeYUnit);
+  if (!Number.isInteger(sizeX) || !Number.isInteger(sizeY)) {
+    return 'no-ome';
+  }
+  if (x === null || y === null) {
+    return 'bad-unit';
+  }
+  return { sizeX, sizeY, x, y };
+}
+
+function readTiff(buf: Buffer, dims: Dims): CellSensScaleResult {
+  const le = buf[0] === 0x49;
+  if ((le ? buf.readUInt16LE(2) : buf.readUInt16BE(2)) !== 42) {
+    return reject('unsupported-format'); // BigTIFF (43) or not a TIFF
+  }
+  const ifd0 = readIfd(
+    buf,
+    le ? buf.readUInt32LE(4) : buf.readUInt32BE(4),
+    le
+  );
+  const sisEntry = ifd0?.get(OLYMPUS_SIS_TAG);
+  if (!ifd0 || !sisEntry) {
+    return reject('not-cellsens');
+  }
+  // The tag is a LONG whose (inline) value is the absolute offset of the block.
+  const sis =
+    sisEntry.valueOffset + 4 <= buf.length
+      ? readSisUm(
+          buf,
+          le
+            ? buf.readUInt32LE(sisEntry.valueOffset)
+            : buf.readUInt32BE(sisEntry.valueOffset)
+        )
+      : null;
+  if (!sis) {
+    return reject('no-sis');
+  }
+
+  const desc = ifd0.get(IMAGE_DESCRIPTION_TAG);
+  if (!desc || desc.valueOffset + desc.count > buf.length) {
+    return reject('no-ome');
+  }
+  const ome = readOme(
+    buf
+      .toString('utf8', desc.valueOffset, desc.valueOffset + desc.count)
+      .replace(/\0+$/, '')
+  );
+  if (typeof ome === 'string') {
+    return reject(ome);
+  }
+
+  if (!sameScale(sis.x, sis.y) || !sameScale(ome.x, ome.y)) {
+    return reject('anisotropic');
+  }
+  if (!sameScale(sis.x, ome.x)) {
+    return reject('sources-disagree');
+  }
+  if (
+    !dims.width ||
+    !dims.height ||
+    ome.sizeX !== dims.width ||
+    ome.sizeY !== dims.height
+  ) {
+    return reject('size-mismatch');
+  }
+  if (!finiteRange(ome.x)) {
+    return reject('out-of-range');
+  }
+  return { pixelSizeUm: Number(ome.x.toPrecision(12)) };
 }

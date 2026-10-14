@@ -72,7 +72,7 @@ export interface PaginatedImages {
 /**
  * The pixel size a still image carries in its own file, or null.
  *
- * Only Olympus cellSens JPEGs are read today (see `olympusCellSensScale.ts`).
+ * Only Olympus cellSens JPEGs and TIFFs are read (see `olympusCellSensScale.ts`).
  * Never throws: a calibration that cannot be read must not cost the user the
  * upload, and null is the state every consumer already handles — the export
  * then falls back to the scale typed in the dialog or set on the project.
@@ -94,7 +94,7 @@ function readUploadPixelSizeUm(
     // calibrated and is not being treated as such. Every other reason just
     // means "no cellSens calibration here", which is most files.
     if (
-      result.reason !== 'not-jpeg' &&
+      result.reason !== 'unsupported-format' &&
       result.reason !== 'no-exif' &&
       result.reason !== 'no-makernote' &&
       result.reason !== 'not-cellsens'

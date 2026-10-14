@@ -143,7 +143,7 @@ vi.mock('fs/promises', () => ({
 }));
 
 import { ImageService } from '../imageService';
-import { cellSensJpeg } from '../../test/fixtures/cellSensJpeg';
+import { cellSensJpeg, cellSensTiff } from '../../test/fixtures/cellSens';
 import { logger } from '../../utils/logger';
 import { getStorageProvider } from '../../storage/index';
 import * as fsModule from 'fs';
@@ -399,6 +399,19 @@ describe('ImageService — upload stores the pixel size read from the file', () 
       jpegFile(cellSensJpeg()),
     ]);
     expect(createdPixelSize()).toBeNull();
+  });
+
+  it('writes the scale of a cellSens XV TIFF too', async () => {
+    storageMock.upload.mockResolvedValueOnce({
+      ...mockUploadResult,
+      width: 2052,
+      height: 1086,
+      mimeType: 'image/tiff',
+    });
+    await makeService().uploadImages('proj-1', 'user-1', [
+      { ...makeFile('Image_7.tif', 'image/tiff'), buffer: cellSensTiff() },
+    ]);
+    expect(createdPixelSize()).toBe(0.1725);
   });
 
   it('stores null for a file without cellSens metadata, and still uploads it', async () => {

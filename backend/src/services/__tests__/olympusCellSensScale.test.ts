@@ -4,11 +4,13 @@ import { readCellSensPixelSizeUm } from '../olympusCellSensScale';
 import {
   cellSensJpeg,
   cellSensJson,
+  cellSensTiff,
+  omeXml,
   exifTiff,
   jpeg,
   makerNote,
   um,
-} from '../../test/fixtures/cellSensJpeg';
+} from '../../test/fixtures/cellSens';
 
 const DIMS = { width: 4104, height: 2174 };
 
@@ -126,7 +128,7 @@ describe('readCellSensPixelSizeUm', () => {
     expect(
       readCellSensPixelSizeUm(Buffer.from('\x89PNG\r\n\x1a\n', 'latin1'), DIMS)
         .reason
-    ).toBe('not-jpeg');
+    ).toBe('unsupported-format');
   });
 
   // A byte search for "OLYXV" would accept both of these.
@@ -162,6 +164,146 @@ describe('readCellSensPixelSizeUm', () => {
     for (let n = 0; n < full.length; n += 7) {
       expect(() =>
         readCellSensPixelSizeUm(full.subarray(0, n), DIMS)
+      ).not.toThrow();
+    }
+  });
+});
+
+describe('readCellSensPixelSizeUm — cellSens XV TIFF', () => {
+  const XV = { width: 2052, height: 1086 };
+
+  it('reads the new-PC calibration (2052x1086, 0.1725 µm/px)', () => {
+    expect(readCellSensPixelSizeUm(cellSensTiff(), XV)).toEqual({
+      pixelSizeUm: 0.1725,
+    });
+  });
+
+  it('reads big-endian TIFF (the SIS block itself is always little-endian)', () => {
+    expect(
+      readCellSensPixelSizeUm(cellSensTiff({ le: false }), XV).pixelSizeUm
+    ).toBe(0.1725);
+  });
+
+  it('converts an OME pixel size written in nm (one real file has it)', () => {
+    const description = omeXml({
+      sizeX: 4104,
+      sizeY: 2174,
+      x: '86.250000000000057',
+      unit: 'nm',
+    });
+    const buf = cellSensTiff({ description, sis: { xCal: 0.08625 } });
+    expect(
+      readCellSensPixelSizeUm(buf, { width: 4104, height: 2174 }).pixelSizeUm
+    ).toBe(0.08625);
+  });
+
+  it('applies the SIS length exponent', () => {
+    const buf = cellSensTiff({ sis: { xCal: 1.725e-7, lenExp: 0 } });
+    expect(readCellSensPixelSizeUm(buf, XV).pixelSizeUm).toBe(0.1725);
+  });
+
+  it('accepts an unprefixed <Pixels> element and the Greek mu', () => {
+    const description = omeXml({ unit: 'μm' }, { prefix: '' });
+    expect(
+      readCellSensPixelSizeUm(cellSensTiff({ description }), XV).pixelSizeUm
+    ).toBe(0.1725);
+  });
+
+  // analySIS 5.0 writes the SIS block alone: 211 production files, nothing
+  // tying the scale to the pixel grid.
+  it('refuses a SIS block with no OME to check it against', () => {
+    expect(
+      readCellSensPixelSizeUm(cellSensTiff({ description: null }), XV).reason
+    ).toBe('no-ome');
+    expect(
+      readCellSensPixelSizeUm(
+        cellSensTiff({ description: 'analySIS image' }),
+        XV
+      ).reason
+    ).toBe('no-ome');
+  });
+
+  it('refuses when SIS and OME disagree', () => {
+    const buf = cellSensTiff({ sis: { xCal: 0.08625 } });
+    expect(readCellSensPixelSizeUm(buf, XV).reason).toBe('sources-disagree');
+  });
+
+  it('refuses a file whose OME size is not the decoded size (resampled)', () => {
+    expect(
+      readCellSensPixelSizeUm(cellSensTiff(), { width: 1026, height: 543 })
+        .reason
+    ).toBe('size-mismatch');
+    expect(readCellSensPixelSizeUm(cellSensTiff(), {}).reason).toBe(
+      'size-mismatch'
+    );
+  });
+
+  it('refuses an OME file describing several images', () => {
+    const description = omeXml({}, { count: 2 });
+    expect(
+      readCellSensPixelSizeUm(cellSensTiff({ description }), XV).reason
+    ).toBe('no-ome');
+  });
+
+  it('refuses an OME unit it cannot convert, and anisotropic pixels', () => {
+    expect(
+      readCellSensPixelSizeUm(
+        cellSensTiff({ description: omeXml({ unit: 'pixel' }) }),
+        XV
+      ).reason
+    ).toBe('bad-unit');
+    expect(
+      readCellSensPixelSizeUm(
+        cellSensTiff({ description: omeXml({ y: '0.2' }) }),
+        XV
+      ).reason
+    ).toBe('anisotropic');
+    expect(
+      readCellSensPixelSizeUm(cellSensTiff({ sis: { yCal: 0.2 } }), XV).reason
+    ).toBe('anisotropic');
+  });
+
+  it('refuses values outside the accepted bounds', () => {
+    const buf = cellSensTiff({
+      description: omeXml({ x: '5000' }),
+      sis: { xCal: 5000 },
+    });
+    expect(readCellSensPixelSizeUm(buf, XV).reason).toBe('out-of-range');
+  });
+
+  // OME alone (Bio-Formats exports) and the TIFF resolution tags are not
+  // sources: 72 dpi would read as 352.8 µm/px, inside every bound.
+  it('ignores TIFFs without the SIS block, whatever else they carry', () => {
+    expect(
+      readCellSensPixelSizeUm(
+        cellSensTiff({
+          sis: null,
+          extraTags: [
+            [282, 4, 1, 72],
+            [296, 3, 1, 2],
+          ],
+        }),
+        XV
+      ).reason
+    ).toBe('not-cellsens');
+  });
+
+  it('refuses a corrupt SIS block and BigTIFF', () => {
+    const buf = cellSensTiff();
+    const sisAt = buf.indexOf('SIS0', 0, 'latin1');
+    const bad = Buffer.from(buf);
+    bad.write('XXXX', sisAt, 'latin1');
+    expect(readCellSensPixelSizeUm(bad, XV).reason).toBe('no-sis');
+    expect(
+      readCellSensPixelSizeUm(cellSensTiff({ magic: 43 }), XV).reason
+    ).toBe('unsupported-format');
+  });
+
+  it('survives every truncation without throwing', () => {
+    const full = cellSensTiff();
+    for (let n = 0; n < full.length; n += 5) {
+      expect(() =>
+        readCellSensPixelSizeUm(full.subarray(0, n), XV)
       ).not.toThrow();
     }
   });
