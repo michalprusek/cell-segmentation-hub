@@ -47,12 +47,14 @@ vi.mock('@/contexts/ThemeContext', () => ({
   useTheme: () => ({ theme: 'light', setTheme: vi.fn() }),
 }));
 
+const { mockSetLanguage } = vi.hoisted(() => ({ mockSetLanguage: vi.fn() }));
+
 // LanguageProvider also calls useAuth; mock useLanguage directly so the
 // component sees real translated strings without the provider needing auth.
 vi.mock('@/contexts/useLanguage', () => ({
   useLanguage: vi.fn(() => ({
     language: 'en',
-    setLanguage: vi.fn(),
+    setLanguage: mockSetLanguage,
     t: (key: string, fallback?: string) => {
       // Minimal translation table for strings used by DashboardHeader
       const translations: Record<string, string> = {
@@ -105,6 +107,26 @@ vi.mock('@/components/feedback/FeedbackButton', () => ({
 }));
 
 describe('DashboardHeader', () => {
+  // The real LanguageSwitcher, not a mock: what is under test is that a
+  // signed-in user can reach it from the header at all.
+  it('offers the language switch beside the profile, desktop and mobile', async () => {
+    const user = userEvent.setup();
+    render(<DashboardHeader />);
+
+    const switches = screen.getAllByRole('button', {
+      name: 'accessibility.selectLanguage',
+    });
+    expect(switches).toHaveLength(2);
+    // Desktop: immediately before the profile dropdown.
+    expect(switches[0].nextElementSibling).toBe(
+      screen.getByTestId('user-dropdown')
+    );
+
+    await user.click(switches[0]);
+    await user.click(await screen.findByText('English'));
+    expect(mockSetLanguage).toHaveBeenCalledWith('en');
+  });
+
   const mockNavigate = vi.fn();
   const mockUseLocation = vi.mocked(router.useLocation);
   const mockUseNavigate = vi.mocked(router.useNavigate);
@@ -253,14 +275,16 @@ describe('DashboardHeader', () => {
     const user = userEvent.setup();
     render(<DashboardHeader />);
 
-    const menuButton = document.querySelector('.md\\:hidden button');
-    if (menuButton) {
-      await user.click(menuButton);
-      expect(screen.getByTestId('mobile-menu')).toHaveAttribute(
-        'data-open',
-        'true'
-      );
-    }
+    // The language switch sits before it in the same row.
+    const menuButton = document.querySelector(
+      '.md\\:hidden > button:last-of-type'
+    );
+    expect(menuButton).not.toBeNull();
+    await user.click(menuButton!);
+    expect(screen.getByTestId('mobile-menu')).toHaveAttribute(
+      'data-open',
+      'true'
+    );
   });
 
   it('hides header on segmentation editor page', () => {

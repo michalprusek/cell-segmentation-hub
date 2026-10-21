@@ -21,10 +21,6 @@ const LanguageSwitcher = () => {
     { value: 'zh' as Language, name: '中文', flag: '🇨🇳' },
   ];
 
-  const _currentLanguage = languageOptions.find(
-    option => option.value === language
-  );
-
   const handleLanguageChange = async (newLanguage: Language) => {
     await setLanguage(newLanguage);
   };

@@ -174,7 +174,7 @@ export const PAN_VISIBILITY_RATIO = 0.5;
  * It replaced a margin of 0.8x the viewport's longer side around the centred
  * position, applied only below zoom 1 (above it, panning was unlimited). That
  * margin did not grow with the image, so on a 4104 x 2174 sperm frame in a
- * 1300 px wide canvas the rightmost ~340 screen px could not be reached at
+ * 1300 x 800 canvas the rightmost 391 screen px could not be reached at
  * zoom 0.99 — a sperm at the border slid out of view as you zoomed toward it
  * and could not be panned back — and crossing zoom 1 switched the clamp off.
  *
