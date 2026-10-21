@@ -1678,7 +1678,7 @@ export default {
         step2: 'Zadejte e-mailovou adresu a zvolte heslo',
         step3: 'Doplňte profil se svým jménem a institucí',
         step4:
-          'V Nastavení zvolte jazyk a motiv — segmentační model se nastavuje u každého projektu zvlášť',
+          'Jazyk přepnete ikonou jazyka vedle profilu v záhlaví (a také v Nastavení, spolu s motivem) — segmentační model se nastavuje u každého projektu zvlášť',
       },
       firstProject: 'První projekt',
       projectDescription:
@@ -2061,7 +2061,7 @@ export default {
         saving:
           'Ukládání na povel: tlačítkem Uložit, klávesou Ctrl+S, nebo automaticky při přechodu na jiný snímek.',
         zoomPan:
-          'Přiblížení k ukazateli myši, posun tažením a přizpůsobení snímku klávesou R nebo 0. Obrysy, body i jejich zvýraznění mají na obrazovce od přiblížení 0,7× výše stejnou velikost; při větším oddálení se obrysy ztenčují, aby nezakryly velký snímek zobrazený zmenšeně.',
+          'Přiblížení k ukazateli myši, posun tažením a přizpůsobení snímku klávesou R nebo 0. Obrysy, body i jejich zvýraznění mají na obrazovce od přiblížení 0,7× výše stejnou velikost; při větším oddálení se obrysy ztenčují, aby nezakryly velký snímek zobrazený zmenšeně. Při jakémkoli přiblížení lze snímek posunout tak, aby se kterýkoli jeho okraj dostal až doprostřed zobrazení.',
         polygonManagement:
           'Seznam tvarů s vícenásobným výběrem, skrýváním, přejmenováním a mazáním.',
         keyboardShortcuts:

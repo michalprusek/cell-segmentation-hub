@@ -1720,7 +1720,7 @@ export default {
         step2: 'Geben Sie Ihre E-Mail-Adresse ein und wählen Sie ein Passwort',
         step3: 'Vervollständigen Sie Ihr Profil mit Name und Einrichtung',
         step4:
-          'Legen Sie in den Einstellungen Sprache und Design fest — das Segmentierungsmodell wird je Projekt gewählt',
+          'Die Sprache wechseln Sie über das Sprachsymbol neben Ihrem Profil in der Kopfzeile (auch in den Einstellungen, zusammen mit dem Design) — das Segmentierungsmodell wird je Projekt gewählt',
       },
       firstProject: 'Ihr erstes Projekt',
       projectDescription:
@@ -2108,7 +2108,7 @@ export default {
         saving:
           'Speichern auf Zuruf: Schaltfläche Speichern, Strg+S, oder automatisch beim Wechsel zu einem anderen Bild.',
         zoomPan:
-          'Zoom am Mauszeiger, Verschieben per Ziehen und Einpassen mit R oder 0. Konturen, Punkte und ihre Hervorhebung behalten ab Zoom 0,7× dieselbe Größe auf dem Bildschirm; weiter herausgezoomt werden die Konturen dünner, damit sie ein verkleinert dargestelltes großes Bild nicht verdecken.',
+          'Zoom am Mauszeiger, Verschieben per Ziehen und Einpassen mit R oder 0. Konturen, Punkte und ihre Hervorhebung behalten ab Zoom 0,7× dieselbe Größe auf dem Bildschirm; weiter herausgezoomt werden die Konturen dünner, damit sie ein verkleinert dargestelltes großes Bild nicht verdecken. Bei jedem Zoom lässt sich das Bild verschieben, bis jeder seiner Ränder die Mitte der Ansicht erreicht.',
         polygonManagement:
           'Eine Formenliste mit Mehrfachauswahl, Ein- und Ausblenden, Umbenennen und Löschen.',
         keyboardShortcuts:
