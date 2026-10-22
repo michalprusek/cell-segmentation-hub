@@ -229,7 +229,10 @@ export default {
     noProjectsDescription:
       'Sie haben noch keine Projekte erstellt. Erstellen Sie Ihr erstes Projekt, um zu beginnen.',
     noImagesDescription: 'Laden Sie einige Bilder hoch, um zu beginnen',
-    searchProjectsPlaceholder: 'Projekte suchen...',
+    searchProjectsPlaceholder: 'Projekte und Ordner suchen…',
+    searchResults: '{{count}} Treffer für „{{query}}“ in allen Ordnern',
+    searchNoResults: 'Kein Name in irgendeinem Ordner passt dazu.',
+    clearSearch: 'Suche löschen',
     searchImagesPlaceholder: 'Bilder nach Namen suchen...',
     sortBy: 'Sortieren nach',
     name: 'Name',
@@ -1724,7 +1727,7 @@ export default {
       },
       firstProject: 'Ihr erstes Projekt',
       projectDescription:
-        'Ein Projekt enthält Bilder und die daraus erzeugten Segmentierungen. Sein Typ bestimmt, welche Modelle laufen, was der Editor zeigt und wie exportiert wird — wählen Sie ihn also bewusst.',
+        'Ein Projekt enthält Bilder und die daraus erzeugten Segmentierungen. Sein Typ bestimmt, welche Modelle laufen, was der Editor zeigt und wie exportiert wird — wählen Sie ihn also bewusst. Um ein Projekt wiederzufinden, tippen Sie seinen Namen in das Suchfeld über der Galerie: Es durchsucht alle Ordner auf einmal, ohne auf Groß-/Kleinschreibung und Akzente zu achten.',
       projectSteps: {
         step1: 'Klicken Sie im Dashboard auf „Neues Projekt“',
         step2: 'Geben Sie einen Namen und optional eine Beschreibung ein',

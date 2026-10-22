@@ -229,7 +229,11 @@ export default {
     noProjectsDescription:
       "Vous n'avez pas encore créé de projets. Créez votre premier projet pour commencer.",
     noImagesDescription: 'Téléchargez des images pour commencer',
-    searchProjectsPlaceholder: 'Rechercher des projets...',
+    searchProjectsPlaceholder: 'Rechercher des projets et des dossiers…',
+    searchResults:
+      '{{count}} résultat(s) pour « {{query}} » dans tous les dossiers',
+    searchNoResults: 'Aucun nom ne correspond, dans aucun dossier.',
+    clearSearch: 'Effacer la recherche',
     searchImagesPlaceholder: 'Rechercher des images par nom...',
     sortBy: 'Trier par',
     name: 'Nom',
@@ -1715,7 +1719,7 @@ export default {
       },
       firstProject: 'Votre premier projet',
       projectDescription:
-        'Un projet contient des images et les segmentations qui en découlent. Son type détermine les modèles disponibles, ce qu’affiche l’éditeur et la façon dont les résultats sont exportés : choisissez-le donc à bon escient.',
+        'Un projet contient des images et les segmentations qui en découlent. Son type détermine les modèles disponibles, ce qu’affiche l’éditeur et la façon dont les résultats sont exportés : choisissez-le donc à bon escient. Pour le retrouver, tapez son nom dans le champ de recherche au-dessus de la galerie : la recherche porte sur tous les dossiers à la fois, sans tenir compte de la casse ni des accents.',
       projectSteps: {
         step1: 'Depuis le tableau de bord, cliquez sur « Nouveau projet »',
         step2: 'Saisissez un nom et, si vous le souhaitez, une description',

@@ -228,7 +228,10 @@ export default {
     noProjectsDescription:
       'Zatím jste nevytvořili žádný projekt. Vytvořte svůj první projekt pro začátek.',
     noImagesDescription: 'Nahrajte několik obrázků pro začátek',
-    searchProjectsPlaceholder: 'Hledat projekty...',
+    searchProjectsPlaceholder: 'Hledat projekty a složky…',
+    searchResults: 'Nalezeno {{count}} pro „{{query}}“ ve všech složkách',
+    searchNoResults: 'Tomuto názvu neodpovídá nic v žádné složce.',
+    clearSearch: 'Zrušit hledání',
     searchImagesPlaceholder: 'Hledat obrázky podle názvu...',
     sortBy: 'Řadit podle',
     name: 'Název',
@@ -1682,7 +1685,7 @@ export default {
       },
       firstProject: 'První projekt',
       projectDescription:
-        'Projekt drží snímky a segmentace z nich vytvořené. Jeho typ určuje, jaké modely můžete spustit, co ukáže editor a jak se výsledky exportují — vybírejte tedy uvážlivě.',
+        'Projekt drží snímky a segmentace z nich vytvořené. Jeho typ určuje, jaké modely můžete spustit, co ukáže editor a jak se výsledky exportují — vybírejte tedy uvážlivě. Projekt pak snadno najdete, když jeho název napíšete do vyhledávání nad galerií: hledá ve všech složkách najednou a nezáleží na velikosti písmen ani na diakritice.',
       projectSteps: {
         step1: 'Na nástěnce klikněte na „Nový projekt“',
         step2: 'Zadejte název a volitelně popis',

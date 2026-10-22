@@ -8,7 +8,7 @@
 
 import React from 'react';
 import { AlertTriangle, CheckCircle2, Info } from 'lucide-react';
-import { normalizeForSearch } from './useDocsSearch';
+import { normalizeForSearch } from '@/lib/textSearch';
 import type { DocsBlock, DocsTone } from './docsContent';
 
 /**

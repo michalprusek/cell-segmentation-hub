@@ -236,7 +236,10 @@ export default {
     noProjectsDescription:
       "You haven't created any projects yet. Create your first project to get started.",
     noImagesDescription: 'Upload some images to get started',
-    searchProjectsPlaceholder: 'Search projects...',
+    searchProjectsPlaceholder: 'Search projects and folders…',
+    searchResults: 'Found {{count}} for “{{query}}” in all folders',
+    searchNoResults: 'Nothing matches this name in any folder.',
+    clearSearch: 'Clear search',
     searchImagesPlaceholder: 'Search images by name...',
     sortBy: 'Sort by',
     name: 'Name',
@@ -1710,7 +1713,7 @@ export default {
       },
       firstProject: 'Creating your first project',
       projectDescription:
-        'A project holds images and the segmentations made from them. Its type decides which models you can run, what the editor shows and how results are exported — so choose it deliberately.',
+        'A project holds images and the segmentations made from them. Its type decides which models you can run, what the editor shows and how results are exported — so choose it deliberately. To find one again, type its name in the search box above the gallery: it searches every folder at once, ignoring case and accents.',
       projectSteps: {
         step1: 'From your dashboard, click "New Project"',
         step2: 'Enter a name and an optional description',

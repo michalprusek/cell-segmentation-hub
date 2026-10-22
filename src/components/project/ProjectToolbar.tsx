@@ -28,6 +28,9 @@ import { logger } from '@/lib/logger';
 interface ProjectToolbarProps {
   searchTerm?: string;
   onSearchChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onSearchKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
+  /** Defaults to the image search's placeholder (the project page's box). */
+  searchPlaceholder?: string;
   sortField: 'name' | 'updatedAt' | 'segmentationStatus';
   sortDirection: 'asc' | 'desc';
   onSort: (field: 'name' | 'updatedAt' | 'segmentationStatus') => void;
@@ -86,6 +89,8 @@ interface ProjectToolbarProps {
 const ProjectToolbar = ({
   searchTerm,
   onSearchChange,
+  onSearchKeyDown,
+  searchPlaceholder,
   sortField,
   sortDirection,
   onSort,
@@ -294,9 +299,16 @@ const ProjectToolbar = ({
             </svg>
             <input
               className="pl-10 pr-4 w-full border rounded-md h-10 sm:h-9 text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white"
-              placeholder={t('dashboard.searchImagesPlaceholder')}
+              type="search"
+              placeholder={
+                searchPlaceholder ?? t('dashboard.searchImagesPlaceholder')
+              }
+              aria-label={
+                searchPlaceholder ?? t('dashboard.searchImagesPlaceholder')
+              }
               value={searchTerm}
               onChange={onSearchChange}
+              onKeyDown={onSearchKeyDown}
             />
           </div>
         )}

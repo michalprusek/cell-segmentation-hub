@@ -10,6 +10,8 @@ interface ProjectsTabProps {
   folders?: FolderViewItem[];
   viewMode: 'grid' | 'list';
   loading: boolean;
+  /** The "+ new project" card; off for search results, which it is not one of. */
+  showCreateCard?: boolean;
   onOpenProject: (id: string) => void;
   onProjectUpdate?: (projectId: string, action: string) => void;
   onRequestProjectMove?: (projectId: string) => void;
@@ -29,6 +31,7 @@ const ProjectsTab = ({
   folders,
   viewMode,
   loading,
+  showCreateCard = true,
   onOpenProject,
   onProjectUpdate,
   onRequestProjectMove,
@@ -47,7 +50,7 @@ const ProjectsTab = ({
       viewMode={viewMode}
       onOpenProject={onOpenProject}
       loading={loading}
-      showCreateCard={true}
+      showCreateCard={showCreateCard}
       onProjectUpdate={onProjectUpdate}
       onRequestProjectMove={onRequestProjectMove}
       hasAnyFolder={hasAnyFolder}

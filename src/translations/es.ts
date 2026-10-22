@@ -228,7 +228,11 @@ export default {
     noProjectsDescription:
       'Aún no has creado ningún proyecto. Crea tu primer proyecto para comenzar.',
     noImagesDescription: 'Sube algunas imágenes para comenzar',
-    searchProjectsPlaceholder: 'Buscar proyectos...',
+    searchProjectsPlaceholder: 'Buscar proyectos y carpetas…',
+    searchResults:
+      '{{count}} resultados para «{{query}}» en todas las carpetas',
+    searchNoResults: 'Ningún nombre coincide en ninguna carpeta.',
+    clearSearch: 'Borrar búsqueda',
     searchImagesPlaceholder: 'Buscar imágenes por nombre...',
     sortBy: 'Ordenar por',
     name: 'Nombre',
@@ -1709,7 +1713,7 @@ export default {
       },
       firstProject: 'Su primer proyecto',
       projectDescription:
-        'Un proyecto contiene imágenes y las segmentaciones obtenidas de ellas. Su tipo decide qué modelos puede ejecutar, qué muestra el editor y cómo se exportan los resultados, así que elíjalo con criterio.',
+        'Un proyecto contiene imágenes y las segmentaciones obtenidas de ellas. Su tipo decide qué modelos puede ejecutar, qué muestra el editor y cómo se exportan los resultados, así que elíjalo con criterio. Para encontrarlo después, escriba su nombre en el cuadro de búsqueda sobre la galería: busca en todas las carpetas a la vez, sin distinguir mayúsculas ni acentos.',
       projectSteps: {
         step1: 'En el panel principal, pulse «Nuevo proyecto»',
         step2: 'Introduzca un nombre y, si quiere, una descripción',
