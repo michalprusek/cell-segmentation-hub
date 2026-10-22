@@ -1713,7 +1713,7 @@ export default {
       },
       firstProject: 'Creating your first project',
       projectDescription:
-        'A project holds images and the segmentations made from them. Its type decides which models you can run, what the editor shows and how results are exported — so choose it deliberately.',
+        'A project holds images and the segmentations made from them. Its type decides which models you can run, what the editor shows and how results are exported — so choose it deliberately. To find one again, type its name in the search box above the gallery: it searches every folder at once, ignoring case and accents.',
       projectSteps: {
         step1: 'From your dashboard, click "New Project"',
         step2: 'Enter a name and an optional description',

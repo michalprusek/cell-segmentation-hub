@@ -1719,7 +1719,7 @@ export default {
       },
       firstProject: 'Votre premier projet',
       projectDescription:
-        'Un projet contient des images et les segmentations qui en découlent. Son type détermine les modèles disponibles, ce qu’affiche l’éditeur et la façon dont les résultats sont exportés : choisissez-le donc à bon escient.',
+        'Un projet contient des images et les segmentations qui en découlent. Son type détermine les modèles disponibles, ce qu’affiche l’éditeur et la façon dont les résultats sont exportés : choisissez-le donc à bon escient. Pour le retrouver, tapez son nom dans le champ de recherche au-dessus de la galerie : la recherche porte sur tous les dossiers à la fois, sans tenir compte de la casse ni des accents.',
       projectSteps: {
         step1: 'Depuis le tableau de bord, cliquez sur « Nouveau projet »',
         step2: 'Saisissez un nom et, si vous le souhaitez, une description',

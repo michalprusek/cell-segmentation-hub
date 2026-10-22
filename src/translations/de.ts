@@ -1727,7 +1727,7 @@ export default {
       },
       firstProject: 'Ihr erstes Projekt',
       projectDescription:
-        'Ein Projekt enthält Bilder und die daraus erzeugten Segmentierungen. Sein Typ bestimmt, welche Modelle laufen, was der Editor zeigt und wie exportiert wird — wählen Sie ihn also bewusst.',
+        'Ein Projekt enthält Bilder und die daraus erzeugten Segmentierungen. Sein Typ bestimmt, welche Modelle laufen, was der Editor zeigt und wie exportiert wird — wählen Sie ihn also bewusst. Um ein Projekt wiederzufinden, tippen Sie seinen Namen in das Suchfeld über der Galerie: Es durchsucht alle Ordner auf einmal, ohne auf Groß-/Kleinschreibung und Akzente zu achten.',
       projectSteps: {
         step1: 'Klicken Sie im Dashboard auf „Neues Projekt“',
         step2: 'Geben Sie einen Namen und optional eine Beschreibung ein',
