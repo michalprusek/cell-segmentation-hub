@@ -263,6 +263,24 @@ describe('Dashboard project search', () => {
     expect(mockNavigate).not.toHaveBeenCalled();
   });
 
+  it('does not jump on Enter while the projects are still loading', () => {
+    // Entering search refetches the flat listing; until it lands, the folder
+    // "Kančí spermie" looks like the sole match for "kan" though the project
+    // "kanec 1360x1024" matches too.
+    mockUseDashboardProjects.mockImplementation(() => ({
+      projects: [],
+      loading: true,
+      fetchError: null,
+      fetchProjects: vi.fn(),
+      removeProjectOptimistically: vi.fn(),
+      updateProjectOptimistically: vi.fn(),
+    }));
+    renderAt('/dashboard?q=kan');
+    fireEvent.keyDown(searchBox(), { key: 'Enter' });
+    expect(location.search).toBe('?q=kan');
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
   it('clears on Escape and on the clear button, back to the folder', async () => {
     const user = userEvent.setup();
     renderAt('/dashboard?folder=f-kanci&q=kanec');

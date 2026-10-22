@@ -399,8 +399,15 @@ const Dashboard = () => {
     (e: React.KeyboardEvent<HTMLInputElement>) => {
       if (e.key === 'Escape') {
         setSearchQuery('');
-      } else if (e.key === 'Enter' && searchResults) {
-        // Enter jumps only when the answer is unambiguous.
+      } else if (
+        e.key === 'Enter' &&
+        searchResults &&
+        !loading &&
+        foldersLoaded
+      ) {
+        // Enter jumps only when the answer is unambiguous — and it cannot be
+        // while either list is still loading: entering search refetches the
+        // projects, so for a moment a lone folder looks like the only match.
         const { projects: found, folders: foundFolders } = searchResults;
         if (found.length === 1 && foundFolders.length === 0) {
           handleOpenProject(found[0].id);
@@ -412,6 +419,8 @@ const Dashboard = () => {
     [
       setSearchQuery,
       searchResults,
+      loading,
+      foldersLoaded,
       handleOpenProject,
       handleOpenFolderFromSearch,
     ]
