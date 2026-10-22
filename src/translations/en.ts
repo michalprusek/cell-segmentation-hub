@@ -236,7 +236,10 @@ export default {
     noProjectsDescription:
       "You haven't created any projects yet. Create your first project to get started.",
     noImagesDescription: 'Upload some images to get started',
-    searchProjectsPlaceholder: 'Search projects...',
+    searchProjectsPlaceholder: 'Search projects and folders…',
+    searchResults: 'Found {{count}} for “{{query}}” in all folders',
+    searchNoResults: 'Nothing matches this name in any folder.',
+    clearSearch: 'Clear search',
     searchImagesPlaceholder: 'Search images by name...',
     sortBy: 'Sort by',
     name: 'Name',

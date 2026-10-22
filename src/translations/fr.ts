@@ -229,7 +229,11 @@ export default {
     noProjectsDescription:
       "Vous n'avez pas encore créé de projets. Créez votre premier projet pour commencer.",
     noImagesDescription: 'Téléchargez des images pour commencer',
-    searchProjectsPlaceholder: 'Rechercher des projets...',
+    searchProjectsPlaceholder: 'Rechercher des projets et des dossiers…',
+    searchResults:
+      '{{count}} résultat(s) pour « {{query}} » dans tous les dossiers',
+    searchNoResults: 'Aucun nom ne correspond, dans aucun dossier.',
+    clearSearch: 'Effacer la recherche',
     searchImagesPlaceholder: 'Rechercher des images par nom...',
     sortBy: 'Trier par',
     name: 'Nom',

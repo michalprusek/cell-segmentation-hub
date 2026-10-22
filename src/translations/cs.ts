@@ -228,7 +228,10 @@ export default {
     noProjectsDescription:
       'Zatím jste nevytvořili žádný projekt. Vytvořte svůj první projekt pro začátek.',
     noImagesDescription: 'Nahrajte několik obrázků pro začátek',
-    searchProjectsPlaceholder: 'Hledat projekty...',
+    searchProjectsPlaceholder: 'Hledat projekty a složky…',
+    searchResults: 'Nalezeno {{count}} pro „{{query}}“ ve všech složkách',
+    searchNoResults: 'Tomuto názvu neodpovídá nic v žádné složce.',
+    clearSearch: 'Zrušit hledání',
     searchImagesPlaceholder: 'Hledat obrázky podle názvu...',
     sortBy: 'Řadit podle',
     name: 'Název',

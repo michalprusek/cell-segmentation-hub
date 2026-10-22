@@ -229,7 +229,10 @@ export default {
     noProjectsDescription:
       'Sie haben noch keine Projekte erstellt. Erstellen Sie Ihr erstes Projekt, um zu beginnen.',
     noImagesDescription: 'Laden Sie einige Bilder hoch, um zu beginnen',
-    searchProjectsPlaceholder: 'Projekte suchen...',
+    searchProjectsPlaceholder: 'Projekte und Ordner suchen…',
+    searchResults: '{{count}} Treffer für „{{query}}“ in allen Ordnern',
+    searchNoResults: 'Kein Name in irgendeinem Ordner passt dazu.',
+    clearSearch: 'Suche löschen',
     searchImagesPlaceholder: 'Bilder nach Namen suchen...',
     sortBy: 'Sortieren nach',
     name: 'Name',

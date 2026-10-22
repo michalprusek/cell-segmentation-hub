@@ -224,7 +224,10 @@ export default {
     lastUpdated: '最后更新',
     noProjectsDescription: '您还没有创建任何项目。创建您的第一个项目开始使用。',
     noImagesDescription: '上传一些图像开始使用',
-    searchProjectsPlaceholder: '搜索项目...',
+    searchProjectsPlaceholder: '搜索项目和文件夹…',
+    searchResults: '在所有文件夹中找到 {{count}} 个与“{{query}}”匹配的结果',
+    searchNoResults: '所有文件夹中都没有匹配此名称的项目。',
+    clearSearch: '清除搜索',
     searchImagesPlaceholder: '按名称搜索图像...',
     sortBy: '排序方式',
     name: '名称',
@@ -1585,7 +1588,8 @@ export default {
         step1: '打开注册页面',
         step2: '填写电子邮箱并设置密码',
         step3: '在个人资料中补充姓名与所属机构',
-        step4: '通过页眉中个人资料旁的语言图标切换界面语言（也可在「设置」中与主题一起设置）— 分割模型在每个项目中单独设置',
+        step4:
+          '通过页眉中个人资料旁的语言图标切换界面语言（也可在「设置」中与主题一起设置）— 分割模型在每个项目中单独设置',
       },
       firstProject: '创建第一个项目',
       projectDescription:
