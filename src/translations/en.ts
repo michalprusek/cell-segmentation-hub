@@ -1706,7 +1706,7 @@ export default {
         step2: 'Enter your email address and choose a password',
         step3: 'Complete your profile with your name and institution',
         step4:
-          'In Settings, choose your language and theme — the segmentation model is set per project',
+          'Switch the language with the language icon beside your profile in the header (also in Settings, with the theme) — the segmentation model is set per project',
       },
       firstProject: 'Creating your first project',
       projectDescription:
@@ -2090,7 +2090,7 @@ export default {
         saving:
           'Saving on demand: the Save button, Ctrl+S, or automatically when you move to another image.',
         zoomPan:
-          'Zoom at the mouse pointer, pan with a drag, and fit the image with R or 0. Outlines, points and their highlight keep the same size on screen from 0.7× zoom up; further out, outlines get thinner so they do not cover a large image shown small.',
+          'Zoom at the mouse pointer, pan with a drag, and fit the image with R or 0. Outlines, points and their highlight keep the same size on screen from 0.7× zoom up; further out, outlines get thinner so they do not cover a large image shown small. You can pan until any edge of the image reaches the centre of the view, at any zoom.',
         polygonManagement:
           'A shape list with multi-select, hide and show, rename and delete.',
         keyboardShortcuts:

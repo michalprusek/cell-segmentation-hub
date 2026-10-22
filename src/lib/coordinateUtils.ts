@@ -157,9 +157,29 @@ export const calculateFixedPointZoom = (
 };
 
 /**
- * Constrain transform to keep image within reasonable bounds
- * When zoomed in, allows unlimited panning for better user experience
- * When zoomed out, applies gentle constraints to prevent losing the image
+ * Share of the smaller of (viewport, image) that must stay covered by the
+ * image on each axis. OpenSeadragon's `visibilityRatio`, at its default.
+ */
+export const PAN_VISIBILITY_RATIO = 0.5;
+
+/**
+ * Clamp the zoom, and keep the image from being panned out of sight.
+ *
+ * This is OpenSeadragon's boundary constraint (`Viewport._applyBoundaryConstraints`,
+ * v5.0.1): on each axis the image must overlap the viewport by at least
+ * `PAN_VISIBILITY_RATIO` of whichever is smaller, the viewport or the image.
+ * An image larger than the viewport can therefore bring ANY of its edges to
+ * the viewport's centre, at every zoom.
+ *
+ * It replaced a margin of 0.8x the viewport's longer side around the centred
+ * position, applied only below zoom 1 (above it, panning was unlimited). That
+ * margin did not grow with the image, so on a 4104 x 2174 sperm frame in a
+ * 1300 x 800 canvas the rightmost 391 screen px could not be reached at
+ * zoom 0.99 — a sperm at the border slid out of view as you zoomed toward it
+ * and could not be panned back — and crossing zoom 1 switched the clamp off.
+ *
+ * The content is laid out from the container's centre, so the image's
+ * on-screen left edge is `canvasWidth / 2 + translateX`.
  */
 export const constrainTransform = (
   transform: TransformState,
@@ -170,51 +190,38 @@ export const constrainTransform = (
   minZoom: number = 0.1,
   maxZoom: number = 10
 ): TransformState => {
-  // Constrain zoom
   const zoom = Math.max(minZoom, Math.min(maxZoom, transform.zoom));
-
-  // Calculate image bounds in canvas coordinates
-  const scaledWidth = imageWidth * zoom;
-  const scaledHeight = imageHeight * zoom;
-
-  // When zoomed in (>= 1x), allow unlimited panning
-  // so the user can freely navigate to any part of the image
-  if (zoom >= 1.0) {
-    return {
-      zoom,
-      translateX: transform.translateX,
-      translateY: transform.translateY,
-    };
-  }
-
-  // Everything below is the zoom < 1 path. The `zoom >= 1.0` branch that
-  // used to sit here was unreachable -- the early return above already
-  // took every zoom >= 1 case -- so its "very generous" constraints never
-  // ran and the panning they described was simply unbounded.
-
-  // For zoom levels < 1x (zoomed out), apply moderate constraints to prevent complete loss
-  const moderateMargin = Math.max(canvasWidth, canvasHeight) * 0.8;
-  const minVisibleSize = 50; // Larger minimum visibility for zoomed out images
-
-  // For X axis - moderate constraints for zoomed out images
-  const maxTranslateX = moderateMargin - scaledWidth / 2;
-  const minTranslateX = -scaledWidth / 2 - moderateMargin + minVisibleSize;
-  const translateX = Math.max(
-    minTranslateX,
-    Math.min(maxTranslateX, transform.translateX)
-  );
-
-  // For Y axis - moderate constraints for zoomed out images
-  const maxTranslateY = moderateMargin - scaledHeight / 2;
-  const minTranslateY = -scaledHeight / 2 - moderateMargin + minVisibleSize;
-  const translateY = Math.max(
-    minTranslateY,
-    Math.min(maxTranslateY, transform.translateY)
-  );
 
   return {
     zoom,
-    translateX,
-    translateY,
+    translateX: constrainAxis(
+      transform.translateX,
+      imageWidth * zoom,
+      canvasWidth
+    ),
+    translateY: constrainAxis(
+      transform.translateY,
+      imageHeight * zoom,
+      canvasHeight
+    ),
   };
+};
+
+/**
+ * One axis of `constrainTransform`. The image spans
+ * `[viewport / 2 + translate, viewport / 2 + translate + scaled]` on screen and
+ * must overlap `[0, viewport]` by `threshold`.
+ */
+const constrainAxis = (
+  translate: number,
+  scaled: number,
+  viewport: number
+): number => {
+  // No measured viewport or image yet: nothing to keep in view.
+  if (!(viewport > 0) || !(scaled > 0)) return translate;
+
+  const threshold = PAN_VISIBILITY_RATIO * Math.min(viewport, scaled);
+  const min = threshold - viewport / 2 - scaled; // right edge >= threshold
+  const max = viewport / 2 - threshold; // left edge <= viewport - threshold
+  return Math.max(min, Math.min(max, translate));
 };
