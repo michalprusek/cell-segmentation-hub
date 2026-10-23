@@ -95,6 +95,16 @@ sperm checkpoint declares the ConvNeXt backbone whose implementation takes no
 HuggingFace dependency, and every other checkpoint carries its own weights.
 Re-run that offline load before adding either back.
 
+**nginx joins two external networks the stack does not create.**
+`maptimize-network` and `curator-network` are declared `external: true` in
+`docker-compose.production.yml`, so Compose refuses to start nginx on a host
+where either is missing. They belong to the Maptimize and Curator stacks, which
+normally create them; on a fresh host create them first:
+`docker network create maptimize-network` and
+`docker network create curator-network`. The Curator upstream is resolved per
+request (`resolver 127.0.0.11` + a variable `proxy_pass`), so a stopped Curator
+stack does not stop this nginx — only a missing network does.
+
 **Upload limits are coupled across three layers** — a frontend constant, the
 multer config and nginx's `client_max_body_size`. The smallest wins. Images
 20 MB, videos and ND2 100 GB.
