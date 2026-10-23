@@ -17,13 +17,18 @@
  * than in production.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'fs';
 import { join, relative } from 'path';
+import sharp from 'sharp';
 import {
   MAX_INPUT_PIXELS,
+  SHARP_INPUT_LIMITS,
   segmentationTimeoutMs,
 } from '../../constants/imageLimits';
+
+// The global setup mocks sharp; the warning-tolerance tests need the real libvips.
+vi.unmock('sharp');
 
 const SRC = join(__dirname, '..', '..');
 
@@ -74,6 +79,31 @@ describe('sharp input pixel limits', () => {
     }
 
     expect(offenders).toEqual([]);
+  });
+});
+
+describe('sharp input warning tolerance', () => {
+  // A real-shaped defect, not a mock: see fixtures/make_unterminated_ascii_tiff.py.
+  const FIXTURE = join(__dirname, 'fixtures', 'unterminated-software-tag.tif');
+
+  it('the fixture still reproduces the defect under sharp defaults', async () => {
+    // Guards the test itself: if a sharp/libtiff upgrade stops warning, the
+    // assertion below would pass vacuously.
+    await expect(sharp(FIXTURE).png().toBuffer()).rejects.toThrow();
+  });
+
+  it('decodes a TIFF whose ASCII tag lacks its NUL terminator', async () => {
+    const png = await sharp(FIXTURE, SHARP_INPUT_LIMITS).png().toBuffer();
+    const meta = await sharp(png).metadata();
+    expect([meta.width, meta.height, meta.channels]).toEqual([16, 16, 3]);
+  });
+
+  it('still refuses a truncated image', async () => {
+    const whole = readFileSync(FIXTURE);
+    const cut = whole.subarray(0, whole.length - 400);
+    await expect(
+      sharp(cut, SHARP_INPUT_LIMITS).png().toBuffer()
+    ).rejects.toThrow();
   });
 });
 
