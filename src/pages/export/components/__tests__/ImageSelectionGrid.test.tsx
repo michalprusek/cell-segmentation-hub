@@ -1,5 +1,6 @@
+import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { render } from '@/test/utils/test-utils';
 import { ImageSelectionGrid } from '@/pages/export/components/ImageSelectionGrid';
@@ -345,5 +346,56 @@ describe('ImageSelectionGrid', () => {
 
     // No page-number buttons visible for < 30 images
     expect(screen.queryByText('2')).not.toBeInTheDocument();
+  });
+
+  // ── Wiring with the real parent shape (2026-10-15 regression) ────────────
+
+  it('settles after a toggle when the parent echoes the selection back', async () => {
+    // AdvancedExportDialog's exact wiring: an inline callback (new identity
+    // every render) that stores the ids in an options object, and the ids
+    // passed back as a fresh array (or a fresh `images.map` fallback). That
+    // ping-pong re-rendered the dialog forever after the first click —
+    // ~3 000 DOM mutations a second in production — and a click landing
+    // mid-cycle was overwritten by a pending reset to the previous ids.
+    let reports = 0;
+    const Parent: React.FC = () => {
+      const [options, setOptions] = React.useState<{ ids?: string[] }>({});
+      return (
+        <ImageSelectionGrid
+          images={FIVE_IMAGES}
+          selectedImageIds={options.ids || FIVE_IMAGES.map(img => img.id)}
+          onSelectionChange={ids => {
+            reports++;
+            // Stop echoing past a bound so the broken version fails the
+            // assertion below instead of running the worker out of memory.
+            if (reports < 20) setOptions(prev => ({ ...prev, ids }));
+          }}
+        />
+      );
+    };
+    render(<Parent />);
+    const user = userEvent.setup();
+
+    await user.click(screen.getByTestId('export-card-img-1'));
+    await user.click(screen.getByTestId('export-card-img-2'));
+    await act(async () => {
+      await new Promise(r => setTimeout(r, 50));
+    });
+    const settled = reports;
+    await act(async () => {
+      await new Promise(r => setTimeout(r, 50));
+    });
+
+    expect(reports).toBe(settled);
+    expect(reports).toBeLessThanOrEqual(4);
+    expect(
+      screen.getByTestId('export-card-img-1').getAttribute('data-selected')
+    ).toBe('false');
+    expect(
+      screen.getByTestId('export-card-img-2').getAttribute('data-selected')
+    ).toBe('false');
+    expect(
+      screen.getByTestId('export-card-img-3').getAttribute('data-selected')
+    ).toBe('true');
   });
 });

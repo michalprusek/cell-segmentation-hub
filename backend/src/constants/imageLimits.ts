@@ -30,10 +30,24 @@ export const MAX_INPUT_PIXELS = 1_000_000_000;
 /**
  * Spread into a sharp constructor for anything a USER supplied.
  *
+ * `failOn: 'error'` because sharp's default, `'warning'`, rejects files that
+ * libtiff reads perfectly well. Reported 2026-10-15: a camera writing
+ * `Software: "Kruwo soft"` without the NUL terminator the TIFF spec requires
+ * makes libtiff warn `ASCII value for tag "Software" does not end in null
+ * byte`, and under `'warning'` that one message failed every decode of the
+ * image — no upload thumbnail, no segmentation thumbnail, a blank card —
+ * while the ML service (PIL) segmented the same file without complaint.
+ * `'error'` still refuses corrupt and truncated input; it only stops treating
+ * a cosmetic metadata defect as one. The display conversion in
+ * `imageService` already used it.
+ *
  * Not for avatars (`authService`): those are small by definition and the tight
  * default is the right guard there.
  */
-export const SHARP_INPUT_LIMITS = { limitInputPixels: MAX_INPUT_PIXELS } as const;
+export const SHARP_INPUT_LIMITS = {
+  limitInputPixels: MAX_INPUT_PIXELS,
+  failOn: 'error',
+} as const;
 
 /**
  * How long to let the ML service work on one frame, from its pixel count.

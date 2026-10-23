@@ -68,10 +68,20 @@ export const ImageSelectionGrid: React.FC<ImageSelectionGridProps> = ({
     itemsPerPage: 30,
   });
 
-  // Update parent when selection changes
+  // Report the selection only when it changes. The callback is read through a
+  // ref because callers pass an inline arrow: as an effect dependency it
+  // re-reported on every parent render, which fed the loop described in
+  // useImageSelection.
+  // The ref is refreshed in a layout effect, not during render (a discarded
+  // render must not leak its callback); layout effects run before the passive
+  // effect below, so it always reports through the latest callback.
+  const onSelectionChangeRef = React.useRef(onSelectionChange);
+  React.useLayoutEffect(() => {
+    onSelectionChangeRef.current = onSelectionChange;
+  }, [onSelectionChange]);
   React.useEffect(() => {
-    onSelectionChange(Array.from(selectedIds));
-  }, [selectedIds, onSelectionChange]);
+    onSelectionChangeRef.current(Array.from(selectedIds));
+  }, [selectedIds]);
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(e.target.value);
