@@ -61,11 +61,18 @@ export const useImageSelection = ({
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
 
-  // Reset selected IDs when initial IDs change
+  // Adopt initial IDs when their CONTENT changes. Comparing by reference is
+  // not enough: the export dialog passes the ids this hook just reported back
+  // as a fresh array every render, and resetting to a new Set on each one made
+  // the grid and the dialog re-render each other forever (2026-10-15).
   useEffect(() => {
-    if (initialSelectedIds) {
-      setSelectedIds(new Set(initialSelectedIds));
-    }
+    if (!initialSelectedIds) return;
+    setSelectedIds(prev =>
+      prev.size === initialSelectedIds.length &&
+      initialSelectedIds.every(id => prev.has(id))
+        ? prev
+        : new Set(initialSelectedIds)
+    );
   }, [initialSelectedIds]);
 
   // Filter images based on search query
