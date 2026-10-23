@@ -46,9 +46,9 @@
 pytest>=9.1.1
 
 # essays_api is a FastAPI app; its tests import it directly.
-fastapi==0.141.1
-starlette==1.6.0
-pydantic==2.13.5
+fastapi==0.143.2
+starlette==1.7.0
+pydantic==2.14.1
 
 # The video helpers: TIFF/ND2 decoding, PNG writing, the resampling and
 # morphology used by channel registration and the playback proxy.
