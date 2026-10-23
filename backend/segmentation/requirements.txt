@@ -55,13 +55,13 @@
 # routing.py in 6.1.0 / 7.1.0 / 8.0.0 / 8.0.1 -- the first three are identical
 # on this line, so no smaller bump gets there.
 #
-#     fastapi 0.141.1  +  starlette 1.6.0  +  instrumentator 8.1.0
+#     fastapi 0.143.2  +  starlette 1.7.0  +  instrumentator 8.1.0
 #
 # starlette is a REPRODUCIBILITY pin, not a constraint: instrumentator 8.x
 # already declares `starlette >=1.0.0,<2.0.0`, so pip would refuse a 0.4x
 # resolve rather than accept one quietly. It is pinned because it is the member
 # of the set nothing else in this file names, and an unpinned transitive floats
-# on its own schedule. fastapi does not object -- 0.141.1 asks for
+# on its own schedule. fastapi does not object -- 0.141.1 asked for
 # `starlette >= 0.46.0` with no upper bound, so the 1.x floor comes entirely
 # from the instrumentator.
 #
@@ -71,10 +71,18 @@
 # working; and /metrics still labelling `handler="/api/v1/segment"` correctly
 # rather than degrading to "none", which is the failure mode a getattr-and-skip
 # fix could plausibly have introduced.
-fastapi==0.141.1
-starlette==1.6.0
-uvicorn==0.52.4
-pydantic==2.13.5
+#
+# Re-verified 2026-10-23 for fastapi 0.143.2 / starlette 1.7.0 / uvicorn
+# 0.54.0 / pydantic 2.14.1 (+ onnx 1.23.2, protobuf 7.36.2): the old and the
+# new image, each run twice in isolation on the same inputs, returned identical
+# /api/v1/segment output for 12 of the 13 models (timings and per-call
+# instanceId excluded); neurite_soma_classical failed the same way in both
+# (it needs the backend's channel fields), so it is unverified by this check.
+# numpy stayed 1.26.4 and /metrics still labels the handler "/api/v1/segment".
+fastapi==0.143.2
+starlette==1.7.0
+uvicorn==0.54.0
+pydantic==2.14.1
 # requests 2.33.0 fixes CVE-2024-47081 (.netrc credential leak),
 # CVE-2026-25645 (insecure temp file reuse in extract_zipped_paths), and the
 # later session-redirect advisory.
@@ -254,7 +262,7 @@ tifffile>=2024.12.12
 # reading it back bit-identically is the test, and it was run at 2025.3.30 for
 # uint8 and uint16, 2-D and 3-D.
 imagecodecs>=2024.12.30
-nd2>=0.10.0
+nd2>=0.12.0
 # transformers 5.5.4 already demands `huggingface-hub >=1.5.0,<2.0`, so the old
 # `>=0.20` floor was three majors below anything installable and documented a
 # resolve that could not happen. 1.30.0 is what the running ml container holds.
@@ -263,7 +271,7 @@ nd2>=0.10.0
 # fails the build when the two specifiers drift, which is why the two Dependabot
 # PRs for this line (#506 essays, #508 ml) were individually red and only green
 # together.
-huggingface_hub>=1.30.0
+huggingface_hub>=1.33.0
 
 # Mamba-UNet dependency. einops is a pure-Python runtime dep of mamba_ssm and is
 # safe to build in the slim wheel-builder. The CUDA-compiled kernels themselves
@@ -305,10 +313,10 @@ einops>=0.8.2  # floor records reality; the image already ships 0.8.2
 # base image, arrives only as onnx's transitive, and onnx bounds it only from
 # below (`>=4.25.1`). Nothing else in this file names it, so unpinned it would
 # float on its own schedule.
-onnx==1.22.0
+onnx==1.23.2
 ml_dtypes==0.5.4
 onnx2torch==1.5.15
-protobuf==7.36.1
+protobuf==7.36.2
 
 # Prometheus metrics
 prometheus-fastapi-instrumentator==8.1.0
