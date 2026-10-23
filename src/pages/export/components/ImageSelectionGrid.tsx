@@ -72,8 +72,13 @@ export const ImageSelectionGrid: React.FC<ImageSelectionGridProps> = ({
   // ref because callers pass an inline arrow: as an effect dependency it
   // re-reported on every parent render, which fed the loop described in
   // useImageSelection.
+  // The ref is refreshed in a layout effect, not during render (a discarded
+  // render must not leak its callback); layout effects run before the passive
+  // effect below, so it always reports through the latest callback.
   const onSelectionChangeRef = React.useRef(onSelectionChange);
-  onSelectionChangeRef.current = onSelectionChange;
+  React.useLayoutEffect(() => {
+    onSelectionChangeRef.current = onSelectionChange;
+  }, [onSelectionChange]);
   React.useEffect(() => {
     onSelectionChangeRef.current(Array.from(selectedIds));
   }, [selectedIds]);
