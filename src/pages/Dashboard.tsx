@@ -28,6 +28,7 @@ import {
 import { apiClient } from '@/lib/api';
 import { logger } from '@/lib/logger';
 import { useSegmentationQueue } from '@/hooks/useSegmentationQueue';
+import { matchesAllTerms, toSearchTerms } from '@/lib/textSearch';
 import { PageTransition } from '@/components/PageTransition';
 import {
   PageContainer,
@@ -60,6 +61,17 @@ const Dashboard = () => {
   // "root" makes that contract explicit in one place.
   const projectFolderQuery: string | 'root' = currentFolderId ?? 'root';
 
+  // Search is also in the URL (`?q=`), so going Back from a project opened
+  // out of the results lands on the same results. It searches EVERY folder,
+  // not the one on screen: the point is to jump to a project by name without
+  // knowing where it is filed — a user with ~200 projects asked for exactly
+  // that. While searching, the listing is the flat one (`folderId`
+  // undefined = owned + shared, every placement) and is filtered here; the
+  // query never reaches the server, so typing costs no request.
+  const searchQuery = searchParams.get('q') ?? '';
+  const searchTerms = useMemo(() => toSearchTerms(searchQuery), [searchQuery]);
+  const isSearching = searchTerms.length > 0;
+
   const {
     projects,
     loading,
@@ -72,7 +84,7 @@ const Dashboard = () => {
     sortDirection,
     userId: user?.id,
     userEmail: user?.email,
-    folderId: projectFolderQuery,
+    folderId: isSearching ? undefined : projectFolderQuery,
   });
 
   const {
@@ -102,6 +114,19 @@ const Dashboard = () => {
   }, [folderTree, currentFolderId]);
 
   const hasAnyFolder = flatFolders.length > 0;
+
+  const searchResults = useMemo(() => {
+    if (!isSearching) return null;
+    return {
+      projects: projects.filter(p =>
+        matchesAllTerms(p.title ?? '', searchTerms)
+      ),
+      folders: flatFolders
+        .filter(f => matchesAllTerms(f.name, searchTerms))
+        .map(f => ({ id: f.id, name: f.name }))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    };
+  }, [isSearching, projects, flatFolders, searchTerms]);
 
   // Fallback: if the URL points at a folder that no longer exists in our
   // tree (someone deleted it, bookmarked URL, etc.) we'd otherwise filter
@@ -347,6 +372,60 @@ const Dashboard = () => {
     [searchParams, setSearchParams]
   );
 
+  const setSearchQuery = useCallback(
+    (value: string) => {
+      const next = new URLSearchParams(searchParams);
+      if (value === '') next.delete('q');
+      else next.set('q', value);
+      // One history entry per search, not per keystroke.
+      setSearchParams(next, { replace: true });
+    },
+    [searchParams, setSearchParams]
+  );
+
+  // A folder found by search opens like any folder, and the search ends:
+  // the folder's contents are what the user went looking for.
+  const handleOpenFolderFromSearch = useCallback(
+    (folderId: string) => {
+      const next = new URLSearchParams(searchParams);
+      next.delete('q');
+      next.set('folder', folderId);
+      setSearchParams(next, { replace: false });
+    },
+    [searchParams, setSearchParams]
+  );
+
+  const handleSearchKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === 'Escape') {
+        setSearchQuery('');
+      } else if (
+        e.key === 'Enter' &&
+        searchResults &&
+        !loading &&
+        foldersLoaded
+      ) {
+        // Enter jumps only when the answer is unambiguous — and it cannot be
+        // while either list is still loading: entering search refetches the
+        // projects, so for a moment a lone folder looks like the only match.
+        const { projects: found, folders: foundFolders } = searchResults;
+        if (found.length === 1 && foundFolders.length === 0) {
+          handleOpenProject(found[0].id);
+        } else if (foundFolders.length === 1 && found.length === 0) {
+          handleOpenFolderFromSearch(foundFolders[0].id);
+        }
+      }
+    },
+    [
+      setSearchQuery,
+      searchResults,
+      loading,
+      foldersLoaded,
+      handleOpenProject,
+      handleOpenFolderFromSearch,
+    ]
+  );
+
   // If the user just deleted the folder they were standing in, jump back to
   // its parent (or root). Wired via DeleteFolderDialog's onDeleted callback.
   const handleAfterDeleteCurrent = useCallback(() => {
@@ -420,14 +499,26 @@ const Dashboard = () => {
         onSort={handleSort}
         viewMode={viewMode}
         setViewMode={setViewMode}
-        showSearchBar={false}
+        searchTerm={searchQuery}
+        onSearchChange={e => setSearchQuery(e.target.value)}
+        onSearchKeyDown={handleSearchKeyDown}
+        searchPlaceholder={String(t('dashboard.searchProjectsPlaceholder'))}
         showUploadButton={false}
         showExportButton={false}
         onCreateProject={() => setNewProjectOpen(true)}
         onCreateFolder={() => setCreateOpen(true)}
       />
     ),
-    [sortField, sortDirection, handleSort, viewMode]
+    [
+      sortField,
+      sortDirection,
+      handleSort,
+      viewMode,
+      searchQuery,
+      setSearchQuery,
+      handleSearchKeyDown,
+      t,
+    ]
   );
 
   if (fetchError) {
@@ -498,33 +589,85 @@ const Dashboard = () => {
                 {projectToolbar}
               </FlexBetween>
 
-              <div className="mb-4">
-                <FolderBreadcrumb
-                  path={path}
-                  onNavigate={handleNavigateToFolder}
-                  onDropToTarget={handleDropOnTarget}
-                />
-              </div>
+              {searchResults ? (
+                <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-gray-600 dark:text-gray-300">
+                  <span data-testid="dashboard-search-summary">
+                    {loading
+                      ? t('common.loading')
+                      : t('dashboard.searchResults', {
+                          count:
+                            searchResults.projects.length +
+                            searchResults.folders.length,
+                          query: searchQuery.trim(),
+                        })}
+                  </span>
+                  <Button
+                    variant="link"
+                    size="sm"
+                    className="h-auto p-0"
+                    onClick={() => setSearchQuery('')}
+                  >
+                    {t('dashboard.clearSearch')}
+                  </Button>
+                </div>
+              ) : (
+                <div className="mb-4">
+                  <FolderBreadcrumb
+                    path={path}
+                    onNavigate={handleNavigateToFolder}
+                    onDropToTarget={handleDropOnTarget}
+                  />
+                </div>
+              )}
 
-              <ProjectsTab
-                projects={projects}
-                folders={visibleFolders}
-                viewMode={viewMode}
-                loading={loading}
-                onOpenProject={handleOpenProject}
-                onProjectUpdate={handleProjectUpdate}
-                onRequestProjectMove={handleRequestProjectMove}
-                hasAnyFolder={hasAnyFolder}
-                // The in-grid "+" card and the list-mode create card must file
-                // a new project here too, not at the root — the header
-                // button below has done so since 2026-09-03.
-                folderId={currentFolderId}
-                onOpenFolder={handleNavigateToFolder}
-                onRenameFolder={(id, name) => setRenameTarget({ id, name })}
-                onMoveFolder={handleRequestFolderMove}
-                onDeleteFolder={(id, name) => setDeleteTarget({ id, name })}
-                onDropItem={handleDropOnTarget}
-              />
+              {searchResults ? (
+                !loading &&
+                searchResults.projects.length === 0 &&
+                searchResults.folders.length === 0 ? (
+                  <p className="py-12 text-center text-gray-500 dark:text-gray-400">
+                    {t('dashboard.searchNoResults')}
+                  </p>
+                ) : (
+                  <ProjectsTab
+                    projects={searchResults.projects}
+                    folders={searchResults.folders}
+                    viewMode={viewMode}
+                    loading={loading}
+                    showCreateCard={false}
+                    onOpenProject={handleOpenProject}
+                    onProjectUpdate={handleProjectUpdate}
+                    onRequestProjectMove={handleRequestProjectMove}
+                    hasAnyFolder={hasAnyFolder}
+                    onOpenFolder={handleOpenFolderFromSearch}
+                    onRenameFolder={(id, name) => setRenameTarget({ id, name })}
+                    onMoveFolder={handleRequestFolderMove}
+                    onDeleteFolder={(id, name) => setDeleteTarget({ id, name })}
+                    // No drop targets in the results: a project moved into a
+                    // folder still matches, and the drop handler would remove
+                    // it from a list that is not a folder's contents.
+                  />
+                )
+              ) : (
+                <ProjectsTab
+                  projects={projects}
+                  folders={visibleFolders}
+                  viewMode={viewMode}
+                  loading={loading}
+                  onOpenProject={handleOpenProject}
+                  onProjectUpdate={handleProjectUpdate}
+                  onRequestProjectMove={handleRequestProjectMove}
+                  hasAnyFolder={hasAnyFolder}
+                  // The in-grid "+" card and the list-mode create card must
+                  // file a new project here too, not at the root — the header
+                  // button below has done so since 2026-09-03.
+                  folderId={currentFolderId}
+                  onOpenFolder={handleNavigateToFolder}
+                  onRenameFolder={(id, name) => setRenameTarget({ id, name })}
+                  onMoveFolder={handleRequestFolderMove}
+                  onDeleteFolder={(id, name) => setDeleteTarget({ id, name })}
+                  onDropItem={handleDropOnTarget}
+                />
+              )}
             </ContentCard>
           </div>
         </PageContainer>

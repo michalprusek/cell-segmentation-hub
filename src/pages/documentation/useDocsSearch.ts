@@ -15,14 +15,7 @@
 
 import { useMemo } from 'react';
 import { sectionSearchText, type DocsSection } from './docsContent';
-
-/** Lowercase and strip combining marks so accents never block a match. */
-export function normalizeForSearch(value: string): string {
-  return value
-    .normalize('NFD')
-    .replace(/\p{M}+/gu, '')
-    .toLowerCase();
-}
+import { matchesAllTerms, toSearchTerms } from '@/lib/textSearch';
 
 export interface DocsSearchResult {
   /** Sections to render — all of them when the query is empty. */
@@ -47,16 +40,14 @@ export function useDocsSearch(
   query: string
 ): DocsSearchResult {
   return useMemo(() => {
-    const normalizedQuery = normalizeForSearch(query.trim());
-    if (normalizedQuery.length < 2) {
+    const terms = toSearchTerms(query);
+    if (terms.join(' ').length < 2) {
       return { sections, isSearching: false, matchCount: 0, terms: [] };
     }
 
-    const terms = normalizedQuery.split(/\s+/).filter(Boolean);
-    const matches = sections.filter(section => {
-      const haystack = normalizeForSearch(sectionSearchText(section));
-      return terms.every(term => haystack.includes(term));
-    });
+    const matches = sections.filter(section =>
+      matchesAllTerms(sectionSearchText(section), terms)
+    );
 
     return {
       sections: matches,

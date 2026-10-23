@@ -6,6 +6,7 @@ import { useAuth, useLanguage } from '@/contexts/exports';
 import Logo from '@/components/header/Logo';
 import UserProfileDropdown from '@/components/header/UserProfileDropdown';
 import FeedbackButton from '@/components/feedback/FeedbackButton';
+import LanguageSwitcher from '@/components/LanguageSwitcher';
 import MobileMenu from '@/components/header/MobileMenu';
 import { useSegmentationQueue } from '@/hooks/useSegmentationQueue';
 // api unused - available for future use
@@ -248,13 +249,18 @@ const DashboardHeader = () => {
             ></div>
           </div>
           <FeedbackButton />
+          {/* Until 2026-10 the language could be changed only in Settings →
+              Appearance once signed in, and a user asked whether the app had
+              an English version at all. */}
+          <LanguageSwitcher />
           <UserProfileDropdown
             username={user?.email?.split('@')[0] || 'User'}
           />
         </div>
 
         {/* Mobile Navigation */}
-        <div className="md:hidden">
+        <div className="md:hidden flex items-center gap-1">
+          <LanguageSwitcher />
           <Button
             variant="ghost"
             size="icon"

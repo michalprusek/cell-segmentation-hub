@@ -229,7 +229,10 @@ export default {
     noProjectsDescription:
       'Sie haben noch keine Projekte erstellt. Erstellen Sie Ihr erstes Projekt, um zu beginnen.',
     noImagesDescription: 'Laden Sie einige Bilder hoch, um zu beginnen',
-    searchProjectsPlaceholder: 'Projekte suchen...',
+    searchProjectsPlaceholder: 'Projekte und Ordner suchen…',
+    searchResults: '{{count}} Treffer für „{{query}}“ in allen Ordnern',
+    searchNoResults: 'Kein Name in irgendeinem Ordner passt dazu.',
+    clearSearch: 'Suche löschen',
     searchImagesPlaceholder: 'Bilder nach Namen suchen...',
     sortBy: 'Sortieren nach',
     name: 'Name',
@@ -1720,11 +1723,11 @@ export default {
         step2: 'Geben Sie Ihre E-Mail-Adresse ein und wählen Sie ein Passwort',
         step3: 'Vervollständigen Sie Ihr Profil mit Name und Einrichtung',
         step4:
-          'Legen Sie in den Einstellungen Sprache und Design fest — das Segmentierungsmodell wird je Projekt gewählt',
+          'Die Sprache wechseln Sie über das Sprachsymbol neben Ihrem Profil in der Kopfzeile (auch in den Einstellungen, zusammen mit dem Design) — das Segmentierungsmodell wird je Projekt gewählt',
       },
       firstProject: 'Ihr erstes Projekt',
       projectDescription:
-        'Ein Projekt enthält Bilder und die daraus erzeugten Segmentierungen. Sein Typ bestimmt, welche Modelle laufen, was der Editor zeigt und wie exportiert wird — wählen Sie ihn also bewusst.',
+        'Ein Projekt enthält Bilder und die daraus erzeugten Segmentierungen. Sein Typ bestimmt, welche Modelle laufen, was der Editor zeigt und wie exportiert wird — wählen Sie ihn also bewusst. Um ein Projekt wiederzufinden, tippen Sie seinen Namen in das Suchfeld über der Galerie: Es durchsucht alle Ordner auf einmal, ohne auf Groß-/Kleinschreibung und Akzente zu achten.',
       projectSteps: {
         step1: 'Klicken Sie im Dashboard auf „Neues Projekt“',
         step2: 'Geben Sie einen Namen und optional eine Beschreibung ein',
@@ -2108,7 +2111,7 @@ export default {
         saving:
           'Speichern auf Zuruf: Schaltfläche Speichern, Strg+S, oder automatisch beim Wechsel zu einem anderen Bild.',
         zoomPan:
-          'Zoom am Mauszeiger, Verschieben per Ziehen und Einpassen mit R oder 0. Konturen, Punkte und ihre Hervorhebung behalten ab Zoom 0,7× dieselbe Größe auf dem Bildschirm; weiter herausgezoomt werden die Konturen dünner, damit sie ein verkleinert dargestelltes großes Bild nicht verdecken.',
+          'Zoom am Mauszeiger, Verschieben per Ziehen und Einpassen mit R oder 0. Konturen, Punkte und ihre Hervorhebung behalten ab Zoom 0,7× dieselbe Größe auf dem Bildschirm; weiter herausgezoomt werden die Konturen dünner, damit sie ein verkleinert dargestelltes großes Bild nicht verdecken. Bei jedem Zoom lässt sich das Bild verschieben, bis jeder seiner Ränder die Mitte der Ansicht erreicht.',
         polygonManagement:
           'Eine Formenliste mit Mehrfachauswahl, Ein- und Ausblenden, Umbenennen und Löschen.',
         keyboardShortcuts:

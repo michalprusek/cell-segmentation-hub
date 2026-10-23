@@ -93,8 +93,12 @@ you change frame** — shape ids are per frame.
   zooms past 100 %.
 - Maximum 10×. The minimum goes _below_ fit-to-view so a large image can always
   be zoomed back out.
-- Above 1× panning is unconstrained; below it, a margin keeps the image
-  reachable.
+- Panning stops when only half of the view (or half of the image, if the
+  image is smaller) is still covered — OpenSeadragon's `visibilityRatio`
+  rule, at every zoom. So any edge or corner of the image can be brought to
+  the centre of the view, and the image cannot be lost off-screen. Until
+  2026-10 a fixed margin applied below 1× instead, and on a 4104 × 2174 frame
+  the outermost few hundred pixels could not be reached just below 100 %.
 - The view auto-fits when you open an image from the gallery, but not when you
   navigate between images inside the editor.
 

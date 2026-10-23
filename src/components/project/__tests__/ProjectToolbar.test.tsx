@@ -96,7 +96,8 @@ describe('ProjectToolbar', () => {
         onSearchChange={vi.fn()}
       />
     );
-    expect(screen.getByRole('textbox')).toBeInTheDocument();
+    // `type="search"`: the browser's own clear button, and role searchbox.
+    expect(screen.getByRole('searchbox')).toBeInTheDocument();
   });
 
   it('renders upload button when showUploadButton is true', () => {

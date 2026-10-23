@@ -116,9 +116,9 @@ describe('wheel zoom wiring', () => {
 
   const mount = () => {
     const utils = render(<Harness />);
-    // Past the fit zoom (< 1 for a 1024 px image in 800 x 600), where
-    // `constrainTransform` leaves the translation alone — so a moved anchor
-    // below can only come from the zoom maths.
+    // Past the fit zoom (< 1 for a 1024 px image in 800 x 600), where the
+    // image covers the canvas and `constrainTransform` never binds near its
+    // centre — so a moved anchor below can only come from the zoom maths.
     const canvas = utils.getByTestId('canvas');
     for (let i = 0; i < 6; i++) {
       fireEvent.wheel(canvas, { deltaY: -100, clientX: 500, clientY: 350 });

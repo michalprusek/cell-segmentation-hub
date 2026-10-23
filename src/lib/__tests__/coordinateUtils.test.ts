@@ -290,47 +290,81 @@ describe('coordinateUtils', () => {
   });
 
   describe('constrainTransform (panning limits)', () => {
-    it('allows unlimited panning when zoomed in (>= 1.0)', () => {
-      const t = makeTransform({
-        zoom: 1.5,
-        translateX: -2000,
-        translateY: -2000,
-      });
-      const result = constrainTransform(t, 800, 600, 400, 300);
-      expect(result.translateX).toBe(-2000);
-      expect(result.translateY).toBe(-2000);
+    // A real sperm frame (4104 x 2174, 1 033 of them in the reporter's
+    // projects) in a 1300 x 800 canvas. Image left edge on screen is
+    // canvasWidth / 2 + translateX.
+    const IMG_W = 4104;
+    const IMG_H = 2174;
+    const VIEW_W = 1300;
+    const VIEW_H = 800;
+    const constrain = (t: TransformState) =>
+      constrainTransform(t, IMG_W, IMG_H, VIEW_W, VIEW_H);
+
+    /** Translation that puts image point (x, y) at the viewport's centre. */
+    const centreOn = (x: number, y: number, zoom: number): TransformState => ({
+      zoom,
+      translateX: -x * zoom,
+      translateY: -y * zoom,
     });
 
-    it('clamps extreme positive translateX when zoomed out (< 1.0)', () => {
-      const t = makeTransform({ zoom: 0.5, translateX: 99999 });
-      const result = constrainTransform(t, 400, 300, 800, 600);
-      expect(result.translateX).toBeLessThan(99999);
-      expect(result.zoom).toBe(0.5);
+    // The reported bug: zooming toward a sperm at the border, just below
+    // zoom 1, it could not be panned back into view.
+    it.each([0.5, 0.99, 1, 3, 10])(
+      'lets every corner of a large image reach the viewport centre at zoom %s',
+      zoom => {
+        for (const [x, y] of [
+          [0, 0],
+          [IMG_W, 0],
+          [0, IMG_H],
+          [IMG_W, IMG_H],
+        ]) {
+          const t = centreOn(x, y, zoom);
+          expect(constrain(t)).toEqual(t);
+        }
+      }
+    );
+
+    it.each([0.99, 3])(
+      'stops at half the viewport covered when panned past an edge at zoom %s',
+      zoom => {
+        const scaledW = IMG_W * zoom;
+        const scaledH = IMG_H * zoom;
+        const right = constrain({ zoom, translateX: -1e6, translateY: 0 });
+        // Image's right edge sits exactly at the viewport's centre.
+        expect(VIEW_W / 2 + right.translateX + scaledW).toBeCloseTo(VIEW_W / 2);
+        const left = constrain({ zoom, translateX: 1e6, translateY: 0 });
+        expect(VIEW_W / 2 + left.translateX).toBeCloseTo(VIEW_W / 2);
+        const bottom = constrain({ zoom, translateX: 0, translateY: -1e6 });
+        expect(VIEW_H / 2 + bottom.translateY + scaledH).toBeCloseTo(
+          VIEW_H / 2
+        );
+        const top = constrain({ zoom, translateX: 0, translateY: 1e6 });
+        expect(VIEW_H / 2 + top.translateY).toBeCloseTo(VIEW_H / 2);
+      }
+    );
+
+    it('keeps half of an image smaller than the viewport in view', () => {
+      // 400 x 300 at zoom 0.5 = 200 x 150 on screen in 800 x 600.
+      const out = constrainTransform(
+        makeTransform({ zoom: 0.5, translateX: 1e6, translateY: -1e6 }),
+        400,
+        300,
+        800,
+        600
+      );
+      // Left edge at 800 - 100, bottom edge at 75.
+      expect(400 + out.translateX).toBeCloseTo(700);
+      expect(300 + out.translateY + 150).toBeCloseTo(75);
     });
 
-    it('clamps extreme negative translateX when zoomed out', () => {
-      const t = makeTransform({ zoom: 0.5, translateX: -99999 });
-      const result = constrainTransform(t, 400, 300, 800, 600);
-      expect(result.translateX).toBeGreaterThan(-99999);
-    });
-
-    it('clamps extreme positive translateY when zoomed out', () => {
-      const t = makeTransform({ zoom: 0.5, translateY: 99999 });
-      const result = constrainTransform(t, 400, 300, 800, 600);
-      expect(result.translateY).toBeLessThan(99999);
-    });
-
-    it('clamps extreme negative translateY when zoomed out', () => {
-      const t = makeTransform({ zoom: 0.5, translateY: -99999 });
-      const result = constrainTransform(t, 400, 300, 800, 600);
-      expect(result.translateY).toBeGreaterThan(-99999);
-    });
-
-    it('preserves in-range translation when zoomed out', () => {
+    it('preserves an in-range translation', () => {
       const t = makeTransform({ zoom: 0.5, translateX: 5, translateY: 5 });
-      const result = constrainTransform(t, 400, 300, 800, 600);
-      expect(result.translateX).toBe(5);
-      expect(result.translateY).toBe(5);
+      expect(constrainTransform(t, 400, 300, 800, 600)).toEqual(t);
+    });
+
+    it('leaves the translation alone before the canvas is measured', () => {
+      const t = makeTransform({ zoom: 2, translateX: -1e6, translateY: 1e6 });
+      expect(constrainTransform(t, 400, 300, 0, 0)).toEqual(t);
     });
 
     it('clamps zoom to the default [0.1, 10] range in both directions', () => {

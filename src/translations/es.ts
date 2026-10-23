@@ -228,7 +228,11 @@ export default {
     noProjectsDescription:
       'Aún no has creado ningún proyecto. Crea tu primer proyecto para comenzar.',
     noImagesDescription: 'Sube algunas imágenes para comenzar',
-    searchProjectsPlaceholder: 'Buscar proyectos...',
+    searchProjectsPlaceholder: 'Buscar proyectos y carpetas…',
+    searchResults:
+      '{{count}} resultados para «{{query}}» en todas las carpetas',
+    searchNoResults: 'Ningún nombre coincide en ninguna carpeta.',
+    clearSearch: 'Borrar búsqueda',
     searchImagesPlaceholder: 'Buscar imágenes por nombre...',
     sortBy: 'Ordenar por',
     name: 'Nombre',
@@ -1705,11 +1709,11 @@ export default {
         step2: 'Introduzca su correo electrónico y elija una contraseña',
         step3: 'Complete su perfil con su nombre y su institución',
         step4:
-          'En Configuración, elija idioma y tema: el modelo de segmentación se define en cada proyecto',
+          'Cambie el idioma con el icono de idioma junto a su perfil en la cabecera (también en Configuración, junto con el tema): el modelo de segmentación se define en cada proyecto',
       },
       firstProject: 'Su primer proyecto',
       projectDescription:
-        'Un proyecto contiene imágenes y las segmentaciones obtenidas de ellas. Su tipo decide qué modelos puede ejecutar, qué muestra el editor y cómo se exportan los resultados, así que elíjalo con criterio.',
+        'Un proyecto contiene imágenes y las segmentaciones obtenidas de ellas. Su tipo decide qué modelos puede ejecutar, qué muestra el editor y cómo se exportan los resultados, así que elíjalo con criterio. Para encontrarlo después, escriba su nombre en el cuadro de búsqueda sobre la galería: busca en todas las carpetas a la vez, sin distinguir mayúsculas ni acentos.',
       projectSteps: {
         step1: 'En el panel principal, pulse «Nuevo proyecto»',
         step2: 'Introduzca un nombre y, si quiere, una descripción',
@@ -2090,7 +2094,7 @@ export default {
         saving:
           'Guardado a petición: el botón Guardar, Ctrl+S, o automáticamente al pasar a otra imagen.',
         zoomPan:
-          'Zoom en el puntero del ratón, desplazamiento arrastrando y ajuste a la vista con R o 0. Los contornos, los puntos y su resaltado mantienen el mismo tamaño en pantalla a partir de un zoom de 0,7×; más lejos, los contornos se afinan para no tapar una imagen grande mostrada en pequeño.',
+          'Zoom en el puntero del ratón, desplazamiento arrastrando y ajuste a la vista con R o 0. Los contornos, los puntos y su resaltado mantienen el mismo tamaño en pantalla a partir de un zoom de 0,7×; más lejos, los contornos se afinan para no tapar una imagen grande mostrada en pequeño. Con cualquier zoom, la imagen se puede desplazar hasta que cualquiera de sus bordes llegue al centro de la vista.',
         polygonManagement:
           'Una lista de formas con selección múltiple, mostrar y ocultar, renombrar y eliminar.',
         keyboardShortcuts:
