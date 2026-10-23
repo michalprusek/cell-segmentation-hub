@@ -345,3 +345,74 @@ def test_a_channel_of_the_wrong_size_is_refused():
     masks = ni.class_masks([], [{'points': _square(1, 1, 5), 'holes': []}], (20, 20))
     with pytest.raises(ValueError, match='polygons were drawn on'):
         ni.measure([('c', np.zeros((21, 20)))], masks)
+
+
+# --- the soma trim's opening -------------------------------------------------
+
+
+def _blobs(seed: int, size: int = 160) -> np.ndarray:
+    """Random overlapping discs and bars, several of them cut by the border --
+    the border is where the two ways of opening could disagree."""
+    rng = np.random.default_rng(seed)
+    yy, xx = np.mgrid[:size, :size]
+    mask = np.zeros((size, size), bool)
+    for _ in range(12):
+        cx, cy = rng.integers(-10, size + 10, 2)
+        r = rng.integers(4, 40)
+        mask |= (xx - cx) ** 2 + (yy - cy) ** 2 <= r * r
+    for _ in range(4):
+        x0, y0 = rng.integers(0, size, 2)
+        mask[y0 : y0 + rng.integers(2, 9), x0 : x0 + rng.integers(20, 120)] = True
+    return mask
+
+
+@pytest.mark.parametrize('seed', range(6))
+@pytest.mark.parametrize('radius', [1, 2, 3, 5, 8, 13, 21])
+def test_the_distance_opening_is_scikit_images_opening(seed, radius):
+    from skimage.morphology import binary_opening, disk
+
+    mask = _blobs(seed)
+    expected = binary_opening(mask, disk(radius))
+    assert np.array_equal(nc._open_by_disk(mask, radius), expected)
+
+
+@pytest.mark.parametrize(
+    'mask',
+    [np.zeros((12, 12), bool), np.ones((12, 12), bool), np.eye(12, dtype=bool)],
+    ids=['empty', 'full', 'too-thin-to-survive'],
+)
+@pytest.mark.parametrize('radius', [4, 20])
+def test_the_distance_opening_on_degenerate_masks(mask, radius):
+    # A radius LARGER than the array matters for 'full': with no background
+    # pixel at all scipy's transform does not return infinity but distances
+    # to a point beyond a corner, so the erosion empties once the radius
+    # exceeds the diagonal -- where scikit-image keeps everything.
+    from skimage.morphology import binary_opening, disk
+
+    expected = binary_opening(mask, disk(radius))
+    assert np.array_equal(nc._open_by_disk(mask, radius), expected)
+
+
+def test_the_soma_trim_opens_by_distance_not_by_a_footprint(monkeypatch):
+    """The trim radius follows the candidate's own width, so a candidate
+    covering half a 2048^2 frame asked scipy for a footprint of radius ~200 --
+    O(r^4) memory, which OOM-killed the ML service. Any footprint opening in
+    the trim is that bug, whatever its result."""
+    seen = []
+    real = nc._open_by_disk
+
+    def spy(mask, radius):
+        seen.append(radius)
+        return real(mask, radius)
+
+    def refuse(*_args, **_kwargs):
+        raise AssertionError('binary_opening with a footprint in the soma trim')
+
+    monkeypatch.setattr(nc, '_open_by_disk', spy)
+    monkeypatch.setattr(nc, 'binary_opening', refuse)
+
+    yy, xx = np.mgrid[:400, :400]
+    cand = (xx - 200) ** 2 + (yy - 200) ** 2 <= 150**2
+    nc._accept_somas(cand, np.zeros_like(cand), nc.PARAMS)
+    # 0.55 x the inscribed radius of a radius-150 disc
+    assert seen and seen[0] >= 80

@@ -81,7 +81,10 @@ MODEL_ID = "neurite_soma_classical"
 CLASSES: Tuple[Tuple[int, str], ...] = ((1, "neurite"), (2, "soma"))
 
 #: Refuse rather than run for minutes: the Hessian is computed at three scales
-#: on a float32 copy, ~40 bytes of working memory per pixel at the peak.
+#: on a float32 copy. Measured 2026-10-23 in the ml image on a 2048^2 frame:
+#: 407 MB peak RSS, ~60 bytes per pixel above the interpreter's ~150 MB, so the
+#: limit costs ~4 GB. That held only once the soma trim stopped using a
+#: footprint opening -- see `_open_by_disk`.
 MAX_PIXELS = 64_000_000
 
 PARAMS: Mapping[str, Any] = {
@@ -195,6 +198,38 @@ def neuriteness(image: np.ndarray, sigmas: Sequence[float]) -> np.ndarray:
     return out
 
 
+def _open_by_disk(mask: np.ndarray, radius: int) -> np.ndarray:
+    """``binary_opening(mask, disk(radius))``, computed with two Euclidean
+    distance transforms instead of a structuring element.
+
+    The result is the same pixel for pixel, borders included: a pixel survives
+    the erosion iff no background pixel lies within ``radius`` of it (the
+    outside of the array is foreground, as in scikit-image's default
+    ``mode='ignore'``), and the dilation keeps every pixel within ``radius`` of
+    a survivor. ``disk`` is ``x^2 + y^2 <= r^2``; the transform is exact, so
+    ``d > r`` is the same test.
+
+    WHY: the radius here is a fraction of a candidate's own inscribed radius,
+    so it is unbounded, and scipy.ndimage builds a table of footprint offsets
+    for every border configuration -- elements x footprint area, O(r^4) memory.
+    Measured in the ml image on a 1500^2 disc: radius 40 took 357 MB and 5.9 s,
+    radius 80 4.1 GB and 28 s, and radius 160 was killed at 20 GB. A 2048^2
+    frame whose candidate covers half the image reaches that, and took the
+    whole ML service down with it (12 GB cgroup, 2026-10-23). This costs two
+    O(N) transforms whatever the radius.
+    """
+    if radius < 1 or not mask.any():
+        return mask.copy()
+    if mask.all():
+        # No background at all, so nothing to measure a distance to; with the
+        # outside counted as foreground the erosion keeps everything.
+        return mask.copy()
+    eroded = ndi.distance_transform_edt(mask) > radius
+    if not eroded.any():
+        return eroded
+    return ndi.distance_transform_edt(~eroded) <= radius
+
+
 def _fill_small_holes(mask: np.ndarray, max_hole: int) -> np.ndarray:
     holes = ndi.binary_fill_holes(mask) & ~mask
     lab, n = ndi.label(holes)
@@ -268,7 +303,7 @@ def _accept_somas(
             continue
         # The opening radius comes from the candidate's OWN width, so a large
         # soma sheds a thick bundle and a small one is not opened away whole.
-        core = binary_opening(body, disk(max(int(round(p["trim"] * inscribed)), 1)))
+        core = _open_by_disk(body, max(int(round(p["trim"] * inscribed)), 1))
         pieces = sk_label(core)
         if pieces.max() == 0:
             continue
