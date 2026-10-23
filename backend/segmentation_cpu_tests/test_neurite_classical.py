@@ -378,13 +378,19 @@ def test_the_distance_opening_is_scikit_images_opening(seed, radius):
 
 @pytest.mark.parametrize(
     'mask',
-    [np.zeros((40, 40), bool), np.ones((40, 40), bool), np.eye(40, dtype=bool)],
+    [np.zeros((12, 12), bool), np.ones((12, 12), bool), np.eye(12, dtype=bool)],
     ids=['empty', 'full', 'too-thin-to-survive'],
 )
-def test_the_distance_opening_on_degenerate_masks(mask):
+@pytest.mark.parametrize('radius', [4, 20])
+def test_the_distance_opening_on_degenerate_masks(mask, radius):
+    # A radius LARGER than the array matters for 'full': with no background
+    # pixel at all scipy's transform does not return infinity but distances
+    # to a point beyond a corner, so the erosion empties once the radius
+    # exceeds the diagonal -- where scikit-image keeps everything.
     from skimage.morphology import binary_opening, disk
 
-    assert np.array_equal(nc._open_by_disk(mask, 4), binary_opening(mask, disk(4)))
+    expected = binary_opening(mask, disk(radius))
+    assert np.array_equal(nc._open_by_disk(mask, radius), expected)
 
 
 def test_the_soma_trim_opens_by_distance_not_by_a_footprint(monkeypatch):

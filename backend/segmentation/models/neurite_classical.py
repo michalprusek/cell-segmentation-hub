@@ -81,7 +81,10 @@ MODEL_ID = "neurite_soma_classical"
 CLASSES: Tuple[Tuple[int, str], ...] = ((1, "neurite"), (2, "soma"))
 
 #: Refuse rather than run for minutes: the Hessian is computed at three scales
-#: on a float32 copy, ~40 bytes of working memory per pixel at the peak.
+#: on a float32 copy. Measured 2026-10-23 in the ml image on a 2048^2 frame:
+#: 407 MB peak RSS, ~60 bytes per pixel above the interpreter's ~150 MB, so the
+#: limit costs ~4 GB. That held only once the soma trim stopped using a
+#: footprint opening -- see `_open_by_disk`.
 MAX_PIXELS = 64_000_000
 
 PARAMS: Mapping[str, Any] = {
