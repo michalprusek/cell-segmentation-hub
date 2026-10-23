@@ -236,7 +236,10 @@ export default {
     noProjectsDescription:
       "You haven't created any projects yet. Create your first project to get started.",
     noImagesDescription: 'Upload some images to get started',
-    searchProjectsPlaceholder: 'Search projects...',
+    searchProjectsPlaceholder: 'Search projects and folders…',
+    searchResults: 'Found {{count}} for “{{query}}” in all folders',
+    searchNoResults: 'Nothing matches this name in any folder.',
+    clearSearch: 'Clear search',
     searchImagesPlaceholder: 'Search images by name...',
     sortBy: 'Sort by',
     name: 'Name',
@@ -1706,11 +1709,11 @@ export default {
         step2: 'Enter your email address and choose a password',
         step3: 'Complete your profile with your name and institution',
         step4:
-          'In Settings, choose your language and theme — the segmentation model is set per project',
+          'Switch the language with the language icon beside your profile in the header (also in Settings, with the theme) — the segmentation model is set per project',
       },
       firstProject: 'Creating your first project',
       projectDescription:
-        'A project holds images and the segmentations made from them. Its type decides which models you can run, what the editor shows and how results are exported — so choose it deliberately.',
+        'A project holds images and the segmentations made from them. Its type decides which models you can run, what the editor shows and how results are exported — so choose it deliberately. To find one again, type its name in the search box above the gallery: it searches every folder at once, ignoring case and accents.',
       projectSteps: {
         step1: 'From your dashboard, click "New Project"',
         step2: 'Enter a name and an optional description',
@@ -2090,7 +2093,7 @@ export default {
         saving:
           'Saving on demand: the Save button, Ctrl+S, or automatically when you move to another image.',
         zoomPan:
-          'Zoom at the mouse pointer, pan with a drag, and fit the image with R or 0. Outlines, points and their highlight keep the same size on screen from 0.7× zoom up; further out, outlines get thinner so they do not cover a large image shown small.',
+          'Zoom at the mouse pointer, pan with a drag, and fit the image with R or 0. Outlines, points and their highlight keep the same size on screen from 0.7× zoom up; further out, outlines get thinner so they do not cover a large image shown small. You can pan until any edge of the image reaches the centre of the view, at any zoom.',
         polygonManagement:
           'A shape list with multi-select, hide and show, rename and delete.',
         keyboardShortcuts:

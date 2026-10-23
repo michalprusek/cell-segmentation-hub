@@ -27,6 +27,7 @@ import { EditMode } from '../../types';
 import { Polygon } from '@/lib/segmentation';
 import type { ProjectType } from '@/types';
 import { toast } from 'sonner';
+import { constrainTransform } from '@/lib/coordinateUtils';
 
 // ── MOCKS ─────────────────────────────────────────────────────────────────────
 
@@ -936,6 +937,34 @@ describe('useEnhancedSegmentationEditor', () => {
       // constrainTransform is a passthrough in the mock, so deltas apply directly
       expect(result.current.transform.translateX).toBe(before.translateX + 15);
       expect(result.current.transform.translateY).toBe(before.translateY - 5);
+    });
+
+    // canvasWidth/Height are an 800 x 600 box fitted to the image's aspect
+    // ratio, not the container; the pan limit must use the container.
+    it('constrains pan and toolbar zoom to the measured container, not canvasWidth', () => {
+      const { result } = renderHook(() =>
+        useEnhancedSegmentationEditor(baseProps)
+      );
+      const container = document.createElement('div');
+      container.getBoundingClientRect = () =>
+        ({ left: 0, top: 0, width: 1236, height: 834 }) as DOMRect;
+      (
+        result.current.canvasRef as React.MutableRefObject<HTMLDivElement>
+      ).current = container;
+      const constrain = vi.mocked(constrainTransform);
+
+      for (const act_ of [
+        () => result.current.handlePan(15, -5),
+        () => result.current.handleZoomIn(),
+        () => result.current.handleZoomOut(),
+      ]) {
+        constrain.mockClear();
+        act(act_);
+        expect(constrain).toHaveBeenCalledTimes(1);
+        expect(constrain.mock.calls[0].slice(1, 5)).toEqual([
+          100, 100, 1236, 834,
+        ]);
+      }
     });
 
     it('handleResetView resets the transform to the centering values', () => {

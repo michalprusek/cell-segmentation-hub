@@ -229,7 +229,11 @@ export default {
     noProjectsDescription:
       "Vous n'avez pas encore créé de projets. Créez votre premier projet pour commencer.",
     noImagesDescription: 'Téléchargez des images pour commencer',
-    searchProjectsPlaceholder: 'Rechercher des projets...',
+    searchProjectsPlaceholder: 'Rechercher des projets et des dossiers…',
+    searchResults:
+      '{{count}} résultat(s) pour « {{query}} » dans tous les dossiers',
+    searchNoResults: 'Aucun nom ne correspond, dans aucun dossier.',
+    clearSearch: 'Effacer la recherche',
     searchImagesPlaceholder: 'Rechercher des images par nom...',
     sortBy: 'Trier par',
     name: 'Nom',
@@ -1711,11 +1715,11 @@ export default {
         step2: 'Saisissez votre adresse e-mail et choisissez un mot de passe',
         step3: 'Complétez votre profil avec votre nom et votre établissement',
         step4:
-          'Dans les Paramètres, réglez la langue et le thème — le modèle de segmentation se choisit par projet',
+          'Changez de langue avec l’icône de langue à côté de votre profil dans l’en-tête (aussi dans les Paramètres, avec le thème) — le modèle de segmentation se choisit par projet',
       },
       firstProject: 'Votre premier projet',
       projectDescription:
-        'Un projet contient des images et les segmentations qui en découlent. Son type détermine les modèles disponibles, ce qu’affiche l’éditeur et la façon dont les résultats sont exportés : choisissez-le donc à bon escient.',
+        'Un projet contient des images et les segmentations qui en découlent. Son type détermine les modèles disponibles, ce qu’affiche l’éditeur et la façon dont les résultats sont exportés : choisissez-le donc à bon escient. Pour le retrouver, tapez son nom dans le champ de recherche au-dessus de la galerie : la recherche porte sur tous les dossiers à la fois, sans tenir compte de la casse ni des accents.',
       projectSteps: {
         step1: 'Depuis le tableau de bord, cliquez sur « Nouveau projet »',
         step2: 'Saisissez un nom et, si vous le souhaitez, une description',
@@ -2099,7 +2103,7 @@ export default {
         saving:
           'Enregistrement à la demande : le bouton Enregistrer, Ctrl+S, ou automatiquement en passant à une autre image.',
         zoomPan:
-          'Zoom au pointeur, déplacement par glisser, et ajustement de l’image avec R ou 0. Les contours, les points et leur surbrillance gardent la même taille à l’écran à partir d’un zoom de 0,7× ; en deçà, les contours s’affinent pour ne pas masquer une grande image affichée en petit.',
+          'Zoom au pointeur, déplacement par glisser, et ajustement de l’image avec R ou 0. Les contours, les points et leur surbrillance gardent la même taille à l’écran à partir d’un zoom de 0,7× ; en deçà, les contours s’affinent pour ne pas masquer une grande image affichée en petit. À tout niveau de zoom, l’image peut être déplacée jusqu’à ce que n’importe lequel de ses bords atteigne le centre de la vue.',
         polygonManagement:
           'Une liste des formes avec sélection multiple, affichage/masquage, renommage et suppression.',
         keyboardShortcuts:

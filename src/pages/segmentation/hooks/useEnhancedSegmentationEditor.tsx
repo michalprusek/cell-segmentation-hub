@@ -673,6 +673,18 @@ export const useEnhancedSegmentationEditor = ({
     getSignal,
   ]);
 
+  // The viewport `constrainTransform` keeps the image in is the canvas
+  // container as laid out, NOT `canvasWidth` x `canvasHeight`: those are an
+  // 800 x 600 box shrunk to the image's aspect ratio (800 x 424 for a
+  // 4104 x 2174 frame in a 1236 x 834 container), so an image zoomed out
+  // below the container's size was held inside that smaller box.
+  const readViewportSize = useCallback(() => {
+    const rect = canvasRef.current?.getBoundingClientRect();
+    return rect && rect.width > 0 && rect.height > 0
+      ? { width: rect.width, height: rect.height }
+      : { width: canvasWidth, height: canvasHeight };
+  }, [canvasWidth, canvasHeight]);
+
   // Transform operations with improved constraints
   const handleZoomIn = useCallback(() => {
     const center = { x: canvasWidth / 2, y: canvasHeight / 2 };
@@ -685,15 +697,23 @@ export const useEnhancedSegmentationEditor = ({
       canvasWidth,
       canvasHeight
     );
+    const viewport = readViewportSize();
     const constrainedTransform = constrainTransform(
       newTransform,
       imageWidth,
       imageHeight,
-      canvasWidth,
-      canvasHeight
+      viewport.width,
+      viewport.height
     );
     setTransform(constrainedTransform);
-  }, [canvasWidth, canvasHeight, imageWidth, imageHeight, effectiveMinZoom]);
+  }, [
+    canvasWidth,
+    canvasHeight,
+    imageWidth,
+    imageHeight,
+    effectiveMinZoom,
+    readViewportSize,
+  ]);
 
   const handleZoomOut = useCallback(() => {
     const center = { x: canvasWidth / 2, y: canvasHeight / 2 };
@@ -706,15 +726,23 @@ export const useEnhancedSegmentationEditor = ({
       canvasWidth,
       canvasHeight
     );
+    const viewport = readViewportSize();
     const constrainedTransform = constrainTransform(
       newTransform,
       imageWidth,
       imageHeight,
-      canvasWidth,
-      canvasHeight
+      viewport.width,
+      viewport.height
     );
     setTransform(constrainedTransform);
-  }, [canvasWidth, canvasHeight, imageWidth, imageHeight, effectiveMinZoom]);
+  }, [
+    canvasWidth,
+    canvasHeight,
+    imageWidth,
+    imageHeight,
+    effectiveMinZoom,
+    readViewportSize,
+  ]);
 
   const handleResetView = useCallback(() => {
     const newTransform = calculateCenteringTransform(
@@ -1080,8 +1108,8 @@ export const useEnhancedSegmentationEditor = ({
           newTransform,
           imageWidth,
           imageHeight,
-          canvasWidth,
-          canvasHeight
+          rect.width,
+          rect.height
         )
       );
     });
@@ -1104,7 +1132,7 @@ export const useEnhancedSegmentationEditor = ({
         zoomer.cancel();
       };
     }
-  }, [imageWidth, imageHeight, canvasWidth, canvasHeight, effectiveMinZoom]);
+  }, [imageWidth, imageHeight, effectiveMinZoom]);
 
   // Enhanced pan handler with smooth continuous movement
   const handlePan = useCallback(
@@ -1119,18 +1147,18 @@ export const useEnhancedSegmentationEditor = ({
         translateY: current.translateY + deltaY,
       };
 
-      // Apply generous constraints that allow free movement
+      const viewport = readViewportSize();
       const constrainedTransform = constrainTransform(
         newTransform,
         imageWidth,
         imageHeight,
-        canvasWidth,
-        canvasHeight
+        viewport.width,
+        viewport.height
       );
 
       setTransform(constrainedTransform);
     },
-    [imageWidth, imageHeight, canvasWidth, canvasHeight]
+    [imageWidth, imageHeight, readViewportSize]
   );
 
   // Endpoint-join refused because the two polylines carry DIFFERENT labels.

@@ -39,6 +39,13 @@ users can file the same shared project in different folders. Folders nest
 arbitrarily; deleting one sweeps its subtree (your own projects are deleted,
 shared ones are only unlinked).
 
+To get back to a project without browsing for it, type its name in the
+**search box** above the gallery. It searches every folder at once (owned and
+shared projects, and folder names), ignores case and accents (`dve` finds
+`dvě`) and needs every word you type to appear. The query stays in the URL, so
+Back from an opened project returns to the results; **Enter** opens the only
+match, **Esc** clears the search.
+
 Each project card shows its image count, a thumbnail and progress. The owner can
 mark a project **verified** ("all annotations reviewed") — so can an
 accepted collaborator, unlike the title, description and type, which stay
