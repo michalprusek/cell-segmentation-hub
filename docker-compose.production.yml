@@ -403,6 +403,7 @@ services:
     networks:
       - spheroseg-network
       - maptimize-network
+      - curator-network
     restart: always
     healthcheck:
       test: ['CMD', 'nginx', '-t']
@@ -417,6 +418,9 @@ networks:
   maptimize-network:
     external: true
     name: maptimize-network
+  curator-network:
+    external: true
+    name: curator-network
 
 volumes:
   postgres_blue_data:
