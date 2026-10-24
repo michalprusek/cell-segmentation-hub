@@ -819,3 +819,71 @@ describe('useRetryImage', () => {
     vi.useRealTimers();
   });
 });
+
+describe('useRetryImage — fallback order', () => {
+  beforeEach(() => {
+    vi.stubGlobal(
+      'Image',
+      class {
+        onload: (() => void) | null = null;
+        onerror: (() => void) | null = null;
+        set src(url: string) {
+          queueMicrotask(() =>
+            url.includes('fail') ? this.onerror?.() : this.onload?.()
+          );
+        }
+      }
+    );
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+
+  it('drops a late failure of the PREVIOUS list instead of breaking the new one', async () => {
+    const { useRetryImage } = await import('../useRetry');
+    vi.useFakeTimers();
+    const { result, rerender } = renderHook(({ urls }) => useRetryImage(urls), {
+      wrapper,
+      initialProps: { urls: ['/old-fail'] },
+    });
+    // The old preview is mid-retry (its backoff timer pending) when the
+    // server hands out a new one.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10);
+    });
+    rerender({ urls: ['/new-preview', '/thumb.jpg'] });
+    for (let i = 0; i < 20; i++) {
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5_000);
+      });
+    }
+
+    expect(result.current.imageError).toBe(false);
+    expect(result.current.currentUrl).toBe('/new-preview');
+  });
+
+  it('falls back to the NEXT candidate, not the one after it', async () => {
+    const { useRetryImage } = await import('../useRetry');
+    vi.useFakeTimers();
+    const { result } = renderHook(
+      () => useRetryImage(['/preview-fail', '/thumb.jpg', '/display']),
+      { wrapper }
+    );
+    for (
+      let i = 0;
+      i < 20 && result.current.currentUrl === '/preview-fail';
+      i++
+    ) {
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5_000);
+      });
+    }
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5_000);
+    });
+
+    expect(result.current.currentUrl).toBe('/thumb.jpg');
+    expect(result.current.imageError).toBe(false);
+  });
+});

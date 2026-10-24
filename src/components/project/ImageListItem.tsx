@@ -31,6 +31,22 @@ export const ImageListItem = ({
   const { t } = useLanguage();
   const [isDeleting, setIsDeleting] = React.useState(false);
 
+  // The preview first, like the grid card: it shows the segmentation, and for
+  // a video frame (no upload thumbnail) it is a 512 px JPEG where the next
+  // candidate is the full 16-bit frame. The endpoint answers 404 for a source
+  // it cannot draw, so a failed candidate falls through to the next one.
+  const candidates = React.useMemo(
+    () =>
+      [image.previewUrl, image.thumbnail_url, image.url].filter(
+        (u, i, all): u is string => !!u && all.indexOf(u) === i
+      ),
+    [image.previewUrl, image.thumbnail_url, image.url]
+  );
+  const [failed, setFailed] = React.useState<ReadonlySet<string>>(
+    () => new Set()
+  );
+  const src = candidates.find(u => !failed.has(u));
+
   const handleDelete = async (e: React.MouseEvent) => {
     e.stopPropagation();
     if (isDeleting) return;
@@ -72,21 +88,13 @@ export const ImageListItem = ({
 
       {/* Thumbnail */}
       <div className="h-10 w-10 rounded overflow-hidden bg-gray-100 dark:bg-gray-700 flex-shrink-0 cursor-pointer dark:bg-gray-800">
-        {/* The preview first, like the grid card: it shows the segmentation,
-            and for a video frame (no upload thumbnail) it is a 512 px JPEG
-            where the fallback is the full 16-bit frame. */}
-        {image.previewUrl || image.thumbnail_url ? (
+        {src ? (
           <img
-            src={image.previewUrl || image.thumbnail_url}
+            src={src}
             alt={image.name ? image.name.normalize('NFC') : 'Image'}
             className="h-full w-full object-cover"
             loading="lazy"
-          />
-        ) : image.url ? (
-          <img
-            src={image.url}
-            alt={image.name ? image.name.normalize('NFC') : 'Image'}
-            className="h-full w-full object-cover"
+            onError={() => setFailed(prev => new Set(prev).add(src))}
           />
         ) : (
           <div className="h-full w-full flex items-center justify-center">

@@ -151,18 +151,29 @@ function parsePolygons(raw: string | undefined): Polygon[] {
   }
 }
 
+interface Waiter {
+  key: string;
+  go: () => void;
+}
+
 /** Two-level semaphore: a request for a preview somebody is waiting to see
  *  always goes before a speculative `warm()`. */
-class RenderQueue {
+export class RenderQueue {
   private active = 0;
-  private readonly waiting: { high: Array<() => void>; low: Array<() => void> } =
-    { high: [], low: [] };
+  private readonly waiting: { high: Waiter[]; low: Waiter[] } = {
+    high: [],
+    low: [],
+  };
 
   constructor(private readonly limit: number) {}
 
-  async run<T>(priority: 'high' | 'low', task: () => Promise<T>): Promise<T> {
+  async run<T>(
+    key: string,
+    priority: 'high' | 'low',
+    task: () => Promise<T>
+  ): Promise<T> {
     if (this.active >= this.limit) {
-      await new Promise<void>(resolve => this.waiting[priority].push(resolve));
+      await new Promise<void>(go => this.waiting[priority].push({ key, go }));
     } else {
       this.active++;
     }
@@ -171,10 +182,22 @@ class RenderQueue {
     } finally {
       const next = this.waiting.high.shift() ?? this.waiting.low.shift();
       if (next) {
-        next(); // the slot passes straight to the next task
+        next.go(); // the slot passes straight to the next task
       } else {
         this.active--;
       }
+    }
+  }
+
+  /**
+   * Move a queued low-priority task to the high lane. A card on screen that
+   * joins a render `warm()` already queued would otherwise wait behind the
+   * whole backlog — after a track edit that is every frame of the video.
+   */
+  promote(key: string): void {
+    const i = this.waiting.low.findIndex(w => w.key === key);
+    if (i >= 0) {
+      this.waiting.high.push(...this.waiting.low.splice(i, 1));
     }
   }
 
@@ -216,7 +239,12 @@ export class PreviewService {
 
     const key = `${row.id}:${version}`;
     const running = this.inFlight.get(key);
-    if (running) {return running;}
+    if (running) {
+      if (priority === 'high') {
+        this.queue.promote(key);
+      }
+      return running;
+    }
 
     const failedUntil = this.failedUntil.get(key);
     if (failedUntil !== undefined && failedUntil > Date.now()) {
@@ -224,7 +252,7 @@ export class PreviewService {
     }
 
     const render = this.queue
-      .run(priority, async () => {
+      .run(key, priority, async () => {
         // Another request may have finished this version while we queued.
         if (await exists(filePath)) {return { version, filePath };}
 

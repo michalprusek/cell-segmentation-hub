@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen } from '@testing-library/react';
+import { fireEvent, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { render } from '@/test/utils/test-utils';
 import { ImageListItem } from '@/components/project/ImageListItem';
@@ -212,5 +212,43 @@ describe('ImageListItem', () => {
       <ImageListItem {...defaultProps} className="test-custom-class" />
     );
     expect(container.querySelector('.test-custom-class')).toBeInTheDocument();
+  });
+});
+
+describe('ImageListItem — picture fallback', () => {
+  const base = {
+    id: 'img-1',
+    name: 'a.png',
+    url: '/api/images/img-1/display',
+    thumbnail_url: '/uploads/a.jpg',
+    previewUrl: '/api/images/img-1/preview?v=0123456789abcdef',
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    segmentationStatus: 'completed',
+  };
+  const props = {
+    onDelete: vi.fn(),
+    onOpen: vi.fn(),
+    isSelected: false,
+    onSelectionChange: vi.fn(),
+  };
+
+  it('shows the preview first', () => {
+    render(<ImageListItem image={base as never} {...props} />);
+    expect(screen.getByAltText('a.png')).toHaveAttribute(
+      'src',
+      base.previewUrl
+    );
+  });
+
+  it('falls back to the upload thumbnail, then the image, when a candidate fails', () => {
+    render(<ImageListItem image={base as never} {...props} />);
+    fireEvent.error(screen.getByAltText('a.png'));
+    expect(screen.getByAltText('a.png')).toHaveAttribute(
+      'src',
+      base.thumbnail_url
+    );
+    fireEvent.error(screen.getByAltText('a.png'));
+    expect(screen.getByAltText('a.png')).toHaveAttribute('src', base.url);
   });
 });

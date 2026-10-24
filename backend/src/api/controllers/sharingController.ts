@@ -1,3 +1,7 @@
+import {
+  projectCardPreviewUrl,
+  withoutSegmentation,
+} from '../../services/previews/projectCardImage';
 import { Request, Response } from 'express';
 import * as SharingService from '../../services/sharingService';
 import { ResponseHelper, asyncHandler } from '../../utils/response';
@@ -19,6 +23,7 @@ interface ProjectWithUser extends Project {
     name: string;
     thumbnailPath: string | null;
     originalPath: string;
+    segmentation?: { id: string; updatedAt: Date } | null;
   }>;
 }
 
@@ -481,7 +486,9 @@ export const getSharedProjects = asyncHandler(
               email: share.project.user.email,
             },
             image_count: share.project._count?.images || 0,
-            images: share.project.images || [],
+            images: (share.project.images || []).map(withoutSegmentation),
+            // The same card picture an owner's project list carries.
+            previewUrl: projectCardPreviewUrl(share.project.images),
             updated_at: share.project.updatedAt,
             // "All annotations reviewed and passed" — owner AND accepted-share
             // annotators can both toggle it (PATCH …/verified), so it must

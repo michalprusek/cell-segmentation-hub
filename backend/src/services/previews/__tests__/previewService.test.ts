@@ -41,7 +41,7 @@ vi.mock('../previewRenderer', async importOriginal => {
 });
 
 import sharp from 'sharp';
-import { PreviewService, PreviewUnavailableError } from '../previewService';
+import { PreviewService, PreviewUnavailableError, RenderQueue } from '../previewService';
 import { previewUrlFor, previewVersion } from '../previewVersion';
 
 const PROJECT = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
@@ -195,5 +195,58 @@ describe('PreviewService.notifyChanged', () => {
     });
     // ...and pre-renders what it announced.
     expect(warm).toHaveBeenCalledWith([IMAGE]);
+  });
+});
+
+describe('RenderQueue', () => {
+  function gate() {
+    let open!: () => void;
+    const p = new Promise<void>(r => (open = r));
+    return { p, open };
+  }
+
+  it('runs a request someone waits for before the speculative backlog', async () => {
+    const q = new RenderQueue(1);
+    const order: string[] = [];
+    const busy = gate();
+    const first = q.run('busy', 'high', () => busy.p);
+    const lows = ['l1', 'l2'].map(k => q.run(k, 'low', async () => void order.push(k)));
+    const high = q.run('h', 'high', async () => void order.push('h'));
+
+    busy.open();
+    await Promise.all([first, ...lows, high]);
+
+    expect(order).toEqual(['h', 'l1', 'l2']);
+  });
+
+  it('promotes a queued low-priority task that a visible card has joined', async () => {
+    const q = new RenderQueue(1);
+    const order: string[] = [];
+    const busy = gate();
+    const first = q.run('busy', 'high', () => busy.p);
+    const lows = ['l1', 'l2', 'l3'].map(k =>
+      q.run(k, 'low', async () => void order.push(k))
+    );
+
+    q.promote('l3');
+    busy.open();
+    await Promise.all([first, ...lows]);
+
+    expect(order).toEqual(['l3', 'l1', 'l2']);
+  });
+
+  it('a high-priority ensurePreview that joins an in-flight warm promotes it', async () => {
+    const svc = new PreviewService();
+    const promote = vi.spyOn(
+      (svc as unknown as { queue: RenderQueue }).queue,
+      'promote'
+    );
+
+    const warm = svc.ensurePreview(IMAGE, 'low');
+    const visible = svc.ensurePreview(IMAGE, 'high');
+    await Promise.all([warm, visible]);
+
+    expect(promote).toHaveBeenCalledTimes(1);
+    expect(renderSpy.calls).toBe(1);
   });
 });

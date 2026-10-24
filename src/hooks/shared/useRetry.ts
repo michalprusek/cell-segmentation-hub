@@ -3,7 +3,14 @@
  * Provides retry functionality with loading states and error handling
  */
 
-import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import {
+  useState,
+  useCallback,
+  useRef,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+} from 'react';
 import { useLanguage } from '@/contexts/exports';
 import { toast } from 'sonner';
 import {
@@ -333,19 +340,19 @@ export function useRetryImage(urls: string[]) {
     setImageError(false);
   }
 
+  // The list a load was started for. A result that arrives after the list
+  // changed belongs to a picture nobody shows any more and is dropped —
+  // otherwise a late failure of the OLD preview marks the NEW one as broken.
+  const latestKeyRef = useRef(urlsKey);
+  useLayoutEffect(() => {
+    latestKeyRef.current = urlsKey;
+  }, [urlsKey]);
+
+  // No `onFailure` here: the failure is acted on once, below. It used to be
+  // acted on in both places, so one failed preview advanced the index TWICE
+  // and skipped the upload thumbnail — straight to the full-size original.
   const { execute, loading, retrying, attempt, nextRetryIn } = useRetry<string>(
-    {
-      preset: 'imageLoad',
-      showToast: false,
-      onFailure: () => {
-        // Try next URL if available
-        if (currentUrlIndex < urls.length - 1) {
-          setCurrentUrlIndex(prev => prev + 1);
-        } else {
-          setImageError(true);
-        }
-      },
-    }
+    { preset: 'imageLoad', showToast: false }
   );
 
   const loadImage = useCallback(async (url: string): Promise<string> => {
@@ -358,20 +365,23 @@ export function useRetryImage(urls: string[]) {
   }, []);
 
   const tryLoadImage = useCallback(async () => {
-    if (currentUrlIndex >= urls.length) {
+    const key = urlsKey;
+    const index = currentUrlIndex;
+    if (index >= urls.length) {
       setImageError(true);
       return;
     }
 
-    const result = await execute(() => loadImage(urls[currentUrlIndex]));
-
-    if (!result.success && currentUrlIndex < urls.length - 1) {
-      // Try next URL
-      setCurrentUrlIndex(prev => prev + 1);
-    } else if (!result.success) {
+    const result = await execute(() => loadImage(urls[index]));
+    if (result.success || latestKeyRef.current !== key) {
+      return;
+    }
+    if (index < urls.length - 1) {
+      setCurrentUrlIndex(index + 1);
+    } else {
       setImageError(true);
     }
-  }, [currentUrlIndex, urls, execute, loadImage]);
+  }, [currentUrlIndex, urls, urlsKey, execute, loadImage]);
 
   useEffect(() => {
     if (urls.length > 0 && currentUrlIndex < urls.length) {
