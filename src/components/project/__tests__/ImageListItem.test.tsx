@@ -252,3 +252,37 @@ describe('ImageListItem — picture fallback', () => {
     expect(screen.getByAltText('a.png')).toHaveAttribute('src', base.url);
   });
 });
+
+describe('ImageListItem — status badge', () => {
+  const props = {
+    onDelete: vi.fn(),
+    onOpen: vi.fn(),
+    isSelected: false,
+    onSelectionChange: vi.fn(),
+  };
+  it.each([
+    ['no_segmentation', 'No segmentation'],
+    ['failed', 'Failed'],
+    ['queued', 'Queued'],
+    ['processing', 'Processing'],
+    ['completed', 'Segmented'],
+  ])('%s reads as "%s"', (status, label) => {
+    render(
+      <ImageListItem
+        image={
+          {
+            id: 'i',
+            name: 'n.png',
+            segmentationStatus: status,
+            createdAt: new Date(),
+          } as never
+        }
+        {...props}
+      />
+    );
+    expect(screen.getByText(label)).toBeInTheDocument();
+    if (status !== 'queued') {
+      expect(screen.queryByText('Queued')).not.toBeInTheDocument();
+    }
+  });
+});

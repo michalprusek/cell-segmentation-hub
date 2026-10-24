@@ -125,11 +125,19 @@ export const ImageListItem = ({
                     : 'bg-gray-100 text-gray-800 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
               )}
             >
-              {image.segmentationStatus === 'completed'
+              {/* Every state named, as the grid card does: an image that was
+                  never segmented (or whose run failed) used to read
+                  "Queued" here. */}
+              {image.segmentationStatus === 'completed' ||
+              image.segmentationStatus === 'segmented'
                 ? t('status.segmented')
                 : image.segmentationStatus === 'processing'
                   ? t('status.processing')
-                  : t('status.queued')}
+                  : image.segmentationStatus === 'queued'
+                    ? t('status.queued')
+                    : image.segmentationStatus === 'failed'
+                      ? t('status.failed')
+                      : t('status.no_segmentation')}
             </Badge>
           )}
         </div>
