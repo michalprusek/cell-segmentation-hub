@@ -8,6 +8,7 @@
  * the palette changes); a delete removes the entry AND nulls every `mtType`
  * reference across the project's frames so no dangling ids remain.
  */
+import { previewService } from './previews/previewService';
 import { prisma } from '../db';
 import { MICROCAPSULE_DEFAULT_TYPE_LABELS } from './microcapsuleRelevance';
 import { Prisma } from '@prisma/client';
@@ -144,6 +145,7 @@ async function clearLabelReferences(
     },
   });
   const ops: Prisma.PrismaPromise<unknown>[] = [];
+  const changedImageIds: string[] = [];
   let framesCleaned = 0;
   for (const frame of frames) {
     if (!frame.segmentation) {
@@ -156,6 +158,7 @@ async function clearLabelReferences(
     const { polygons, changed } = clearMtTypesByIds(parsed, idSet);
     if (changed > 0) {
       framesCleaned++;
+      changedImageIds.push(frame.id);
       ops.push(
         prisma.segmentation.update({
           where: { id: frame.segmentation.id },
@@ -166,6 +169,9 @@ async function clearLabelReferences(
   }
   if (ops.length > 0) {
     await prisma.$transaction(ops);
+    // A microcapsule's colour follows its type label (grey when it does not
+    // count), so clearing a label changes what its preview draws.
+    previewService.notifyChanged(changedImageIds);
   }
   return framesCleaned;
 }

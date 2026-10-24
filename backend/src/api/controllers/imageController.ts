@@ -1,8 +1,7 @@
 import { Request, Response } from 'express';
 import { Prisma } from '@prisma/client';
 import { ImageService } from '../../services/imageService';
-// Removed ThumbnailService - using unified approach with SegmentationThumbnailService only
-import { SegmentationThumbnailService } from '../../services/segmentationThumbnailService';
+import { previewUrlFor } from '../../services/previews/previewVersion';
 import { WebSocketService } from '../../services/websocketService';
 import {
   WebSocketEvent,
@@ -20,15 +19,9 @@ import * as SharingService from '../../services/sharingService';
 
 export class ImageController {
   private imageService: ImageService;
-  // Removed thumbnailService - using unified approach
-  private segmentationThumbnailService: SegmentationThumbnailService;
 
   constructor() {
     this.imageService = new ImageService(prisma);
-    // Unified thumbnail approach - no polygon service needed
-    this.segmentationThumbnailService = new SegmentationThumbnailService(
-      prisma
-    );
   }
 
   /**
@@ -1157,11 +1150,6 @@ export class ImageController {
             ? await getUrlSafe(image.thumbnailPath, originalUrl)
             : originalUrl; // Fallback to original if no thumbnail
 
-          // Generate segmentation thumbnail URL if it exists
-          const segmentationThumbnailUrl = image.segmentationThumbnailPath
-            ? await getUrlSafe(image.segmentationThumbnailPath, null)
-            : null;
-
           // Video containers / extracted frames are not directly
           // browser-renderable — the original is a binary ND2 / TIFF
           // stack or a per-channel PNG buried in frames/. Route the
@@ -1189,8 +1177,9 @@ export class ImageController {
             createdAt: image.createdAt,
             updatedAt: image.updatedAt,
             segmentationResult: thumbnailData,
-            segmentationThumbnailUrl: segmentationThumbnailUrl,
-            segmentationThumbnailPath: image.segmentationThumbnailPath,
+            // The grid's picture: the image with its segmentation drawn on
+            // it, at a URL that changes whenever either does.
+            previewUrl: previewUrlFor(image),
             // Video-container metadata (ND2 / TIFF stack / MP4) — without
             // these the editor's VideoModeOverlay can't tell a container
             // from a standalone image, so frame slider / play / channel
@@ -1383,235 +1372,6 @@ export class ImageController {
           'ImageController'
         );
       }
-    }
-  };
-
-  /**
-   * Regenerate missing segmentation thumbnails for a project
-   * POST /api/projects/:projectId/regenerate-thumbnails
-   *
-   * This endpoint finds images with segmentationStatus='segmented' but missing segmentationThumbnailPath
-   * and regenerates the thumbnails using the retry-enabled service
-   */
-  regenerateThumbnails = async (req: Request, res: Response): Promise<void> => {
-    try {
-      const userId = req.user?.id;
-      if (!userId) {
-        ResponseHelper.unauthorized(res, 'Unauthorized access');
-        return;
-      }
-
-      const { projectId } = req.params;
-      if (!projectId) {
-        ResponseHelper.badRequest(res, 'Project ID is required');
-        return;
-      }
-
-      // Optional query parameters
-      const {
-        dryRun = 'false', // If true, only count missing thumbnails without regenerating
-        limit = '100', // Limit number of thumbnails to regenerate in one request
-      } = req.query;
-
-      const isDryRun = dryRun === 'true';
-      const limitNum = parseInt(limit as string, 10);
-
-      if (isNaN(limitNum) || limitNum < 1 || limitNum > 1000) {
-        ResponseHelper.badRequest(
-          res,
-          'Limit must be a positive integer between 1 and 1000'
-        );
-        return;
-      }
-
-      logger.info('Starting thumbnail regeneration', 'ImageController', {
-        projectId,
-        userId,
-        isDryRun,
-        limit: limitNum,
-      });
-
-      // Check if user has access to this project (owner or shared)
-      const accessCheck = await SharingService.hasProjectAccess(
-        projectId,
-        userId
-      );
-      if (!accessCheck.hasAccess) {
-        ResponseHelper.notFound(res, 'Projekt nenalezen nebo nemáte oprávnění');
-        return;
-      }
-
-      // Find images with segmentation but missing thumbnails
-      const imagesWithMissingThumbnails = await prisma.image.findMany({
-        where: {
-          projectId,
-          segmentationStatus: 'segmented',
-          OR: [
-            { segmentationThumbnailPath: null },
-            { segmentationThumbnailPath: '' },
-          ],
-        },
-        include: {
-          segmentation: {
-            select: {
-              id: true,
-              imageId: true,
-            },
-          },
-        },
-        orderBy: {
-          updatedAt: 'desc', // Prioritize recently processed images
-        },
-        take: limitNum,
-      });
-
-      // Filter to only images that actually have segmentation data
-      const validImages = imagesWithMissingThumbnails.filter(
-        img => img.segmentation
-      );
-
-      logger.info('Found images with missing thumbnails', 'ImageController', {
-        projectId,
-        totalFound: imagesWithMissingThumbnails.length,
-        validWithSegmentation: validImages.length,
-        isDryRun,
-      });
-
-      if (isDryRun) {
-        // Dry run - just return the count and details
-        const summary = {
-          projectId,
-          totalImagesChecked: imagesWithMissingThumbnails.length,
-          imagesWithMissingThumbnails: validImages.length,
-          imageDetails: validImages.map(img => ({
-            id: img.id,
-            name: img.name,
-            segmentationId: img.segmentation?.id,
-            updatedAt: img.updatedAt,
-          })),
-          concurrencyStatus:
-            this.segmentationThumbnailService.getConcurrencyStatus(),
-        };
-
-        ResponseHelper.success(
-          res,
-          summary,
-          `Nalezeno ${validImages.length} obrázků s chybějícími náhledy (dry run)`
-        );
-        return;
-      }
-
-      if (validImages.length === 0) {
-        ResponseHelper.success(
-          res,
-          {
-            projectId,
-            regeneratedCount: 0,
-            failedCount: 0,
-            message: 'No images with missing thumbnails found',
-          },
-          'Žádné obrázky s chybějícími náhledy nebyly nalezeny'
-        );
-        return;
-      }
-
-      // Extract segmentation IDs for batch processing
-      const segmentationIds = validImages
-        .map(img => img.segmentation?.id)
-        .filter((id): id is string => id !== undefined);
-
-      // Regenerate thumbnails using batch processing with retry logic
-      const startTime = Date.now();
-      const results =
-        await this.segmentationThumbnailService.generateBatchThumbnails(
-          segmentationIds,
-          {
-            width: 300,
-            height: 300,
-            showNumbers: false,
-          }
-        );
-
-      // Count successes and failures
-      let successCount = 0;
-      let failureCount = 0;
-      const failedImages: string[] = [];
-
-      results.forEach((thumbnailUrl, segmentationId) => {
-        if (thumbnailUrl) {
-          successCount++;
-        } else {
-          failureCount++;
-          const failedImage = validImages.find(
-            img => img.segmentation?.id === segmentationId
-          );
-          if (failedImage) {
-            failedImages.push(failedImage.name);
-          }
-        }
-      });
-
-      const totalTime = Date.now() - startTime;
-
-      logger.info('Thumbnail regeneration completed', 'ImageController', {
-        projectId,
-        totalImages: validImages.length,
-        successCount,
-        failureCount,
-        totalTime,
-        concurrencyStatus:
-          this.segmentationThumbnailService.getConcurrencyStatus(),
-      });
-
-      const response = {
-        projectId,
-        totalImages: validImages.length,
-        regeneratedCount: successCount,
-        failedCount: failureCount,
-        processingTime: totalTime,
-        failedImages: failureCount > 0 ? failedImages : undefined,
-        concurrencyStatus:
-          this.segmentationThumbnailService.getConcurrencyStatus(),
-      };
-
-      if (failureCount > 0) {
-        ResponseHelper.success(
-          res,
-          response,
-          `Úspěšně regenerováno ${successCount} náhledů, ${failureCount} selhalo`
-        );
-      } else {
-        ResponseHelper.success(
-          res,
-          response,
-          `Úspěšně regenerováno ${successCount} náhledů`
-        );
-      }
-    } catch (error) {
-      logger.error(
-        'Failed to regenerate thumbnails',
-        error instanceof Error ? error : undefined,
-        'ImageController',
-        {
-          userId: req.user?.id,
-          projectId: req.params.projectId,
-        }
-      );
-
-      // Handle ApiError instances directly
-      if (error instanceof ApiError) {
-        ResponseHelper.error(
-          res,
-          error,
-          error.statusCode,
-          undefined,
-          'ImageController'
-        );
-        return;
-      }
-
-      // Fallback for non-ApiError errors
-      ResponseHelper.internalError(res, error as Error, 'ImageController');
     }
   };
 }

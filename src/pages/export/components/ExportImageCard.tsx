@@ -80,15 +80,26 @@ export const ExportImageCard: React.FC<ExportImageCardProps> = ({
   React.useEffect(() => {
     setFallbackIndex(0);
     setImageError(false);
-  }, [image.id, image.thumbnail_url, image.url, image.image_url]);
+  }, [
+    image.id,
+    image.previewUrl,
+    image.thumbnail_url,
+    image.url,
+    image.image_url,
+  ]);
 
   // Create ordered list of candidate URLs
   const candidateUrls = React.useMemo(() => {
-    const urls = [image.thumbnail_url, image.url, image.image_url]
+    const urls = [
+      image.previewUrl,
+      image.thumbnail_url,
+      image.url,
+      image.image_url,
+    ]
       .filter(Boolean)
       .filter((url, index, array) => array.indexOf(url) === index);
     return urls;
-  }, [image.thumbnail_url, image.url, image.image_url]);
+  }, [image.previewUrl, image.thumbnail_url, image.url, image.image_url]);
 
   const statusInfo = getStatusInfo(
     image.segmentationStatus || 'no_segmentation',

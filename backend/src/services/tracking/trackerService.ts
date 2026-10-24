@@ -14,6 +14,7 @@
  * user-visible errors; kymograph then falls back to the static-line path.
  */
 
+import { previewService } from '../previews/previewService';
 import axios from 'axios';
 import { prisma } from '../../db/prismaClient';
 import { config } from '../../utils/config';
@@ -351,6 +352,8 @@ async function _runTrackingForContainerInner(
       chunksCommitted++;
     }
   } catch (err) {
+    // What committed is changed: tell open pages, then fail as before.
+    if (chunksCommitted > 0) {previewService.notifyContainerChanged(containerId);}
     const rowsCommitted = chunksCommitted * TX_CHUNK_SIZE;
     const rowsTotal = updates.length;
     logger.error(
@@ -369,6 +372,8 @@ async function _runTrackingForContainerInner(
     );
     throw err;
   }
+
+  if (updates.length > 0) {previewService.notifyContainerChanged(containerId);}
 
   const uniqueTracks = new Set(Object.values(assignments)).size;
   logger.info(

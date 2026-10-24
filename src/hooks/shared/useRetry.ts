@@ -319,6 +319,20 @@ export function useRetryImage(urls: string[]) {
   const [currentUrlIndex, setCurrentUrlIndex] = useState(0);
   const [imageError, setImageError] = useState(false);
 
+  // A new candidate list starts from its first entry. The list changes when
+  // the server hands out a new preview URL (every segmentation edit does), and
+  // without this a card whose previous preview had failed stayed on its
+  // fallback — or on "no preview" — and never tried the new one. Adjusted
+  // during render, React's documented pattern for state derived from props,
+  // so the stale index is never rendered.
+  const urlsKey = urls.join('\n');
+  const [loadedKey, setLoadedKey] = useState(urlsKey);
+  if (loadedKey !== urlsKey) {
+    setLoadedKey(urlsKey);
+    setCurrentUrlIndex(0);
+    setImageError(false);
+  }
+
   const { execute, loading, retrying, attempt, nextRetryIn } = useRetry<string>(
     {
       preset: 'imageLoad',
@@ -363,7 +377,7 @@ export function useRetryImage(urls: string[]) {
     if (urls.length > 0 && currentUrlIndex < urls.length) {
       tryLoadImage();
     }
-  }, [currentUrlIndex]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [currentUrlIndex, urlsKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return {
     currentUrl: urls[currentUrlIndex],

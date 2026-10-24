@@ -96,14 +96,14 @@ describe('ensureBrowserCompatibleUrl', () => {
 
 describe('getImageFallbackUrls', () => {
   describe('TIFF images', () => {
-    it('puts segmentationThumbnailUrl first', () => {
+    it('puts the preview first', () => {
       const urls = getImageFallbackUrls({
         id: 'img-1',
         name: 'scan.tiff',
-        segmentationThumbnailUrl: '/seg-thumb',
+        previewUrl: '/api/images/img/preview?v=0123456789abcdef',
         thumbnail_url: '/thumb',
       });
-      expect(urls[0]).toBe('/seg-thumb');
+      expect(urls[0]).toBe('/api/images/img/preview?v=0123456789abcdef');
     });
 
     it('includes the display endpoint in the list', () => {
@@ -126,14 +126,16 @@ describe('getImageFallbackUrls', () => {
   });
 
   describe('non-TIFF images', () => {
-    it('puts segmentationThumbnailUrl first when available', () => {
+    it('puts the preview first when available', () => {
       const urls = getImageFallbackUrls({
         id: 'img-2',
         name: 'photo.jpg',
-        segmentationThumbnailUrl: '/seg-thumb',
+        previewUrl: '/api/images/img/preview?v=0123456789abcdef',
+        // An upload thumbnail too: the preview must still come first.
+        thumbnail_url: '/thumb',
         url: '/original',
       });
-      expect(urls[0]).toBe('/seg-thumb');
+      expect(urls[0]).toBe('/api/images/img/preview?v=0123456789abcdef');
     });
 
     it('appends the display endpoint as final fallback', () => {

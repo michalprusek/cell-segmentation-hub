@@ -52,6 +52,9 @@ export enum WebSocketEvent {
   // Project events
   PROJECT_UPDATE = 'projectUpdate',
   PROJECT_DELETED = 'projectDeleted',
+  // Images of a project whose preview changed. Sent to the project room.
+  // Payload: ImagePreviewsUpdatedData.
+  IMAGE_PREVIEWS_UPDATED = 'imagePreviewsUpdated',
 
   // Dashboard events
   DASHBOARD_UPDATE = 'dashboardUpdate',
@@ -294,6 +297,13 @@ export interface UploadFailedData {
 /**
  * Project update event
  */
+/** `IMAGE_PREVIEWS_UPDATED`: the current preview URL of each changed image.
+ *  The URL is versioned, so a client only has to swap it in. */
+export interface ImagePreviewsUpdatedData {
+  projectId: string;
+  previews: Array<{ imageId: string; previewUrl: string }>;
+}
+
 export interface ProjectUpdateData {
   projectId: string;
   userId: string;

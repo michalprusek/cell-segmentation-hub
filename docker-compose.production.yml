@@ -79,6 +79,12 @@ services:
       - WS_PARALLEL_PROCESSING_ENABLED=true
       # Automated Essays worker (batch MT assay). Reached over the docker network.
       - ESSAYS_SERVICE_URL=${ESSAYS_SERVICE_URL:-http://essays:8000}
+      # Storage GC (services/maintenance/storageGc.ts): reconcile the upload
+      # tree with the database every 6 h and delete orphans past their grace
+      # period. `dry-run` plans and reports to logs/backend/storage-gc/ without
+      # deleting; `off` disables it. The code default is dry-run; production
+      # deletes, by the decision recorded in the PR that added it.
+      - STORAGE_GC_MODE=${STORAGE_GC_MODE:-delete}
     volumes:
       - ./backend/uploads/blue:/app/uploads
       - ./backend/data:/app/data

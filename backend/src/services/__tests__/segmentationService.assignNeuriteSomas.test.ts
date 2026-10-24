@@ -42,11 +42,9 @@ vi.mock('../../utils/config', () => ({
   },
 }));
 vi.mock('../../storage');
-vi.mock('../segmentationThumbnailService');
-vi.mock('../thumbnailManager', () => ({
-  ThumbnailManager: function MockThumbnailManager(this: any) {
-    this.generateAllThumbnails = vi.fn().mockResolvedValue(undefined);
-  },
+vi.mock('../previews/previewService', () => ({
+  previewService: { notifyChanged: vi.fn(), notifyContainerChanged: vi.fn() },
+  removePreviews: vi.fn(),
 }));
 vi.mock('../imageService');
 

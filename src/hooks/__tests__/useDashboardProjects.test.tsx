@@ -510,58 +510,25 @@ describe('useDashboardProjects', () => {
     });
   });
 
-  describe('thumbnail URL resolution', () => {
-    it('uses thumbnailPath as-is when it starts with http', async () => {
+  describe('card picture', () => {
+    it('is the project previewUrl the server sends', async () => {
+      const previewUrl = '/api/images/img-1/preview?v=0123456789abcdef';
       vi.mocked(apiClient.getProjects).mockResolvedValue({
-        projects: [
-          makeProject('p1', {
-            images: [
-              {
-                thumbnailPath: 'http://cdn.example.com/thumb.jpg',
-                originalPath: null,
-              },
-            ],
-          }),
-        ],
+        projects: [makeProject('p1', { previewUrl })],
       });
 
       const { result } = renderDashboard();
-
       await waitFor(() => expect(result.current.loading).toBe(false));
 
-      expect(result.current.projects[0].thumbnail).toBe(
-        'http://cdn.example.com/thumb.jpg'
-      );
+      expect(result.current.projects[0].thumbnail).toBe(previewUrl);
     });
 
-    it('prepends baseUrl when thumbnailPath is relative', async () => {
+    it('is the placeholder for a project with no image (previewUrl null)', async () => {
       vi.mocked(apiClient.getProjects).mockResolvedValue({
-        projects: [
-          makeProject('p1', {
-            images: [
-              { thumbnailPath: 'uploads/thumb.jpg', originalPath: null },
-            ],
-          }),
-        ],
+        projects: [makeProject('p1', { previewUrl: null })],
       });
 
       const { result } = renderDashboard();
-
-      await waitFor(() => expect(result.current.loading).toBe(false));
-
-      // apiBaseUrl 'http://localhost:3001/api' → base 'http://localhost:3001'
-      expect(result.current.projects[0].thumbnail).toBe(
-        'http://localhost:3001/uploads/thumb.jpg'
-      );
-    });
-
-    it('falls back to /placeholder.svg when there are no images', async () => {
-      vi.mocked(apiClient.getProjects).mockResolvedValue({
-        projects: [makeProject('p1', { images: [] })],
-      });
-
-      const { result } = renderDashboard();
-
       await waitFor(() => expect(result.current.loading).toBe(false));
 
       expect(result.current.projects[0].thumbnail).toBe('/placeholder.svg');

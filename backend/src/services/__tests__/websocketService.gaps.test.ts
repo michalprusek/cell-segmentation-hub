@@ -8,7 +8,7 @@
  *  - connected-user tracking via the 'connection' handler
  *  - disconnection cleanup (single vs multiple sockets per user)
  *  - emitSegmentationComplete (notification shape + room targeting)
- *  - broadcastThumbnailUpdate (event name + room)
+ *  - emitToProject (event name + room)
  *  - broadcastSystemMessage (all-socket broadcast)
  *  - emitToUser input validation (empty userId, empty event)
  *  - isValidProjectAccess — Prisma error path (returns false, does not throw)
@@ -449,53 +449,28 @@ describe('WebSocketService – gap coverage', () => {
   });
 
   // -------------------------------------------------------------------------
-  // broadcastThumbnailUpdate
+  // emitToProject
   // -------------------------------------------------------------------------
-  describe('broadcastThumbnailUpdate', () => {
-    it('emits thumbnail:updated to the project room', () => {
+  describe('emitToProject', () => {
+    it('emits the event to the project room, not a user room', () => {
       const roomEmit = vi.fn();
       io.to.mockReturnValueOnce({ emit: roomEmit });
-
-      const thumbnailUpdate = {
-        imageId: 'img-th1',
+      const payload = {
         projectId: 'proj-th',
-        segmentationId: 'seg-1',
-        thumbnailData: {
-          levelOfDetail: 'low' as const,
-          polygons: [],
-          polygonCount: 3,
-          pointCount: 12,
-          compressionRatio: 0.5,
-        },
+        previews: [{ imageId: 'img-1', previewUrl: '/api/images/img-1/preview?v=1' }],
       };
 
-      svc.broadcastThumbnailUpdate('proj-th', thumbnailUpdate);
+      svc.emitToProject('proj-th', 'imagePreviewsUpdated', payload);
 
       expect(io.to).toHaveBeenCalledWith('project:proj-th');
-      expect(roomEmit).toHaveBeenCalledWith(
-        'thumbnail:updated',
-        thumbnailUpdate
-      );
+      expect(roomEmit).toHaveBeenCalledWith('imagePreviewsUpdated', payload);
     });
 
     it('does not throw when io.to throws', () => {
       io.to.mockImplementationOnce(() => {
         throw new Error('boom');
       });
-      expect(() =>
-        svc.broadcastThumbnailUpdate('proj-th', {
-          imageId: 'i',
-          projectId: 'p',
-          segmentationId: 's',
-          thumbnailData: {
-            levelOfDetail: 'high',
-            polygons: [],
-            polygonCount: 0,
-            pointCount: 0,
-            compressionRatio: 1,
-          },
-        })
-      ).not.toThrow();
+      expect(() => svc.emitToProject('p', 'imagePreviewsUpdated', {})).not.toThrow();
     });
   });
 

@@ -72,11 +72,15 @@ export const ImageListItem = ({
 
       {/* Thumbnail */}
       <div className="h-10 w-10 rounded overflow-hidden bg-gray-100 dark:bg-gray-700 flex-shrink-0 cursor-pointer dark:bg-gray-800">
-        {image.thumbnail_url ? (
+        {/* The preview first, like the grid card: it shows the segmentation,
+            and for a video frame (no upload thumbnail) it is a 512 px JPEG
+            where the fallback is the full 16-bit frame. */}
+        {image.previewUrl || image.thumbnail_url ? (
           <img
-            src={image.thumbnail_url}
+            src={image.previewUrl || image.thumbnail_url}
             alt={image.name ? image.name.normalize('NFC') : 'Image'}
             className="h-full w-full object-cover"
+            loading="lazy"
           />
         ) : image.url ? (
           <img

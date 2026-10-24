@@ -57,6 +57,51 @@ const NEURON_COLORS: Record<string, string> = {
   soma: '#d946ef', // magenta
 };
 
+/**
+ * The colour one shape is drawn in. Shared by the export visualization and the
+ * project-grid preview (`services/previews/previewRenderer.ts`), so the two can
+ * never describe the same polygon differently.
+ */
+export function resolvePolygonColor(
+  polygon: Polygon,
+  polygonColors: VisualizationOptions['polygonColors']
+): string {
+  const isPolyline = polygon.geometry === 'polyline';
+
+  // A microcapsule that does not count renders grey, mirroring the model's
+  // own overlay: visible for QA without implying it was measured. The user's
+  // type label decides, falling back to the model's border-cut flag — so this
+  // stays in step with the metrics rather than describing a different set.
+  // A membrane is a second boundary of a capsule, not a capsule — the
+  // relevance rule below is about which CAPSULES count, and applying it here
+  // would grey out a membrane for a property it does not have.
+  const isMembrane = isMembranePolygon(polygon);
+  const isIncomplete = !isMembrane && !isMeasuredMicrocapsule(polygon);
+
+  // Polylines use part-class colors; closed polygons use type-based colors
+  // except 'core' (green) and the neuron classes, which carry their own —
+  // all consistent with the editor canvas.
+  const isCorePolygon = !isPolyline && polygon.partClass === 'core';
+  const neuronColor = isPolyline
+    ? undefined
+    : NEURON_COLORS[polygon.partClass || ''];
+  return isMembrane
+    ? // Magenta against the wall's green, matching the upstream method's own
+      // overlay convention (green = outer wall, magenta = membrane) and the
+      // editor canvas, so a QA image and the editor read the same.
+      MEMBRANE_COLOR
+    : isIncomplete
+      ? '#969696' // grey — matches the model overlay (150,150,150)
+      : isPolyline
+        ? POLYLINE_COLORS[polygon.partClass || ''] || '#a855f7'
+        : isCorePolygon
+          ? '#22c55e' // green — matches frontend CanvasPolygon for the disintegration core
+          : (neuronColor ??
+            (polygon.type === 'external'
+              ? polygonColors?.external || '#00FF00'
+              : polygonColors?.internal || '#FF0000'));
+}
+
 export enum VisualizationResult {
   SUCCESS = 'success',
   SKIPPED = 'skipped',
@@ -334,38 +379,7 @@ export class VisualizationGenerator {
       return;
     }
 
-    // A microcapsule that does not count renders grey, mirroring the model's
-    // own overlay: visible for QA without implying it was measured. The user's
-    // type label decides, falling back to the model's border-cut flag — so this
-    // stays in step with the metrics rather than describing a different set.
-    // A membrane is a second boundary of a capsule, not a capsule — the
-    // relevance rule below is about which CAPSULES count, and applying it here
-    // would grey out a membrane for a property it does not have.
-    const isMembrane = isMembranePolygon(polygon);
-    const isIncomplete = !isMembrane && !isMeasuredMicrocapsule(polygon);
-
-    // Polylines use part-class colors; closed polygons use type-based colors
-    // except 'core' (green) and the neuron classes, which carry their own —
-    // all consistent with the editor canvas.
-    const isCorePolygon = !isPolyline && polygon.partClass === 'core';
-    const neuronColor = isPolyline
-      ? undefined
-      : NEURON_COLORS[polygon.partClass || ''];
-    const color = isMembrane
-      ? // Magenta against the wall's green, matching the upstream method's own
-        // overlay convention (green = outer wall, magenta = membrane) and the
-        // editor canvas, so a QA image and the editor read the same.
-        MEMBRANE_COLOR
-      : isIncomplete
-        ? '#969696' // grey — matches the model overlay (150,150,150)
-        : isPolyline
-          ? POLYLINE_COLORS[polygon.partClass || ''] || '#a855f7'
-          : isCorePolygon
-            ? '#22c55e' // green — matches frontend CanvasPolygon for the disintegration core
-            : (neuronColor ??
-              (polygon.type === 'external'
-                ? options.polygonColors?.external || '#00FF00'
-                : options.polygonColors?.internal || '#FF0000'));
+    const color = resolvePolygonColor(polygon, options.polygonColors);
 
     ctx.strokeStyle = color;
     ctx.lineWidth = isPolyline

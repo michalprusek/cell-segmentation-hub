@@ -765,3 +765,57 @@ describe('useRetry', () => {
 // ---------------------------------------------------------------------------
 // useRetryImport
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// useRetryImage — a new candidate list starts again from its first URL
+// ---------------------------------------------------------------------------
+describe('useRetryImage', () => {
+  let loadOk: (url: string) => boolean;
+
+  beforeEach(() => {
+    loadOk = () => true;
+    // jsdom never loads images; decide per URL.
+    vi.stubGlobal(
+      'Image',
+      class {
+        onload: (() => void) | null = null;
+        onerror: (() => void) | null = null;
+        set src(url: string) {
+          queueMicrotask(() =>
+            loadOk(url) ? this.onload?.() : this.onerror?.()
+          );
+        }
+      }
+    );
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('starts again from the first URL — and clears the error — when the list changes', async () => {
+    const { useRetryImage } = await import('../useRetry');
+    // The first preview fails everywhere, so the hook gives up.
+    loadOk = () => false;
+    vi.useFakeTimers();
+    const { result, rerender } = renderHook(({ urls }) => useRetryImage(urls), {
+      wrapper,
+      initialProps: { urls: ['/preview?v=1'] },
+    });
+    // Past every retry delay of the imageLoad preset (a countdown interval
+    // keeps ticking, so runAllTimers would never settle).
+    for (let i = 0; i < 20 && !result.current.imageError; i++) {
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5_000);
+      });
+    }
+    expect(result.current.imageError).toBe(true);
+
+    // The server hands out a new preview after an edit.
+    loadOk = () => true;
+    rerender({ urls: ['/preview?v=2', '/thumb.jpg'] });
+
+    expect(result.current.imageError).toBe(false);
+    expect(result.current.currentUrl).toBe('/preview?v=2');
+    vi.useRealTimers();
+  });
+});

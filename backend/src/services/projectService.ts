@@ -1,3 +1,4 @@
+import { previewUrlFor } from './previews/previewVersion';
 import {
   collectProjectFiles,
   completeCleanup,
@@ -86,6 +87,15 @@ export async function createProject(
 /**
  * Get projects for a user with pagination and search (owned AND shared projects)
  */
+/** The card's image row, without the segmentation stamp only the preview
+ *  version needed. */
+function omitSegmentation<T extends { segmentation?: unknown }>(
+  row: T
+): Omit<T, 'segmentation'> {
+  const { segmentation: _segmentation, ...rest } = row;
+  return rest;
+}
+
 export async function getUserProjects(
   userId: string,
   options: ProjectQueryParams
@@ -178,9 +188,17 @@ export async function getUserProjects(
             images: true,
           },
         },
+        // The card's picture: the newest image the project grid shows — a
+        // still, or the FIRST frame of a video, never a container (which the
+        // grid hides) or an arbitrary frame of a 300-frame upload whose rows
+        // all share one createdAt.
         images: {
           take: 1,
-          orderBy: { createdAt: 'desc' },
+          where: {
+            isVideoContainer: false,
+            OR: [{ parentVideoId: null }, { frameIndex: 0 }],
+          },
+          orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
           select: {
             id: true,
             name: true,
@@ -189,6 +207,7 @@ export async function getUserProjects(
             segmentationStatus: true,
             createdAt: true,
             updatedAt: true,
+            segmentation: { select: { id: true, updatedAt: true } },
           },
         },
         user: {
@@ -270,6 +289,9 @@ export async function getUserProjects(
 
       return {
         ...project,
+        // Same versioned preview as the grid card, so the dashboard shows the
+        // segmentation and follows every edit without a request per card.
+        previewUrl: latestImage ? previewUrlFor(latestImage) : null,
         isOwned: project.userId === userId,
         isShared: project.userId !== userId && project.shares.length > 0,
         owner: project.user,
@@ -287,7 +309,7 @@ export async function getUserProjects(
         images: latestImage
           ? [
               {
-                ...latestImage,
+                ...omitSegmentation(latestImage),
                 thumbnailUrl,
                 displayUrl: `/api/images/${latestImage.id}/display`,
               },

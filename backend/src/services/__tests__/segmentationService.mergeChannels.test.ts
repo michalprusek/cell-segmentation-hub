@@ -15,8 +15,10 @@ vi.mock('@prisma/client', () => ({
   Prisma: { PrismaClientKnownRequestError: class extends Error {} },
 }));
 vi.mock('../imageService');
-vi.mock('../segmentationThumbnailService');
-vi.mock('../thumbnailManager');
+vi.mock('../previews/previewService', () => ({
+  previewService: { notifyChanged: vi.fn(), notifyContainerChanged: vi.fn() },
+  removePreviews: vi.fn(),
+}));
 vi.mock('../../utils/logger', () => ({
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
