@@ -947,6 +947,56 @@ Batch microtubule assay of ND2 wells. `essays_api.py` is a thin FastAPI job runn
 - **The GPU cap was re-measured for v5H on 2026-08-17 and lowered.** `ESSAYS_GPU_MEM_FRACTION` **0.75 → 0.12** (17.67 → 2.83 GiB) and `ESSAYS_GPU_MIN_FREE_GB` **17 → 4**. Measured on a real `evaluate.py` run over 3 positions of a 2048² IRM well (162 MTs): the working set is **1.41 GiB reserved** / 1.05 GiB allocated, and FLAT across caps of 17.99 / 4.80 / 2.88 / 1.92 GiB. Runtime was flat too (43.0 / 43.6 / 44.0 / 43.9 s) and `results.csv` came out **byte-identical at all four caps** — unlike v7, where the cap sized cuDNN's workspace and 0.6 → 0.75 moved a centerline by 1.10 px. The equivalence holds only because 1.41 GiB sits far below every cap tested, so the workspace is never constrained; re-check it if either number moves. This returned ~15 GiB of reservation and dropped the start gate from 17 GB to 4 GB — the gate mattered more in practice, because it made a batch _wait_ for memory it was never going to use.
 - **The rule that produced the old numbers still stands: set the cap ABOVE the model's working set, never below.** v7's was 16.36 GiB on a 2048² well; the cap was once 0.6 (14.13 GiB), i.e. _under_ it, so torch hit the ceiling on every position, released ~3.7 GiB of cached blocks back to the driver and had to re-win them from a card shared with `ml` and Maptimize. Losing that race is an `OutOfMemoryError`, which is why one folder lost 255 wells in one run and 68 in the next. Demand does not grow into the ceiling, so raising the cap past ~2× the working set buys nothing and only takes room interactive segmentation needs. A cap below the working set protects nobody: it hands other tenants memory the batch immediately tries to take back. `backend/essays/tests/test_gpu_budget.py` asserts both directions (cap ≥ 1.5× working set, cap ≤ working set + 2 GiB, start gate ≥ cap + CUDA context) and that the compose defaults match the module defaults.
 
+### Grid previews and storage GC (2026-10-24)
+
+- **A preview is addressed by its inputs, not invalidated by its writers.**
+  `previewUrl = /api/images/:id/preview?v=<version>`, the version a hash of
+  `originalPath` + the segmentation row's `id`/`updatedAt` + `PREVIEW_RENDERER_VERSION`
+  (`services/previews/previewVersion.ts`). The old scheme re-rendered a file
+  from 3 of the ~15 paths that change a segmentation; deleting one, every
+  cross-frame track op, static projection, neurite soma assignment and
+  type-label clean-up left the old picture, and nothing told the browser. Any
+  write that moves `updatedAt` now moves the URL — a new write path needs
+  nothing to stay correct. **Bump `PREVIEW_RENDERER_VERSION` whenever
+  `previewRenderer.ts` changes what it draws**, or every cached preview stays.
+- **Rendered on first request, 512 px, aspect kept, in preview space**:
+  1 851 → 30 ms for a 4080×3072 JPEG and 700 → 75 ms for a 16-bit frame with
+  311 polylines, measured on production files. A 16-bit source is stretched
+  over its own min..max (the editor's opening window), scaled to 0..65535 —
+  sharp's `grey16 → b-w` divides by 256, so a 0..255 stretch came out black.
+  Colours come from `resolvePolygonColor`, shared with the export
+  visualization (whose output was proven byte-identical across the refactor).
+- `previewService.notifyChanged` / `notifyContainerChanged` emit
+  `imagePreviewsUpdated` to the PROJECT room (collaborators too) and pre-render
+  at low priority. They are a liveness path, not a correctness one.
+- **The FE has ONE gallery mapper (`mapGalleryImage`) and ONE re-list
+  (`reloadImages`, replace-not-merge).** Five hand-written copies used to
+  "preserve the existing thumbnail if the API sent none", which is exactly how a
+  deleted segmentation kept its overlay, and four of them dropped the video
+  fields. After an upload the page also fetched the full polygons of EVERY
+  segmented image, unbounded — data the grid never reads.
+- `images.segmentationThumbnailPath` is **unused and kept only as the rollback
+  target**; drop it (and the old `segmentation_thumbnails/` dirs, which the GC
+  keeps while a row references them) in a follow-up once the new previews have
+  run in production.
+- **Storage GC** (`services/maintenance/storageGc.ts`, every 6 h,
+  `STORAGE_GC_MODE=off|dry-run|delete`, JSONL report per run in
+  `<LOG_DIR>/storage-gc/`). The first production dry-run (2026-10-24) planned
+  74 000 files / 40.2 GB of 306 GB — 27.6 GB from projects deleted before #580,
+  11.5 GB of video dirs the batch delete left behind, 38 190 superseded
+  thumbnails, 4 353 v1 proxies — and matched an independent file-by-file audit
+  exactly, every difference being the grace period. Safety rules that look
+  like over-engineering and are not: **inside a live container nothing is
+  judged by reference** (non-source channel PNGs are referenced by no row, and
+  removeChannel can repoint a frame at one); **grace is the NEWEST file mtime
+  in the subtree**, never a directory's (the GC's own deletes move that);
+  `(parentVideoId, frameIndex)` is **not unique**, so a frame dir goes only when
+  no row has its index; `projects/segmenter/` is a namespace of its own. Each
+  of these is a mutation-tested case in `storageGc.test.ts`.
+- The delete paths now remove a row's files AFTER the row commits (the batch
+  path used to delete files inside the transaction, before the row), and a
+  cascaded container takes its whole directory, display cache and previews.
+
 ### Video projects
 
 - Video container = one `Image` row with `isVideoContainer=true` + `channels` JSON. Each frame is a child `Image` row with `parentVideoId` + `frameIndex` + `displayOrder`. Containers are never enqueued.

@@ -143,10 +143,20 @@ vi.mock('fs/promises', () => ({
 }));
 
 import { ImageService } from '../imageService';
+
+/** Every `rm` the service made, through either fs entry point. */
+function allRmCalls(): Array<[string, unknown]> {
+  return [
+    ...fsRmMock.mock.calls,
+    ...vi.mocked(fsModuleForRm.promises).rm.mock.calls,
+  ].map(c => [String(c[0]), c[1]] as [string, unknown]);
+}
+
 import { cellSensJpeg, cellSensTiff } from '../../test/fixtures/cellSens';
 import { logger } from '../../utils/logger';
 import { getStorageProvider } from '../../storage/index';
 import * as fsModule from 'fs';
+import * as fsModuleForRm from 'fs';
 
 const mockGetStorageProvider = getStorageProvider as ReturnType<typeof vi.fn>;
 
@@ -178,7 +188,6 @@ const makeImage = (overrides: Record<string, unknown> = {}) => ({
   name: 'test.jpg',
   originalPath: 'uploads/test.jpg',
   thumbnailPath: 'uploads/test_thumb.jpg',
-  segmentationThumbnailPath: null,
   projectId: 'proj-1',
   fileSize: BigInt(1024),
   width: 800,
@@ -674,26 +683,40 @@ describe('ImageService — getImageById', () => {
     expect(result!.thumbnailUrl).toBeUndefined();
   });
 
-  it('includes segmentationThumbnailUrl when segmentationThumbnailPath is set', async () => {
-    prismaMock.user.findUnique.mockResolvedValueOnce({ email: 'u@test.com' });
-    prismaMock.image.findFirst.mockResolvedValueOnce(
-      makeImage({ segmentationThumbnailPath: 'uploads/seg_thumb.jpg', project: mockProject })
-    );
+  it('returns a previewUrl that moves when the segmentation is saved again', async () => {
+    const at = (iso: string) => ({ id: 'seg-1', updatedAt: new Date(iso) });
+    const urlFor = async (segmentation: unknown) => {
+      prismaMock.user.findUnique.mockResolvedValueOnce({ email: 'u@test.com' });
+      prismaMock.image.findFirst.mockResolvedValueOnce(
+        makeImage({ project: mockProject, segmentation })
+      );
+      const result = await service.getImageById('img-1', 'user-1');
+      return result!.previewUrl;
+    };
 
-    const result = await service.getImageById('img-1', 'user-1');
+    const bare = await urlFor(null);
+    const first = await urlFor(at('2026-10-24T10:00:00.000Z'));
+    const again = await urlFor(at('2026-10-24T10:00:00.000Z'));
+    const edited = await urlFor(at('2026-10-24T10:00:00.001Z'));
 
-    expect(result!.segmentationThumbnailUrl).toBe('http://host/uploads/seg_thumb.jpg');
+    expect(bare).toMatch(/^\/api\/images\/img-1\/preview\?v=[0-9a-f]{16}$/);
+    expect(first).toBe(again);
+    expect(first).not.toBe(bare);
+    expect(edited).not.toBe(first);
   });
 
-  it('omits segmentationThumbnailUrl when segmentationThumbnailPath is null', async () => {
+  it('does not leak the segmentation stamp into the image payload', async () => {
     prismaMock.user.findUnique.mockResolvedValueOnce({ email: 'u@test.com' });
     prismaMock.image.findFirst.mockResolvedValueOnce(
-      makeImage({ segmentationThumbnailPath: null, project: mockProject })
+      makeImage({
+        project: mockProject,
+        segmentation: { id: 'seg-1', updatedAt: new Date() },
+      })
     );
 
     const result = await service.getImageById('img-1', 'user-1');
 
-    expect(result!.segmentationThumbnailUrl).toBeUndefined();
+    expect(result).not.toHaveProperty('segmentation');
   });
 
   it('includes a displayUrl pointing at the image display endpoint', async () => {
@@ -776,14 +799,48 @@ describe('ImageService — deleteImage', () => {
         isVideoContainer: true,
       })
     );
+    prismaMock.image.findMany.mockResolvedValueOnce([
+      { id: 'frame-a', segmentationThumbnailPath: 'o/p/segmentation_thumbnails/a.jpg' },
+    ]);
     prismaMock.image.delete.mockResolvedValueOnce({});
 
     await service.deleteImage('vid-1', 'user-1');
 
-    const rmCalls = fsRmMock.mock.calls.map(c => c[0] as string);
-    expect(rmCalls).toContain('/tmp/uploads/projects/proj-1/images/vid-1');
-    expect(fsRmMock.mock.calls[0]?.[1]).toEqual({ recursive: true, force: true });
+    const rm = allRmCalls();
+    const containerRm = rm.find(([p]) => p === '/tmp/uploads/projects/proj-1/images/vid-1');
+    expect(containerRm?.[1]).toEqual({ recursive: true, force: true });
     expect(prismaMock.image.delete).toHaveBeenCalledWith({ where: { id: 'vid-1' } });
+    // The cascade takes the frame rows; their previews and legacy thumbnails
+    // are files it cannot see.
+    expect(rm.map(([p]) => p)).toContain('/tmp/uploads/projects/proj-1/previews/frame-a');
+    expect(storageMock.delete).toHaveBeenCalledWith('o/p/segmentation_thumbnails/a.jpg');
+  });
+
+  it('removes the derived files of a still: display cache, previews, legacy thumbnail', async () => {
+    prismaMock.image.findFirst.mockResolvedValueOnce(
+      makeImage({
+        id: 'img-7',
+        segmentationThumbnailPath: 'o/p/segmentation_thumbnails/seg_1.jpg',
+      })
+    );
+    prismaMock.image.delete.mockResolvedValueOnce({});
+
+    await service.deleteImage('img-7', 'user-1');
+
+    const paths = allRmCalls().map(([p]) => p);
+    expect(paths).toContain('/tmp/uploads/converted/img-7.png');
+    expect(paths).toContain('/tmp/uploads/projects/proj-1/previews/img-7');
+    expect(storageMock.delete).toHaveBeenCalledWith('o/p/segmentation_thumbnails/seg_1.jpg');
+  });
+
+  it('deletes the row BEFORE any file, so a failed delete leaves no dangling row', async () => {
+    prismaMock.image.findFirst.mockResolvedValueOnce(makeImage());
+    prismaMock.image.delete.mockRejectedValueOnce(new Error('FK violation'));
+
+    await expect(service.deleteImage('img-1', 'user-1')).rejects.toThrow('FK violation');
+
+    expect(storageMock.delete).not.toHaveBeenCalled();
+    expect(allRmCalls()).toEqual([]);
   });
 
   it('does NOT touch the filesystem container directory for non-video images', async () => {
@@ -899,6 +956,12 @@ describe('ImageService — deleteBatch', () => {
     expect(txDelete).toHaveBeenCalledTimes(2);
     expect(storageMock.delete).toHaveBeenCalledWith('uploads/video.nd2');
     expect(storageMock.delete).toHaveBeenCalledWith('uploads/video_thumb.jpg');
+    // ...and the directory holding every channel of every frame, which the
+    // batch path used to leave behind (168 directories / 8.6 GB in prod).
+    expect(allRmCalls()).toContainEqual([
+      '/tmp/uploads/projects/proj-1/images/container-orphan',
+      { recursive: true, force: true },
+    ]);
   });
 
   it('deletes the thumbnail from storage when thumbnailPath is set', async () => {
@@ -945,6 +1008,9 @@ describe('ImageService — deleteBatch', () => {
     expect(result.deletedCount).toBe(1);
     expect(result.failedIds).toContain('img-fail');
     expect(result.errors.length).toBeGreaterThan(0);
+    // The row that could not be deleted keeps its files.
+    expect(storageMock.delete).toHaveBeenCalledWith('p/ok.png');
+    expect(storageMock.delete).not.toHaveBeenCalledWith('p/fail.png');
   });
 
   it('does not throw when the WebSocket service is unavailable', async () => {
@@ -1299,43 +1365,5 @@ describe('ImageService — getVideoFrameForDisplay', () => {
       makeImage({ isVideoContainer: false, parentVideoId: 'container-gone' })
     );
     expect(result).toBeNull();
-  });
-});
-
-// ─── removeConvertedFile ──────────────────────────────────────────────────────
-
-describe('ImageService — removeConvertedFile', () => {
-  let service: ImageService;
-  beforeEach(() => {
-    service = makeService();
-  });
-
-  it('silently handles ENOENT (file already absent — no error logged)', async () => {
-    vi.mocked(fsModule.promises).unlink.mockRejectedValueOnce(
-      Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
-    );
-
-    await expect(service.removeConvertedFile('img-absent')).resolves.toBeUndefined();
-    expect(logger.error).not.toHaveBeenCalled();
-  });
-
-  it('swallows non-ENOENT fs.unlink errors and logs them', async () => {
-    vi.mocked(fsModule.promises).unlink.mockRejectedValueOnce(
-      Object.assign(new Error('EPERM'), { code: 'EPERM' })
-    );
-
-    await expect(service.removeConvertedFile('img-eperm')).resolves.toBeUndefined();
-    expect(logger.error).toHaveBeenCalled();
-  });
-
-  it('deletes the converted PNG (path includes the imageId and .png)', async () => {
-    vi.mocked(fsModule.promises).unlink.mockResolvedValueOnce(undefined);
-
-    await service.removeConvertedFile('img-abc');
-
-    expect(vi.mocked(fsModule.promises).unlink).toHaveBeenCalledOnce();
-    const calledPath = vi.mocked(fsModule.promises).unlink.mock.calls[0][0] as string;
-    expect(calledPath).toContain('img-abc');
-    expect(calledPath).toMatch(/\.png$/);
   });
 });

@@ -30,7 +30,6 @@ vi.mock('../../../utils/response', () => ({
 }));
 vi.mock('../../../db');
 vi.mock('../../../services/imageService');
-vi.mock('../../../services/segmentationThumbnailService');
 vi.mock('../../../services/sharingService');
 vi.mock('../../../services/websocketService');
 vi.mock('../../../storage');

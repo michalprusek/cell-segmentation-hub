@@ -107,7 +107,8 @@ export async function collectProjectFiles(
 export async function collectUserFiles(userId: string): Promise<UserFiles> {
   const safeUserId = assertSafeStorageSegment(userId, 'userId');
 
-  const [images, projects, essayJobs, apiJobs] = await Promise.all([
+  const [images, projects, essayJobs, apiJobs, segmenterDatasets] =
+    await Promise.all([
     prisma.image.findMany({
       where: { project: { userId } },
       select: IMAGE_PATHS,
@@ -118,6 +119,8 @@ export async function collectUserFiles(userId: string): Promise<UserFiles> {
       select: { resultZipKey: true },
     }),
     prisma.apiJob.findMany({ where: { userId }, select: { id: true } }),
+    // Segmenter datasets cascade from the user row; their files do not.
+    prisma.segmenterDataset.findMany({ where: { userId }, select: { id: true } }),
   ]);
 
   const fileKeys = new Set<string>();
@@ -133,6 +136,15 @@ export async function collectUserFiles(userId: string): Promise<UserFiles> {
     addProjectDirs(dirKeys, safeUserId, id);
   }
   dirKeys.add(path.posix.join('avatars', safeUserId));
+  for (const { id } of segmenterDatasets) {
+    dirKeys.add(
+      path.posix.join(
+        'projects',
+        'segmenter',
+        assertSafeStorageSegment(id, 'segmenterDatasetId')
+      )
+    );
+  }
   dirKeys.add(path.posix.join('essays', safeUserId));
   for (const { id } of apiJobs) {
     dirKeys.add(

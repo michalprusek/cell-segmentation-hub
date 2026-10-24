@@ -45,13 +45,9 @@ vi.mock('../../utils/config', () => ({
   },
 }));
 vi.mock('../../storage');
-vi.mock('../segmentationThumbnailService');
-// Plain constructor inside the factory (not a vi.fn) so restoreMocks:true can't
-// wipe the body between tests.
-vi.mock('../thumbnailManager', () => ({
-  ThumbnailManager: function MockThumbnailManager(this: any) {
-    this.generateAllThumbnails = vi.fn().mockResolvedValue(undefined);
-  },
+vi.mock('../previews/previewService', () => ({
+  previewService: { notifyChanged: vi.fn(), notifyContainerChanged: vi.fn() },
+  removePreviews: vi.fn(),
 }));
 vi.mock('../imageService');
 

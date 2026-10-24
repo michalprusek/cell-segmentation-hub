@@ -9,6 +9,133 @@ import apiClient from '@/lib/api';
 import { type ProjectImage } from '@/types';
 import { getLocalizedErrorMessage } from '@/lib/errorUtils';
 
+/** Safety cap on the page walk: it ends on `total`, this only stops a
+ *  server that never reports one. 100 pages of 100 is far above the largest
+ *  project today (624 images, 2026-10-24). */
+const MAX_IMAGE_PAGES = 100;
+const IMAGE_PAGE_SIZE = 100;
+
+/**
+ * THE mapping from a gallery row to a `ProjectImage`. Every refresh path of
+ * the project page goes through it. There used to be five hand-written copies
+ * in this hook and `ProjectDetail`, four of which dropped the video fields
+ * (`parentVideoId`, `frameIndex`, `channels`, …) and "preserved" the previous
+ * thumbnail whenever the server sent none — which is how a deleted
+ * segmentation kept showing its overlay.
+ */
+export function mapGalleryImage(img: any): ProjectImage {
+  // Normalize segmentation status from different backend field names
+  let segmentationStatus = img.segmentationStatus || img.segmentation_status;
+  // Normalize status values to consistent format
+  if (segmentationStatus === 'segmented') {
+    segmentationStatus = 'completed';
+  }
+
+  return {
+    id: img.id,
+    name: img.name || `Image ${img.id}`,
+    url: img.url || img.image_url,
+    width: img.width,
+    height: img.height,
+    thumbnail_url: img.thumbnail_url,
+    previewUrl: img.previewUrl,
+    createdAt: new Date(img.created_at || img.createdAt),
+    updatedAt: new Date(img.updated_at || img.updatedAt),
+    segmentationStatus: segmentationStatus,
+    // segmentationResult from lod:'low' has empty polygons[] with
+    // counts only — sufficient for the grid view. The segmentation
+    // editor loads full polygon data independently.
+    segmentationResult: img.segmentationResult || undefined,
+    // Video-container metadata (ND2 / TIFF / MP4). Without these
+    // the segmentation editor's VideoModeOverlay can't tell a
+    // container from a standalone image, so frame slider /
+    // play-pause / channel switcher never render and the canvas
+    // stays empty when the user opens a video in the editor.
+    isVideoContainer: img.isVideoContainer,
+    parentVideoId: img.parentVideoId,
+    frameIndex: img.frameIndex,
+    frameCount: img.frameCount,
+    videoDurationMs: img.videoDurationMs,
+    pixelSizeUm: img.pixelSizeUm,
+    frameIntervalMs: img.frameIntervalMs,
+    channels: img.channels,
+    // Surface originalPath for the Segment-All channel picker —
+    // extractChannelsFromPaths derives distinct channels from the
+    // /frames/NNNN/<channel>.<ext> shape across all pages.
+    originalPath: img.originalPath,
+  };
+}
+
+interface GalleryListing {
+  images: ProjectImage[];
+  channels: string[];
+  segmentationSources: string[];
+}
+
+/** Every gallery row of a project, walking the pages. */
+async function fetchGallery(projectId: string): Promise<GalleryListing> {
+  // Backend max is 100 per request; lod 'low' returns only metadata counts
+  // (no polygon arrays) — fast & light.
+  const allImages: any[] = [];
+  const seenImageIds = new Set<string>();
+  let channels: string[] = [];
+  let segmentationSources: string[] = [];
+
+  for (let page = 1; page <= MAX_IMAGE_PAGES; page++) {
+    const imagesResponse = await apiClient.getProjectImagesWithThumbnails(
+      projectId,
+      { limit: IMAGE_PAGE_SIZE, page, lod: 'low' }
+    );
+    if (!imagesResponse.images || !Array.isArray(imagesResponse.images)) {
+      logger.error('Invalid images response format');
+      break;
+    }
+
+    // Dedupe across pages. The backend now paginates on a TOTAL,
+    // immutable order (createdAt + id), which is the actual fix for
+    // the duplicates — but offset pagination still cannot survive a
+    // row being INSERTED or DELETED between two page fetches, and an
+    // upload finishing mid-load does exactly that. Without this, the
+    // duplicate inflates `filteredImages.length` while
+    // `selectedImageIds` (a Set) collapses it, so "Select All 300
+    // images" selects 216 and the missing rows are unreachable.
+    for (const img of imagesResponse.images) {
+      if (!seenImageIds.has(img.id)) {
+        seenImageIds.add(img.id);
+        allImages.push(img);
+      }
+    }
+    // BE recomputes projectChannels on every page (it queries all
+    // containers, not just the page slice), so keeping the last
+    // response's list is safe and avoids needing a separate fetch.
+    if (Array.isArray(imagesResponse.metadata?.projectChannels)) {
+      channels = imagesResponse.metadata.projectChannels;
+    }
+    if (Array.isArray(imagesResponse.metadata?.projectSegmentationSources)) {
+      segmentationSources = imagesResponse.metadata.projectSegmentationSources;
+    }
+
+    const totalImages =
+      imagesResponse.pagination?.total ||
+      (imagesResponse as { total?: number }).total ||
+      0;
+    if (page * IMAGE_PAGE_SIZE >= totalImages) {
+      break;
+    }
+    if (page === MAX_IMAGE_PAGES) {
+      logger.warn(
+        `Stopped listing after ${MAX_IMAGE_PAGES} pages of ${IMAGE_PAGE_SIZE}`
+      );
+    }
+  }
+
+  return {
+    images: allImages.map(mapGalleryImage),
+    channels,
+    segmentationSources,
+  };
+}
+
 export const useProjectData = (
   projectId: string | undefined,
   userId: string | undefined
@@ -69,22 +196,24 @@ export const useProjectData = (
   >([]);
   const [loading, setLoading] = useState<boolean>(true);
 
-  // Track pending requests to prevent duplicates
-  const pendingRequestsRef = useRef<Set<string>>(new Set());
-
   // Store navigate function in ref to avoid dependency issues
   const navigateRef = useRef(navigate);
   navigateRef.current = navigate;
 
-  // Same pattern, for the retry decision below: refreshImageSegmentation is not
-  // memoised, so reading `images` through a ref keeps it from acting on a stale
-  // closure when several frames refresh in quick succession.
+  // Track pending requests to prevent duplicates
+  const pendingRequestsRef = useRef<Set<string>>(new Set());
+  // Read by refreshImageSegmentation's retry decision: it is not memoised, so
+  // reading `images` through a ref keeps it from acting on a stale closure
+  // when several frames refresh in quick succession.
   const imagesRef = useRef<ProjectImage[]>(images);
   imagesRef.current = images;
   /** The project the fetch effect last ran for, so a refresh can be told
    *  apart from a switch. A ref, not state: it must update inside the effect
    *  without scheduling another render. */
   const lastFetchedProjectRef = useRef<string | undefined>(undefined);
+  /** Bumped by every image listing; a response that is not the latest is
+   *  dropped, so a slow listing cannot overwrite a newer one. */
+  const reloadGeneration = useRef(0);
 
   useEffect(() => {
     // Forget the previous project's folder BEFORE fetching the next one.
@@ -141,133 +270,13 @@ export const useProjectData = (
         // behaviour rather than a broken link.
         setProjectFolderId(project.folderId ?? null);
 
-        // Fetch all images by making multiple requests if needed.
-        // Backend max is 100 per request; we use lod: 'low' which
-        // returns only metadata counts (no polygon arrays) — fast & light.
-        const allImages: any[] = [];
-        const seenImageIds = new Set<string>();
-        let aggregatedChannels: string[] = [];
-        let aggregatedSegSources: string[] = [];
-        let page = 1;
-        let hasMore = true;
-        const limit = 100; // Use max backend limit for fewer round-trips
-
-        while (hasMore) {
-          try {
-            const imagesResponse =
-              await apiClient.getProjectImagesWithThumbnails(projectId, {
-                limit,
-                page,
-                lod: 'low',
-              });
-
-            if (
-              !imagesResponse.images ||
-              !Array.isArray(imagesResponse.images)
-            ) {
-              logger.error('Invalid images response format');
-              break;
-            }
-
-            // Dedupe across pages. The backend now paginates on a TOTAL,
-            // immutable order (createdAt + id), which is the actual fix for
-            // the duplicates — but offset pagination still cannot survive a
-            // row being INSERTED or DELETED between two page fetches, and an
-            // upload finishing mid-load does exactly that. Without this, the
-            // duplicate inflates `filteredImages.length` while
-            // `selectedImageIds` (a Set) collapses it, so "Select All 300
-            // images" selects 216 and the missing rows are unreachable.
-            for (const img of imagesResponse.images) {
-              if (!seenImageIds.has(img.id)) {
-                seenImageIds.add(img.id);
-                allImages.push(img);
-              }
-            }
-            // BE recomputes projectChannels on every page (it queries all
-            // containers, not just the page slice), so keeping the last
-            // response's list is safe and avoids needing a separate fetch.
-            if (
-              imagesResponse.metadata?.projectChannels &&
-              Array.isArray(imagesResponse.metadata.projectChannels)
-            ) {
-              aggregatedChannels = imagesResponse.metadata.projectChannels;
-            }
-            if (
-              imagesResponse.metadata?.projectSegmentationSources &&
-              Array.isArray(imagesResponse.metadata.projectSegmentationSources)
-            ) {
-              aggregatedSegSources =
-                imagesResponse.metadata.projectSegmentationSources;
-            }
-
-            const totalImages =
-              imagesResponse.pagination?.total || imagesResponse.total || 0;
-            hasMore = page * limit < totalImages;
-            page++;
-
-            // Safety limit to prevent infinite loops (max 2000 images)
-            if (page > 20) {
-              logger.warn('Reached maximum pagination limit (2000 images)');
-              break;
-            }
-          } catch (error) {
-            logger.error(`Error fetching images page ${page}`, error);
-            break;
-          }
-        }
-
-        const formattedImages: ProjectImage[] = allImages.map(img => {
-          // Normalize segmentation status from different backend field names
-          let segmentationStatus =
-            img.segmentationStatus || img.segmentation_status;
-
-          // Normalize status values to consistent format
-          if (segmentationStatus === 'segmented') {
-            segmentationStatus = 'completed';
-          }
-
-          return {
-            id: img.id,
-            name: img.name || `Image ${img.id}`,
-            url: img.url || img.image_url,
-            width: img.width,
-            height: img.height,
-            thumbnail_url: img.thumbnail_url,
-            segmentationThumbnailUrl: img.segmentationThumbnailUrl,
-            segmentationThumbnailPath: img.segmentationThumbnailPath,
-            createdAt: new Date(img.created_at || img.createdAt),
-            updatedAt: new Date(img.updated_at || img.updatedAt),
-            segmentationStatus: segmentationStatus,
-            // segmentationResult from lod:'low' has empty polygons[] with
-            // counts only — sufficient for the grid view. The segmentation
-            // editor loads full polygon data independently.
-            segmentationResult: img.segmentationResult || undefined,
-            // Video-container metadata (ND2 / TIFF / MP4). Without these
-            // the segmentation editor's VideoModeOverlay can't tell a
-            // container from a standalone image, so frame slider /
-            // play-pause / channel switcher never render and the canvas
-            // stays empty when the user opens a video in the editor.
-            isVideoContainer: img.isVideoContainer,
-            parentVideoId: img.parentVideoId,
-            frameIndex: img.frameIndex,
-            frameCount: img.frameCount,
-            videoDurationMs: img.videoDurationMs,
-            pixelSizeUm: img.pixelSizeUm,
-            frameIntervalMs: img.frameIntervalMs,
-            channels: img.channels,
-            // Surface originalPath for the Segment-All channel picker —
-            // extractChannelsFromPaths derives distinct channels from the
-            // /frames/NNNN/<channel>.<ext> shape across all pages.
-            originalPath: img.originalPath,
-          };
-        });
-
-        // Set images directly — no enrichment needed.
-        // The grid view uses server-generated thumbnail images, not raw polygons.
-        // The segmentation editor loads full polygon data on its own.
+        const generation = ++reloadGeneration.current;
+        const gallery = await fetchGallery(projectId);
+        if (generation !== reloadGeneration.current) return;
+        const formattedImages = gallery.images;
         setImages(formattedImages);
-        setProjectChannels(aggregatedChannels);
-        setProjectSegmentationSources(aggregatedSegSources);
+        setProjectChannels(gallery.channels);
+        setProjectSegmentationSources(gallery.segmentationSources);
 
         logger.debug(
           `Loaded ${formattedImages.length} images for project ${projectId}`
@@ -325,7 +334,9 @@ export const useProjectData = (
     []
   );
 
-  // Function to refresh segmentation data for a specific image with deduplication
+  // Loads one image's full polygons into the list. Used by the segmentation
+  // editor to prefetch the current and adjacent frames; the project grid does
+  // not read polygons and does not call it.
   const refreshImageSegmentation = async (imageId: string) => {
     // Check if request is already in progress
     if (pendingRequestsRef.current.has(imageId)) {
@@ -444,6 +455,53 @@ export const useProjectData = (
     }
   };
 
+  /**
+   * Re-list the project's images from the server and REPLACE local state
+   * with it. The server is the source of truth for status and preview; the
+   * old refresh paths merged and "preserved" fields instead, which is how a
+   * cleared segmentation kept its overlay. A slower, older reload can never
+   * overwrite a newer one.
+   */
+  const reloadImages = useCallback(async (): Promise<void> => {
+    if (!projectId) return;
+    const generation = ++reloadGeneration.current;
+    try {
+      const gallery = await fetchGallery(projectId);
+      if (
+        generation !== reloadGeneration.current ||
+        lastFetchedProjectRef.current !== projectId
+      ) {
+        return;
+      }
+      setImages(gallery.images);
+      setProjectChannels(gallery.channels);
+      setProjectSegmentationSources(gallery.segmentationSources);
+    } catch (error) {
+      logger.error('Failed to reload project images', error);
+    }
+  }, [projectId]);
+
+  /** Swap in the preview URLs a `imagePreviewsUpdated` message carries.
+   *  Rows it does not name keep their identity, so their cards do not
+   *  re-render. */
+  const applyPreviewUpdates = useCallback(
+    (previews: Array<{ imageId: string; previewUrl: string }>): void => {
+      if (previews.length === 0) return;
+      const byId = new Map(previews.map(p => [p.imageId, p.previewUrl]));
+      setImages(prev => {
+        let changed = false;
+        const next = prev.map(img => {
+          const url = byId.get(img.id);
+          if (url === undefined || url === img.previewUrl) return img;
+          changed = true;
+          return { ...img, previewUrl: url };
+        });
+        return changed ? next : prev;
+      });
+    },
+    []
+  );
+
   /** Re-fetch the project's images and channel aggregates. Needed after a
    *  write that changes a container's `channels` JSON — removing a channel
    *  would otherwise keep offering the one just deleted. */
@@ -470,5 +528,7 @@ export const useProjectData = (
     loading,
     updateImages,
     refreshImageSegmentation,
+    reloadImages,
+    applyPreviewUpdates,
   };
 };

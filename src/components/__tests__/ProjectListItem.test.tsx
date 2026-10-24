@@ -6,11 +6,9 @@ import ProjectListItem from '@/components/ProjectListItem';
 
 // Mock child components
 vi.mock('@/components/project/ProjectThumbnail', () => ({
-  default: ({ projectId, fallbackSrc, imageCount }: any) => (
+  default: ({ src }: { src: string }) => (
     <div data-testid="project-thumbnail">
-      <img src={fallbackSrc} alt="thumbnail" />
-      <span data-testid="image-count">{imageCount}</span>
-      <span data-testid="project-id">{projectId}</span>
+      <img src={src} alt="thumbnail" />
     </div>
   ),
 }));
@@ -64,14 +62,10 @@ describe('ProjectListItem', () => {
     ).toBeInTheDocument();
   });
 
-  it('renders ProjectThumbnail component with correct props', () => {
+  it('renders ProjectThumbnail with the project picture', () => {
     render(<ProjectListItem {...mockProps} />);
 
     expect(screen.getByTestId('project-thumbnail')).toBeInTheDocument();
-    expect(screen.getByTestId('project-id')).toHaveTextContent(
-      'test-project-id'
-    );
-    expect(screen.getByTestId('image-count')).toHaveTextContent('5');
 
     const thumbnailImg = screen.getByAltText('thumbnail');
     expect(thumbnailImg).toHaveAttribute('src', '/test-thumbnail.jpg');
@@ -253,7 +247,6 @@ describe('ProjectListItem', () => {
     expect(screen.getByTestId('metadata-image-count')).toHaveTextContent(
       '0 images'
     );
-    expect(screen.getByTestId('image-count')).toHaveTextContent('0');
   });
 
   it('handles large image counts', () => {
@@ -262,7 +255,6 @@ describe('ProjectListItem', () => {
     expect(screen.getByTestId('metadata-image-count')).toHaveTextContent(
       '999 images'
     );
-    expect(screen.getByTestId('image-count')).toHaveTextContent('999');
   });
 
   it('maintains semantic HTML structure', () => {

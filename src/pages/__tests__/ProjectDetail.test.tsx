@@ -105,8 +105,7 @@ const makeImage = (overrides: Record<string, unknown> = {}, id = 'img-1') => ({
   segmentationStatus: 'no_segmentation' as SegStatus,
   segmentationResult: undefined as unknown,
   segmentationData: undefined as unknown,
-  segmentationThumbnailPath: undefined as string | undefined,
-  segmentationThumbnailUrl: undefined as string | undefined,
+  previewUrl: undefined as string | undefined,
   ...overrides,
 });
 
@@ -141,6 +140,8 @@ function makeProjectData(
     loading: false,
     updateImages,
     refreshImageSegmentation: vi.fn().mockResolvedValue(undefined),
+    reloadImages: vi.fn().mockResolvedValue(undefined),
+    applyPreviewUpdates: vi.fn(),
     ...overrides,
   };
 }
@@ -251,6 +252,14 @@ vi.mock('@/hooks/useProjectImageActions', () => ({
     handleDeleteImage: mockHandleDeleteImage,
     handleOpenSegmentationEditor: mockHandleOpenSegmentationEditor,
   }),
+}));
+
+// The live-preview subscription: captured so a test can assert what the page
+// hands it, without a WebSocketProvider.
+const mockUseImagePreviewUpdates = vi.fn();
+vi.mock('@/hooks/useImagePreviewUpdates', () => ({
+  useImagePreviewUpdates: (...args: unknown[]) =>
+    mockUseImagePreviewUpdates(...args),
 }));
 
 vi.mock('@/hooks/useSegmentationQueue', () => ({
@@ -1734,13 +1743,15 @@ describe('ProjectDetail page', () => {
       }
     });
 
-    it('clears the result when a completed image is re-queued', async () => {
+    it('a re-queued image changes STATUS only — its picture stays the server preview', async () => {
+      const preview = '/api/images/img-1/preview?v=0123456789abcdef';
       const images = [
         makeImage(
           {
             segmentationStatus: 'completed',
-            segmentationResult: { polygons: [] },
-            segmentationData: { some: 'data' },
+            previewUrl: preview,
+            thumbnail_url: '/thumbs/img-1.jpg',
+            url: '/api/images/img-1/display',
           },
           'img-1'
         ),
@@ -1774,13 +1785,75 @@ describe('ProjectDetail page', () => {
         ([arg]) => typeof arg === 'function'
       );
       expect(fnCall).toBeDefined();
-      if (fnCall) {
-        const result = (fnCall[0] as (imgs: MockImage[]) => MockImage[])(
-          images
-        );
-        expect(result[0].segmentationResult).toBeUndefined();
-        expect(result[0].segmentationData).toBeUndefined();
-      }
+      const result = (fnCall![0] as (imgs: MockImage[]) => MockImage[])(images);
+      expect(result[0].segmentationStatus).toBe('queued');
+      // It used to swap the card to the FULL original image (`img.url`).
+      expect(result[0].previewUrl).toBe(preview);
+      expect(result[0].thumbnail_url).toBe('/thumbs/img-1.jpg');
+      // ...and no longer fetches the polygons of each image that completes.
+      expect(projectData.refreshImageSegmentation).not.toHaveBeenCalled();
+    });
+
+    it('fetches no polygons when an image finishes — the grid draws the server preview', async () => {
+      const images = [makeImage({ segmentationStatus: 'processing' }, 'img-1')];
+      const projectData = wireHooks(
+        images,
+        {},
+        {
+          lastUpdate: {
+            imageId: 'img-1',
+            status: 'segmented',
+            projectId: 'proj-1',
+            timestamp: Date.now(),
+          },
+        }
+      );
+      renderPage();
+
+      await act(async () => {
+        await new Promise(r => setTimeout(r, 200));
+      });
+
+      expect(projectData.refreshImageSegmentation).not.toHaveBeenCalled();
+    });
+  });
+
+  // =========================================================================
+  // Live previews
+  // =========================================================================
+
+  describe('live previews', () => {
+    it('subscribes the project to preview updates and applies them through useProjectData', () => {
+      const projectData = wireHooks([makeImage({}, 'img-1')]);
+      renderPage();
+
+      expect(mockUseImagePreviewUpdates).toHaveBeenCalledWith(
+        'proj-1',
+        projectData.applyPreviewUpdates
+      );
+    });
+
+    it('tells the dashboard the count and the card picture (the first preview)', async () => {
+      const dispatched: CustomEvent[] = [];
+      const handler = (e: Event) => dispatched.push(e as CustomEvent);
+      window.addEventListener('project-images-updated', handler);
+      wireHooks([
+        makeImage(
+          { previewUrl: '/api/images/a/preview?v=0123456789abcdef' },
+          'img-a'
+        ),
+        makeImage({}, 'img-b'),
+      ]);
+
+      renderPage();
+
+      await waitFor(() => expect(dispatched.length).toBeGreaterThan(0));
+      expect(dispatched.at(-1)!.detail).toEqual({
+        projectId: 'proj-1',
+        imageCount: 2,
+        thumbnail: '/api/images/a/preview?v=0123456789abcdef',
+      });
+      window.removeEventListener('project-images-updated', handler);
     });
   });
 
@@ -1789,14 +1862,11 @@ describe('ProjectDetail page', () => {
   // =========================================================================
 
   describe('handleSegmentationCancelled', () => {
-    it('resets the image to no_segmentation and clears thumbnails', async () => {
+    it('resets the status to no_segmentation and leaves the picture to the server', async () => {
+      const preview = '/api/images/img-1/preview?v=0123456789abcdef';
       const images = [
         makeImage(
-          {
-            segmentationStatus: 'processing',
-            segmentationThumbnailPath: '/thumb/path.jpg',
-            segmentationThumbnailUrl: '/thumb/url.jpg',
-          },
+          { segmentationStatus: 'processing', previewUrl: preview },
           'img-1'
         ),
       ];
@@ -1811,15 +1881,9 @@ describe('ProjectDetail page', () => {
       const fnCall = projectData.updateImages.mock.calls.find(
         ([arg]) => typeof arg === 'function'
       );
-      expect(fnCall).toBeDefined();
-      if (fnCall) {
-        const result = (fnCall[0] as (imgs: MockImage[]) => MockImage[])(
-          images
-        );
-        expect(result[0].segmentationStatus).toBe('no_segmentation');
-        expect(result[0].segmentationThumbnailPath).toBeUndefined();
-        expect(result[0].segmentationThumbnailUrl).toBeUndefined();
-      }
+      const result = (fnCall![0] as (imgs: MockImage[]) => MockImage[])(images);
+      expect(result[0].segmentationStatus).toBe('no_segmentation');
+      expect(result[0].previewUrl).toBe(preview);
     });
 
     it('no-ops when imageId is undefined', async () => {
@@ -1837,30 +1901,16 @@ describe('ProjectDetail page', () => {
   });
 
   // =========================================================================
-  // WebSocket — bulk cancel (handleBulkSegmentationCancelled)
+  // Re-listing: bulk cancel, batch completed, upload completed
   // =========================================================================
 
   describe('handleBulkSegmentationCancelled', () => {
-    it('refetches and updates images when the current project is affected', async () => {
-      const images = [makeImage({ segmentationStatus: 'processing' }, 'img-1')];
+    it('re-lists from the server when the current project is affected', async () => {
       const captureRef: Parameters<typeof wireHooksCapturingCallbacks>[1] = {};
-      const projectData = wireHooksCapturingCallbacks(images, captureRef);
-
-      mockGetProjectImages.mockResolvedValue({
-        images: [
-          {
-            id: 'img-1',
-            name: 'Image img-1',
-            url: '/images/img-1.png',
-            thumbnail_url: '/thumbs/img-1.jpg',
-            created_at: '2026-01-01T00:00:00Z',
-            updatedAt: '2026-01-01T00:00:00Z',
-            segmentationStatus: 'no_segmentation',
-          },
-        ],
-        total: 1,
-      });
-
+      const projectData = wireHooksCapturingCallbacks(
+        [makeImage({}, 'img-1')],
+        captureRef
+      );
       renderPage();
       await waitFor(() => expect(captureRef.onBulkCancelled).toBeDefined());
 
@@ -1871,20 +1921,17 @@ describe('ProjectDetail page', () => {
         });
       });
 
-      await waitFor(() =>
-        expect(mockGetProjectImages).toHaveBeenCalledWith(
-          'proj-1',
-          expect.anything()
-        )
-      );
-      expect(projectData.updateImages).toHaveBeenCalled();
+      expect(projectData.reloadImages).toHaveBeenCalledTimes(1);
+      // Its own page walk and merge are gone.
+      expect(mockGetProjectImages).not.toHaveBeenCalled();
     });
 
-    it('does NOT refetch when the current project is not affected', async () => {
-      const images = [makeImage({}, 'img-1')];
+    it('does NOT re-list when the current project is not affected', async () => {
       const captureRef: Parameters<typeof wireHooksCapturingCallbacks>[1] = {};
-      wireHooksCapturingCallbacks(images, captureRef);
-
+      const projectData = wireHooksCapturingCallbacks(
+        [makeImage({}, 'img-1')],
+        captureRef
+      );
       renderPage();
       await waitFor(() => expect(captureRef.onBulkCancelled).toBeDefined());
 
@@ -1895,240 +1942,46 @@ describe('ProjectDetail page', () => {
         });
       });
 
-      await new Promise(r => setTimeout(r, 50));
+      expect(projectData.reloadImages).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('handleBatchCompleted', () => {
+    it('re-lists from the server (statuses and previews together)', async () => {
+      const captureRef: Parameters<typeof wireHooksCapturingCallbacks>[1] = {};
+      const projectData = wireHooksCapturingCallbacks(
+        [makeImage({}, 'img-1')],
+        captureRef
+      );
+      renderPage();
+      await waitFor(() => expect(captureRef.onBatchCompleted).toBeDefined());
+
+      await act(async () => {
+        await captureRef.onBatchCompleted!();
+      });
+
+      expect(projectData.reloadImages).toHaveBeenCalledTimes(1);
       expect(mockGetProjectImages).not.toHaveBeenCalled();
     });
   });
 
-  // =========================================================================
-  // WebSocket — batch completed (handleBatchCompleted)
-  // =========================================================================
-
-  describe('handleBatchCompleted', () => {
-    it('refetches, normalises segmented→completed, and updates images', async () => {
-      const images = [makeImage({ segmentationStatus: 'processing' }, 'img-1')];
-      const captureRef: Parameters<typeof wireHooksCapturingCallbacks>[1] = {};
-      const projectData = wireHooksCapturingCallbacks(images, captureRef);
-
-      mockGetProjectImages.mockResolvedValue({
-        images: [
-          {
-            id: 'img-1',
-            name: 'Image img-1',
-            url: '/images/img-1.png',
-            thumbnail_url: '/thumbs/img-1.jpg',
-            created_at: '2026-01-01T00:00:00Z',
-            updatedAt: '2026-01-01T00:00:00Z',
-            segmentationStatus: 'segmented',
-          },
-        ],
-        total: 1,
-      });
-
-      renderPage();
-      await waitFor(() => expect(captureRef.onBatchCompleted).toBeDefined());
-
-      await act(async () => {
-        await captureRef.onBatchCompleted!();
-      });
-
-      await waitFor(() =>
-        expect(mockGetProjectImages).toHaveBeenCalledWith(
-          'proj-1',
-          expect.anything()
-        )
-      );
-      expect(projectData.updateImages).toHaveBeenCalled();
-
-      const arrCall = projectData.updateImages.mock.calls.find(([arg]) =>
-        Array.isArray(arg)
-      );
-      if (arrCall) {
-        const imgs = arrCall[0] as Array<{ segmentationStatus: string }>;
-        expect(imgs[0].segmentationStatus).toBe('completed');
-      }
-    });
-
-    it('stops paginating once the first page covers all items', async () => {
-      const images = [makeImage({}, 'img-1')];
-      const captureRef: Parameters<typeof wireHooksCapturingCallbacks>[1] = {};
-      wireHooksCapturingCallbacks(images, captureRef);
-
-      // total=5, limit=50 → a single page is enough
-      mockGetProjectImages.mockResolvedValue({
-        images: Array.from({ length: 5 }, (_, i) => ({
-          id: `img-${i}`,
-          name: `Image ${i}`,
-          url: `/images/${i}.png`,
-          thumbnail_url: `/thumbs/${i}.jpg`,
-          created_at: '2026-01-01T00:00:00Z',
-          updatedAt: '2026-01-01T00:00:00Z',
-          segmentationStatus: 'completed',
-        })),
-        total: 5,
-      });
-
-      renderPage();
-      await waitFor(() => expect(captureRef.onBatchCompleted).toBeDefined());
-
-      await act(async () => {
-        await captureRef.onBatchCompleted!();
-      });
-
-      await waitFor(() => expect(mockGetProjectImages).toHaveBeenCalled());
-      expect(mockGetProjectImages).toHaveBeenCalledTimes(1);
-    });
-  });
-
-  // =========================================================================
-  // Upload completion (merge logic)
-  // =========================================================================
-
   describe('handleUploadComplete', () => {
-    it('refetches, fires project-images-updated, and updates images', async () => {
-      const projectData = wireHooks([makeImage({}, 'img-1')]);
-
-      mockGetProjectImages.mockResolvedValue({
-        images: [
-          {
-            id: 'img-1',
-            name: 'Image img-1',
-            url: '/images/img-1.png',
-            thumbnail_url: '/thumbs/img-1.jpg',
-            created_at: '2026-01-01T00:00:00Z',
-            updatedAt: '2026-01-01T00:00:00Z',
-            segmentationStatus: 'no_segmentation',
-          },
-          {
-            id: 'img-2',
-            name: 'Image img-2',
-            url: '/images/img-2.png',
-            thumbnail_url: '/thumbs/img-2.jpg',
-            created_at: '2026-01-01T00:00:00Z',
-            updatedAt: '2026-01-01T00:00:00Z',
-            segmentationStatus: 'no_segmentation',
-          },
-        ],
-        total: 2,
-      });
-
-      const dispatchedEvents: CustomEvent[] = [];
-      const handler = (e: Event) => dispatchedEvents.push(e as CustomEvent);
-      window.addEventListener('project-images-updated', handler);
-
+    it('re-lists once, and fetches no polygons for the segmented images', async () => {
+      const projectData = wireHooks([
+        makeImage({ segmentationStatus: 'completed' }, 'img-1'),
+        makeImage({ segmentationStatus: 'completed' }, 'img-2'),
+      ]);
       renderPage();
 
-      await userEvent.click(screen.getByTestId('toggle-uploader'));
-      await userEvent.click(screen.getByTestId('upload-complete'));
-
-      await waitFor(() => {
-        expect(mockGetProjectImages).toHaveBeenCalledWith(
-          'proj-1',
-          expect.anything()
-        );
-        expect(projectData.updateImages).toHaveBeenCalled();
-      });
-
-      await waitFor(() => expect(dispatchedEvents.length).toBeGreaterThan(0));
-      expect(dispatchedEvents[0].detail.projectId).toBe('proj-1');
-      expect(dispatchedEvents[0].detail.imageCount).toBe(2);
-
-      window.removeEventListener('project-images-updated', handler);
-    });
-
-    it('preserves an existing segmentationResult when merging refetched images', async () => {
-      const existingResult = { polygons: [{ id: 'poly-1', points: [] }] };
-      const images = [
-        makeImage(
-          {
-            segmentationStatus: 'completed',
-            segmentationResult: existingResult,
-          },
-          'img-1'
-        ),
-      ];
-      const projectData = wireHooks(images);
-
-      // Backend returns the image without its segmentationResult
-      mockGetProjectImages.mockResolvedValue({
-        images: [
-          {
-            id: 'img-1',
-            name: 'Image img-1',
-            url: '/images/img-1.png',
-            thumbnail_url: '/thumbs/img-1.jpg',
-            created_at: '2026-01-01T00:00:00Z',
-            updatedAt: '2026-01-01T00:00:00Z',
-            segmentationStatus: 'completed',
-          },
-        ],
-        total: 1,
-      });
-
-      renderPage();
-      await userEvent.click(screen.getByTestId('toggle-uploader'));
-      await userEvent.click(screen.getByTestId('upload-complete'));
-
-      await waitFor(() => expect(projectData.updateImages).toHaveBeenCalled());
-      const fnCall = projectData.updateImages.mock.calls.find(
-        ([arg]) => typeof arg === 'function'
-      );
-      expect(fnCall).toBeDefined();
-      if (fnCall) {
-        const result = (fnCall[0] as (imgs: MockImage[]) => MockImage[])(
-          images
-        );
-        expect(result[0].segmentationResult).toEqual(existingResult);
-      }
-    });
-
-    it('normalises "segmented" status to "completed" in merged images', async () => {
-      const images: MockImage[] = [];
-      const projectData = wireHooks(images);
-
-      mockGetProjectImages.mockResolvedValue({
-        images: [
-          {
-            id: 'img-new',
-            name: 'Image img-new',
-            url: '/images/img-new.png',
-            thumbnail_url: '/thumbs/img-new.jpg',
-            created_at: '2026-01-01T00:00:00Z',
-            updatedAt: '2026-01-01T00:00:00Z',
-            segmentation_status: 'segmented', // legacy field name
-          },
-        ],
-        total: 1,
-      });
-
-      renderPage();
-      await userEvent.click(screen.getByTestId('toggle-uploader'));
-      await userEvent.click(screen.getByTestId('upload-complete'));
-
-      await waitFor(() => expect(projectData.updateImages).toHaveBeenCalled());
-      const fnCall = projectData.updateImages.mock.calls.find(
-        ([arg]) => typeof arg === 'function'
-      );
-      expect(fnCall).toBeDefined();
-      if (fnCall) {
-        const result = (fnCall[0] as (imgs: MockImage[]) => MockImage[])(
-          images
-        );
-        expect(result[0].segmentationStatus).toBe('completed');
-      }
-    });
-
-    it('shows toast.error when the refetch fails', async () => {
-      wireHooks([]);
-      mockGetProjectImages.mockRejectedValue(new Error('network error'));
-
-      renderPage();
       await userEvent.click(screen.getByTestId('toggle-uploader'));
       await userEvent.click(screen.getByTestId('upload-complete'));
 
       await waitFor(() =>
-        expect(toast.error).toHaveBeenCalledWith('toast.upload.failed')
+        expect(projectData.reloadImages).toHaveBeenCalledTimes(1)
       );
+      // It used to GET the full polygon set of EVERY segmented image.
+      expect(mockGetSegmentationResults).not.toHaveBeenCalled();
+      expect(mockGetProjectImages).not.toHaveBeenCalled();
     });
   });
 });

@@ -3,7 +3,14 @@
  * Provides retry functionality with loading states and error handling
  */
 
-import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import {
+  useState,
+  useCallback,
+  useRef,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+} from 'react';
 import { useLanguage } from '@/contexts/exports';
 import { toast } from 'sonner';
 import {
@@ -319,19 +326,33 @@ export function useRetryImage(urls: string[]) {
   const [currentUrlIndex, setCurrentUrlIndex] = useState(0);
   const [imageError, setImageError] = useState(false);
 
+  // A new candidate list starts from its first entry. The list changes when
+  // the server hands out a new preview URL (every segmentation edit does), and
+  // without this a card whose previous preview had failed stayed on its
+  // fallback — or on "no preview" — and never tried the new one. Adjusted
+  // during render, React's documented pattern for state derived from props,
+  // so the stale index is never rendered.
+  const urlsKey = urls.join('\n');
+  const [loadedKey, setLoadedKey] = useState(urlsKey);
+  if (loadedKey !== urlsKey) {
+    setLoadedKey(urlsKey);
+    setCurrentUrlIndex(0);
+    setImageError(false);
+  }
+
+  // The list a load was started for. A result that arrives after the list
+  // changed belongs to a picture nobody shows any more and is dropped —
+  // otherwise a late failure of the OLD preview marks the NEW one as broken.
+  const latestKeyRef = useRef(urlsKey);
+  useLayoutEffect(() => {
+    latestKeyRef.current = urlsKey;
+  }, [urlsKey]);
+
+  // No `onFailure` here: the failure is acted on once, below. It used to be
+  // acted on in both places, so one failed preview advanced the index TWICE
+  // and skipped the upload thumbnail — straight to the full-size original.
   const { execute, loading, retrying, attempt, nextRetryIn } = useRetry<string>(
-    {
-      preset: 'imageLoad',
-      showToast: false,
-      onFailure: () => {
-        // Try next URL if available
-        if (currentUrlIndex < urls.length - 1) {
-          setCurrentUrlIndex(prev => prev + 1);
-        } else {
-          setImageError(true);
-        }
-      },
-    }
+    { preset: 'imageLoad', showToast: false }
   );
 
   const loadImage = useCallback(async (url: string): Promise<string> => {
@@ -344,26 +365,29 @@ export function useRetryImage(urls: string[]) {
   }, []);
 
   const tryLoadImage = useCallback(async () => {
-    if (currentUrlIndex >= urls.length) {
+    const key = urlsKey;
+    const index = currentUrlIndex;
+    if (index >= urls.length) {
       setImageError(true);
       return;
     }
 
-    const result = await execute(() => loadImage(urls[currentUrlIndex]));
-
-    if (!result.success && currentUrlIndex < urls.length - 1) {
-      // Try next URL
-      setCurrentUrlIndex(prev => prev + 1);
-    } else if (!result.success) {
+    const result = await execute(() => loadImage(urls[index]));
+    if (result.success || latestKeyRef.current !== key) {
+      return;
+    }
+    if (index < urls.length - 1) {
+      setCurrentUrlIndex(index + 1);
+    } else {
       setImageError(true);
     }
-  }, [currentUrlIndex, urls, execute, loadImage]);
+  }, [currentUrlIndex, urls, urlsKey, execute, loadImage]);
 
   useEffect(() => {
     if (urls.length > 0 && currentUrlIndex < urls.length) {
       tryLoadImage();
     }
-  }, [currentUrlIndex]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [currentUrlIndex, urlsKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return {
     currentUrl: urls[currentUrlIndex],

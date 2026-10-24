@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { ImageController } from '../controllers/imageController';
 import { VideoController } from '../controllers/videoController';
+import { getImagePreview } from '../controllers/previewController';
 import { authenticate } from '../../middleware/auth';
 import { createCacheMiddleware } from '../../middleware/cache';
 import {
@@ -84,15 +85,11 @@ router.get(
 );
 
 /**
- * Regenerate missing segmentation thumbnails for a project
- * POST /projects/:id/regenerate-thumbnails
- * POZOR: Musí být před /:id/images kvůli pořadí matchování routes
+ * The image's project-grid preview (image + its segmentation), rendered on
+ * demand and addressed by version — see services/previews/previewVersion.ts.
+ * GET /images/:imageId/preview?v=<version>
  */
-router.post(
-  '/:id/regenerate-thumbnails',
-  validateParams(projectIdSchema),
-  imageController.regenerateThumbnails
-);
+router.get('/:imageId/preview', getImagePreview);
 
 /**
  * Get image statistics for project

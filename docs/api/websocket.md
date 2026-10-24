@@ -77,8 +77,20 @@ avoid delivering the same event twice to a client that is in both rooms.
 
 ### Project and dashboard
 
-`projectUpdate`, `projectDeleted`, `dashboardUpdate`, `thumbnail:updated`,
+`projectUpdate`, `projectDeleted`, `dashboardUpdate`,
 `concurrent-user-count`.
+
+`imagePreviewsUpdated` — `{ projectId, previews: [{ imageId, previewUrl }] }`,
+sent to the **project room** (owner and collaborators) after any change to what
+a grid preview draws: an ML result, an editor save, a deleted segmentation, a
+forced resegment, a cross-frame track edit, tracking, a static-channel share, a
+type-label removal or a channel removal. Bursts are coalesced (250 ms) into
+one message per project. The client only swaps the URL in; it is not the only
+path to a correct picture, because every listing carries the current URL.
+
+`segmentation:cancelled` / `segmentation:bulk-cancelled` are sent to the user
+room when queued work is cancelled. Until 2026-10-24 the client registered
+handlers for them that never ran: `WebSocketManager` did not forward them.
 
 ### Sharing
 

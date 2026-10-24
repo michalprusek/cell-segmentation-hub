@@ -1,3 +1,4 @@
+import { PROJECT_CARD_IMAGE_QUERY } from './previews/projectCardImage';
 import { v4 as uuidv4 } from 'uuid';
 import { prisma } from '../db';
 import { logger } from '../utils/logger';
@@ -381,16 +382,7 @@ export async function getSharedProjects(
             _count: {
               select: { images: true },
             },
-            images: {
-              take: 1,
-              orderBy: { createdAt: 'desc' },
-              select: {
-                id: true,
-                name: true,
-                thumbnailPath: true,
-                originalPath: true,
-              },
-            },
+            images: PROJECT_CARD_IMAGE_QUERY,
             user: {
               select: {
                 id: true,

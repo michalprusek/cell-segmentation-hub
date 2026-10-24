@@ -16,6 +16,7 @@ vi.mock('../../db', () => ({
     user: { findUnique: vi.fn() },
     essayJob: { findMany: vi.fn() },
     apiJob: { findMany: vi.fn() },
+    segmenterDataset: { findMany: vi.fn() },
   },
 }));
 
@@ -75,6 +76,9 @@ describe('collectUserFiles', () => {
     vi.mocked(prisma.apiJob.findMany).mockResolvedValue([
       { id: 'job-xyz' },
     ] as never);
+    vi.mocked(prisma.segmenterDataset.findMany).mockResolvedValue([
+      { id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc' },
+    ] as never);
   });
 
   it('selects images by the PROJECT owner, not by who uploaded them', async () => {
@@ -118,6 +122,8 @@ describe('collectUserFiles', () => {
         `avatars/${OWNER}`,
         `essays/${OWNER}`,
         'api-jobs/job-xyz',
+        // The user's segmenter datasets, which the user row cascades away.
+        'projects/segmenter/cccccccc-cccc-4ccc-8ccc-cccccccccccc',
       ].sort()
     );
   });

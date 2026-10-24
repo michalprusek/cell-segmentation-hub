@@ -75,10 +75,6 @@ const ProjectCard = React.memo(
       }
     };
 
-    const handleAccessError = (projectId: string, _error: unknown) => {
-      onProjectUpdate?.(projectId, 'access-denied');
-    };
-
     return (
       <Card
         {...drag}
@@ -100,12 +96,7 @@ const ProjectCard = React.memo(
         )}
         <CardHeader className="p-0">
           <div className="relative aspect-video overflow-hidden">
-            <ProjectThumbnail
-              projectId={id}
-              fallbackSrc={thumbnail}
-              imageCount={imageCount}
-              onAccessError={handleAccessError}
-            />
+            <ProjectThumbnail src={thumbnail} />
             <div className="absolute top-4 right-4 z-10">
               <ProjectActions
                 projectId={id}

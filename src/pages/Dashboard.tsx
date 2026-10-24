@@ -458,11 +458,7 @@ const Dashboard = () => {
 
   const handleProjectUpdate = useCallback(
     (projectId: string, action: string) => {
-      if (
-        action === 'delete' ||
-        action === 'unshare' ||
-        action === 'access-denied'
-      ) {
+      if (action === 'delete' || action === 'unshare') {
         removeProjectOptimistically(projectId);
       }
     },

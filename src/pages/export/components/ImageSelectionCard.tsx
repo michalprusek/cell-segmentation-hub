@@ -60,9 +60,10 @@ const ImageSelectionCard: React.FC<ImageSelectionCardProps> = ({
                 </div>
 
                 <div className="h-10 w-10 bg-gray-200 rounded overflow-hidden flex-shrink-0">
-                  {image.thumbnail_url ? (
+                  {image.previewUrl || image.thumbnail_url ? (
                     <img
-                      src={image.thumbnail_url}
+                      src={image.previewUrl || image.thumbnail_url}
+                      loading="lazy"
                       alt={image.name ? image.name.normalize('NFC') : 'Image'}
                       className="h-full w-full object-cover"
                     />

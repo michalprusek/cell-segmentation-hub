@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Project } from '@/components/ProjectsList';
-import { ProjectImage } from '@/types';
 import apiClient from '@/lib/api';
 import { fetchAllProjects } from '@/lib/fetchAllProjects';
 import { toast } from 'sonner';
@@ -10,7 +9,6 @@ import { useLanguage } from '@/contexts/useLanguage';
 import { useAuth } from '@/contexts/useAuth';
 import { useNavigate } from 'react-router-dom';
 import { useDebounce } from '@/hooks/useDebounce';
-import config from '@/lib/config';
 
 export interface DashboardProjectsOptions {
   sortField: string;
@@ -26,9 +24,10 @@ export interface DashboardProjectsOptions {
   folderId?: string | 'root';
 }
 
-// Interface for project data from API including optional images
+// The project as `mapProjectFields` delivers it to this hook.
 interface ApiProject extends Project {
-  images?: ProjectImage[];
+  /** Versioned preview of the card image (see `mapProjectFields`). */
+  previewUrl?: string | null;
 }
 
 export const useDashboardProjects = ({
@@ -85,8 +84,8 @@ export const useDashboardProjects = ({
         // EVERY page, not just the first — see `fetchAllProjects` for why the
         // first-page-only version read as data loss.
         // Inferred as the API's `Project`; the `ApiProject` view (which only
-        // adds an optional `images`) is applied at the `forEach` below, as it
-        // was before this walk existed.
+        // adds `previewUrl`) is applied at the `forEach` below, as it was
+        // before this walk existed.
         const ownedProjects = await fetchAllProjects(
           params => apiClient.getProjects(params),
           {
@@ -232,27 +231,18 @@ export const useDashboardProjects = ({
               owner?: { email: string; name?: string };
             }
           ) => {
-            // Extract thumbnail from backend data (first image if available)
-            let thumbnail = '/placeholder.svg';
+            // The server's versioned preview of the card image: the image
+            // with its segmentation, at a URL that moves with every edit.
+            //
+            // This used to be derived from `project.images[0]`, which no
+            // response ever carried — `mapProjectFields` does not list
+            // `images` — so every card fell through to the placeholder and
+            // `ProjectThumbnail` fetched a raw thumbnail of its own.
+            const thumbnail =
+              typeof project.previewUrl === 'string'
+                ? project.previewUrl
+                : '/placeholder.svg';
             const imageCount = project.image_count || 0;
-
-            // If project has associated image data from backend
-            if (project.images && project.images.length > 0) {
-              const firstImage = project.images[0];
-              thumbnail =
-                firstImage.thumbnailPath ||
-                firstImage.originalPath ||
-                '/placeholder.svg';
-
-              // Ensure URL is absolute for Docker environment
-              if (thumbnail && !thumbnail.startsWith('http')) {
-                const baseUrl = config.apiBaseUrl
-                  .replace('/api', '')
-                  .replace(/\/+$/, '');
-                const cleanThumbnail = thumbnail.replace(/^\/+/, '');
-                thumbnail = `${baseUrl}/${cleanThumbnail}`;
-              }
-            }
 
             const processedProject = {
               ...project,
