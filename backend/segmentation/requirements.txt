@@ -79,7 +79,7 @@
 # instanceId excluded); neurite_soma_classical failed the same way in both
 # (it needs the backend's channel fields), so it is unverified by this check.
 # numpy stayed 1.26.4 and /metrics still labels the handler "/api/v1/segment".
-fastapi==0.143.2
+fastapi==0.161.1
 starlette==1.7.0
 uvicorn==0.54.0
 pydantic==2.14.1
