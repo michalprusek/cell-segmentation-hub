@@ -248,6 +248,7 @@ warning codes and a `result_url`.
 - **`microtubule`** — IRM (label-free) images only. On fluorescence (TIRF) frames the output does not track image content. The detection cut is part of the fitted model and cannot be set.
 - **`microcapsule`** — A membrane outline encloses its capsule, so the two overlap. In mask outputs the smaller object is drawn on top.
 - **`neurite_soma`** — Single-channel images. A colour image is accepted only if its channels are identical.
+- **`neurite_soma_merged`** — One image is one channel here. Merging several channels before segmentation is a feature of the application; this endpoint does not take them. A colour image is reduced to its luminance.
 - **`neurite_soma_classical`** — One image is one channel here. Merging several channels before segmentation is a feature of the application; this endpoint does not take them. A colour image is reduced to its luminance. Images over 64 megapixels are refused.
 
 **Input depth.** `native` models use a 16-bit or float image at full depth.

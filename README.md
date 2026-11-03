@@ -97,7 +97,7 @@ covers that route.
 | ---------- | ------------------------------------------------------------------------ |
 | Frontend   | React 18 + TypeScript + Vite + shadcn/ui (Radix + Tailwind)              |
 | Backend    | Node.js + Express + TypeScript + Prisma ORM                              |
-| ML Service | Python + FastAPI + PyTorch (13 models — see docs/reference/ml-models.md) |
+| ML Service | Python + FastAPI + PyTorch (14 models — see docs/reference/ml-models.md) |
 | Database   | PostgreSQL (dev + prod, via Docker Compose)                              |
 | Real-time  | Socket.io with auto-reconnect + exponential backoff                      |
 | Auth       | JWT access + refresh tokens                                              |

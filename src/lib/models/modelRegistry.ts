@@ -313,6 +313,27 @@ export const MODEL_REGISTRY = {
     i18nKey: 'neurite_soma',
     compatibleProjectTypes: ['neurite'],
   },
+  neurite_soma_merged: {
+    size: 'large',
+    // Semantic 3-class argmax, like neurite_soma: this is the registry's neutral
+    // default and is not forwarded as a meaningful knob.
+    defaultThreshold: 0.5,
+    category: 'neurite',
+    performance: {
+      // @@PERF_COMMENT@@
+      avgTimePerImage: 4,
+      throughput: 0.25,
+      p95Latency: 60,
+      batchSize: 1,
+    },
+    name: 'Neurite / Soma (merged channels)',
+    displayName: 'Neurite / Soma – nnU-Net (merged channels)',
+    description:
+      'Two-class semantic segmentation of neurons for fluorescence images where the cell shows when several channels are taken together. You tick the channels before segmenting; each is normalised to its own noise and they are merged into one greyscale image, which an nnU-Net v2 ResEnc-M 4-fold ensemble segments. Held-out Dice 0.843 neurite / 0.879 soma on 15 expert-corrected frames from four wells at about 0.18 um/px. On dim staining it finds only part of the neurites and often no somas; the classical model goes further there.',
+    i18nKey: 'neurite_soma_merged',
+    compatibleProjectTypes: ['neurite'],
+    mergesChannels: true,
+  },
   neurite_soma_classical: {
     size: 'small',
     // The cut is relative to each image's own noise and is part of the fitted
@@ -332,7 +353,10 @@ export const MODEL_REGISTRY = {
     description:
       'Classical, training-free segmentation of neurites and somas for fluorescence images where the cell only shows when several channels are taken together. You tick the channels before segmenting; each is normalised to its own noise and they are merged into one greyscale image. Neurites come from a Meijering ridge filter, somas from a width-and-shape test. Runs on the CPU in about a second per 1024 x 1024 frame. Faint, diffuse somas are found only some of the time — check them in the editor.',
     i18nKey: 'neurite_soma_classical',
-    compatibleProjectTypes: ['neurite'],
+    // Retired from the picker. No project type may select it, so a stored value
+    // resolves to the type's default. Still a known id because stored results
+    // name it and the public API serves it.
+    compatibleProjectTypes: [],
     mergesChannels: true,
   },
 } as const satisfies Record<string, ModelRegistryEntry>;
@@ -476,9 +500,10 @@ type CompatibleModelFor<PT extends ProjectTypeKey> = {
  * model, deliberately NOT the fastest.
  *
  * Four of the seven types have exactly one compatible model, so their entry is
- * forced. `sperm` and `neurite` have two and keep the learned model they
- * started with (`neurite_soma_classical` is for images the learned one cannot
- * take, not a more accurate replacement). `spheroid` is the open choice among
+ * forced. `sperm` and `neurite` have two and keep the model they started with.
+ * `neurite_soma_merged` is not a more accurate replacement for `neurite_soma`:
+ * each wins on the other's data by a wide margin, so the choice is a question
+ * of the images and the default is left where it was. `spheroid` is the open choice among
  * accuracy claims, and it resolves to `segformer`
  * on the only accuracy figure any of the five candidates actually carries:
  * 93 % IoU on bright-field spheroids (see its `description`). `cbam_resunet`

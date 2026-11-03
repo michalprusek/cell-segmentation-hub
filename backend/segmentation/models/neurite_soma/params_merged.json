@@ -1,0 +1,11 @@
+{
+  "_comment": "Inference configuration for the merged-channel neurite/soma model: the same network and sliding window as params.json, four folds from leave-one-well-out training on frames merged by models/neurite_classical.merge_channels. These are NOT tunables: they are the configuration the held-out score was measured with, Dice 0.843 neurite / 0.879 soma, mean of four wells, leave-one-well-out over 15 frames.",
+  "configuration": "2d",
+  "folds": [0, 1, 2, 3],
+  "percentile_lo": 1.0,
+  "percentile_hi": 99.5,
+  "tile_step_ratio": 0.5,
+  "gaussian_sigma_scale": 0.125,
+  "use_mirroring": true,
+  "staging_script": "scripts/download-neurite-soma-merged-weights.sh"
+}

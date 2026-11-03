@@ -97,7 +97,7 @@ describe('SegmentationService — channels to merge', () => {
       data: {
         success: true,
         polygons: [],
-        model_used: 'neurite_soma_classical',
+        model_used: 'neurite_soma_merged',
         threshold_used: 0.5,
         processing_time: 1,
         image_size: { width: 64, height: 64 },
@@ -134,7 +134,7 @@ describe('SegmentationService — channels to merge', () => {
       .catch(error => error);
 
   it('reads every picked channel and sends them all, in the order asked', async () => {
-    await run('neurite_soma_classical', ['Channel_2', 'Channel_1']);
+    await run('neurite_soma_merged', ['Channel_2', 'Channel_1']);
 
     expect(getBuffer.mock.calls.map(call => call[0])).toEqual([
       'projects/p/images/video-1/frames/0001/Channel_2.png',
@@ -151,7 +151,7 @@ describe('SegmentationService — channels to merge', () => {
   });
 
   it('sends one file when one channel is picked', async () => {
-    await run('neurite_soma_classical', ['Channel_3']);
+    await run('neurite_soma_merged', ['Channel_3']);
     expect(getBuffer.mock.calls.map(call => call[0])).toEqual([
       'projects/p/images/video-1/frames/0001/Channel_3.png',
     ]);
@@ -159,7 +159,7 @@ describe('SegmentationService — channels to merge', () => {
   });
 
   it('does not segment a subset when a channel does not exist', async () => {
-    const outcome = await run('neurite_soma_classical', ['Channel_2', 'nope']);
+    const outcome = await run('neurite_soma_merged', ['Channel_2', 'nope']);
     expect(post).not.toHaveBeenCalled();
     expect(String((outcome as Error)?.message ?? outcome)).toMatch(/nope/);
   });

@@ -9,7 +9,7 @@ import torchvision.transforms as transforms
 from PIL import Image
 import numpy as np
 import cv2
-from typing import Dict, List, Tuple, Any, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 import logging
 import threading
 from pathlib import Path
@@ -112,7 +112,11 @@ except ImportError as e:
 # second copy, and the checkpoints carry every weight — no HF_TOKEN, no download.
 _neurite_soma_import_error = None
 try:
-    from models.neurite_soma import NEURITE_SOMA_CLASSES, NeuriteSomaModel
+    from models.neurite_soma import (
+        MERGED_PARAMS_PATH,
+        NEURITE_SOMA_CLASSES,
+        NeuriteSomaModel,
+    )
 except ImportError as e:
     logger.warning(
         f"Could not import NeuriteSomaModel: {e}. "
@@ -313,6 +317,15 @@ class ModelLoader:
             'class': NeuriteSomaModel,
             'pretrained_path': 'weights/neurite_soma',
             'finetuned_path': 'weights/neurite_soma',
+            'config_path': None
+        },
+        'neurite_soma_merged': {
+            # The same network as `neurite_soma`, retrained on one image merged
+            # from the channels the user picked (the merge the classical model
+            # below uses). A directory bundle like `neurite_soma`, see there.
+            'class': NeuriteSomaModel,
+            'pretrained_path': 'weights/neurite_soma_merged',
+            'finetuned_path': 'weights/neurite_soma_merged',
             'config_path': None
         },
         'neurite_soma_classical': {
@@ -529,6 +542,17 @@ class ModelLoader:
                 model.load_weights(str(weights_full_path), self.device)
                 self.loaded_models[model_name] = model
                 logger.info(f"Successfully loaded neurite/soma model from: {weights_full_path}")
+                return model
+            elif model_name == 'neurite_soma_merged':
+                if NeuriteSomaModel is None:
+                    raise ImportError(
+                        f"Neurite/soma model architecture not available: "
+                        f"{_neurite_soma_import_error}"
+                    )
+                model = NeuriteSomaModel(params_path=MERGED_PARAMS_PATH)
+                model.load_weights(str(weights_full_path), self.device)
+                self.loaded_models[model_name] = model
+                logger.info(f"Successfully loaded merged neurite/soma model from: {weights_full_path}")
                 return model
             elif model_name == 'neurite_soma_classical':
                 # Nothing to load and nothing to hold: the model is a module of
@@ -1608,24 +1632,7 @@ class ModelLoader:
         ``detect_holes`` is forwarded to polygonisation. ``timeout`` is accepted
         for symmetry with the other predict_* methods.
         """
-        import time as _time
-        from services.postprocessing import PostprocessingService
-
-        self.get_model('neurite_soma')
-        if 'neurite_soma' not in self.loaded_models:
-            raise ValueError(
-                "Neurite/soma model not loaded. "
-                "Load it first with load_model('neurite_soma')"
-            )
-
-        model = self.loaded_models['neurite_soma']
-        original_size = image.size  # (width, height)
-
-        self.is_processing = True
-        self.current_model = 'neurite_soma'
-        start_time = _time.time()
-
-        try:
+        def single_channel() -> np.ndarray:
             # PIL → grayscale numpy (H, W), preserving native bit depth.
             # `convert('L')` would quantise an 'I;16' 16-bit microscopy frame to
             # 8-bit BEFORE the wrapper's percentile stretch, throwing away the
@@ -1633,20 +1640,72 @@ class ModelLoader:
             # predict_microtubule; the wrapper normalises from whatever dtype
             # arrives.
             if image.mode in ('I;16', 'I;16B', 'I;16L'):
-                image_np = np.array(image, dtype=np.uint16)
-            elif image.mode == 'I':
-                image_np = np.array(image, dtype=np.int32)
-            elif image.mode == 'F':
-                image_np = np.array(image, dtype=np.float32)
-            elif image.mode in ('RGB', 'RGBA', 'P'):
+                return np.array(image, dtype=np.uint16)
+            if image.mode == 'I':
+                return np.array(image, dtype=np.int32)
+            if image.mode == 'F':
+                return np.array(image, dtype=np.float32)
+            if image.mode in ('RGB', 'RGBA', 'P'):
                 # An RGB render of one grayscale channel is the common case for
                 # a web upload; the wrapper rejects a genuinely multi-channel
                 # frame rather than averaging a mixture the model never saw.
-                image_np = np.array(image.convert('RGB'))
-            else:
-                image_np = np.array(image.convert('L'), dtype=np.uint8)
+                return np.array(image.convert('RGB'))
+            return np.array(image.convert('L'), dtype=np.uint8)
 
-            label = model.predict(image_np)  # (H, W) uint8: 0 bg / 1 neurite / 2 soma
+        return self._predict_neurite_soma_ensemble(
+            'neurite_soma', single_channel, image.size, threshold, detect_holes
+        )
+
+    def predict_neurite_soma_merged(self, images: List[Image.Image],
+                                    threshold: float = 0.5,
+                                    detect_holes: bool = True,
+                                    timeout: Optional[float] = None) -> Dict[str, Any]:
+        """Run the merged neurite/soma model on the channels of ONE image.
+
+        ``images`` is one PIL image per selected channel, all the same size.
+        They are merged with the classical model's merge, which is what this
+        model was trained on, and the merged frame then takes exactly the path
+        of ``predict_neurite_soma``. A single image is a one-channel merge.
+        """
+        if not images:
+            raise ValueError("neurite_soma_merged needs at least one channel")
+
+        def merged() -> np.ndarray:
+            return neurite_classical.merge_channels(
+                [neurite_classical.native_depth(image) for image in images]
+            )
+
+        return self._predict_neurite_soma_ensemble(
+            'neurite_soma_merged', merged, images[0].size, threshold, detect_holes,
+            extra_info={"num_channels_merged": len(images)},
+        )
+
+    def _predict_neurite_soma_ensemble(self, model_name: str,
+                                       read_input: Callable[[], np.ndarray],
+                                       original_size: Tuple[int, int],
+                                       threshold: float,
+                                       detect_holes: bool,
+                                       extra_info: Optional[Dict[str, Any]] = None,
+                                       ) -> Dict[str, Any]:
+        """Inference and polygonisation shared by the two learned neurite models."""
+        import time as _time
+        from services.postprocessing import PostprocessingService
+
+        self.get_model(model_name)
+        if model_name not in self.loaded_models:
+            raise ValueError(
+                "Neurite/soma model not loaded. "
+                f"Load it first with load_model('{model_name}')"
+            )
+
+        model = self.loaded_models[model_name]
+
+        self.is_processing = True
+        self.current_model = model_name
+        start_time = _time.time()
+
+        try:
+            label = model.predict(read_input())  # (H, W) uint8: 0 bg / 1 neurite / 2 soma
 
             pp = PostprocessingService()
             # The service-wide default of 50 px is wrong for neurites, and not
@@ -1738,7 +1797,7 @@ class ModelLoader:
             )
 
             return {
-                "model_used": "neurite_soma",
+                "model_used": model_name,
                 "threshold_used": threshold,
                 "image_size": {"width": original_size[0], "height": original_size[1]},
                 "polygons": emitted,
@@ -1753,6 +1812,7 @@ class ModelLoader:
                     "confidence_scores": [p.get("confidence", 1.0) for p in emitted],
                     "processing_time_s": processing_time,
                     "batch_size": 1,
+                    **(extra_info or {}),
                 },
             }
 
@@ -1767,7 +1827,7 @@ class ModelLoader:
         finally:
             self.is_processing = False
             self.current_model = None
-            self.release_model('neurite_soma')
+            self.release_model(model_name)
             # Three fold networks stay resident (~1.7 GiB of weights), but the
             # sliding-window accumulators are per-call and proportional to frame
             # area — two (C, H, W) fp16 tensors, ~1.2 GiB on a 13000² frame.
@@ -1806,18 +1866,7 @@ class ModelLoader:
         self.current_model = neurite_classical.MODEL_ID
         start_time = _time.time()
         try:
-            channels = []
-            for image in images:
-                # Native depth: `convert('L')` on an 'I;16' frame clips at 255,
-                # and the per-channel noise normalisation needs the real counts.
-                if image.mode in ('I;16', 'I;16B', 'I;16L', 'I;16N'):
-                    channels.append(np.array(image, dtype=np.uint16))
-                elif image.mode == 'I':
-                    channels.append(np.array(image, dtype=np.int32))
-                elif image.mode == 'F':
-                    channels.append(np.array(image, dtype=np.float32))
-                else:
-                    channels.append(np.array(image.convert('L'), dtype=np.uint8))
+            channels = [neurite_classical.native_depth(image) for image in images]
 
             label = neurite_classical.segment(channels)
             polygons = neurite_classical.label_to_polygons(label, detect_holes)

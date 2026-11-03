@@ -669,6 +669,11 @@ export default {
           description:
             'Semantische Zwei-Klassen-Segmentierung von Neuronen in der Fluoreszenzmikroskopie — Neurit (Fortsätze) und Soma (Zellkörper) — allein aus dem Tubulin-Kanal. nnU-Net v2 ResEnc-M, Ensemble aus 3 Folds mit Spiegel-TTA und clDice-Topologieterm für die Neurit-Klasse. Dice auf Holdout-Daten 0,832 Neurit / 0,915 Soma.',
         },
+        neurite_soma_merged: {
+          name: 'Neurit / Soma – nnU-Net (zusammengeführte Kanäle)',
+          description:
+            'Zweiklassige semantische Segmentierung von Neuronen — Neurit und Soma — für Fluoreszenzbilder, in denen die Zelle erst sichtbar wird, wenn mehrere Kanäle zusammengenommen werden. Sie haken die Kanäle vor dem Segmentieren an; jeder wird auf sein eigenes Rauschen normiert und sie werden zu einem Graustufenbild zusammengeführt, das ein 4-Fold-Ensemble aus nnU-Net v2 ResEnc-M segmentiert. Dice auf zurückgehaltenen Bildern 0,843 Neurit / 0,879 Soma. Bei schwacher Färbung findet es nur einen Teil der Neuriten und oft keine Somata; das klassische Modell kommt dort weiter.',
+        },
         neurite_soma_classical: {
           name: 'Neurit / Soma – klassisch (zusammengeführte Kanäle)',
           description:
@@ -711,6 +716,8 @@ export default {
         'Kompaktes U-Net (destilliert aus Meta SAM 3) zur Instanz-Segmentierung von Mikrokapseln — Fläche, Umfang und Kompaktheit je Kapsel; am Bildrand abgeschnittene Kapseln werden von den Metriken ausgeschlossen.',
       neurite_soma:
         'nnU-Net v2 ResEnc-M (2D, Ensemble aus 3 Folds) zur Segmentierung von Neuriten und Somata in der Fluoreszenzmikroskopie. Liest den Tubulin-Kanal; Dice auf Holdout-Daten 0,832 Neurit / 0,915 Soma. Trainiert auf Leica-Konfokaldaten bei ~0,180 µm/px — Soma-Zahlen bei anderer Pixelgröße prüfen.',
+      neurite_soma_merged:
+        'nnU-Net v2 ResEnc-M (2D, 4-Fold-Ensemble) zur Segmentierung von Neuriten und Somata auf Fluoreszenzbildern, die aus mehreren Kanälen zusammengeführt werden: Sie haken die Kanäle an, jeder wird auf sein eigenes Hintergrundrauschen normiert und sie werden zu einem Graustufenbild zusammengeführt. Dice auf zurückgehaltenen Bildern 0,843 Neurit / 0,879 Soma, auf 15 von Hand korrigierten Bildern aus vier Wells bei etwa 0,18 µm/px. Bei schwacher Färbung findet es nur einen Teil der Neuriten und oft keine Somata; das klassische Modell kommt dort weiter.',
       neurite_soma_classical:
         'Klassische Segmentierung von Neuriten und Somata ohne neuronales Netz und ohne Gewichte (Meijering-Gratfilter plus Formregeln; nur CPU, etwa 1,3 s pro Bild von 1024 × 1024). Für Fluoreszenzbilder, in denen eine Zelle erst sichtbar wird, wenn mehrere Kanäle zusammengenommen werden: Sie haken die Kanäle an, jeder wird auf sein eigenes Hintergrundrauschen normiert, und sie werden zu einem Graustufenbild zusammengeführt. Schwache, diffuse Somata werden nur manchmal gefunden — prüfen Sie sie im Editor.',
     },
@@ -1984,14 +1991,14 @@ export default {
           description:
             'Ein Ensemble aus drei Folds von nnU-Net v2 ResEnc-M, im Logit-Raum gemittelt, mit Spiegelungs-Augmentierung zur Inferenzzeit und einem clDice-Topologieterm, der dünne Fortsätze zusammenhängend statt perlenartig hält. Auf zurückgehaltenen Daten Dice 0,832 Neurit / 0,915 Soma. Trainiert auf Leica-Konfokaldaten bei etwa 0,180 µm/px — bei halber Pixelgröße kommt jedes Soma meist zweigeteilt zurück, prüfen Sie Somazahlen also zuerst.',
         },
-        neuriteSomaClassical: {
-          name: 'Neurit / Soma (klassisch)',
+        neuriteSomaMerged: {
+          name: 'Neurit / Soma (zusammengeführte Kanäle)',
           inferenceTime:
-            'Etwa 1,3 s für ein Bild von 1024 × 1024, auf der CPU · kein einstellbarer Schwellenwert — der Schnitt folgt dem Rauschen des Bildes selbst',
+            'Etwa 4 s für ein Bild von 1024 × 1024 · kein Schwellenwert — es entscheidet ein Argmax',
           bestFor:
-            'Verwendet von: Neuriten- und Soma-Projekten, wenn Sie es statt des Standardmodells wählen. Für Fluoreszenzbilder, in denen eine Zelle erst sichtbar wird, wenn mehrere Kanäle zusammengenommen werden.',
+            'Verwendet von: Neuriten- und Soma-Projekten, wenn Sie es wählen. Für Fluoreszenzbilder, in denen eine Zelle erst sichtbar wird, wenn mehrere Kanäle zusammengenommen werden, bei einigermaßen kräftiger Färbung.',
           description:
-            'Ein klassisches Verfahren: kein neuronales Netz, keine Gewichte, kein Training. Vor dem Segmentieren haken Sie einen oder mehrere Kanäle an; jeder wird auf sein eigenes Hintergrundrauschen normiert, und sie werden per pixelweisem Maximum zu einem Graustufenbild zusammengeführt, das dann segmentiert wird. Neuriten stammen aus einem Meijering-Gratfilter mit einem Schwellenwert relativ zum Rauschen des Bildes selbst; kurze, isolierte Fragmente (unter etwa 100 px) werden als Flecken im Hintergrund verworfen. Somata sind breite, kompakte Strukturen, von denen Neuriten ausgehen. Löcher, etwa das Innere einer Neuritenschleife, bleiben als Löcher erhalten. Schwache, diffuse Somata werden nur manchmal gefunden, prüfen und korrigieren Sie die Somata also im Editor. Bilder über 64 Megapixel werden abgelehnt.',
+            'Ein Ensemble aus vier Folds von nnU-Net v2 ResEnc-M, gemittelt im Logit-Raum mit Spiegel-Augmentierung zur Testzeit. Vor dem Segmentieren haken Sie einen oder mehrere Kanäle an; jeder wird auf sein eigenes Hintergrundrauschen normiert und sie werden per pixelweisem Maximum zu einem Graustufenbild zusammengeführt, das das Netz sieht. Trainiert auf 15 von Hand korrigierten Bildern aus vier Wells bei etwa 0,18 µm/px. Jedes Well wurde einmal zurückgehalten: Dice 0,843 Neurit / 0,879 Soma. Das ist der Wert eines Folds; für das ganze Ensemble bleiben keine zurückgehaltenen Bilder übrig. Bei schwacher Färbung findet es nur einen Teil der Neuriten und oft keine Somata, und das klassische Modell kommt dort weiter. Außerdem markiert es große unaufgeräumte Zellkörper als Somata, die ein Annotator ausgelassen haben kann.',
         },
       },
       howToSelect: 'Ein Modell wählen',
