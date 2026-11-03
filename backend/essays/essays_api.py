@@ -44,7 +44,7 @@ MODULE_DIR = Path(os.environ.get("ESSAYS_MODULE_DIR", "/app/essays_module"))
 # make the endpoint authenticated, and is not a substitute for keeping the
 # port off the public interface.
 ESSAYS_ROOT = os.path.realpath(os.environ.get("ESSAYS_ROOT", "/app/uploads"))
-WEIGHTS = os.environ.get("ESSAYS_WEIGHTS", "/app/mt_weights/microtubule_sparse35_ep040.pth")
+WEIGHTS = os.environ.get("ESSAYS_WEIGHTS", "/app/mt_weights/microtubule_v16_deb_s4_ep040.pth")
 # Measured on the 24 GB A5000 against a real 2048x2048 IRM well. Under
 # microtubule **v7** a forward pass wanted a 16.36 GiB working set; the cap was
 # once set to 0.6 (14.13 GiB), i.e. BELOW it. Every position therefore hit the
@@ -60,6 +60,10 @@ WEIGHTS = os.environ.get("ESSAYS_WEIGHTS", "/app/mt_weights/microtubule_sparse35
 # growing into whatever ceiling it is handed. Runtime was flat too and
 # results.csv was byte-identical at all four caps.
 #
+# RE-MEASURED 2026-11-03 for **V16 DEB_S4** (Gaussian fusion, in this container), by a direct
+# probe of predict() with no cap, not from a job: **1.22 GiB reserved** / 0.93 GiB allocated,
+# the same at 1024x1024 and 2048x2048 inputs. The forward pass does not depend on content.
+#
 # The cap is now 0.12 (2.88 GiB), twice the working set. It must stay ABOVE the
 # working set — that is the rule the data loss taught — but the previous 0.75 /
 # 17 GB pair was sized for a model that no longer exists and reserved ~17.7 GiB
@@ -70,7 +74,7 @@ WEIGHTS = os.environ.get("ESSAYS_WEIGHTS", "/app/mt_weights/microtubule_sparse35
 # preferences, and test_gpu_budget.py fails if a future tweak puts the cap back
 # under the working set — which is precisely the mistake that caused the data
 # loss, and which nothing else would catch until a batch had already lost wells.
-GPU_WORKING_SET_GB = 1.41
+GPU_WORKING_SET_GB = 1.22
 GPU_TOTAL_GB = 23.56  # usable VRAM of the production A5000, per torch
 
 GPU_MIN_FREE_GB = float(os.environ.get("ESSAYS_GPU_MIN_FREE_GB", "4"))

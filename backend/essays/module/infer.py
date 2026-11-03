@@ -206,7 +206,7 @@ def main() -> int:
     ap.add_argument("--image", required=True, type=Path,
                     help="Input frame (PNG/JPG/BMP/TIFF/ND2/NPY).")
     ap.add_argument("--weights", type=Path, default=default_weights(),
-                    help="Path to the microtubule_sparse35_ep040.pth checkpoint.")
+                    help="Path to the microtubule_v16_deb_s4_ep040.pth checkpoint.")
     ap.add_argument("--output", type=Path, default=None,
                     help="Output JSON path (default: <image>.mt.json).")
     ap.add_argument("--overlay", type=Path, default=None,
@@ -216,7 +216,7 @@ def main() -> int:
                     help="Compute device (auto = cuda if present else cpu).")
     ap.add_argument("--threshold", type=float, default=None,
                     help="Foreground probability cut. Default: the model's own value "
-                         "from params_sparse35.json (0.98). Only override if you know "
+                         "(V16: 0.995, params_v16.json). Only override if you know "
                          "why — the generic 0.5 other models use floods the "
                          "instancer, because this model's foreground is very "
                          "confident.")
@@ -232,7 +232,7 @@ def main() -> int:
         return 2
 
     device = resolve_device(args.device)
-    thr_label = "model's own (params_sparse35.json)" if args.threshold is None else args.threshold
+    thr_label = "model's own" if args.threshold is None else args.threshold
     print(f"[info] device={device}  threshold={thr_label}")
 
     image_2d = load_frame(args.image, args.frame)

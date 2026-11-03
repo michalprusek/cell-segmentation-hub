@@ -52,7 +52,7 @@ except ImportError as e:
     WoundModel = None
     _wound_import_error = e
 
-# Optional microtubule model import (SPARSE35 ep040 since 2026-09-19, v5H before
+# Optional microtubule model import (V16 DEB_S4 ep040 since 2026-11-03, SPARSE35 before
 # that; see models/microtubule/MODEL_CARD.md). Self-contained since the v7 → v5H
 # swap: an nnU-Net ResEnc-M network with dynamic_network_architectures vendored
 # alongside it, so an ImportError here means the vendored library or the
@@ -286,8 +286,8 @@ class ModelLoader:
         'microtubule': {
             # Will be None if the vendored network library failed to import
             'class': MicrotubuleModel,
-            'pretrained_path': 'weights/microtubule_sparse35_ep040.pth',
-            'finetuned_path': 'weights/microtubule_sparse35_ep040.pth',
+            'pretrained_path': 'weights/microtubule_v16_deb_s4_ep040.pth',
+            'finetuned_path': 'weights/microtubule_v16_deb_s4_ep040.pth',
             'config_path': None
         },
         'microcapsule': {
@@ -486,8 +486,9 @@ class ModelLoader:
                 logger.info(f"Successfully loaded wound model from: {weights_full_path}")
                 return model
             elif model_name == 'microtubule':
-                # Microtubule SPARSE35 ep040 — nnU-Net ResEnc-M + curvature-bounded
-                # instancer. The wrapper reads the head width off the checkpoint
+                # Microtubule V16 DEB_S4 ep040 — nnU-Net ResEnc-M + instancer L+H.
+                # The file name selects the pipeline (wrapper._PIPELINES), and the
+                # wrapper reads the head width off the checkpoint
                 # before building the network, so we skip the generic torch.load
                 # path below and let it drive loading end-to-end.
                 if MicrotubuleModel is None:
@@ -498,7 +499,7 @@ class ModelLoader:
                 model = MicrotubuleModel()
                 model.load_weights(str(weights_full_path), self.device)
                 self.loaded_models[model_name] = model
-                logger.info(f"Successfully loaded microtubule SPARSE35 ep040 model from: {weights_full_path}")
+                logger.info(f"Successfully loaded microtubule model from: {weights_full_path}")
                 return model
             elif model_name == 'microcapsule':
                 # Microcapsule distilled U-Net — the wrapper builds the smp
@@ -1862,8 +1863,9 @@ class ModelLoader:
 
     def predict_microtubule(self, image: Image.Image,
                             threshold: Optional[float] = None,
-                            timeout: Optional[float] = None) -> Dict[str, Any]:
-        """Run the microtubule model (SPARSE35 ep040: ResEnc-M + curvature instancer) on one frame.
+                            timeout: Optional[float] = None,
+                            include_prob: bool = False) -> Dict[str, Any]:
+        """Run the microtubule model (V16 DEB_S4 ep040: ResEnc-M + instancer L+H) on one frame.
 
         Differs from the standard predict() path:
 
@@ -1878,9 +1880,13 @@ class ModelLoader:
           model runs inside MicrotubuleModel.predict().
 
         ``threshold=None`` (the default, and what the /segment route passes)
-        means "use the model's own foreground cut from params_sparse35.json" — 0.98,
-        which the generic 0.1-0.9 API bound cannot even express. Pass a float
+        means "use the model's own foreground cut from params_v16.json", which the
+        generic 0.1-0.9 API bound cannot even express. Pass a float
         only to deliberately override it.
+
+        ``include_prob`` adds the native-scale probability map under ``prob``, for a
+        caller in this process; the /segment route serialises its result and must not
+        ask for it.
         """
         import time as _time
         import uuid as _uuid
@@ -1942,10 +1948,11 @@ class ModelLoader:
 
             processing_time = _time.time() - start_time
             logger.info(
-                f"Microtubule SPARSE35: {len(polylines)} centerlines in {processing_time:.2f}s"
+                f"Microtubule: {len(polylines)} centerlines in {processing_time:.2f}s"
             )
 
             return {
+                **({"prob": result["prob"]} if include_prob else {}),
                 "model_used": "microtubule",
                 "threshold_used": threshold_used,
                 "image_size": {"width": original_size[0], "height": original_size[1]},
@@ -1962,7 +1969,7 @@ class ModelLoader:
             self.is_processing = False
             self.current_model = None
             self.release_model('microtubule')
-            # v5H's activations are modest (measured 0.73 GiB peak, flat across
+            # The activations are modest (V16 measured 0.93 GiB peak, flat across
             # 1024x1024 and 2048x2048 because it tiles at 512x512), so this is
             # no longer load-bearing the way it was for v7's ~7 GB.  It is kept
             # because the card is shared with the essays batch worker and

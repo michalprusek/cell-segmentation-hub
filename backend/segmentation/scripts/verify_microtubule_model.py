@@ -6,7 +6,7 @@
         --extra /tmp/mtcheck/training_img_114.tif:/tmp/mtcheck/reference_training_img_114.json:/tmp/mtcheck/reference_training_img_114_prob.npz
 
 Loads the checkpoint the ModelLoader would load, runs the committed fixture
-(``tests/fixtures/mt_sparse35``) through the production wrapper and compares the 1.5x
+(``tests/fixtures/mt_v16``) through the production wrapper and compares the 1.5x
 probability map and the polyline set with what the research evaluation harness produced for
 the same PNG (see ``models/microtubule/reference_check.py``). ``--extra`` adds real frames with
 their own reference pairs, produced on the research host by the same harness; those files are
@@ -32,7 +32,7 @@ for p in (SEG / "models" / "microtubule", SEG / "models" / "microtubule" / "vend
     sys.path.insert(0, str(p))
 
 from models.microtubule import reference_check as rc  # noqa: E402
-from models.microtubule.wrapper import MODEL_NAME, MicrotubuleModel  # noqa: E402
+from models.microtubule.wrapper import MicrotubuleModel  # noqa: E402
 
 
 def _read_image(path: Path) -> np.ndarray:
@@ -62,8 +62,8 @@ def _sha256(path: Path) -> str:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--weights", default=str(SEG / "weights" / "microtubule_sparse35_ep040.pth"))
-    ap.add_argument("--fixture-dir", default=str(SEG / "tests" / "fixtures" / "mt_sparse35"))
+    ap.add_argument("--weights", default=str(SEG / "weights" / "microtubule_v16_deb_s4_ep040.pth"))
+    ap.add_argument("--fixture-dir", default=str(SEG / "tests" / "fixtures" / "mt_v16"))
     ap.add_argument("--extra", nargs="*", default=[], help="IMAGE:REF_JSON:REF_NPZ triples")
     ap.add_argument("--strict", action="store_true", help="identity tolerances (same GPU, same torch)")
     ap.add_argument("--device", default=None)
@@ -75,7 +75,7 @@ def main() -> int:
                            poly_matched_frac=1.0, poly_count_slack=0)
     else:
         tol = rc.CUDA_TOL if str(model._device).startswith("cuda") else rc.CPU_TOL
-    print(f"{MODEL_NAME} from {args.weights} on {model._device}; sha256 {_sha256(Path(args.weights))[:16]}…")
+    print(f"{model._params_path.name} + {args.weights} on {model._device}; sha256 {_sha256(Path(args.weights))[:16]}…")
     print(f"params: thr {model.params['prob_thr']}, min_length {model.params['min_length']}, "
           f"merge_radius {model.params['merge_radius']}")
 

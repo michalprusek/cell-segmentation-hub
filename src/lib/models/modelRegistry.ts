@@ -243,29 +243,28 @@ export const MODEL_REGISTRY = {
   },
   microtubule: {
     size: 'large',
-    // The model's own foreground cut (SPARSE35 ep040's optimum on its
-    // validation block; the ML route applies it from params_sparse35.json and
-    // ignores anything sent here). This model's foreground is very confident,
-    // so the generic 0.5 other models use would flood it.
+    // Ignored: the ML route applies the model's own cut (0.995 since 2026-11-03,
+    // from params_v16.json) and takes nothing from here. This value stays 0.98
+    // because it is sent on the wire and the API bound stops at 0.99. It is not
+    // the generic 0.5, so that a reader does not take that for this model's cut.
     defaultThreshold: 0.98,
     category: 'microtubule',
     performance: {
-      // nnU-Net ResEnc-M (140M params) + a pure-numpy curvature-bounded
-      // instancer, run at NATIVE resolution since 2026-09-19 (SPARSE35 ep040).
-      // Measured on an A5000: 0.5 s for a 1024x1024 frame carrying 22
-      // microtubules (research host); v5H at 1.5x took 4.0-4.4 s for 65.
-      // Runtime is dominated by the instancer and therefore scales with MT
-      // count, not just frame size. No backbone download, so the first call
-      // is no slower than the rest.
-      avgTimePerImage: 0.6,
-      throughput: 1.7,
-      p95Latency: 2.0,
+      // nnU-Net ResEnc-M (140M params) + instancer L+H, at NATIVE resolution with
+      // Gaussian tile fusion (V16 DEB_S4 ep040, 2026-11-03). Measured on the
+      // production A5000: 0.54 s for a 1024x1024 frame carrying 22 microtubules,
+      // about 2 s at 2048x2048, about 4 s at 1952x1952 with 489. The instancer
+      // takes most of it and scales with MT count, not just frame size. No
+      // backbone download, so the first call is no slower than the rest.
+      avgTimePerImage: 2.0,
+      throughput: 0.5,
+      p95Latency: 4.0,
       batchSize: 1,
     },
-    name: 'Microtubule (SPARSE35)',
+    name: 'Microtubule (V16)',
     displayName: 'Microtubule (ResEnc-M + curvature instancer)',
     description:
-      'Instance segmentation for IRM microtubule time-lapses. An nnU-Net ResEnc-M network predicts the filament foreground, then a curvature-bounded instancer separates it into individual centerlines, resolving every crossing by min-cost matching under a hard 0.25 rad/px bound. The network runs at native resolution. Trained entirely on synthetic frames — no human annotation at any stage. Cross-frame tracking for kymograph analysis is geometric. The only model in the platform producing polyline output.',
+      'Instance segmentation for IRM microtubule time-lapses. An nnU-Net ResEnc-M network predicts the filament foreground, then a curvature-bounded instancer separates it into individual centerlines, resolving every crossing by one global matching of arc ends under a hard 0.25 rad/px bound. The network runs at native resolution. Trained entirely on synthetic frames — no human annotation at any stage. Cross-frame tracking for kymograph analysis is geometric. The only model in the platform producing polyline output.',
     i18nKey: 'microtubule',
     compatibleProjectTypes: ['microtubules'],
   },
@@ -436,7 +435,7 @@ export const keyMap = (() => {
  * - `spheroid_invasive` is locked to `spheroid_disintegration` because core
  *   detection is tied to that model's postprocessing path.
  * - `wound`, `sperm`, `microcapsule`, `neurite` and `microtubules` use their
- *   dedicated specialised models only. `microtubules` ships with the SPARSE35
+ *   dedicated specialised models only. `microtubules` ships with the V16 DEB_S4
  *   ep040 nnU-Net ResEnc-M network plus a curvature-bounded instancer,
  *   producing per-instance polyline centerlines.
  * - Standard `spheroid` projects can use any of the general spheroid models,

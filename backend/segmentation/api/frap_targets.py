@@ -550,7 +550,7 @@ def frap_targets(
     """Segment the IRM page, choose bleach spots, return them in image pixels.
 
     There is deliberately NO threshold parameter. The microtubule model applies its own
-    foreground cut of 0.98 from params_sparse35.json, and forwarding a user value would
+    foreground cut of 0.995 from params_v16.json, and forwarding a user value would
     cut a very confident foreground at 0.5 and flood the instancer with noise. A
     knob that is silently ignored is worse than no knob.
 
@@ -630,7 +630,7 @@ def frap_targets(
         )
     try:
         try:
-            result = loader.predict_microtubule(pil)
+            result = loader.predict_microtubule(pil, include_prob=True)
         finally:
             _inference_lock.release()
     except InferenceError as exc:
@@ -650,6 +650,10 @@ def frap_targets(
     inference_s = time.time() - t0
 
     polylines, mt_instance_ids = _polylines_from(result)
+    # Instancer L+H links across gaps, and a bleach must not land in one. Pieces of one
+    # filament keep its instance id.
+    polylines, owners = FS.split_unsupported(polylines, result["prob"])
+    mt_instance_ids = [mt_instance_ids[i] for i in owners]
     t1 = time.time()
     sel = FS.select_spots(polylines, irm.shape[:2], um_per_px, fluor=fluor,
                           params=params, k_min=k_min, k_max=k_max)

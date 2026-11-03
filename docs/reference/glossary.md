@@ -100,8 +100,8 @@ the most accurate compatible model, not the fastest. Owner-only to change.
 
 **Threshold** — the confidence cut applied to a model's output. **Not settable
 anywhere in the interface**: each model applies the value it was validated
-with, read from the registry. They differ by a factor of five — 0.98 for the
-microtubule model, 0.2 for spheroid disintegration, 0.5 for the rest.
+with. They differ by a factor of five — 0.995 for the
+microtubule model (from its own params file), 0.2 for spheroid disintegration, 0.5 for the rest.
 
 **TIRF** — Total Internal Reflection Fluorescence. Measured for microtubule
 work, **never segmented** — the model does not track image content on it.

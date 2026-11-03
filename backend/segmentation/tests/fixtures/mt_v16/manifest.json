@@ -1,0 +1,73 @@
+{
+ "ckpt": "/data2/prusek/mt_work/runs/DEB_S4/ep040.pth",
+ "ckpt_sha256": "8fc22555737b2054f89c73db417314e5f4f89be0d4514bc60c6993508ec42f73",
+ "thr": 0.995,
+ "up": 1.5,
+ "kappa_max": 0.25,
+ "tile": 512,
+ "stride": 256,
+ "fusion": "gauss",
+ "decoder": "L+H",
+ "match_reach": 80.0,
+ "hyst_t_lo": 0.98,
+ "hyst_radius": 22.5,
+ "frame_fixture": "../mt_sparse35",
+ "torch": "2.5.1+cu121",
+ "gpu": "NVIDIA L40S",
+ "frames": {
+  "roi_median": {
+   "source": "roi_img_261.h5",
+   "shape": [
+    2048,
+    2048
+   ],
+   "file": "roi_median.png",
+   "n_polylines": 36
+  },
+  "roi_densest": {
+   "source": "roi_img_177.h5",
+   "shape": [
+    1952,
+    1952
+   ],
+   "file": "roi_densest.png",
+   "n_polylines": 489
+  },
+  "htw_median": {
+   "source": "htw_054.h5",
+   "shape": [
+    512,
+    512
+   ],
+   "file": "htw_median.tif",
+   "n_polylines": 19
+  },
+  "htw_densest": {
+   "source": "htw_014.h5",
+   "shape": [
+    512,
+    512
+   ],
+   "file": "htw_densest.tif",
+   "n_polylines": 45
+  },
+  "mt34_median": {
+   "source": "alice_2026_02_06_pll336_100x_NOatp_ch4_II__066_f00_irm.h5",
+   "shape": [
+    938,
+    1120
+   ],
+   "file": "mt34_median.tif",
+   "n_polylines": 17
+  },
+  "mt34_densest": {
+   "source": "training_img_11.h5",
+   "shape": [
+    1341,
+    1383
+   ],
+   "file": "mt34_densest.png",
+   "n_polylines": 103
+  }
+ }
+}
