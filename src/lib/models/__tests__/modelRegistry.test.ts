@@ -245,9 +245,9 @@ describe('model registry SSOT', () => {
         defaultThreshold: 0.98,
         category: 'microtubule',
         performance: {
-          avgTimePerImage: 0.6,
-          throughput: 1.7,
-          p95Latency: 2.0,
+          avgTimePerImage: 2.0,
+          throughput: 0.5,
+          p95Latency: 4.0,
           batchSize: 1,
         },
       },

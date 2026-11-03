@@ -278,7 +278,9 @@ See [Metrics](../reference/metrics.md#disintegration-index-di).
 ## FRAP targeting
 
 `POST /api/v1/frap/targets` — synchronous segment-and-select for a microscope
-control call.
+control call. Since 2026-11-03 it cuts each polyline where the probability map does not
+support it before selecting, because the instancer can link across a gap and a bleach
+is not recoverable; `n_polylines` counts the pieces.
 
 ## GPU monitoring
 

@@ -250,16 +250,15 @@ export const MODEL_REGISTRY = {
     defaultThreshold: 0.98,
     category: 'microtubule',
     performance: {
-      // nnU-Net ResEnc-M (140M params) + a pure-numpy curvature-bounded
-      // instancer, run at NATIVE resolution since 2026-09-19 (SPARSE35 ep040).
-      // Measured on an A5000: 0.5 s for a 1024x1024 frame carrying 22
-      // microtubules (research host); v5H at 1.5x took 4.0-4.4 s for 65.
-      // Runtime is dominated by the instancer and therefore scales with MT
-      // count, not just frame size. No backbone download, so the first call
-      // is no slower than the rest.
-      avgTimePerImage: 0.6,
-      throughput: 1.7,
-      p95Latency: 2.0,
+      // nnU-Net ResEnc-M (140M params) + instancer L+H, at NATIVE resolution with
+      // Gaussian tile fusion (V16 DEB_S4 ep040, 2026-11-03). Measured on the
+      // production A5000: 0.54 s for a 1024x1024 frame carrying 22 microtubules,
+      // about 2 s at 2048x2048, about 4 s at 1952x1952 with 489. The instancer
+      // takes most of it and scales with MT count, not just frame size. No
+      // backbone download, so the first call is no slower than the rest.
+      avgTimePerImage: 2.0,
+      throughput: 0.5,
+      p95Latency: 4.0,
       batchSize: 1,
     },
     name: 'Microtubule (V16)',

@@ -649,7 +649,7 @@ export default {
         microtubule: {
           name: 'Microtubule (ResEnc-M + curvature instancer)',
           description:
-            'Instance segmentation for IRM microtubule time-lapses. An nnU-Net ResEnc-M network predicts the filament foreground, then a curvature-bounded instancer separates it into individual centerlines, resolving every crossing under a hard 0.25 rad/px bound. Trained entirely on synthetic frames — no human annotation. ~0.6 s/frame; the only model in the platform with native polyline output.',
+            'Instance segmentation for IRM microtubule time-lapses. An nnU-Net ResEnc-M network predicts the filament foreground, then a curvature-bounded instancer separates it into individual centerlines, resolving every crossing under a hard 0.25 rad/px bound. Trained entirely on synthetic frames — no human annotation. ~0.6–2.5 s/frame; the only model in the platform with native polyline output.',
         },
         microcapsule: {
           name: 'Microcapsule',
@@ -1947,7 +1947,7 @@ export default {
         microtubule: {
           name: 'Microtubule (V16)',
           inferenceTime:
-            'About 0.6 s per frame · threshold fixed at 0.995 and not user-settable',
+            'About 0.6–2.5 s per frame · threshold fixed at 0.995 and not user-settable',
           bestFor: 'Used by: Microtubule projects. IRM images only.',
           description:
             'An nnU-Net ResEnc-M network predicts the filament foreground, then a curvature-bounded instancer separates it into individual centerlines, resolving every crossing under a hard curvature bound. Trained entirely on synthetic frames. Runtime scales with the number of filaments, not just frame size.',
@@ -2040,7 +2040,7 @@ export default {
       },
       processingNote: 'Processing time depends on the model:',
       processingTimes:
-        'the wound model takes about 0.03 s per image and the spheroid models about 0.2–0.4 s, while the microtubule model takes around 0.6 s per frame because separating individual filaments is the expensive part.',
+        'the wound model takes about 0.03 s per image and the spheroid models about 0.2–0.4 s, while the microtubule model takes around 0.6–2.5 s per frame because separating individual filaments is the expensive part.',
     },
 
     // Editor

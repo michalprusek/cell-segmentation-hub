@@ -15,7 +15,7 @@
  "match_reach": 80.0,
  "hyst_t_lo": 0.98,
  "hyst_radius": 22.5,
- "max_arcs": 3000,
+ "max_arcs": 2000,
  "link_model": {
   "features": [
    "mean_logit",
@@ -47,5 +47,5 @@
   ],
   "intercept": -5.338825959030348
  },
- "_provenance": "Decoder L+H of the microtubules repo. The graph constants and min_length are params_a_derived.json, unchanged from params_sparse35.json. link_model is src/instance/params_l_hand.json, fitted once on synthetic links only (2026-10-06). hyst_t_lo and hyst_radius were selected on half of the roi303 VAL fields and confirmed on the other half (2026-11-01). match_reach 80 missed its declared VAL line and was accepted by the user after the read (2026-11-02). prob_thr 0.995: one of DEB_S4's two own VAL cuts (roi303 0.995, htw and MT-34 0.99), by the declared rule 'higher block mean on VAL, ties to the higher cut' (block mean 0.7462 vs 0.7427). polyline_eps_px is output formatting (RDP), not read by the instancer. kappa_max 0.25 is a constant of the method and is never read from this file. max_arcs is a time bound, not a measured constant: 2.5x the densest of the 195 VAL frames (1224 arcs); beyond it the frame falls back to instance_a."
+ "_provenance": "Decoder L+H of the microtubules repo. The graph constants and min_length are params_a_derived.json, unchanged from params_sparse35.json. link_model is src/instance/params_l_hand.json, fitted once on synthetic links only (2026-10-06). hyst_t_lo and hyst_radius were selected on half of the roi303 VAL fields and confirmed on the other half (2026-11-01). match_reach 80 missed its declared VAL line and was accepted by the user after the read (2026-11-02). prob_thr 0.995: one of DEB_S4's two own VAL cuts (roi303 0.995, htw and MT-34 0.99), by the declared rule 'higher block mean on VAL, ties to the higher cut' (block mean 0.7462 vs 0.7427). polyline_eps_px is output formatting (RDP), not read by the instancer. kappa_max 0.25 is a constant of the method and is never read from this file. max_arcs is a time bound, not a measured constant: about 1.6x the densest of the 195 VAL frames (1224 arcs, 4.5 s of matching); a synthetic over-firing map of 2097 arcs took 48 s and 3735 arcs 157 s. Beyond it the frame falls back to instance_a."
 }

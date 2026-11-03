@@ -26,10 +26,10 @@ crossing by one global matching of arc ends under a hard 0.25 rad/px curvature b
 Trained **entirely on synthetic frames** — no human annotation at any stage.
 Nothing is downloaded at inference time.
 
-Roughly @T1024@ s for a 1024² frame and @T2048@ s for a 2048² one on an A5000. The
+Roughly 0.6 s for a 1024² frame and 2 s for a 2048² one on an A5000. The
 instancer takes most of that, so it scales with the number of
 microtubules, not just with frame size — a dense field is slower than a large
-empty one (@TDENSE@ s for the densest 2048² benchmark frame).
+empty one (about 10 s for the densest benchmark frame, with 1224 arcs).
 
 See [ML models](../../reference/ml-models.md#microtubule--microtubule-v16-deb_s4-ep040).
 

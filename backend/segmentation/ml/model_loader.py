@@ -1969,7 +1969,7 @@ class ModelLoader:
             self.is_processing = False
             self.current_model = None
             self.release_model('microtubule')
-            # v5H's activations are modest (measured 0.73 GiB peak, flat across
+            # The activations are modest (V16 measured 0.93 GiB peak, flat across
             # 1024x1024 and 2048x2048 because it tiles at 512x512), so this is
             # no longer load-bearing the way it was for v7's ~7 GB.  It is kept
             # because the card is shared with the essays batch worker and

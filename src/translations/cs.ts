@@ -634,7 +634,7 @@ export default {
         microtubule: {
           name: 'Mikrotubuly (ResEnc-M + zakřivený instancer)',
           description:
-            'Instanční segmentace mikrotubulů pro IRM časosběrná videa. Síť nnU-Net ResEnc-M předpoví popředí vláken a instancer je rozdělí na jednotlivé centerline, přičemž každé křížení řeší pod tvrdou mezí zakřivení 0,25 rad/px. Trénováno výhradně na syntetických snímcích — bez lidských anotací. ~0,6 s/frame; jediný model v platformě s nativním polyline výstupem.',
+            'Instanční segmentace mikrotubulů pro IRM časosběrná videa. Síť nnU-Net ResEnc-M předpoví popředí vláken a instancer je rozdělí na jednotlivé centerline, přičemž každé křížení řeší pod tvrdou mezí zakřivení 0,25 rad/px. Trénováno výhradně na syntetických snímcích — bez lidských anotací. ~0,6–2,5 s/frame; jediný model v platformě s nativním polyline výstupem.',
         },
         microcapsule: {
           name: 'Microcapsule',
@@ -1919,7 +1919,7 @@ export default {
         microtubule: {
           name: 'Mikrotubuly (V16)',
           inferenceTime:
-            'Přibližně 0,6 s na snímek · práh je pevně 0,995 a uživatel jej nemění',
+            'Přibližně 0,6–2,5 s na snímek · práh je pevně 0,995 a uživatel jej nemění',
           bestFor: 'Používá: projekty s mikrotubuly. Pouze snímky IRM.',
           description:
             'Síť nnU-Net ResEnc-M predikuje popředí vláken a pak instancer omezený křivostí rozdělí popředí na jednotlivé osy, přičemž každé křížení řeší pod pevnou mezí křivosti. Trénováno výhradně na syntetických snímcích. Doba běhu roste s počtem vláken, nejen s velikostí snímku.',
@@ -2011,7 +2011,7 @@ export default {
       },
       processingNote: 'Doba zpracování závisí na modelu:',
       processingTimes:
-        'model hojení ran zabere zhruba 0,03 s na snímek a sferoidové modely 0,2–0,4 s, zatímco model mikrotubulů asi 0,6 s na snímek, protože oddělení jednotlivých vláken je ta nákladná část.',
+        'model hojení ran zabere zhruba 0,03 s na snímek a sferoidové modely 0,2–0,4 s, zatímco model mikrotubulů asi 0,6–2,5 s na snímek, protože oddělení jednotlivých vláken je ta nákladná část.',
     },
 
     // Editor

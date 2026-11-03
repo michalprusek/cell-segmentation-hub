@@ -54,7 +54,7 @@ incompatible pair with a 400 even if you post it directly.
 | `wound`                   | Wound Healing (Scratch Assay)      | `wound`             | Closed polygons | 0.5                                                         | ~0.03 s                       | medium      |
 | `sperm`                   | Sperm Morphology                   | `sperm`             | Part polylines  | 0.5, **not read** (own cut-offs: mask 0.3, score 0.95)      | ~0.30 s                       | medium      |
 | `sperm_2part`             | Sperm Morphology (head + tail)     | `sperm`             | Part polylines  | 0.5, **not read** (own cut-offs: mask 0.3, score 0.95)      | ~0.30 s (copied from `sperm`) | medium      |
-| `microtubule`             | Microtubule (ResEnc-M + instancer) | `microtubules`      | **Polylines**   | 0.98, **not read** (`prob_thr` 0.995 in its own params file) | ~0.6 s (p95 ~2 s)             | large       |
+| `microtubule`             | Microtubule (ResEnc-M + instancer) | `microtubules`      | **Polylines**   | 0.98, **not read** (`prob_thr` 0.995 in its own params file) | ~2 s at 2048² (p95 ~4 s)             | large       |
 | `microcapsule`            | Microcapsule                       | `microcapsule`      | Closed polygons | 0.5                                                         | ~0.30 s                       | small       |
 | `neurite_soma`            | Neurite / Soma                     | `neurite`           | Closed polygons | 0.5, **not read** (argmax)                                  | ~12 s at 2048²                | large       |
 | `neurite_soma_classical`  | Neurite / Soma (classical)         | `neurite`           | Closed polygons | 0.5, **not read** (cut relative to the image's own noise)   | ~1.3 s at 1024², CPU          | small       |
@@ -391,9 +391,9 @@ of its properties are deliberate and surprising.
   inference time** — no HuggingFace token, no network access, and the first call
   is no slower than the rest.
 - Trained **entirely on synthetic frames**. No human annotation at any stage.
-- Peak GPU: @PEAK@ GiB. Runtime ~@T1024@ s for a 1024² frame and ~@T2048@ s for a 2048² one
+- Peak GPU: ~0.93 GiB. Runtime ~0.6 s for a 1024² frame and ~2 s for a 2048² one
   on an A5000 — mostly the _instancer_, so it scales with microtubule count, not
-  just with frame size (@TDENSE@ s for the densest 2048² benchmark frame).
+  just with frame size (about 10 s for the densest benchmark frame, with 1224 arcs).
 
 ### It is IRM-only
 

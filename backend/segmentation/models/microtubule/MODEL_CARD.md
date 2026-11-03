@@ -37,8 +37,8 @@ source of record.
 
 | VAL, as deployed unless stated | roi303 v2 (145 fr) | htw (33 fr) | MT-34 (17 fr) |
 |---|---|---|---|
-| DEB_S4 + L+H, reach 80, cut 0.995 | 0.741 | @HTWG@ | @MTG@ |
-| same at cut 0.99 | 0.732 | @HTWG99@ | @MTG99@ |
+| DEB_S4 + L+H, reach 80, cut 0.995 | **0.741** | **0.751** | **0.681** |
+| same at cut 0.99 | 0.732 | 0.754 | 0.675 |
 
 What the TEST table does not cover, stated so that nobody reads more into it: reach 80 and the
 single cut 0.995 were never read on TEST (at 0.995 the htw cell above would differ), the seed was chosen on VAL, and DEB_S4 is
@@ -51,7 +51,8 @@ the table above is under Gaussian fusion, as deployed.
 **Why 0.995.** DEB_S4's own VAL cuts differ by block (roi303 0.995, htw and MT-34 0.99) and production
 carries one. The rule, declared before reading: higher block mean of htw and roi303 on VAL, ties to the higher
 cut. It gives 0.7462 against 0.7427. MT-34, the block nearest to production frames by filament width,
-prefers 0.99, and the rule does not look at it.
+is not in the rule and agrees under Gaussian fusion (0.681 against 0.675; the uniform maps of the
+research ledger said the opposite, 0.666 against 0.686).
 
 **What users will notice.** Filaments keep their identity through crossings more often, and fewer
 detections land on debris. Curves under 20 px are found less often than the recipe without
@@ -60,7 +61,19 @@ recipe's mean. Large frames take about twice the tiles.
 
 **Verification, 2026-11-03.** On all 195 VAL frames (145 roi303, 33 htw, 17 MT-34): `instance_lh` on the research
 maps gives the research polylines at 0.000000 px, 9 758 curves; a mutated reach (60) fails that comparison.
-@E2E@ See §8b for the production record.
+The whole wrapper on the same frames reproduces them within 1e-9 px on the research host, and its output after RDP keeps the counts:
+roi303 0.7411, htw 0.7513, MT-34 0.6810. Inside the ML image, whose scipy, skimage and networkx differ, the decoder
+is again identical on all 195. torch 2.6.0 against the research host's 2.5.1 moves the map by up to 0.04, which on the fixture and six real
+frames keeps every curve count and moves no matched curve by more than 0.4 px (`verify_microtubule_model.py`, default tolerances; strict ones need the same torch).
+
+**FRAP targets.** L+H links across gaps the network saw no filament in, and a spot in such a gap would bleach
+empty glass with nothing to catch it on a field without a fluorescence page. `frap_select.split_unsupported` therefore cuts a polyline where the
+map stays under 0.5 for more than 3 px, before selection. On the 195 VAL frames, at 0.11 µm/px, 2 of 1374 spots landed on such a stretch without it and none with it, and the spot count stays within 3.
+
+**Time bound.** The matching is cubic at worst and runs under the service's one inference lock with no deadline. Beyond `max_arcs` (2000;
+the densest VAL frame has 1224) a frame falls back to `instance_a` with a logged warning. That is a bound on garbage input, such as a non-IRM channel, not a measured operating point.
+
+See §8b for the production record.
 
 **Rollback.** The previous checkpoint stays on disk, and its file name selects its own pipeline. Point
 `pretrained_path` and `finetuned_path` in `model_loader.py` back at `microtubule_sparse35_ep040.pth`, rebuild `ml` and recreate

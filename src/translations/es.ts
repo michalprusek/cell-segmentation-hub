@@ -634,7 +634,7 @@ export default {
         microtubule: {
           name: 'Microtúbulos (ResEnc-M + instanciador por curvatura)',
           description:
-            'Segmentación de instancias para time-lapses de microtúbulos IRM. Una red nnU-Net ResEnc-M predice el primer plano de los filamentos y un instanciador acotado por curvatura lo separa en centerlines individuales, resolviendo cada cruce bajo un límite duro de 0,25 rad/px. Entrenado íntegramente con imágenes sintéticas, sin anotación humana. ~0,6 s por cuadro; único modelo de la plataforma con salida polilínea nativa.',
+            'Segmentación de instancias para time-lapses de microtúbulos IRM. Una red nnU-Net ResEnc-M predice el primer plano de los filamentos y un instanciador acotado por curvatura lo separa en centerlines individuales, resolviendo cada cruce bajo un límite duro de 0,25 rad/px. Entrenado íntegramente con imágenes sintéticas, sin anotación humana. ~0,6–2,5 s por cuadro; único modelo de la plataforma con salida polilínea nativa.',
         },
         microcapsule: {
           name: 'Microcapsule',
@@ -1948,7 +1948,7 @@ export default {
         microtubule: {
           name: 'Microtúbulos (V16)',
           inferenceTime:
-            'Unos 0,6 s por fotograma · umbral fijado en 0,995 y no configurable',
+            'Unos 0,6–2,5 s por fotograma · umbral fijado en 0,995 y no configurable',
           bestFor: 'Lo usan: los proyectos de microtúbulos. Solo imágenes IRM.',
           description:
             'Una red nnU-Net ResEnc-M predice el primer plano de los filamentos y después un separador acotado por curvatura lo divide en líneas centrales individuales, resolviendo cada cruce bajo un límite estricto de curvatura. Entrenado exclusivamente con fotogramas sintéticos. El tiempo de ejecución crece con el número de filamentos, no solo con el tamaño del fotograma.',
@@ -2041,7 +2041,7 @@ export default {
       },
       processingNote: 'El tiempo de proceso depende del modelo:',
       processingTimes:
-        'el modelo de heridas tarda unos 0,03 s por imagen y los de esferoides entre 0,2 y 0,4 s, mientras que el de microtúbulos ronda los 0,6 s por fotograma porque separar filamentos individuales es la parte cara.',
+        'el modelo de heridas tarda unos 0,03 s por imagen y los de esferoides entre 0,2 y 0,4 s, mientras que el de microtúbulos ronda los 0,6–2,5 s por fotograma porque separar filamentos individuales es la parte cara.',
     },
 
     // Editor
