@@ -1,10 +1,12 @@
 # Microtubule model card
 
-Two models run from this package. **V16 DEB_S4 ep040** serves interactive segmentation and FRAP
-targets since 2026-11-03 (§0). **SPARSE35 ep040** serves the Automated Essays batch, and the rest
-of this card (§1–§12) is its record, unchanged except where it says so.
+**V16 DEB_S4 ep040** serves interactive segmentation, FRAP targets and the Automated Essays batch
+since 2026-11-03 (§0). The batch follows the interactive model by the owner's rule, and
+`backend/essays/tests/test_batch_follows_interactive.py` fails if they differ. **SPARSE35 ep040** is
+loaded by no service any more; the rest of this card (§1–§12) is its record, unchanged except where
+it says so.
 
-## 0. V16 DEB_S4 ep040 (interactive, since 2026-11-03)
+## 0. V16 DEB_S4 ep040 (interactive and Essays, since 2026-11-03)
 
 | | |
 |---|---|
@@ -101,8 +103,8 @@ The landing page's outlines (`src/components/landing/specimens.ts`) still predat
 
 # SPARSE35 ep040
 
-Deployed to SpheroSeg on 2026-09-19, replacing v5H (deployed 2026-08-17), and since 2026-11-03 run
-only by the essays batch. This is the
+Deployed to SpheroSeg on 2026-09-19, replacing v5H (deployed 2026-08-17), and since 2026-11-03
+loaded by no service. This is the
 reference for what the model is, how it was measured, what it scores, how the deployment
 was verified, and how to roll it back. Every number below has a source; none was re-typed
 from memory.

@@ -216,6 +216,8 @@ users index by position.
 | 29  | `tirf_frames`               | How many TIRF frames the position has. `1` for every run before 2026-10-07                                                                                                                                                                                |
 | 30  | `tirf_frame_time_s`         | Seconds from the position's first TIRF frame to this one, from the ND2's own timestamps. Blank when the file does not say                                                                                                                                 |
 | 31  | `segmentation_source_file`  | The file that was **segmented** (IRM). `source_file` (16) is the file the intensities were read from; the two differ only for a well recorded as one file per channel                                                                                     |
+| 32  | `segmentation_model`        | The checkpoint that drew this row. Counts and lengths from different models are not comparable |
+| 33  | `decoder`                   | `lh`, or `instance_a_fallback` on a position past the L+H arc limit (a very dense field), whose curves come from a decoder the model was not measured with |
 
 **With a TIRF time series the table is one row per microtubule _per frame_.**
 Columns 1–6, 14–17 and 20–27 describe the microtubule or its position and
@@ -271,7 +273,8 @@ export uses (`backend/segmentation/models/mt_measure.py`). See
 ## Related
 
 - [Microtubule projects](project-types/microtubules.md) — the interactive path.
-  Since 2026-11-03 it runs a newer model (V16); this batch keeps SPARSE35 ep040,
-  so that a running assay's outputs do not change.
+  Both run the same model (V16 DEB_S4 ep040 since 2026-11-03), and when the interactive
+  model changes this batch moves with it. Runs from before 2026-11-03 used SPARSE35 ep040,
+  so their counts and lengths are not comparable with later runs.
 - [ML models: microtubule](../reference/ml-models.md#microtubule--microtubule-v16-deb_s4-ep040)
 - [REST API](../api/README.md#automated-essays) — the endpoints behind this page

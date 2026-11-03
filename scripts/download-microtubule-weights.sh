@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Stages a microtubule checkpoint into the ML service weights directory and
-# verifies it. Without an argument: V16 DEB_S4 ep040, the interactive service's.
-# With microtubule_sparse35_ep040.pth: SPARSE35 ep040, the essays batch's.
+# verifies it. Without an argument: V16 DEB_S4 ep040, which the interactive service
+# and the essays batch both load. With microtubule_sparse35_ep040.pth: SPARSE35 ep040,
+# which no service loads any more (reference tests, older runs).
 #
 # The checkpoint (~535 MB) is .gitignore'd via the global ``*.pth`` rule, so it
 # must be staged out-of-band on each fresh checkout. Sources, in order:
@@ -18,7 +19,7 @@
 #
 # It is a COMPLETE state_dict: no frozen backbone, no HF_TOKEN, no network
 # access at run time. Both checkpoints stay on disk side by side: SPARSE35 is
-# the essays batch's model and the interactive service's rollback.
+# the rollback of both callers.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

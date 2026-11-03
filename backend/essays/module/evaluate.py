@@ -36,8 +36,8 @@ The v5H checkpoint is a complete ``state_dict`` with no frozen backbone, so
 **no HuggingFace token, download or network access is required** at any point.
 
 The 535 MB checkpoint itself is not stored in git; stage it once with
-``scripts/download-microtubule-weights.sh microtubule_sparse35_ep040.pth`` (or pass
-``--weights /path/to/microtubule_sparse35_ep040.pth``; the file name selects the decoder).
+``scripts/download-microtubule-weights.sh`` (or pass
+``--weights /path/to/microtubule_v16_deb_s4_ep040.pth``; the file name selects the decoder).
 """
 from __future__ import annotations
 
@@ -46,6 +46,7 @@ import gc
 import os
 import sys
 import time
+from collections import Counter
 from pathlib import Path
 from typing import NamedTuple
 
@@ -213,12 +214,12 @@ def build_args() -> argparse.Namespace:
     ap.add_argument("--out", type=Path, default=Path("results"),
                     help="Output directory (results.csv, overlays/, annotations/).")
     ap.add_argument("--weights", type=Path, default=DEFAULT_WEIGHTS,
-                    help="Path to microtubule_sparse35_ep040.pth (staged out-of-band; see README).")
+                    help="Path to microtubule_v16_deb_s4_ep040.pth (staged out-of-band; see README).")
     ap.add_argument("--device", default="auto", choices=["auto", "cuda", "cpu", "mps"],
                     help="Compute device.")
     ap.add_argument("--threshold", type=float, default=None,
                     help="Foreground probability cut. Default: the model's own value "
-                         "from params_sparse35.json (0.98). The generic 0.5 other "
+                         "(V16: 0.995, params_v16.json). The generic 0.5 other "
                          "models use would flood the instancer.")
     # Measurement geometry. Shared with the project export's /mt-metrics
     # endpoint (models/mt_measure.py), so these two flags mean exactly what
@@ -288,7 +289,7 @@ def main() -> int:
         print(f"[error] {exc}", file=sys.stderr)
         return 2
     device = resolve_device(args.device)
-    thr_label = "model's own (params_sparse35.json)" if args.threshold is None else args.threshold
+    thr_label = "model's own" if args.threshold is None else args.threshold
     print(f"[info] device={device}  threshold={thr_label}  "
           f"mt_width={args.mt_width} bg_margin={args.bg_margin}")
     # Say out loud which channel plays which role. A run that segments the wrong
@@ -320,6 +321,7 @@ def main() -> int:
     budget = _RetryBudget(RETRY_WAIT_BUDGET_S)
 
     n_pos = n_mt = n_fail = 0
+    decoders: Counter[str] = Counter()
     t_start = time.time()
     for fi, f in enumerate(files, start=1):
         try:
@@ -372,6 +374,8 @@ def main() -> int:
                       f"{attempt.error.type_name}: {attempt.error.message}")
                 continue
             centerlines = attempt.result["centerlines_rc"]
+            decoder = attempt.result.get("decoder", "")
+            decoders[decoder] += 1
 
             # ...and TIRF for the readout: the centerlines come from IRM, the
             # intensities integrated along them are the TIRF signal. Every
@@ -397,6 +401,8 @@ def main() -> int:
                     r["solution_intensity_median"] = round(solution_median, 3)
                     r["source_file"] = tirf_file
                     r["segmentation_source_file"] = irm_file
+                    r["segmentation_model"] = weights.stem
+                    r["decoder"] = decoder
                     r["acquired_at"] = pos.acquired_at
                     # None renders as a blank cell: an unmeasured offset must
                     # not read as a measured zero.
@@ -456,6 +462,10 @@ def main() -> int:
     if n_fail:
         print(f"[done] failures -> {failures.path} (one row per lost well, "
               f"with the reason)")
+    # Always printed, for the same reason as the focus line below: a position past
+    # the L+H arc limit takes another decoder, and that belongs with the run's totals.
+    print("[done] decoder per position: " + (", ".join(
+        f"{n} {name or 'unreported'}" for name, n in sorted(decoders.items())) or "none"))
     # Always printed, flagged or not: "0 of 900 flagged" is a result, and a
     # silent run would leave the reader unsure the check ran at all. Stated as a
     # diagnostic, never as a verdict on the run — the exit code is unaffected,

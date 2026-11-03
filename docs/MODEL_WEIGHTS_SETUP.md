@@ -10,7 +10,8 @@ The ML service requires three pre-trained deep learning models (~1.8 GB total):
 - **CBAM-ResUNet** (597 MB) - Advanced model with attention mechanisms
 - **U-Net SpheroHQ** (410 MB) - Optimized for SpheroHQ dataset
 
-Plus the models staged by their own scripts: **Microtubule V16 DEB_S4 ep040** and **SPARSE35 ep040**
+Plus the models staged by their own scripts: **Microtubule V16 DEB_S4 ep040** (interactive and
+Essays) and **SPARSE35 ep040** (no service loads it; reference tests and older runs)
 (535 MB each, `scripts/download-microtubule-weights.sh [name]`, sha256-pinned; sources of record
 `kajman:/data2/prusek/mt_work/runs/DEB_S4/ep040.pth` and
 `tulen:/disk2/prusek/mt_work/runs/SPARSE35/ep040.pth`; see

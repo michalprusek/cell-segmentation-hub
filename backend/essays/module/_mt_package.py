@@ -6,7 +6,7 @@ for ``channel_registration`` (``MT_REGISTRATION_DIR``). Both env vars are set
 explicitly in ``docker/essays.Dockerfile`` so a future move of either source
 fails the build there rather than silently finding nothing at run time.
 
-Single source of truth: the microtubule model code (SPARSE35 ep040; wrapper, net, the
+Single source of truth: the microtubule model code (V16 DEB_S4 ep040; wrapper, net, the
 instancer, the vendored network library) lives ONCE, in the ML service at
 ``backend/segmentation/models/microtubule``. Both the interactive segmentation
 service and this batch evaluator import that one package.
@@ -130,17 +130,17 @@ def ensure_registration_on_path() -> Path:
     )
 
 
-WEIGHTS_NAME = "microtubule_sparse35_ep040.pth"
+#: The file the interactive service loads too, by the owner's rule (2026-11-03);
+#: backend/essays/tests/test_batch_follows_interactive.py fails if the two differ.
+WEIGHTS_NAME = "microtubule_v16_deb_s4_ep040.pth"
 
 
 def weights_candidates() -> list[Path]:
     """Where the microtubule checkpoint may be staged, most-specific first.
 
     The checkpoint (~535 MB) is too large for git and is staged out-of-band by
-    ``scripts/download-microtubule-weights.sh microtubule_sparse35_ep040.pth`` into the ML
-    service's weights directory. The essays container bind-mounts that same directory
-    read-only at ``/app/mt_weights``. Since 2026-11-03 the interactive service loads a
-    different file from it (V16), and this batch keeps SPARSE35.
+    ``scripts/download-microtubule-weights.sh`` into the ML service's weights directory.
+    The essays container bind-mounts that same directory read-only at ``/app/mt_weights``.
     """
     env = os.environ.get("ESSAYS_WEIGHTS")
     out = [Path(env)] if env else []
@@ -174,7 +174,7 @@ def missing_weights_message(weights: Path) -> str:
     download that 404s.
     """
     return (
-        f"microtubule SPARSE35 ep040 checkpoint not found at {weights}.\n"
+        f"microtubule V16 DEB_S4 ep040 checkpoint not found at {weights}.\n"
         "Looked in: " + ", ".join(str(p) for p in weights_candidates()) + "\n"
         "Stage it with scripts/download-microtubule-weights.sh " + WEIGHTS_NAME + " (writes "
         "backend/segmentation/weights/" + WEIGHTS_NAME + "), or pass an explicit "

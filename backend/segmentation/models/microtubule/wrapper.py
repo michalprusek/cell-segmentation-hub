@@ -13,15 +13,15 @@ TWO callers share this package, so it is not free to change:
 They used to be separate copies that silently drifted apart. Re-verify BOTH
 paths when changing this file or anything under ``instance/``.
 
-What changed on 2026-11-03 (SPARSE35 ep040 -> V16 DEB_S4 ep040, interactive only)
--------------------------------------------------------------------------------
-The two callers now run different models, and the checkpoint decides which pipeline
-runs (``_PIPELINES``), so neither can be paired with the other's decoder by mistake.
-The interactive service loads the V16 checkpoint: Gaussian tile fusion and instancer
-L+H (``instance.instancer_lh``, ``params_v16.json``). The essays batch keeps the
-SPARSE35 checkpoint and, through it, the uniform fusion and ``instance_a`` below,
-bit for bit, because a new decoder would change a running assay's outputs. Read
-``MODEL_CARD.md`` for the numbers.
+What changed on 2026-11-03 (SPARSE35 ep040 -> V16 DEB_S4 ep040)
+---------------------------------------------------------------
+Both callers load the V16 checkpoint: Gaussian tile fusion and instancer L+H
+(``instance.instancer_lh``, ``params_v16.json``). They run the same model by the
+owner's rule, and ``backend/essays/tests/test_batch_follows_interactive.py`` fails if
+they differ. The checkpoint decides which pipeline runs (``_PIPELINES``), so a model
+cannot be paired with another's decoder by mistake; SPARSE35 stays listed, with the
+uniform fusion and ``instance_a`` below, to reproduce older runs. Read ``MODEL_CARD.md``
+for the numbers.
 
 What changed on 2026-09-19 (v5H -> SPARSE35 ep040)
 ---------------------------------------------------
@@ -410,6 +410,8 @@ class MicrotubuleModel:
             ``{
                 'centerlines_rc': list[(M_i, 2) float64],  # row, col, INPUT px
                 'prob':           (H, W) float32,          # foreground prob, INPUT px
+                'decoder':        str,   # 'lh', 'instance_a', or 'instance_a_fallback'
+                                         # for a frame beyond the L+H arc limit
             }``
 
             Note the absence of ``embedding_samples``: it is gone rather than
@@ -444,6 +446,7 @@ class MicrotubuleModel:
         # one full-frame boolean mask per polyline only to drop it cost 0.38 GB
         # and 0.133 s on a real 1476x1924 production frame, 2.84 GB on a dense
         # 2048^2 essays position. See instance_a's docstring.
+        decoder = "instance_a"
         if merged.get("decoder") == "lh":
             # The declared numbers read a map stored as float16, whose step just below
             # 1.0 is 2^-11 (about 5e-4, a tenth of the gap between the cuts 0.99 and
@@ -452,10 +455,13 @@ class MicrotubuleModel:
                 polylines = instance_lh(
                     prob_eval.astype(np.float16).astype(np.float32), thr, KAPPA_MAX, merged
                 )
+                decoder = "lh"
             except TooManyArcs as exc:
                 # Far outside anything L+H was measured on. instance_a answers such a frame
                 # in seconds, and what it returns there is no better or worse than garbage in.
+                # The batch records this per row, through ``decoder`` in the return value.
                 logger.warning("microtubule frame falls back to instance_a: %s", exc)
+                decoder = "instance_a_fallback"
                 polylines, _ = instance_a(
                     prob_eval > thr, KAPPA_MAX, merged, channels=chans_eval, prob=prob_eval,
                     return_masks=False,
@@ -489,4 +495,4 @@ class MicrotubuleModel:
 
         # The network ran at input resolution, so its map IS the caller's frame:
         # no resampling back, no shape fitting.
-        return {"centerlines_rc": centerlines_rc, "prob": maps["prob"]}
+        return {"centerlines_rc": centerlines_rc, "prob": maps["prob"], "decoder": decoder}

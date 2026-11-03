@@ -1,7 +1,8 @@
-# Microtubule SPARSE35 ep040 — segmentation model internals
+# Microtubule V16 DEB_S4 ep040 — segmentation model internals
 
-> Model swapped 2026-09-19 (v5H → SPARSE35 ep040). The authoritative description, numbers,
-> provenance and rollback live in `backend/segmentation/models/microtubule/MODEL_CARD.md`;
+> Model swapped 2026-11-03 (SPARSE35 ep040 → V16 DEB_S4 ep040, Gaussian tile fusion, instancer
+> L+H, cut 0.995); the batch runs the interactive service's model by rule. The authoritative
+> description, numbers, provenance and rollback live in `backend/segmentation/models/microtubule/MODEL_CARD.md`;
 > this file covers the pipeline shape and the single-frame CLI, which did not change.
 
 Reference for the bundled segmentation model. For the **batch well-recording
@@ -37,7 +38,7 @@ with exact ground truth.
 
 ## Nothing is downloaded at run time
 
-`microtubule_sparse35_ep040.pth` is a complete `state_dict` — a bare `OrderedDict` of 1364
+`microtubule_v16_deb_s4_ep040.pth` is a complete `state_dict` — a bare `OrderedDict` of 1364
 tensors and no other payload. There is no frozen backbone to fetch, so:
 
 * **no `HF_TOKEN`**, no HuggingFace account, no license acceptance;
@@ -78,7 +79,7 @@ python infer.py --image frame.tif --device cpu        # CPU (default on Mac)
 | `--output` | `<image>.mt.json` | Output JSON path. |
 | `--overlay` | *(off)* | Render centerlines over the frame to this PNG. |
 | `--device` | `auto` | `auto` = CUDA if present else CPU. `cpu` / `cuda` / `mps`. |
-| `--threshold` | `0.98` | Foreground probability threshold. Comes from the shipped params vector (`params_sparse35.json`); the generic 0.5 used by other models would flood the instancer. |
+| `--threshold` | `0.995` | Foreground probability threshold. Comes from the shipped params vector (`params_v16.json`); the generic 0.5 used by other models would flood the instancer. |
 | `--frame` | `0` | Frame index for multi-page TIFF / ND2 stacks. |
 
 > **Input intensity:** do **not** pre-scale your images. The model
@@ -102,7 +103,7 @@ measurement of well recordings, use `evaluate.py` instead.
 ```jsonc
 {
   "model_used": "microtubule",
-  "threshold_used": 0.98,
+  "threshold_used": 0.995,
   "image_size": { "width": 1024, "height": 1024 },
   "polygons": [],
   "polylines": [
@@ -132,7 +133,7 @@ from _mt_package import default_weights, ensure_on_path
 ensure_on_path()                            # shared package from the ML service
 from microtubule import MicrotubuleModel
 model = MicrotubuleModel().load_weights(str(default_weights()), "cpu")
-out = model.predict(frame_2d)               # seed_threshold=None -> the model's own 0.98
+out = model.predict(frame_2d)               # seed_threshold=None -> the model's own 0.995
 out["centerlines_rc"]      # list of (M_i, 2) float64 (row, col) px
 out["prob"]                # (H, W) float32 foreground probability
 ```
@@ -145,16 +146,17 @@ out["prob"]                # (H, W) float32 foreground probability
 | ------- | --- |
 | `checkpoint has no decoder.seg_layers.*.weight` | The file is not a ResEnc U-Net checkpoint — you are probably still pointing at `microtubule_v7.pt`. Stage the v5H weights. |
 | `ModuleNotFoundError: dynamic_network_architectures` | The vendored library under `microtubule/vendor/` was not copied. Keep the shared package intact at `backend/segmentation/models/microtubule`, or point `MT_PACKAGE_DIR` at its parent. |
-| Far too many tiny instances | The threshold was overridden to a generic 0.5. Leave `--threshold` unset so the model's own 0.98 is used. |
+| Far too many tiny instances | The threshold was overridden to a generic 0.5. Leave `--threshold` unset so the model's own 0.995 is used. |
 | Shape mismatch inside the residual adds | The tile size was changed. It must stay divisible by 128 (seven /2 stages); 512 is correct, and v4b's 518 is not. |
 | MPS error / odd results on Mac | Use `--device cpu`; `mps` is experimental for this model. |
 
 ## Provenance
 
-Model microtubule **SPARSE35 ep040** (nnU-Net ResEnc-M, binary head), checkpoint
-`microtubule_sparse35_ep040.pth` (sha256 `db78ec2d…`); instancer hyperparameters
-`params_sparse35.json` — the DERIVED vector (`min_length` 15.0 by the rule 3 × tolerance,
-declared before any number was read) with the model's own cut 0.98. Packaged 2026-09-19;
+Model microtubule **V16 DEB_S4 ep040** (nnU-Net ResEnc-M, binary head), checkpoint
+`microtubule_v16_deb_s4_ep040.pth` (sha256 `8fc22555…`); instancer L+H with `params_v16.json`, which keeps the
+DERIVED graph constants (`min_length` 15.0 by the rule 3 × tolerance, declared before any number
+was read) and adds a hysteresis bridge and a link score fitted on synthetic links, with the cut
+0.995. Packaged 2026-11-03;
 see `MODEL_CARD.md` in the package for the declared metric, the numbers and the rollback.
 The paragraphs below describe the v5H-era evidence and are kept as history.
 

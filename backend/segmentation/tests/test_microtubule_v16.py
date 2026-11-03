@@ -270,6 +270,7 @@ def test_predict_returns_row_col_at_input_scale_through_the_v16_branch():
     cl = out["centerlines_rc"][0]
     assert abs(cl[:, 0].mean() - 120) < 2           # row
     assert np.ptp(cl[:, 1]) > 400                   # runs along the columns of the 512 px input
+    assert out["decoder"] == "lh"
 
 
 def test_predict_falls_back_to_instance_a_beyond_the_arc_limit(monkeypatch, caplog):
@@ -282,3 +283,4 @@ def test_predict_falls_back_to_instance_a_beyond_the_arc_limit(monkeypatch, capl
     out = _v16_model().predict(np.random.default_rng(0).random((512, 512)).astype(np.float32))
     assert "falls back to instance_a" in caplog.text
     assert len(out["centerlines_rc"]) == 1
+    assert out["decoder"] == "instance_a_fallback"

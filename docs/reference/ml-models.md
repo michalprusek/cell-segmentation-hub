@@ -371,9 +371,9 @@ images to get the other model's parts.
 
 ## `microtubule` — Microtubule V16 DEB_S4 ep040
 
-> Swapped 2026-11-03 (SPARSE35 ep040 → V16 DEB_S4 ep040, interactive service only): same ResEnc-M
-> topology, new training recipe, Gaussian tile fusion, instancer L+H, cut 0.995. The Automated Essays
-> batch keeps SPARSE35 ep040 and its decoder. The checkpoint's file name selects the pipeline
+> Swapped 2026-11-03 (SPARSE35 ep040 → V16 DEB_S4 ep040): same ResEnc-M topology, new training
+> recipe, Gaussian tile fusion, instancer L+H, cut 0.995. The Automated Essays batch runs the same
+> model, and moves whenever this one does. The checkpoint's file name selects the pipeline
 > (`_PIPELINES` in `wrapper.py`). Everything the model is, scores and how it was verified:
 > `backend/segmentation/models/microtubule/MODEL_CARD.md`. The threshold evidence table below was
 > measured on v5H at 0.97 and is kept as the record of why the cut is not a setting.
