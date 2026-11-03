@@ -88,8 +88,9 @@ import evaluate, mt_pipeline, microtubule, mt_measure; \
 mt = pkg / 'microtubule'; \
 assert (mt / 'vendor' / 'dynamic_network_architectures' / 'architectures' / 'unet.py').is_file(), \
     'vendored network library missing under %s' % mt; \
-assert (mt / 'params_sparse35.json').is_file(), \
-    'instancer params missing under %s' % mt; \
+from microtubule.wrapper import _PIPELINES; \
+assert _PIPELINES[_mt_package.WEIGHTS_NAME].is_file(), \
+    'instancer params of %s missing under %s' % (_mt_package.WEIGHTS_NAME, mt); \
 import net; assert net.TILE == 512, 'unexpected tile size %s' % net.TILE; \
 assert mt_pipeline.measure.mt_measure is mt_measure, \
     'the essays measurement is not the shared one'; \
@@ -117,7 +118,7 @@ ENTRYPOINT []
 
 ENV PYTHONUNBUFFERED=1 \
     ESSAYS_MODULE_DIR=/app/essays_module \
-    ESSAYS_WEIGHTS=/app/mt_weights/microtubule_sparse35_ep040.pth
+    ESSAYS_WEIGHTS=/app/mt_weights/microtubule_v16_deb_s4_ep040.pth
 
 EXPOSE 8000
 

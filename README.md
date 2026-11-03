@@ -123,7 +123,7 @@ other type has exactly one.
 | Wound Healing                  | wound             | ~0.03 s   | 35 img/s   |
 | Sperm Morphology               | sperm             | ~0.30 s   | 3.3 img/s  |
 | Sperm Morphology (head + tail) | sperm             | ~0.30 s   | 3.3 img/s  |
-| Microtubule (SPARSE35)         | microtubules      | ~0.6 s    | 1.7 img/s  |
+| Microtubule (V16)              | microtubules      | ~2 s      | 0.5 img/s  |
 | Microcapsule                   | microcapsule      | ~0.30 s   | 3.0 img/s  |
 | Neurite / Soma                 | neurite           | ~12 s     | 0.08 img/s |
 | Neurite / Soma (classical)     | neurite           | ~1.3 s    | 0.75 img/s |

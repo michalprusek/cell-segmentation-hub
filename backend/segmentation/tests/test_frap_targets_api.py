@@ -7,6 +7,11 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 
+def _prob(image):
+    """A probability map that supports every stub polyline, so split_unsupported leaves them alone."""
+    return np.ones(image.size[::-1], np.float32)
+
+
 class _StubLoader:
     """Returns two clean horizontal filaments, in the real response shape."""
 
@@ -15,7 +20,7 @@ class _StubLoader:
             return {"id": f"polyline_{y}", "instanceId": f"mt_{y}",
                     "points": [{"x": 100.0, "y": float(y)}, {"x": 400.0, "y": float(y)}],
                     "class": "microtubule", "geometry": "polyline"}
-        return {"polylines": [line(150), line(450)], "success": True}
+        return {"polylines": [line(150), line(450)], "success": True, "prob": _prob(image)}
 
 
 @pytest.fixture
@@ -156,7 +161,7 @@ class _OneDegeneratePolylineLoader:
              "class": "microtubule", "geometry": "polyline"},
             line(150, "mt_FIRST"),
             line(450, "mt_SECOND"),
-        ], "success": True}
+        ], "success": True, "prob": _prob(image)}
 
 
 def test_instance_ids_survive_the_short_polyline_filter_in_step():
@@ -536,7 +541,7 @@ class _ShortFilamentLoader:
             {"id": "polyline_short", "instanceId": "mt_short",
              "points": [{"x": 100.0, "y": 300.0}, {"x": 105.0, "y": 300.0}],
              "class": "microtubule", "geometry": "polyline"},
-        ], "success": True}
+        ], "success": True, "prob": _prob(image)}
 
 
 def test_rejected_filaments_pass_through_to_the_overlay_renderer():
@@ -632,7 +637,7 @@ def test_omitting_the_fluor_page_is_announced_not_silent():
 def test_a_frame_with_no_filaments_says_so():
     class _EmptyLoader:
         def predict_microtubule(self, image, *args, **kwargs):
-            return {"polylines": [], "success": True}
+            return {"polylines": [], "success": True, "prob": _prob(image)}
 
     r = _post_with(_EmptyLoader(), um_per_px="0.1")
     assert r.status_code == 200, r.text
@@ -709,7 +714,7 @@ class _DiagonalLoader:
         return {"polylines": [{
             "id": "polyline_diag", "instanceId": "mt_diag",
             "points": [{"x": 100.0, "y": 100.0}, {"x": 400.0, "y": 400.0}],
-            "class": "microtubule", "geometry": "polyline"}], "success": True}
+            "class": "microtubule", "geometry": "polyline"}], "success": True, "prob": _prob(image)}
 
 
 def test_a_diagonal_filament_reports_its_real_angle_on_a_non_square_frame():
@@ -735,3 +740,27 @@ def test_a_diagonal_filament_reports_its_real_angle_on_a_non_square_frame():
     # ...and sit on the filament, where x == y. A transposed coordinate pair would
     # still land inside this frame, so the equality is what catches it.
     assert spot["x"] == pytest.approx(spot["y"], abs=2.0)
+
+
+class _LoaderWithAGap:
+    """One long filament whose middle the map does not support, as instancer L+H can return."""
+
+    def predict_microtubule(self, image, *args, **kwargs):
+        prob = np.ones(image.size[::-1], np.float32)
+        prob[:, 220:290] = 0.05
+        return {"polylines": [{
+            "id": "polyline_gap", "instanceId": "mt_gap",
+            "points": [{"x": 40.0, "y": 300.0}, {"x": 480.0, "y": 300.0}],
+            "class": "microtubule", "geometry": "polyline"}], "success": True, "prob": prob}
+
+
+def test_a_spot_never_lands_where_the_map_saw_no_filament():
+    """Without a fluorescence page nothing else would catch this, and a bleach is not recoverable.
+    The middle of this polyline, where the selector aims by default, lies in the gap."""
+    r = _post_with(_LoaderWithAGap(), um_per_px="0.1")
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["spots"], body
+    for spot in body["spots"]:
+        assert not 220 <= spot["x"] <= 290, spot
+        assert spot["mt_instance_id"] == "mt_gap"

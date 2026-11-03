@@ -649,7 +649,7 @@ export default {
         microtubule: {
           name: 'Microtubules (ResEnc-M + instanceur par courbure)',
           description:
-            "Segmentation d'instances pour les time-lapses de microtubules IRM. Un réseau nnU-Net ResEnc-M prédit l'avant-plan des filaments, puis un instanceur borné en courbure le sépare en centerlines individuelles, résolvant chaque croisement sous une borne dure de 0,25 rad/px. Entraîné uniquement sur des images synthétiques, sans annotation humaine. ~0,6 s/image ; seul modèle de la plateforme à sortie polyligne native.",
+            "Segmentation d'instances pour les time-lapses de microtubules IRM. Un réseau nnU-Net ResEnc-M prédit l'avant-plan des filaments, puis un instanceur borné en courbure le sépare en centerlines individuelles, résolvant chaque croisement sous une borne dure de 0,25 rad/px. Entraîné uniquement sur des images synthétiques, sans annotation humaine. ~0,6–2,5 s/image ; seul modèle de la plateforme à sortie polyligne native.",
         },
         microcapsule: {
           name: 'Microcapsule',
@@ -1952,9 +1952,9 @@ export default {
             'La même architecture que Morphologie des spermatozoïdes, affinée à partir de ce modèle sur des spermatozoïdes annotés uniquement en tête et flagelle. Chaque cellule est restituée sous forme de deux polylignes — la tête, qui couvre ici toute la partie hélicoïdale, raccordée au flagelle — si bien que la limite entre tête et flagelle est apprise, et non obtenue en rattachant la pièce intermédiaire à une partie voisine.',
         },
         microtubule: {
-          name: 'Microtubules (SPARSE35)',
+          name: 'Microtubules (V16)',
           inferenceTime:
-            'Environ 0,6 s par image · seuil fixé à 0,98 et non modifiable',
+            'Environ 0,6–2,5 s par image · seuil fixé à 0,995 et non modifiable',
           bestFor:
             'Utilisé par : les projets microtubules. Images IRM uniquement.',
           description:
@@ -2003,7 +2003,7 @@ export default {
       },
       thresholdNote: 'Les seuils de détection sont fixes pour chaque modèle.',
       thresholdNoteText:
-        'Il n’existe aucun réglage de seuil dans l’interface : chaque modèle qui utilise un seuil applique la coupure avec laquelle il a été validé — celle des microtubules étant 0,98 — et deux modèles (Désagrégation des sphéroïdes, Neurite / soma) n’en ont aucun : ils décident par argmax. Le modèle classique pour les neurites n’a pas de réglage non plus : il tire sa coupure du bruit de chaque image. Abaisser un seuil ne trouve pas davantage d’objets réels : il en trouve davantage avec des indices plus faibles, et sur un canal non IRM la sortie microtubules ne suit l’image à aucun réglage. S’il manque des détections, vérifiez plutôt le canal d’entrée.',
+        'Il n’existe aucun réglage de seuil dans l’interface : chaque modèle qui utilise un seuil applique la coupure avec laquelle il a été validé — celle des microtubules étant 0,995 — et deux modèles (Désagrégation des sphéroïdes, Neurite / soma) n’en ont aucun : ils décident par argmax. Le modèle classique pour les neurites n’a pas de réglage non plus : il tire sa coupure du bruit de chaque image. Abaisser un seuil ne trouve pas davantage d’objets réels : il en trouve davantage avec des indices plus faibles, et sur un canal non IRM la sortie microtubules ne suit l’image à aucun réglage. S’il manque des détections, vérifiez plutôt le canal d’entrée.',
       tip: 'Astuce :',
       tipText:
         'Commencez par le modèle par défaut. Passez à CBAM-ResUNet quand les contours comptent plus que la vitesse, et à Mamba-UNet quand vos images ne ressemblent au jeu d’entraînement de personne.',
@@ -2050,7 +2050,7 @@ export default {
       },
       processingNote: 'Le temps de traitement dépend du modèle :',
       processingTimes:
-        'le modèle de cicatrisation prend environ 0,03 s par image et les modèles de sphéroïdes 0,2 à 0,4 s, tandis que le modèle de microtubules demande environ 0,6 s par image, car séparer les filaments un à un est la partie coûteuse.',
+        'le modèle de cicatrisation prend environ 0,03 s par image et les modèles de sphéroïdes 0,2 à 0,4 s, tandis que le modèle de microtubules demande environ 0,6–2,5 s par image, car séparer les filaments un à un est la partie coûteuse.',
     },
 
     // Éditeur

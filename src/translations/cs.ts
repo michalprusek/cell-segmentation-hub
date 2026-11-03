@@ -634,7 +634,7 @@ export default {
         microtubule: {
           name: 'Mikrotubuly (ResEnc-M + zakřivený instancer)',
           description:
-            'Instanční segmentace mikrotubulů pro IRM časosběrná videa. Síť nnU-Net ResEnc-M předpoví popředí vláken a instancer je rozdělí na jednotlivé centerline, přičemž každé křížení řeší pod tvrdou mezí zakřivení 0,25 rad/px. Trénováno výhradně na syntetických snímcích — bez lidských anotací. ~0,6 s/frame; jediný model v platformě s nativním polyline výstupem.',
+            'Instanční segmentace mikrotubulů pro IRM časosběrná videa. Síť nnU-Net ResEnc-M předpoví popředí vláken a instancer je rozdělí na jednotlivé centerline, přičemž každé křížení řeší pod tvrdou mezí zakřivení 0,25 rad/px. Trénováno výhradně na syntetických snímcích — bez lidských anotací. ~0,6–2,5 s/frame; jediný model v platformě s nativním polyline výstupem.',
         },
         microcapsule: {
           name: 'Microcapsule',
@@ -1917,9 +1917,9 @@ export default {
             'Stejná architektura jako Morfologie spermií, doladěná z tohoto modelu na spermiích anotovaných jen jako hlavička a bičík. Každá buňka se vrací jako dvě polyline — hlavička, která zde zahrnuje celou šroubovicovou část, navázaná na bičík — takže hranici mezi hlavičkou a bičíkem se model naučil a nevzniká přičtením krčku k sousední části.',
         },
         microtubule: {
-          name: 'Mikrotubuly (SPARSE35)',
+          name: 'Mikrotubuly (V16)',
           inferenceTime:
-            'Přibližně 0,6 s na snímek · práh je pevně 0,98 a uživatel jej nemění',
+            'Přibližně 0,6–2,5 s na snímek · práh je pevně 0,995 a uživatel jej nemění',
           bestFor: 'Používá: projekty s mikrotubuly. Pouze snímky IRM.',
           description:
             'Síť nnU-Net ResEnc-M predikuje popředí vláken a pak instancer omezený křivostí rozdělí popředí na jednotlivé osy, přičemž každé křížení řeší pod pevnou mezí křivosti. Trénováno výhradně na syntetických snímcích. Doba běhu roste s počtem vláken, nejen s velikostí snímku.',
@@ -1966,7 +1966,7 @@ export default {
       },
       thresholdNote: 'Prahy detekce jsou pevně dané pro každý model.',
       thresholdNoteText:
-        'V rozhraní žádné nastavení prahu není: každý model, který práh používá, pracuje s řezem, se kterým byl validován — u mikrotubulů je to 0,98 — a dva modely (Rozpad sferoidů, Neurit / soma) žádný práh nemají: rozhodují argmaxem. Ani klasický model pro neurity žádné nastavení nemá: řez si odvozuje ze šumu každého snímku. Snížení prahu nenajde více skutečných objektů — najde jich více se slabším důkazem, a na jiném než IRM kanálu výstup mikrotubulového modelu nesleduje obraz při žádném nastavení. Pokud detekce chybí, zkontrolujte raději vstupní kanál.',
+        'V rozhraní žádné nastavení prahu není: každý model, který práh používá, pracuje s řezem, se kterým byl validován — u mikrotubulů je to 0,995 — a dva modely (Rozpad sferoidů, Neurit / soma) žádný práh nemají: rozhodují argmaxem. Ani klasický model pro neurity žádné nastavení nemá: řez si odvozuje ze šumu každého snímku. Snížení prahu nenajde více skutečných objektů — najde jich více se slabším důkazem, a na jiném než IRM kanálu výstup mikrotubulového modelu nesleduje obraz při žádném nastavení. Pokud detekce chybí, zkontrolujte raději vstupní kanál.',
       tip: 'Tip:',
       tipText:
         'Začněte výchozím modelem. Po CBAM-ResUNetu sáhněte, když jsou hranice důležitější než rychlost, a po Mamba-UNetu, když vaše snímky nevypadají jako ničí trénovací data.',
@@ -2011,7 +2011,7 @@ export default {
       },
       processingNote: 'Doba zpracování závisí na modelu:',
       processingTimes:
-        'model hojení ran zabere zhruba 0,03 s na snímek a sferoidové modely 0,2–0,4 s, zatímco model mikrotubulů asi 0,6 s na snímek, protože oddělení jednotlivých vláken je ta nákladná část.',
+        'model hojení ran zabere zhruba 0,03 s na snímek a sferoidové modely 0,2–0,4 s, zatímco model mikrotubulů asi 0,6–2,5 s na snímek, protože oddělení jednotlivých vláken je ta nákladná část.',
     },
 
     // Editor

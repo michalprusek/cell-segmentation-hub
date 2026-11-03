@@ -236,6 +236,58 @@ def _spot_snr(fluor: np.ndarray, window: np.ndarray, not_signal: np.ndarray,
     return float((b.mean - r.median) / max(r.std, _MIN_RING_SPREAD))
 
 
+def split_unsupported(
+    polylines: Sequence[np.ndarray], prob: np.ndarray, p_min: float = 0.5, run_px: float = 3.0,
+) -> Tuple[List[np.ndarray], List[int]]:
+    """Cut each polyline at stretches the probability map does not support.
+
+    The instancer may link two arcs across a gap the network saw no filament in, which is
+    right for tracing and wrong for aiming: a bleach is not recoverable, and without a
+    fluorescence page nothing else would notice a spot on empty glass. A stretch counts when
+    the map stays under ``p_min`` for more than ``run_px`` along the curve.
+
+    Returns the pieces and, per piece, the index of the polyline it came from. A polyline
+    with no such stretch comes back as the same array, so a field without one selects exactly
+    what it would have selected without this step.
+    """
+    h, w = prob.shape[:2]
+    pieces: List[np.ndarray] = []
+    owners: List[int] = []
+    for i, pts in enumerate(polylines):
+        pts = np.asarray(pts, float)
+        seg = np.hypot(*np.diff(pts, axis=0).T) if len(pts) > 1 else np.zeros(0)
+        s = np.concatenate([[0.0], np.cumsum(seg)])
+        if len(pts) < 2 or s[-1] <= 0:
+            pieces.append(pts)
+            owners.append(i)
+            continue
+        at = np.arange(0.0, s[-1] + 1.0)
+        at[-1] = min(at[-1], s[-1])
+        xy = np.stack([np.interp(at, s, pts[:, 0]), np.interp(at, s, pts[:, 1])], 1)
+        rows = np.clip(np.round(xy[:, 1]).astype(int), 0, h - 1)
+        cols = np.clip(np.round(xy[:, 0]).astype(int), 0, w - 1)
+        low = prob[rows, cols] < p_min
+        keep, start, cut_any = np.ones(len(at), bool), None, False
+        for k in range(len(at) + 1):
+            if k < len(at) and low[k]:
+                start = k if start is None else start
+            elif start is not None:
+                if k - start > run_px:
+                    keep[start:k] = False
+                    cut_any = True
+                start = None
+        if not cut_any:
+            pieces.append(pts)
+            owners.append(i)
+            continue
+        idx = np.flatnonzero(keep)
+        for run in np.split(idx, np.flatnonzero(np.diff(idx) > 1) + 1):
+            if len(run) >= 2:
+                pieces.append(xy[run])
+                owners.append(i)
+    return pieces, owners
+
+
 def select_spots(
     polylines_xy: Sequence[np.ndarray],
     shape_hw: Tuple[int, int],

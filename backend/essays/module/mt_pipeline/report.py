@@ -92,6 +92,12 @@ COLUMNS = [
     # intensities were read from; the two are the same name unless the well
     # arrived as one file per channel.
     "segmentation_source_file",
+    # Added 2026-11-03. Which checkpoint drew this row, and with which decoder.
+    # The batch follows the interactive model, so one folder series can span two
+    # models, and their counts and lengths are not comparable. `decoder` is `lh`,
+    # or `instance_a_fallback` on a position past the L+H arc limit (a very dense
+    # field), whose curves come from a decoder the model was not measured with.
+    "segmentation_model", "decoder",
 ]
 
 
