@@ -10,10 +10,12 @@ import { isPolygonInsidePolygon } from '@/lib/polygonGeometry';
 import { createExcelExport } from '@/services/excelExportService';
 import { downloadJSON } from '@/lib/downloadUtils';
 import { lazyLoadMetricCalculations } from '@/lib/lazyImports';
+import { loadFullSegmentations } from '../utils/loadFullSegmentations';
 
 export const useExportFunctions = (
   images: ProjectImage[],
-  projectTitle: string
+  projectTitle: string,
+  projectId?: string
 ) => {
   const { t } = useLanguage();
   const [selectedImages, setSelectedImages] = useState<Record<string, boolean>>(
@@ -68,10 +70,12 @@ export const useExportFunctions = (
     // user's type label first, the model's border-cut flag as the default.
     // Membranes are `external` too — a closed outline, not a hole — but they
     // are boundaries INSIDE a capsule, not objects to count. Left in, every
-    // capsule with an intact membrane would be exported twice.
+    // capsule with an intact membrane would be exported twice. Polylines are
+    // `external` as well, and an open path has no area or circularity.
     const externalPolygons = polygons.filter(
       p =>
         p.type === 'external' &&
+        p.geometry !== 'polyline' &&
         !isMembranePolygon(p) &&
         isMeasuredMicrocapsule(p)
     );
@@ -102,7 +106,6 @@ export const useExportFunctions = (
         compactness: metrics.Compactness,
         convexity: metrics.Convexity,
         solidity: metrics.Solidity,
-        sphericity: metrics.Sphericity,
         feretDiameterMax: metrics.FeretDiameterMax,
         feretDiameterMin: metrics.FeretDiameterMin,
         aspectRatio: metrics.FeretAspectRatio,
@@ -110,129 +113,125 @@ export const useExportFunctions = (
     });
   };
 
+  const writeMetricsXlsx = async (imagesToExport: ProjectImage[]) => {
+    // Collect all metrics from all selected images
+    const allMetrics: SpheroidMetric[] = [];
+
+    for (const image of imagesToExport) {
+      if (image.segmentationResult && image.segmentationResult.polygons) {
+        const imageMetrics = await calculateObjectMetrics(
+          image.segmentationResult.polygons
+        );
+
+        if (imageMetrics) {
+          imageMetrics.forEach((metric, index) => {
+            allMetrics.push({
+              imageId: image.id,
+              imageName: image.name || 'Unnamed',
+              contourNumber: index + 1,
+              area: parseFloat(metric.area.toFixed(2)),
+              perimeter: parseFloat(metric.perimeter.toFixed(2)),
+              circularity: parseFloat(metric.circularity.toFixed(4)),
+              compactness: parseFloat(metric.compactness.toFixed(4)),
+              convexity: parseFloat(metric.convexity.toFixed(4)),
+              equivalentDiameter: parseFloat(
+                metric.equivalentDiameter.toFixed(2)
+              ),
+              aspectRatio: parseFloat(metric.aspectRatio.toFixed(2)),
+              feretDiameterMax: parseFloat(metric.feretDiameterMax.toFixed(2)),
+              feretDiameterMin: parseFloat(metric.feretDiameterMin.toFixed(2)),
+              solidity: parseFloat(metric.solidity.toFixed(4)),
+            } as SpheroidMetric);
+          });
+        }
+      }
+    }
+
+    if (allMetrics.length === 0) {
+      toast.error('Žádná data pro export. Vybrané obrázky nemají segmentaci.');
+      return;
+    }
+
+    // Create workbook and worksheet using lazy-loaded ExcelJS
+    const excelService = await createExcelExport();
+    const workbook = excelService.createWorkbook();
+    const worksheet = workbook.addWorksheet('Object Metrics');
+
+    // Add headers
+    worksheet.columns = [
+      { header: 'Image Name', key: 'imageName', width: 20 },
+      { header: 'Image ID', key: 'imageId', width: 15 },
+      { header: 'Object ID', key: 'contourNumber', width: 10 },
+      { header: 'Area (px²)', key: 'area', width: 15 },
+      { header: 'Perimeter (px)', key: 'perimeter', width: 15 },
+      { header: 'Circularity', key: 'circularity', width: 15 },
+      {
+        header: 'Equivalent Diameter (px)',
+        key: 'equivalentDiameter',
+        width: 25,
+      },
+      { header: 'Aspect Ratio', key: 'aspectRatio', width: 15 },
+      { header: 'Compactness', key: 'compactness', width: 15 },
+      { header: 'Convexity', key: 'convexity', width: 15 },
+      { header: 'Solidity', key: 'solidity', width: 15 },
+      {
+        header: 'Feret Diameter Max (px)',
+        key: 'feretDiameterMax',
+        width: 25,
+      },
+      {
+        header: 'Feret Diameter Min (px)',
+        key: 'feretDiameterMin',
+        width: 25,
+      },
+    ];
+
+    // Add data rows
+    allMetrics.forEach(metric => {
+      worksheet.addRow({
+        imageName: metric.imageName,
+        imageId: metric.imageId,
+        contourNumber: metric.contourNumber,
+        area: metric.area,
+        perimeter: metric.perimeter,
+        circularity: metric.circularity,
+        equivalentDiameter: metric.equivalentDiameter,
+        aspectRatio: metric.aspectRatio,
+        compactness: metric.compactness,
+        convexity: metric.convexity,
+        solidity: metric.solidity,
+        feretDiameterMax: metric.feretDiameterMax,
+        feretDiameterMin: metric.feretDiameterMin,
+      });
+    });
+
+    // Style the header row
+    worksheet.getRow(1).font = { bold: true };
+    worksheet.getRow(1).fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FFE0E0E0' },
+    };
+
+    // Generate Excel file buffer and download
+    const buffer = await excelService.writeBuffer(workbook);
+    const blob = excelService.createBlob(buffer);
+    const filename = `${projectTitle || 'project'}_metrics_${format(new Date(), 'yyyy-MM-dd')}.xlsx`;
+    excelService.downloadFile(blob, filename);
+
+    toast.success(t('export.metricsExportComplete'));
+  };
+
   const handleExportMetricsAsXlsx = async () => {
     setIsExporting(true);
 
     try {
-      // Filter selected images
-      const imagesToExport = images.filter(img => selectedImages[img.id]);
-
-      // Collect all metrics from all selected images
-      const allMetrics: SpheroidMetric[] = [];
-
-      for (const image of imagesToExport) {
-        if (image.segmentationResult && image.segmentationResult.polygons) {
-          const imageMetrics = await calculateObjectMetrics(
-            image.segmentationResult.polygons
-          );
-
-          if (imageMetrics) {
-            imageMetrics.forEach((metric, index) => {
-              allMetrics.push({
-                imageId: image.id,
-                imageName: image.name || 'Unnamed',
-                contourNumber: index + 1,
-                area: parseFloat(metric.area.toFixed(2)),
-                perimeter: parseFloat(metric.perimeter.toFixed(2)),
-                circularity: parseFloat(metric.circularity.toFixed(4)),
-                compactness: parseFloat(metric.compactness.toFixed(4)),
-                convexity: parseFloat(metric.convexity.toFixed(4)),
-                equivalentDiameter: parseFloat(
-                  metric.equivalentDiameter.toFixed(2)
-                ),
-                aspectRatio: parseFloat(metric.aspectRatio.toFixed(2)),
-                feretDiameterMax: parseFloat(
-                  metric.feretDiameterMax.toFixed(2)
-                ),
-                feretDiameterMin: parseFloat(
-                  metric.feretDiameterMin.toFixed(2)
-                ),
-                solidity: parseFloat(metric.solidity.toFixed(4)),
-                sphericity: parseFloat(metric.sphericity.toFixed(4)),
-              } as SpheroidMetric);
-            });
-          }
-        }
-      }
-
-      if (allMetrics.length === 0) {
-        toast.error(
-          'Žádná data pro export. Vybrané obrázky nemají segmentaci.'
-        );
-        setIsExporting(false);
-        return;
-      }
-
-      // Create workbook and worksheet using lazy-loaded ExcelJS
-      const excelService = await createExcelExport();
-      const workbook = excelService.createWorkbook();
-      const worksheet = workbook.addWorksheet('Object Metrics');
-
-      // Add headers
-      worksheet.columns = [
-        { header: 'Image Name', key: 'imageName', width: 20 },
-        { header: 'Image ID', key: 'imageId', width: 15 },
-        { header: 'Object ID', key: 'contourNumber', width: 10 },
-        { header: 'Area (px²)', key: 'area', width: 15 },
-        { header: 'Perimeter (px)', key: 'perimeter', width: 15 },
-        { header: 'Circularity', key: 'circularity', width: 15 },
-        {
-          header: 'Equivalent Diameter (px)',
-          key: 'equivalentDiameter',
-          width: 25,
-        },
-        { header: 'Aspect Ratio', key: 'aspectRatio', width: 15 },
-        { header: 'Compactness', key: 'compactness', width: 15 },
-        { header: 'Convexity', key: 'convexity', width: 15 },
-        { header: 'Solidity', key: 'solidity', width: 15 },
-        { header: 'Sphericity', key: 'sphericity', width: 15 },
-        {
-          header: 'Feret Diameter Max (px)',
-          key: 'feretDiameterMax',
-          width: 25,
-        },
-        {
-          header: 'Feret Diameter Min (px)',
-          key: 'feretDiameterMin',
-          width: 25,
-        },
-      ];
-
-      // Add data rows
-      allMetrics.forEach(metric => {
-        worksheet.addRow({
-          imageName: metric.imageName,
-          imageId: metric.imageId,
-          contourNumber: metric.contourNumber,
-          area: metric.area,
-          perimeter: metric.perimeter,
-          circularity: metric.circularity,
-          equivalentDiameter: metric.equivalentDiameter,
-          aspectRatio: metric.aspectRatio,
-          compactness: metric.compactness,
-          convexity: metric.convexity,
-          solidity: metric.solidity,
-          sphericity: metric.sphericity,
-          feretDiameterMax: metric.feretDiameterMax,
-          feretDiameterMin: metric.feretDiameterMin,
-        });
-      });
-
-      // Style the header row
-      worksheet.getRow(1).font = { bold: true };
-      worksheet.getRow(1).fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: 'FFE0E0E0' },
-      };
-
-      // Generate Excel file buffer and download
-      const buffer = await excelService.writeBuffer(workbook);
-      const blob = excelService.createBlob(buffer);
-      const filename = `${projectTitle || 'project'}_metrics_${format(new Date(), 'yyyy-MM-dd')}.xlsx`;
-      excelService.downloadFile(blob, filename);
-
-      toast.success(t('export.metricsExportComplete'));
+      await writeMetricsXlsx(
+        await loadFullSegmentations(
+          projectId,
+          images.filter(img => selectedImages[img.id])
+        )
+      );
     } catch (error) {
       logger.error('Export failed:', error);
       toast.error(t('export.exportFailed'));
@@ -246,7 +245,11 @@ export const useExportFunctions = (
 
     try {
       // Filter selected images
-      const imagesToExport = images.filter(img => selectedImages[img.id]);
+      const selected = images.filter(img => selectedImages[img.id]);
+      const imagesToExport =
+        includeSegmentation || includeObjectMetrics
+          ? await loadFullSegmentations(projectId, selected)
+          : selected;
 
       // Create export data based on selected options
       const exportData = imagesToExport.map(img => {
@@ -277,7 +280,7 @@ export const useExportFunctions = (
 
       // If object metrics option is selected, also export metrics to XLSX
       if (includeObjectMetrics) {
-        await handleExportMetricsAsXlsx();
+        await writeMetricsXlsx(imagesToExport);
       }
 
       toast.success(t('export.exportComplete'));

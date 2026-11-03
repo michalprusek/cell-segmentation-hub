@@ -289,10 +289,8 @@
         "TS2322: Type 'string | string[]' is not assignable to type 'string | undefined'.": 1
       },
       "src/pages/export/hooks/useExportFunctions.ts": {
-        "TS2339: Property 'Sphericity' does not exist on type 'PolygonMetrics'.": 1,
         "TS2339: Property 'compactness' does not exist on type 'SpheroidMetric'.": 1,
-        "TS2339: Property 'sphericity' does not exist on type 'SpheroidMetric'.": 1,
-        "TS2352: Conversion of type '{ imageId: string; imageName: string; contourNumber: number; area: number; perimeter: number; circularity: number; compactness: number; convexity: number; equivalentDiameter: number; aspectRatio: number; feretDiameterMax: number; feretDiameterMin: number; solidity: number; sphericity: number; }' to type 'SpheroidMetric' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.": 1
+        "TS2352: Conversion of type '{ imageId: string; imageName: string; contourNumber: number; area: number; perimeter: number; circularity: number; compactness: number; convexity: number; equivalentDiameter: number; aspectRatio: number; feretDiameterMax: number; feretDiameterMin: number; solidity: number; }' to type 'SpheroidMetric' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.": 1
       },
       "src/pages/export/hooks/useSharedAdvancedExport.ts": {
         "TS18046: 'response.data' is of type 'unknown'.": 1,
@@ -895,10 +893,8 @@
         "TS2345: Argument of type '{ data: {}; }' is not assignable to parameter of type 'AxiosResponse<unknown, any, {}, any>'.": 1
       },
       "src/pages/export/hooks/useExportFunctions.ts": {
-        "TS2339: Property 'Sphericity' does not exist on type 'PolygonMetrics'.": 1,
         "TS2339: Property 'compactness' does not exist on type 'SpheroidMetric'.": 1,
-        "TS2339: Property 'sphericity' does not exist on type 'SpheroidMetric'.": 1,
-        "TS2352: Conversion of type '{ imageId: string; imageName: string; contourNumber: number; area: number; perimeter: number; circularity: number; compactness: number; convexity: number; equivalentDiameter: number; aspectRatio: number; feretDiameterMax: number; feretDiameterMin: number; solidity: number; sphericity: number; }' to type 'SpheroidMetric' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.": 1
+        "TS2352: Conversion of type '{ imageId: string; imageName: string; contourNumber: number; area: number; perimeter: number; circularity: number; compactness: number; convexity: number; equivalentDiameter: number; aspectRatio: number; feretDiameterMax: number; feretDiameterMin: number; solidity: number; }' to type 'SpheroidMetric' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.": 1
       },
       "src/pages/export/hooks/useSharedAdvancedExport.ts": {
         "TS18046: 'response.data' is of type 'unknown'.": 1,
