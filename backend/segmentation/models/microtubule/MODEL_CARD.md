@@ -60,7 +60,7 @@ debris would find them: recall 0.54 / 0.70 (htw / roi303) for this seed against 
 recipe's mean. Large frames take about twice the tiles.
 
 **Verification, 2026-11-03.** On all 195 VAL frames (145 roi303, 33 htw, 17 MT-34): `instance_lh` on the research
-maps gives the research polylines at 0.000000 px, 9 758 curves; a mutated reach (60) fails that comparison.
+maps gives the research polylines at 0.000000 px, 9 754 curves; a mutated reach (60) fails that comparison.
 The whole wrapper on the same frames reproduces them within 1e-9 px on the research host, and its output after RDP keeps the counts:
 roi303 0.7411, htw 0.7513, MT-34 0.6810. Inside the ML image, whose scipy, skimage and networkx differ, the decoder
 is again identical on all 195. torch 2.6.0 against the research host's 2.5.1 moves the map by up to 0.04, which on the fixture and six real
