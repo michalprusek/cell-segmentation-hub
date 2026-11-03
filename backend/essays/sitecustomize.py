@@ -20,6 +20,9 @@ OutOfMemoryError, and it cost one folder 255 wells in one run and 68 in the
 next. A cap set below the working set does not protect the other tenants; it
 just hands them memory the batch will immediately try to take back.
 
+Re-measured 2026-11-03 for **V16 DEB_S4** by a direct probe of predict() with no cap:
+1.22 GiB reserved / 0.93 GiB allocated, the same at 1024x1024 and 2048x2048 inputs.
+
 Re-measured 2026-08-17 for microtubule **v5H** (3 positions of a 2048x2048 IRM
 well, 162 microtubules): the working set is **1.41 GiB reserved** / 1.05 GiB
 allocated, and flat across caps of 17.99 / 4.80 / 2.88 / 1.92 GiB. The default

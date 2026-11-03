@@ -60,8 +60,9 @@ WEIGHTS = os.environ.get("ESSAYS_WEIGHTS", "/app/mt_weights/microtubule_v16_deb_
 # growing into whatever ceiling it is handed. Runtime was flat too and
 # results.csv was byte-identical at all four caps.
 #
-# RE-MEASURED 2026-11-03 for **V16 DEB_S4** (Gaussian fusion, in this container): **1.22 GiB
-# reserved** / 0.93 GiB allocated, the same at 1024x1024 and 2048x2048 inputs.
+# RE-MEASURED 2026-11-03 for **V16 DEB_S4** (Gaussian fusion, in this container), by a direct
+# probe of predict() with no cap, not from a job: **1.22 GiB reserved** / 0.93 GiB allocated,
+# the same at 1024x1024 and 2048x2048 inputs. The forward pass does not depend on content.
 #
 # The cap is now 0.12 (2.88 GiB), twice the working set. It must stay ABOVE the
 # working set — that is the rule the data loss taught — but the previous 0.75 /

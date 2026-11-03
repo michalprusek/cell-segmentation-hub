@@ -220,7 +220,7 @@ users index by position.
 | 33  | `decoder`                   | `lh`, or `instance_a_fallback` on a position past the L+H arc limit (a very dense field), whose curves come from a decoder the model was not measured with |
 
 **With a TIRF time series the table is one row per microtubule _per frame_.**
-Columns 1–6, 14–17 and 20–27 describe the microtubule or its position and
+Columns 1–6, 14–17, 20–27, 32 and 33 describe the microtubule or its position and
 repeat unchanged across its rows; the intensities (7–13, 18, 19) are per
 frame. To get the one-row-per-microtubule table of earlier runs, keep the rows
 where `tirf_frame` is `0`. The alignment (20–23) and focus (24–27) diagnostics

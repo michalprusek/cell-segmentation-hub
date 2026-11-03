@@ -99,7 +99,7 @@ it; the previous image is also tagged `cell-segmentation-hub-ml:pre-mt-v16` for 
 | **Essays moved to V16** (owner's word 2026-11-03 10:19: "dělej to vždy"): `spheroseg-essays` recreated | ✅ 2026-11-03 10:33 CET, no job running; old image tagged `cell-segmentation-hub-essays:pre-mt-v16` |
 | Essays through the real queue, e2e account, 4 VAL wells of the Alice recordings (060, 064, 066, 069), same files before and after | ✅ both jobs complete, empty `failures.csv`; `decoder` reads `lh` on all 4392 rows; curve counts equal to the research reference on all four (17, 25, 17, 13), p99 distance ≤ 0.43 px, max 1.32 px at 1.5×. Whole job 20.8 s before and after |
 | The same four frames scored against the MT-34 GT (a small check, not a benchmark) | pooled F1 0.871 before, 0.887 after: 060 0.824 → 0.970, 064 0.958 → 0.917, 066 0.737 → 0.686, 069 0.963 → 1.000 |
-| Essays GPU working set under V16, in the container | ✅ 1.22 GiB reserved, 0.93 allocated, the same at 1024² and 2048²; cap 2.88 GiB unchanged |
+| Essays GPU working set under V16, in the container, by a direct probe of `predict()` with no cap (the host-side watcher missed the job) | ✅ 1.22 GiB reserved, 0.93 allocated, the same at 1024² and 2048²; cap 2.88 GiB unchanged |
 | Tests in the images: Essays module suite with the real V16 checkpoint; microtubule suites | ✅ 138 passed, 0 skipped; 45 passed |
 
 The landing page's outlines (`src/components/landing/specimens.ts`) still predate this model, as they predated SPARSE35; regenerating them is open.

@@ -333,8 +333,9 @@ services:
       # out BYTE-IDENTICAL at all four caps, because 1.41 GiB sits far below
       # every one of them and cuDNN's workspace is never constrained.
       #
-      # RE-MEASURED 2026-11-03 for V16 DEB_S4 (Gaussian fusion, in the container):
-      # 1.22 GiB reserved, 0.93 allocated, the same at 1024^2 and 2048^2 inputs.
+      # RE-MEASURED 2026-11-03 for V16 DEB_S4 (Gaussian fusion, in the container), by a
+      # direct probe of predict() with no cap, not from a job: 1.22 GiB reserved, 0.93
+      # allocated, the same at 1024^2 and 2048^2 inputs.
       #
       # 0.12 (2.88 GiB) is TWICE the measured working set. The cardinal rule is
       # that the cap must sit ABOVE the working set: the old 0.6 (14.13 GiB) sat
