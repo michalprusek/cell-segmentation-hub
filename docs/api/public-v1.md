@@ -222,21 +222,22 @@ warning codes and a `result_url`.
 
 ## Models
 
-| id                        | Name                           | Geometry | Classes                                    | `threshold`       | `detect_holes`     | Input depth |
-| ------------------------- | ------------------------------ | -------- | ------------------------------------------ | ----------------- | ------------------ | ----------- |
-| `hrnet`                   | HRNet                          | polygon  | `spheroid`                                 | yes (default 0.5) | yes (default true) | 8bit        |
-| `cbam_resunet`            | CBAM-ResUNet                   | polygon  | `spheroid`                                 | yes (default 0.5) | yes (default true) | 8bit        |
-| `unet_spherohq`           | U-Net (SpheroHQ)               | polygon  | `spheroid`                                 | yes (default 0.5) | yes (default true) | 8bit        |
-| `spheroid_disintegration` | Spheroid Disintegration        | polygon  | `spheroid`, `core`                         | no                | no                 | 8bit        |
-| `segformer`               | SegFormer                      | polygon  | `spheroid`                                 | yes (default 0.5) | yes (default true) | 8bit        |
-| `mamba_unet`              | Mamba-UNet                     | polygon  | `spheroid`                                 | yes (default 0.5) | yes (default true) | 8bit        |
-| `sperm`                   | Sperm Morphology               | polyline | `sperm` / parts `head`, `midpiece`, `tail` | no                | no                 | 8bit        |
-| `sperm_2part`             | Sperm Morphology (head + tail) | polyline | `sperm` / parts `head`, `tail`             | no                | no                 | 8bit        |
-| `wound`                   | Wound Healing                  | polygon  | `wound`                                    | yes (default 0.5) | yes (default true) | 8bit        |
-| `microtubule`             | Microtubule                    | polyline | `microtubule`                              | no                | no                 | native      |
-| `microcapsule`            | Microcapsule                   | polygon  | `microcapsule`, `membrane`                 | yes (default 0.5) | no                 | 8bit        |
-| `neurite_soma`            | Neurite / Soma                 | polygon  | `neurite`, `soma`                          | no                | yes (default true) | native      |
-| `neurite_soma_classical`  | Neurite / Soma (classical)     | polygon  | `neurite`, `soma`                          | no                | yes (default true) | native      |
+| id                        | Name                             | Geometry | Classes                                    | `threshold`       | `detect_holes`     | Input depth |
+| ------------------------- | -------------------------------- | -------- | ------------------------------------------ | ----------------- | ------------------ | ----------- |
+| `hrnet`                   | HRNet                            | polygon  | `spheroid`                                 | yes (default 0.5) | yes (default true) | 8bit        |
+| `cbam_resunet`            | CBAM-ResUNet                     | polygon  | `spheroid`                                 | yes (default 0.5) | yes (default true) | 8bit        |
+| `unet_spherohq`           | U-Net (SpheroHQ)                 | polygon  | `spheroid`                                 | yes (default 0.5) | yes (default true) | 8bit        |
+| `spheroid_disintegration` | Spheroid Disintegration          | polygon  | `spheroid`, `core`                         | no                | no                 | 8bit        |
+| `segformer`               | SegFormer                        | polygon  | `spheroid`                                 | yes (default 0.5) | yes (default true) | 8bit        |
+| `mamba_unet`              | Mamba-UNet                       | polygon  | `spheroid`                                 | yes (default 0.5) | yes (default true) | 8bit        |
+| `sperm`                   | Sperm Morphology                 | polyline | `sperm` / parts `head`, `midpiece`, `tail` | no                | no                 | 8bit        |
+| `sperm_2part`             | Sperm Morphology (head + tail)   | polyline | `sperm` / parts `head`, `tail`             | no                | no                 | 8bit        |
+| `wound`                   | Wound Healing                    | polygon  | `wound`                                    | yes (default 0.5) | yes (default true) | 8bit        |
+| `microtubule`             | Microtubule                      | polyline | `microtubule`                              | no                | no                 | native      |
+| `microcapsule`            | Microcapsule                     | polygon  | `microcapsule`, `membrane`                 | yes (default 0.5) | no                 | 8bit        |
+| `neurite_soma`            | Neurite / Soma                   | polygon  | `neurite`, `soma`                          | no                | yes (default true) | native      |
+| `neurite_soma_merged`     | Neurite / Soma (merged channels) | polygon  | `neurite`, `soma`                          | no                | yes (default true) | native      |
+| `neurite_soma_classical`  | Neurite / Soma (classical)       | polygon  | `neurite`, `soma`                          | no                | yes (default true) | native      |
 
 - **`hrnet`** — The image is resized to 1024 x 1024 for inference, whatever its size or aspect ratio, and the outlines are scaled back. A frame much larger than that gains no detail; segment one spheroid per image.
 - **`cbam_resunet`** — The image is resized to 1024 x 1024 for inference, whatever its size or aspect ratio, and the outlines are scaled back. A frame much larger than that gains no detail; segment one spheroid per image.

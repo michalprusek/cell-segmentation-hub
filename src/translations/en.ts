@@ -1978,7 +1978,7 @@ export default {
         neuriteSomaMerged: {
           name: 'Neurite / Soma (merged channels)',
           inferenceTime:
-            'About 4 s for a 1024 × 1024 frame · no threshold — the decision is an argmax',
+            'About 2.6 s for a 1024 × 1024 frame · no threshold — the decision is an argmax',
           bestFor:
             'Used by: Neurite & soma projects, when you pick it. For fluorescence images where a cell shows when several channels are taken together, with reasonably bright staining.',
           description:

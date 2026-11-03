@@ -320,10 +320,12 @@ export const MODEL_REGISTRY = {
     defaultThreshold: 0.5,
     category: 'neurite',
     performance: {
-      // @@PERF_COMMENT@@
-      avgTimePerImage: 4,
-      throughput: 0.25,
-      p95Latency: 60,
+      // Measured 2026-11-03 in the ML image on the production A5000, on three
+      // 1024 x 1024 frames: 2.52-2.71 s with 4 folds x 4-way mirror, polygons
+      // included, once the weights are loaded (6 s). Scales with image area.
+      avgTimePerImage: 2.6,
+      throughput: 0.38,
+      p95Latency: 3,
       batchSize: 1,
     },
     name: 'Neurite / Soma (merged channels)',

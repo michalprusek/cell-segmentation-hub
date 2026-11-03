@@ -1979,7 +1979,7 @@ export default {
         neuriteSomaMerged: {
           name: 'Neurita / soma (canales fusionados)',
           inferenceTime:
-            'Unos 4 s para un fotograma de 1024 × 1024 · sin umbral: decide un argmax',
+            'Unos 2,6 s para un fotograma de 1024 × 1024 · sin umbral: decide un argmax',
           bestFor:
             'Lo usan: los proyectos de neuritas y somas, cuando se elige. Para imágenes de fluorescencia en las que la célula se ve al tomar varios canales juntos, con una tinción razonablemente intensa.',
           description:

@@ -1994,7 +1994,7 @@ export default {
         neuriteSomaMerged: {
           name: 'Neurit / Soma (zusammengeführte Kanäle)',
           inferenceTime:
-            'Etwa 4 s für ein Bild von 1024 × 1024 · kein Schwellenwert — es entscheidet ein Argmax',
+            'Etwa 2,6 s für ein Bild von 1024 × 1024 · kein Schwellenwert — es entscheidet ein Argmax',
           bestFor:
             'Verwendet von: Neuriten- und Soma-Projekten, wenn Sie es wählen. Für Fluoreszenzbilder, in denen eine Zelle erst sichtbar wird, wenn mehrere Kanäle zusammengenommen werden, bei einigermaßen kräftiger Färbung.',
           description:

@@ -294,9 +294,9 @@ describe('model registry SSOT', () => {
         defaultThreshold: 0.5,
         category: 'neurite',
         performance: {
-          avgTimePerImage: 4,
-          throughput: 0.25,
-          p95Latency: 60,
+          avgTimePerImage: 2.6,
+          throughput: 0.38,
+          p95Latency: 3,
           batchSize: 1,
         },
       },

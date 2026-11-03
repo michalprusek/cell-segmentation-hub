@@ -1950,7 +1950,7 @@ export default {
         neuriteSomaMerged: {
           name: 'Neurit / soma (sloučené kanály)',
           inferenceTime:
-            'Přibližně 4 s na snímek 1024 × 1024 · bez prahu — rozhoduje argmax',
+            'Přibližně 2,6 s na snímek 1024 × 1024 · bez prahu — rozhoduje argmax',
           bestFor:
             'Používají: projekty s neurity a somaty, pokud ho zvolíte. Pro fluorescenční snímky, na nichž je buňka vidět až po spojení několika kanálů, s rozumně silným barvením.',
           description:

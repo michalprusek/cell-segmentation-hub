@@ -253,6 +253,7 @@ async def test_segment_route_dispatches_neurite_soma_to_its_own_predictor():
     class _Loader:
         device = "cpu"
         last_batch_size = 1
+        AVAILABLE_MODELS = {"neurite_soma": {}}
 
         def predict_neurite_soma(self, image, threshold, detect_holes):
             calls.append(("neurite_soma", threshold, detect_holes))

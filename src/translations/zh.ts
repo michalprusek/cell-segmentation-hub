@@ -1842,7 +1842,7 @@ export default {
         },
         neuriteSomaMerged: {
           name: '神经突 / 胞体（合并通道）',
-          inferenceTime: '1024 × 1024 画面约 4 秒 · 没有阈值——由 argmax 决定',
+          inferenceTime: '1024 × 1024 画面约 2.6 秒 · 没有阈值——由 argmax 决定',
           bestFor:
             '用于：神经突与胞体项目，当您选择它时。适用于把多个通道合在一起才能看清细胞、且染色足够强的荧光图像。',
           description:
