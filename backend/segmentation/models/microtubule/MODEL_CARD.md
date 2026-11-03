@@ -90,12 +90,17 @@ it; the previous image is also tagged `cell-segmentation-hub-ml:pre-mt-v16` for 
 | tests in the new image, with both real checkpoints | ✅ 157 passed, 0 skipped |
 | `scripts/verify_microtubule_model.py` in the image, fixture + 6 real VAL frames | ✅ ALL OK at default tolerances: every curve count equal, median 0.000 px, max 0.397 px. `--strict` fails by design here: reference from torch 2.5.1, image torch 2.6.0, map max \|Δp\| 0.036, 0 flips outside the float16 band |
 | recreate ml, backend, frontend, restart nginx | ✅ 2026-11-03 09:01 CET, queue empty; `/health` `production-healthy` |
-| container pinned to the commit (`md5sum` of wrapper, params, instancer, loader, `frap_select`) | ✅ 5 of 5 match `HEAD`; `spheroseg-essays` still on its 2026-10-06 image, `wrapper.py` md5 `375135db`, SPARSE35 |
+| container pinned to the commit (`md5sum` of wrapper, params, instancer, loader, `frap_select`) | ✅ 5 of 5 match `HEAD`; `spheroseg-essays` was then still on its 2026-10-06 image, `wrapper.py` md5 `375135db`, SPARSE35 (moved at 10:33, below) |
 | through the real queue, e2e account, project `5b9f24b4…`, 6 VAL frames, same frames before and after | ✅ curve counts equal to the research reference on all six, `threshold_used` 0.995 stored; pooled F1 0.681 before, 0.758 after (5 of 6 frames up; a small check, not a benchmark) |
 | FRAP targets on the running service | ✅ 2 VAL frames, 6 and 1 spots |
 | `neurite_soma_merged` survived the merge | ✅ the concurrent deployment's expected 19 polygons (12 neurite, 2 soma, 5 internal) |
 | in-app Documentation and landing page, browser, signed out | ✅ `Microtubule (V16)`, 0.995, no page errors |
 | browser check signed in (editor, overlay) | ⬜ not done: the sign-in needs the test account's password in a tool call |
+| **Essays moved to V16** (owner's word 2026-11-03 10:19: "dělej to vždy"): `spheroseg-essays` recreated | ✅ 2026-11-03 10:33 CET, no job running; old image tagged `cell-segmentation-hub-essays:pre-mt-v16` |
+| Essays through the real queue, e2e account, 4 VAL wells of the Alice recordings (060, 064, 066, 069), same files before and after | ✅ both jobs complete, empty `failures.csv`; `decoder` reads `lh` on all 4392 rows; curve counts equal to the research reference on all four (17, 25, 17, 13), p99 distance ≤ 0.43 px, max 1.32 px at 1.5×. Whole job 20.8 s before and after |
+| The same four frames scored against the MT-34 GT (a small check, not a benchmark) | pooled F1 0.871 before, 0.887 after: 060 0.824 → 0.970, 064 0.958 → 0.917, 066 0.737 → 0.686, 069 0.963 → 1.000 |
+| Essays GPU working set under V16, in the container | ✅ 1.22 GiB reserved, 0.93 allocated, the same at 1024² and 2048²; cap 2.88 GiB unchanged |
+| Tests in the images: Essays module suite with the real V16 checkpoint; microtubule suites | ✅ 138 passed, 0 skipped; 45 passed |
 
 The landing page's outlines (`src/components/landing/specimens.ts`) still predate this model, as they predated SPARSE35; regenerating them is open.
 

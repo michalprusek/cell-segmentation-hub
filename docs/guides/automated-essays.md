@@ -117,9 +117,9 @@ enumerated. Read the whole message — it is scrollable, not truncated.
   10 s for up to **30 minutes**, then runs on the CPU rather than blocking the
   queue forever.
 - **Memory cap:** the worker is capped at 12 % of the card (~2.83 GiB). The
-  measured v5H working set is **1.41 GiB reserved / 1.05 GiB allocated** and the
-  results are byte-identical across caps from 1.92 to 17.99 GiB, so the cap
-  costs nothing.
+  measured V16 working set is **1.22 GiB reserved / 0.93 GiB allocated**, the same
+  at 1024² and 2048² inputs. Results under the previous model were byte-identical
+  across caps from 1.92 to 17.99 GiB, so the cap costs nothing.
 - **Speed:** ~43 s for 3 positions of a 2048² well containing 162 microtubules,
   including model load — roughly 10–14 s per position on GPU.
 - **Retries:** a failed position is retried at 30 s / 120 s / 300 s (4 attempts),

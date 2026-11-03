@@ -60,6 +60,9 @@ WEIGHTS = os.environ.get("ESSAYS_WEIGHTS", "/app/mt_weights/microtubule_v16_deb_
 # growing into whatever ceiling it is handed. Runtime was flat too and
 # results.csv was byte-identical at all four caps.
 #
+# RE-MEASURED 2026-11-03 for **V16 DEB_S4** (Gaussian fusion, in this container): **1.22 GiB
+# reserved** / 0.93 GiB allocated, the same at 1024x1024 and 2048x2048 inputs.
+#
 # The cap is now 0.12 (2.88 GiB), twice the working set. It must stay ABOVE the
 # working set — that is the rule the data loss taught — but the previous 0.75 /
 # 17 GB pair was sized for a model that no longer exists and reserved ~17.7 GiB
@@ -70,7 +73,7 @@ WEIGHTS = os.environ.get("ESSAYS_WEIGHTS", "/app/mt_weights/microtubule_v16_deb_
 # preferences, and test_gpu_budget.py fails if a future tweak puts the cap back
 # under the working set — which is precisely the mistake that caused the data
 # loss, and which nothing else would catch until a batch had already lost wells.
-GPU_WORKING_SET_GB = 1.41
+GPU_WORKING_SET_GB = 1.22
 GPU_TOTAL_GB = 23.56  # usable VRAM of the production A5000, per torch
 
 GPU_MIN_FREE_GB = float(os.environ.get("ESSAYS_GPU_MIN_FREE_GB", "4"))
