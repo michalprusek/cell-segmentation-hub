@@ -36,7 +36,8 @@ The v5H checkpoint is a complete ``state_dict`` with no frozen backbone, so
 **no HuggingFace token, download or network access is required** at any point.
 
 The 535 MB checkpoint itself is not stored in git; stage it once with
-``scripts/download-microtubule-weights.sh`` (or pass ``--weights /path/to.pth``).
+``scripts/download-microtubule-weights.sh microtubule_sparse35_ep040.pth`` (or pass
+``--weights /path/to/microtubule_sparse35_ep040.pth``; the file name selects the decoder).
 """
 from __future__ import annotations
 

@@ -1863,7 +1863,8 @@ class ModelLoader:
 
     def predict_microtubule(self, image: Image.Image,
                             threshold: Optional[float] = None,
-                            timeout: Optional[float] = None) -> Dict[str, Any]:
+                            timeout: Optional[float] = None,
+                            include_prob: bool = False) -> Dict[str, Any]:
         """Run the microtubule model (V16 DEB_S4 ep040: ResEnc-M + instancer L+H) on one frame.
 
         Differs from the standard predict() path:
@@ -1882,6 +1883,10 @@ class ModelLoader:
         means "use the model's own foreground cut from params_v16.json", which the
         generic 0.1-0.9 API bound cannot even express. Pass a float
         only to deliberately override it.
+
+        ``include_prob`` adds the native-scale probability map under ``prob``, for a
+        caller in this process; the /segment route serialises its result and must not
+        ask for it.
         """
         import time as _time
         import uuid as _uuid
@@ -1947,6 +1952,7 @@ class ModelLoader:
             )
 
             return {
+                **({"prob": result["prob"]} if include_prob else {}),
                 "model_used": "microtubule",
                 "threshold_used": threshold_used,
                 "image_size": {"width": original_size[0], "height": original_size[1]},

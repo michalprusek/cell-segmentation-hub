@@ -36,6 +36,10 @@ _K8 = np.array([[1, 1, 1], [1, 0, 1], [1, 1, 1]])
 _S8 = np.ones((3, 3), int)
 
 
+class TooManyArcs(ValueError):
+    """The mask fell apart into more arcs than this decoder was ever measured on."""
+
+
 def to_logit(prob: np.ndarray) -> np.ndarray:
     pc = np.clip(prob, 1e-6, 1 - 1e-6)
     return np.clip(np.log(pc / (1 - pc)), -12, 12).astype(np.float32)
@@ -94,17 +98,15 @@ def _arc_graph(mask: np.ndarray, params: dict) -> tuple[dict, dict]:
     return arcs, arms
 
 
-def _link_features(a: ArmEnd, b: ArmEnd, logit: np.ndarray, params: dict):
-    """-> the five features of the link score and the curvature the link would imply."""
+def _link_features(a: ArmEnd, b: ArmEnd, cost: float, logit: np.ndarray) -> tuple:
+    """-> the five features of the link score."""
     gap = float(np.linalg.norm(a.pos - b.pos))
-    cost, kappa_implied = pair_cost(a, b, w_theta=params["w_theta"], w_kappa=params["w_kappa"],
-                                    w_gap=params["w_gap"], gap_floor=params["gap_floor"])
     n = max(2, int(round(gap)) + 1)
     bridge = a.pos[None] + (b.pos - a.pos)[None] * np.linspace(0, 1, n)[:, None]
     along = map_coordinates(logit, [bridge[:, 1], bridge[:, 0]], order=1, mode="nearest")
     angle = float(np.arctan2(*(b.pos - a.pos)[::-1])) if gap > 1e-6 else a.theta + np.pi
     turn = turn_penalty(a.theta + np.pi, angle) + turn_penalty(angle, b.theta)
-    return (float(along.mean()), float(along.min()), gap, float(turn), float(cost)), kappa_implied
+    return (float(along.mean()), float(along.min()), gap, float(turn), float(cost))
 
 
 def _match_ends(arms: dict, logit: np.ndarray, kappa_max: float, params: dict) -> dict:
@@ -119,9 +121,14 @@ def _match_ends(arms: dict, logit: np.ndarray, kappa_max: float, params: dict) -
     for i, j in sorted(tree.query_pairs(reach)):
         if keys[i][0] == keys[j][0]:
             continue
-        features, kappa_implied = _link_features(arms[keys[i]], arms[keys[j]], logit, params)
-        if kappa_implied > kappa_max or features[2] > reach:
+        cost, kappa_implied = pair_cost(arms[keys[i]], arms[keys[j]], w_theta=params["w_theta"],
+                                        w_kappa=params["w_kappa"], w_gap=params["w_gap"],
+                                        gap_floor=params["gap_floor"])
+        if kappa_implied > kappa_max:
             continue                      # physically impossible: forbidden, not costly
+        features = _link_features(arms[keys[i]], arms[keys[j]], cost, logit)
+        if features[2] > reach:
+            continue
         score = float(((np.asarray(features) - mu) / sd) @ coef + intercept)
         if score > 0:
             g.add_edge(keys[i], keys[j], weight=score)
@@ -158,11 +165,18 @@ def _chains(arcs: dict, partner: dict) -> list[list[tuple[int, str]]]:
 
 
 def instance_lh(prob: np.ndarray, cut: float, kappa_max: float, params: dict) -> list[np.ndarray]:
-    """Polylines ``(x=col, y=row)`` on the frame of ``prob`` (the 1.5x instancer frame)."""
+    """Polylines ``(x=col, y=row)`` on the frame of ``prob`` (the 1.5x instancer frame).
+
+    Raises :class:`TooManyArcs` beyond ``params["max_arcs"]``. The matching is cubic in the
+    worst case and runs under the service's one inference lock, with no deadline, so a frame the
+    model cannot read (a non-IRM channel, say) must not hold every other model for minutes.
+    """
     mask = hysteresis_mask(prob, cut, float(params["hyst_t_lo"]), float(params["hyst_radius"]))
     arcs, arms = _arc_graph(mask, params)
     if not arcs:
         return []
+    if len(arcs) > params["max_arcs"]:
+        raise TooManyArcs(f"{len(arcs)} arcs, limit {params['max_arcs']}")
     partner = _match_ends(arms, to_logit(prob), kappa_max, params)
     polylines = []
     for chain in _chains(arcs, partner):

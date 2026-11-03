@@ -587,11 +587,11 @@ clean-monitoring:
 # Download ML model weights
 download-weights:
 	@echo "📥 Downloading ML model weights..."
-	@echo "This will download ~2.6 GB of model weights (incl. microtubule V16 DEB_S4 + SPARSE35 ep040 + KymoButler)"
+	@echo "This will download ~3.1 GB of model weights (incl. microtubule V16 DEB_S4 + SPARSE35 ep040 + KymoButler)"
 	@if [ \! -d "backend/segmentation/weights" ]; then mkdir -p backend/segmentation/weights; fi
 	@cd backend/segmentation && python scripts/download_weights.py
 	@./scripts/download-microtubule-weights.sh
-	@./scripts/download-microtubule-weights.sh microtubule_sparse35_ep040.pth
+	@MICROTUBULE_CKPT_URL= MICROTUBULE_CKPT_SRC= ./scripts/download-microtubule-weights.sh microtubule_sparse35_ep040.pth
 	@./scripts/download-kymobutler-weights.sh
 	@echo "✅ Weights download complete\!"
 

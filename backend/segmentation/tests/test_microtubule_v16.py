@@ -7,7 +7,6 @@ probability maps. The check against what the research harness emitted lives in
 from __future__ import annotations
 
 import json
-import logging
 import sys
 from pathlib import Path
 
@@ -22,7 +21,7 @@ for _p in (str(_PKG), str(_PKG / "vendor")):
 
 from models.microtubule.wrapper import _PIPELINES, MicrotubuleModel  # noqa: E402
 
-from instance.instancer_lh import hysteresis_mask, instance_lh  # noqa: E402
+from instance.instancer_lh import TooManyArcs, hysteresis_mask, instance_lh  # noqa: E402
 
 KAPPA = 0.25
 V16 = json.loads((_PKG / "params_v16.json").read_text())
@@ -51,12 +50,11 @@ def test_checkpoint_name_selects_the_measured_pipeline(tmp_path, name, decoder, 
     assert model.params["prob_thr"] == pytest.approx(cut)
 
 
-def test_unknown_checkpoint_name_falls_back_with_a_warning(tmp_path, caplog):
+def test_unknown_checkpoint_name_is_refused(tmp_path):
+    """A renamed V16 loads without error into SPARSE35's pipeline, so the name has to be checked."""
     model = MicrotubuleModel()
-    with caplog.at_level(logging.WARNING), pytest.raises(FileNotFoundError):
+    with pytest.raises(ValueError, match="unknown microtubule checkpoint name"):
         model.load_weights(tmp_path / "ep040.pth")
-    assert "unknown microtubule checkpoint name" in caplog.text
-    assert model.params.get("decoder") is None
 
 
 def test_every_listed_pipeline_has_its_params_file():
@@ -208,3 +206,79 @@ def test_short_fragments_are_dropped_at_min_length():
     prob = np.full((100, 100), 1e-3, np.float32)
     _line(prob, (50, 40), (50, 45), 0.9995)
     assert instance_lh(prob, 0.995, KAPPA, V16) == []
+
+
+def _dashes(n):
+    """A map of n separate short dashes: nothing to link, so the arc count is simply n."""
+    prob = np.full((40 * (n // 20 + 2), 40 * 22), 1e-3, np.float32)
+    for k in range(n):
+        y, x = 20 + 40 * (k // 20), 20 + 40 * (k % 20)
+        _line(prob, (y, x), (y, x + 20), 0.9995, 0)
+    return prob
+
+
+def test_too_many_arcs_is_refused_before_the_matching():
+    with pytest.raises(TooManyArcs):
+        instance_lh(_dashes(40), 0.995, KAPPA, {**V16, "max_arcs": 10})
+    assert len(instance_lh(_dashes(40), 0.995, KAPPA, {**V16, "max_arcs": 40})) >= 1
+
+
+# --- predict() through the V16 branch, network stubbed -------------------------------------------
+
+
+class _Band:
+    """A horizontal filament at row 120 of every tile; saturated, so it clears any cut."""
+
+    def __call__(self, t):
+        import torch
+
+        b, _, h, w = t.shape
+        out = torch.full((b, 1, h, w), -12.0)
+        out[:, :, 119:122, :] = 12.0
+        return out
+
+
+def _v16_model():
+    pytest.importorskip("torch")
+    model = MicrotubuleModel()
+    model._params_path = _PKG / "params_v16.json"
+    model._model, model._device = _Band(), "cpu"
+    return model
+
+
+def test_predict_decodes_the_v16_branch_on_a_float16_rounded_map(monkeypatch):
+    import instance.instancer_lh as lh
+
+    seen = {}
+
+    def spy(prob, cut, kappa, params):
+        seen.update(prob=prob, cut=cut)
+        return []
+
+    monkeypatch.setattr(lh, "instance_lh", spy)
+    model = _v16_model()
+    image = np.random.default_rng(0).random((512, 512)).astype(np.float32)
+    model.predict(image)
+    assert seen["cut"] == pytest.approx(0.995)
+    assert seen["prob"].dtype == np.float32
+    assert np.array_equal(seen["prob"], seen["prob"].astype(np.float16).astype(np.float32))
+
+
+def test_predict_returns_row_col_at_input_scale_through_the_v16_branch():
+    out = _v16_model().predict(np.random.default_rng(0).random((512, 512)).astype(np.float32))
+    assert len(out["centerlines_rc"]) == 1
+    cl = out["centerlines_rc"][0]
+    assert abs(cl[:, 0].mean() - 120) < 2           # row
+    assert np.ptp(cl[:, 1]) > 400                   # runs along the columns of the 512 px input
+
+
+def test_predict_falls_back_to_instance_a_beyond_the_arc_limit(monkeypatch, caplog):
+    import instance.instancer_lh as lh
+
+    def too_many(*args):
+        raise lh.TooManyArcs("9999 arcs, limit 3000")
+
+    monkeypatch.setattr(lh, "instance_lh", too_many)
+    out = _v16_model().predict(np.random.default_rng(0).random((512, 512)).astype(np.float32))
+    assert "falls back to instance_a" in caplog.text
+    assert len(out["centerlines_rc"]) == 1

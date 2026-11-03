@@ -81,9 +81,6 @@ for _extra_path in (_PKG_DIR, _PKG_DIR / "vendor"):
     if str(_extra_path) not in sys.path:
         sys.path.insert(0, str(_extra_path))
 
-#: Name of the model the interactive service runs, for logs and error messages.
-MODEL_NAME = "V16 DEB_S4 ep040"
-
 #: Scale of the INSTANCER's frame relative to the input. The network runs at
 #: native scale; its probabilities are resampled by this factor before
 #: instancing, because every instancer constant (tolerance, min_length, the
@@ -98,8 +95,9 @@ KAPPA_MAX = 0.25
 DEFAULT_PARAMS_PATH = _PKG_DIR / "params_sparse35.json"
 
 #: Checkpoint file name -> the params vector it was MEASURED with. Fusion and decoder
-#: are read from the vector. A file name not listed here (a test's tmp checkpoint, a
-#: research run) falls back to DEFAULT_PARAMS_PATH with a warning.
+#: are read from the vector. Any other file name is refused: every checkpoint of this
+#: topology loads without an error, so a renamed V16 would otherwise run SPARSE35's
+#: cut, fusion and decoder and return plausible curves.
 _PIPELINES = {
     "microtubule_sparse35_ep040.pth": DEFAULT_PARAMS_PATH,
     "microtubule_v16_deb_s4_ep040.pth": _PKG_DIR / "params_v16.json",
@@ -185,12 +183,13 @@ def _simplify_polyline(cl: np.ndarray, eps_px: float) -> np.ndarray:
 
 
 class MicrotubuleModel:
-    """Semantic stage + instancer. Load once, then predict many frames.
+    """Semantic stage + instancer, the pair the checkpoint name selects. Load once, then
+    predict many frames.
 
     Unlike HRNet / UNet / CBAM (pure ``nn.Module`` networks), this class is a
     thin orchestrator: the network is a ``ResidualEncoderUNet`` and the
-    postprocessing is :func:`instance.instancer_a.instance_a`, which has no
-    learned weights at all.
+    postprocessing is :func:`instance.instancer_lh.instance_lh` or
+    :func:`instance.instancer_a.instance_a`, neither of which has a learned network.
     """
 
     #: Foreground cut, used only if a params vector has no ``prob_thr``. The
@@ -239,17 +238,16 @@ class MicrotubuleModel:
 
         path = Path(weights_path)
         if path.name not in _PIPELINES:
-            logger.warning(
-                "unknown microtubule checkpoint name %s: running it with %s",
-                path.name,
-                DEFAULT_PARAMS_PATH.name,
+            raise ValueError(
+                f"unknown microtubule checkpoint name {path.name!r}: the file name selects "
+                f"the pipeline, so it must be one of {sorted(_PIPELINES)}"
             )
-        self._params_path = _PIPELINES.get(path.name, DEFAULT_PARAMS_PATH)
+        self._params_path = _PIPELINES[path.name]
         self._params = None
         if not path.is_file():
             raise FileNotFoundError(
-                f"microtubule {MODEL_NAME} checkpoint not found at {path} (~535 MB). "
-                "Stage it with scripts/download-microtubule-weights.sh."
+                f"microtubule checkpoint not found at {path} (~535 MB). "
+                f"Stage it with scripts/download-microtubule-weights.sh {path.name}."
             )
 
         self._device = device or ("cuda" if torch.cuda.is_available() else "cpu")
@@ -419,7 +417,7 @@ class MicrotubuleModel:
             silently tracking on zeros.
         """
         from instance.instancer_a import instance_a
-        from instance.instancer_lh import instance_lh
+        from instance.instancer_lh import TooManyArcs, instance_lh
 
         maps = self.infer_maps(image_np)   # raises the same errors predict used to
         overrides = dict(params or {})
@@ -450,9 +448,18 @@ class MicrotubuleModel:
             # The declared numbers read a map stored as float16, whose step just below
             # 1.0 is 2^-11 (about 5e-4, a tenth of the gap between the cuts 0.99 and
             # 0.995). Round the same way, so the mask and the link logits are the measured ones.
-            polylines = instance_lh(
-                prob_eval.astype(np.float16).astype(np.float32), thr, KAPPA_MAX, merged
-            )
+            try:
+                polylines = instance_lh(
+                    prob_eval.astype(np.float16).astype(np.float32), thr, KAPPA_MAX, merged
+                )
+            except TooManyArcs as exc:
+                # Far outside anything L+H was measured on. instance_a answers such a frame
+                # in seconds, and what it returns there is no better or worse than garbage in.
+                logger.warning("microtubule frame falls back to instance_a: %s", exc)
+                polylines, _ = instance_a(
+                    prob_eval > thr, KAPPA_MAX, merged, channels=chans_eval, prob=prob_eval,
+                    return_masks=False,
+                )
         else:
             polylines, _ = instance_a(
                 prob_eval > thr, KAPPA_MAX, merged, channels=chans_eval, prob=prob_eval,

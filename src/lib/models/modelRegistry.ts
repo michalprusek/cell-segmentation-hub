@@ -436,7 +436,7 @@ export const keyMap = (() => {
  * - `spheroid_invasive` is locked to `spheroid_disintegration` because core
  *   detection is tied to that model's postprocessing path.
  * - `wound`, `sperm`, `microcapsule`, `neurite` and `microtubules` use their
- *   dedicated specialised models only. `microtubules` ships with the SPARSE35
+ *   dedicated specialised models only. `microtubules` ships with the V16 DEB_S4
  *   ep040 nnU-Net ResEnc-M network plus a curvature-bounded instancer,
  *   producing per-instance polyline centerlines.
  * - Standard `spheroid` projects can use any of the general spheroid models,

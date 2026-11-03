@@ -137,9 +137,10 @@ def weights_candidates() -> list[Path]:
     """Where the microtubule checkpoint may be staged, most-specific first.
 
     The checkpoint (~535 MB) is too large for git and is staged out-of-band by
-    ``scripts/download-microtubule-weights.sh`` into the ML service's weights
-    directory. The essays container bind-mounts that same directory read-only at
-    ``/app/mt_weights``, so both callers run the byte-identical file.
+    ``scripts/download-microtubule-weights.sh microtubule_sparse35_ep040.pth`` into the ML
+    service's weights directory. The essays container bind-mounts that same directory
+    read-only at ``/app/mt_weights``. Since 2026-11-03 the interactive service loads a
+    different file from it (V16), and this batch keeps SPARSE35.
     """
     env = os.environ.get("ESSAYS_WEIGHTS")
     out = [Path(env)] if env else []
@@ -175,7 +176,7 @@ def missing_weights_message(weights: Path) -> str:
     return (
         f"microtubule SPARSE35 ep040 checkpoint not found at {weights}.\n"
         "Looked in: " + ", ".join(str(p) for p in weights_candidates()) + "\n"
-        "Stage it with scripts/download-microtubule-weights.sh (writes "
+        "Stage it with scripts/download-microtubule-weights.sh " + WEIGHTS_NAME + " (writes "
         "backend/segmentation/weights/" + WEIGHTS_NAME + "), or pass an explicit "
-        "--weights path."
+        "--weights path to a file of that name: the name selects the decoder."
     )

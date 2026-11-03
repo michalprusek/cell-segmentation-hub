@@ -211,7 +211,7 @@ pip install --upgrade pip
 pip install -r requirements.txt
 
 # stage the 535 MB checkpoint once (from the repo root)
-../../../scripts/download-microtubule-weights.sh
+../../../scripts/download-microtubule-weights.sh microtubule_sparse35_ep040.pth
 
 python evaluate.py --data /path/to/well_recordings --out results/
 ```
@@ -253,7 +253,7 @@ The 535 MB checkpoint `microtubule_sparse35_ep040.pth` is **not** stored in git 
 same file the ML service uses, staged out-of-band from the repo root:
 
 ```bash
-scripts/download-microtubule-weights.sh    # -> backend/segmentation/weights/microtubule_sparse35_ep040.pth
+scripts/download-microtubule-weights.sh microtubule_sparse35_ep040.pth    # -> backend/segmentation/weights/microtubule_sparse35_ep040.pth
 ```
 
 `evaluate.py` finds it automatically, looking in this order: `$ESSAYS_WEIGHTS`,
@@ -525,7 +525,7 @@ core normally is free.
 
 | Symptom | Fix |
 | ------- | --- |
-| `microtubule SPARSE35 ep040 checkpoint not found` | Stage it with `scripts/download-microtubule-weights.sh` from the repo root, or pass `--weights /path/to/microtubule_v5h.pth`. The error lists every path that was searched. |
+| `microtubule SPARSE35 ep040 checkpoint not found` | Stage it with `scripts/download-microtubule-weights.sh microtubule_sparse35_ep040.pth` from the repo root, or pass `--weights` with a path to a file of that name (the name selects the decoder). The error lists every path that was searched. |
 | `Could not locate the shared 'microtubule' package` | The model code lives in the ML service at `backend/segmentation/models/microtubule`. Run from a full checkout, or set `MT_PACKAGE_DIR` to the directory that *contains* the `microtubule` package. |
 | `no .nd2 files found` | Check `--data`; the folder is searched recursively for `*.nd2`. |
 | `no channel matching ('irm',)` | The well has no IRM channel under that name — pass `--irm-name <substring>`. Segmentation needs IRM; the well is skipped rather than segmented on another channel. |

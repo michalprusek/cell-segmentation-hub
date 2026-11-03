@@ -47,9 +47,9 @@ def test_microtubule_package_is_not_a_local_copy():
 
 def test_weights_name_is_the_sparse35_checkpoint():
     """The essays container bind-mounts the ML service's weights directory
-    read-only. If the two callers named different files, the batch assay would
-    silently run a different model from interactive segmentation — exactly the
-    drift that vendoring the module was meant to end."""
+    read-only. Since 2026-11-03 the interactive service loads V16 from it and this
+    batch deliberately stays on SPARSE35, so a running assay's outputs do not change.
+    Moving it is the owner's decision, and it should take editing this test."""
     assert _mt_package.WEIGHTS_NAME == "microtubule_sparse35_ep040.pth"
 
 
