@@ -649,7 +649,7 @@ export default {
         neurite_soma_merged: {
           name: 'Neurit / Soma – nnU-Net (sloučené kanály)',
           description:
-            'Dvoutřídní sémantická segmentace neuronů — neurit a soma — pro fluorescenční snímky, na nichž je buňka vidět až po spojení několika kanálů. Kanály zaškrtnete před segmentací; každý se normalizuje na vlastní šum a sloučí se do jednoho šedotónového obrazu, který segmentuje ansámbl 4 foldů nnU-Net v2 ResEnc-M. Dice na držených snímcích 0,843 neurit / 0,879 soma. Při slabém barvení najde jen část neuritů a často žádná somata; klasický model tam dojde dál.',
+            'Dvoutřídní sémantická segmentace neuronů — neurit a soma — pro fluorescenční snímky, na nichž je buňka vidět až po spojení několika kanálů. Kanály zaškrtnete před segmentací; každý se normalizuje na vlastní šum a sloučí se do jednoho šedotónového obrazu, který segmentuje ansámbl 4 foldů nnU-Net v2 ResEnc-M. Dice na držených snímcích 0,843 neurit / 0,879 soma. Při slabém barvení najde jen část neuritů a často žádná somata, proto takové snímky zkontrolujte v editoru.',
         },
         neurite_soma_classical: {
           name: 'Neurit / Soma – klasický (sloučené kanály)',
@@ -694,7 +694,7 @@ export default {
       neurite_soma:
         'nnU-Net v2 ResEnc-M (2D, ansámbl 3 foldů) pro segmentaci neuritů a somat ve fluorescenční mikroskopii. Čte tubulinový kanál; Dice na testovací sadě 0,832 neurit / 0,915 soma. Trénováno na konfokálních datech Leica při ~0,180 µm/px — u jiné velikosti pixelu ověřte počty somat.',
       neurite_soma_merged:
-        'nnU-Net v2 ResEnc-M (2D, ansámbl 4 foldů) pro segmentaci neuritů a somat na fluorescenčních snímcích sloučených z několika kanálů: kanály zaškrtnete, každý se normalizuje na vlastní šum pozadí a sloučí se do jednoho šedotónového obrazu. Dice na držených snímcích 0,843 neurit / 0,879 soma, na 15 ručně opravených snímcích ze čtyř jamek při asi 0,18 µm/px. Při slabém barvení najde jen část neuritů a často žádná somata; klasický model tam dojde dál.',
+        'nnU-Net v2 ResEnc-M (2D, ansámbl 4 foldů) pro segmentaci neuritů a somat na fluorescenčních snímcích sloučených z několika kanálů: kanály zaškrtnete, každý se normalizuje na vlastní šum pozadí a sloučí se do jednoho šedotónového obrazu. Dice na držených snímcích 0,843 neurit / 0,879 soma, na 15 ručně opravených snímcích ze čtyř jamek při asi 0,18 µm/px. Při slabém barvení najde jen část neuritů a často žádná somata, proto takové snímky zkontrolujte v editoru.',
       neurite_soma_classical:
         'Klasická segmentace neuritů a somat bez neuronové sítě a bez vah (Meijeringův hřebenový filtr a tvarová pravidla; jen CPU, asi 1,3 s na snímek 1024 × 1024). Pro fluorescenční snímky, na nichž je buňka vidět až po spojení několika kanálů: zaškrtnete kanály, každý se normalizuje na vlastní šum pozadí a sloučí se do jednoho obrazu ve stupních šedi. Slabá, rozplizlá somata najde jen někdy — zkontrolujte je v editoru.',
     },
@@ -1954,7 +1954,7 @@ export default {
           bestFor:
             'Používají: projekty s neurity a somaty, pokud ho zvolíte. Pro fluorescenční snímky, na nichž je buňka vidět až po spojení několika kanálů, s rozumně silným barvením.',
           description:
-            'Ansámbl čtyř foldů nnU-Net v2 ResEnc-M, průměrovaný v prostoru logitů se zrcadlovou augmentací při inferenci. Před segmentací zaškrtnete jeden nebo více kanálů; každý se normalizuje na vlastní šum pozadí a kanály se sloučí maximem po pixelech do jednoho šedotónového obrazu, který síť vidí. Trénováno na 15 ručně opravených snímcích ze čtyř jamek při asi 0,18 µm/px. Každá jamka byla jednou držená stranou: Dice 0,843 neurit / 0,879 soma. To je skóre jednoho foldu; pro celý ansámbl už žádné držené snímky nezbyly. Při slabém barvení najde jen část neuritů a často žádná somata a klasický model tam dojde dál. Označuje také velká neuklizená těla buněk jako somata, která anotátor mohl vynechat.',
+            'Ansámbl čtyř foldů nnU-Net v2 ResEnc-M, průměrovaný v prostoru logitů se zrcadlovou augmentací při inferenci. Před segmentací zaškrtnete jeden nebo více kanálů; každý se normalizuje na vlastní šum pozadí a kanály se sloučí maximem po pixelech do jednoho šedotónového obrazu, který síť vidí. Trénováno na 15 ručně opravených snímcích ze čtyř jamek při asi 0,18 µm/px. Každá jamka byla jednou držená stranou: Dice 0,843 neurit / 0,879 soma. To je skóre jednoho foldu; pro celý ansámbl už žádné držené snímky nezbyly. Při slabém barvení najde jen část neuritů a často žádná somata, proto takové snímky zkontrolujte v editoru. Označuje také velká neuklizená těla buněk jako somata, která anotátor mohl vynechat.',
         },
       },
       howToSelect: 'Výběr modelu',

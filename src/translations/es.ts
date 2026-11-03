@@ -649,7 +649,7 @@ export default {
         neurite_soma_merged: {
           name: 'Neurita / soma – nnU-Net (canales fusionados)',
           description:
-            'Segmentación semántica de dos clases de neuronas — neurita y soma — para imágenes de fluorescencia en las que la célula se ve al tomar varios canales juntos. Se marcan los canales antes de segmentar; cada uno se normaliza a su propio ruido y se fusionan en una imagen en escala de grises, que segmenta un conjunto de 4 folds de nnU-Net v2 ResEnc-M. Dice en fotogramas reservados 0,843 neurita / 0,879 soma. Con una tinción débil solo encuentra parte de las neuritas y a menudo ningún soma; el modelo clásico llega más lejos en ese caso.',
+            'Segmentación semántica de dos clases de neuronas — neurita y soma — para imágenes de fluorescencia en las que la célula se ve al tomar varios canales juntos. Se marcan los canales antes de segmentar; cada uno se normaliza a su propio ruido y se fusionan en una imagen en escala de grises, que segmenta un conjunto de 4 folds de nnU-Net v2 ResEnc-M. Dice en fotogramas reservados 0,843 neurita / 0,879 soma. Con una tinción débil solo encuentra parte de las neuritas y a menudo ningún soma, así que revise esas imágenes en el editor.',
         },
         neurite_soma_classical: {
           name: 'Neurita / Soma – clásico (canales fusionados)',
@@ -694,7 +694,7 @@ export default {
       neurite_soma:
         'nnU-Net v2 ResEnc-M (2D, conjunto de 3 folds) para segmentar neuritas y somas en microscopía de fluorescencia. Usa el canal de tubulina; Dice en datos retenidos 0,832 neurita / 0,915 soma. Entrenado con datos confocales Leica a ~0,180 µm/px: valide los recuentos de somas con otro tamaño de píxel.',
       neurite_soma_merged:
-        'nnU-Net v2 ResEnc-M (2D, conjunto de 4 folds) para segmentar neuritas y somas en imágenes de fluorescencia fusionadas a partir de varios canales: se marcan los canales, cada uno se normaliza a su propio ruido de fondo y se fusionan en una imagen en escala de grises. Dice en fotogramas reservados 0,843 neurita / 0,879 soma, en 15 fotogramas corregidos a mano de cuatro pocillos a unos 0,18 µm/px. Con una tinción débil solo encuentra parte de las neuritas y a menudo ningún soma; el modelo clásico llega más lejos en ese caso.',
+        'nnU-Net v2 ResEnc-M (2D, conjunto de 4 folds) para segmentar neuritas y somas en imágenes de fluorescencia fusionadas a partir de varios canales: se marcan los canales, cada uno se normaliza a su propio ruido de fondo y se fusionan en una imagen en escala de grises. Dice en fotogramas reservados 0,843 neurita / 0,879 soma, en 15 fotogramas corregidos a mano de cuatro pocillos a unos 0,18 µm/px. Con una tinción débil solo encuentra parte de las neuritas y a menudo ningún soma, así que revise esas imágenes en el editor.',
       neurite_soma_classical:
         'Segmentación clásica de neuritas y somas, sin red neuronal y sin pesos (filtro de crestas de Meijering más reglas de forma; solo CPU, unos 1,3 s por fotograma de 1024 × 1024). Para imágenes de fluorescencia en las que la célula solo se ve al tomar varios canales juntos: usted marca los canales, cada uno se normaliza a su propio ruido de fondo y se fusionan en una sola imagen en escala de grises. Los somas tenues y difusos solo se encuentran algunas veces: revíselos en el editor.',
     },
@@ -1983,7 +1983,7 @@ export default {
           bestFor:
             'Lo usan: los proyectos de neuritas y somas, cuando se elige. Para imágenes de fluorescencia en las que la célula se ve al tomar varios canales juntos, con una tinción razonablemente intensa.',
           description:
-            'Un conjunto de cuatro folds de nnU-Net v2 ResEnc-M, promediado en el espacio de logits con aumentación por espejo en la inferencia. Antes de segmentar se marcan uno o varios canales; cada uno se normaliza a su propio ruido de fondo y se fusionan por máximo píxel a píxel en una imagen en escala de grises, que es lo que ve la red. Entrenado con 15 fotogramas corregidos a mano, de cuatro pocillos, a unos 0,18 µm/px. Cada pocillo se reservó una vez: Dice 0,843 neurita / 0,879 soma. Esa es la puntuación de un fold; para el conjunto completo no quedan fotogramas reservados. Con una tinción débil solo encuentra parte de las neuritas y a menudo ningún soma, y el modelo clásico llega más lejos en ese caso. También marca como somas cuerpos celulares grandes y desordenados que un anotador puede haber omitido.',
+            'Un conjunto de cuatro folds de nnU-Net v2 ResEnc-M, promediado en el espacio de logits con aumentación por espejo en la inferencia. Antes de segmentar se marcan uno o varios canales; cada uno se normaliza a su propio ruido de fondo y se fusionan por máximo píxel a píxel en una imagen en escala de grises, que es lo que ve la red. Entrenado con 15 fotogramas corregidos a mano, de cuatro pocillos, a unos 0,18 µm/px. Cada pocillo se reservó una vez: Dice 0,843 neurita / 0,879 soma. Esa es la puntuación de un fold; para el conjunto completo no quedan fotogramas reservados. Con una tinción débil solo encuentra parte de las neuritas y a menudo ningún soma, así que revise esas imágenes en el editor. También marca como somas cuerpos celulares grandes y desordenados que un anotador puede haber omitido.',
         },
       },
       howToSelect: 'Elegir un modelo',

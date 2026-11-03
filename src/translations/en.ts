@@ -664,7 +664,7 @@ export default {
         neurite_soma_merged: {
           name: 'Neurite / Soma – nnU-Net (merged channels)',
           description:
-            'Two-class semantic segmentation of neurons — neurite and soma — for fluorescence images where the cell shows when several channels are taken together. You tick the channels before segmenting; each is normalised to its own noise and they are merged into one greyscale image, which an nnU-Net v2 ResEnc-M 4-fold ensemble segments. Held-out Dice 0.843 neurite / 0.879 soma. On dim staining it finds only part of the neurites and often no somas; the classical model goes further there.',
+            'Two-class semantic segmentation of neurons — neurite and soma — for fluorescence images where the cell shows when several channels are taken together. You tick the channels before segmenting; each is normalised to its own noise and they are merged into one greyscale image, which an nnU-Net v2 ResEnc-M 4-fold ensemble segments. Held-out Dice 0.843 neurite / 0.879 soma. On dim staining it finds only part of the neurites and often no somas, so check those images in the editor.',
         },
         neurite_soma_classical: {
           name: 'Neurite / Soma – classical (merged channels)',
@@ -709,7 +709,7 @@ export default {
       neurite_soma:
         'nnU-Net v2 ResEnc-M (2D, 3-fold ensemble) for neurite and soma segmentation in fluorescence microscopy. Reads the tubulin channel; held-out Dice 0.832 neurite / 0.915 soma. Trained on Leica confocal data at ~0.180 µm/px — validate soma counts on a different pixel size.',
       neurite_soma_merged:
-        'nnU-Net v2 ResEnc-M (2D, 4-fold ensemble) for neurite and soma segmentation on fluorescence images merged from several channels: you tick the channels, each is normalised to its own background noise and they are merged into one greyscale image. Held-out Dice 0.843 neurite / 0.879 soma, on 15 expert-corrected frames from four wells at about 0.18 µm/px. On dim staining it finds only part of the neurites and often no somas; the classical model goes further there.',
+        'nnU-Net v2 ResEnc-M (2D, 4-fold ensemble) for neurite and soma segmentation on fluorescence images merged from several channels: you tick the channels, each is normalised to its own background noise and they are merged into one greyscale image. Held-out Dice 0.843 neurite / 0.879 soma, on 15 expert-corrected frames from four wells at about 0.18 µm/px. On dim staining it finds only part of the neurites and often no somas, so check those images in the editor.',
       neurite_soma_classical:
         'Classical neurite and soma segmentation with no neural network and no weights (Meijering ridge filter plus shape rules; CPU only, about 1.3 s per 1024 × 1024 frame). For fluorescence images where a cell is only visible when several channels are taken together: you tick the channels, each is normalised to its own background noise and they are merged into one greyscale image. Faint, diffuse somas are found only some of the time — check them in the editor.',
     },
@@ -1982,7 +1982,7 @@ export default {
           bestFor:
             'Used by: Neurite & soma projects, when you pick it. For fluorescence images where a cell shows when several channels are taken together, with reasonably bright staining.',
           description:
-            'An nnU-Net v2 ResEnc-M ensemble of four folds, averaged in logit space with mirroring test-time augmentation. Before segmenting you tick one or more channels; each is normalised to its own background noise and they are merged by pixel-wise maximum into one greyscale image, which is what the network sees. Trained on 15 frames corrected by hand, from four wells, at about 0.18 µm/px. Each well was held out once: Dice 0.843 neurite / 0.879 soma. That is the score of one fold; the ensemble has no held-out frames left to measure it on. On dim staining it finds only part of the neurites and often no somas, and the classical model goes further there. It also marks large untidy cell bodies as somas, which an annotator may have left out.',
+            'An nnU-Net v2 ResEnc-M ensemble of four folds, averaged in logit space with mirroring test-time augmentation. Before segmenting you tick one or more channels; each is normalised to its own background noise and they are merged by pixel-wise maximum into one greyscale image, which is what the network sees. Trained on 15 frames corrected by hand, from four wells, at about 0.18 µm/px. Each well was held out once: Dice 0.843 neurite / 0.879 soma. That is the score of one fold; the ensemble has no held-out frames left to measure it on. On dim staining it finds only part of the neurites and often no somas, so check those images in the editor. It also marks large untidy cell bodies as somas, which an annotator may have left out.',
         },
       },
       howToSelect: 'Choosing a model',

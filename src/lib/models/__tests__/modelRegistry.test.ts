@@ -289,7 +289,7 @@ describe('model registry SSOT', () => {
         name: 'Neurite / Soma (merged channels)',
         displayName: 'Neurite / Soma – nnU-Net (merged channels)',
         description:
-          'Two-class semantic segmentation of neurons for fluorescence images where the cell shows when several channels are taken together. You tick the channels before segmenting; each is normalised to its own noise and they are merged into one greyscale image, which an nnU-Net v2 ResEnc-M 4-fold ensemble segments. Held-out Dice 0.843 neurite / 0.879 soma on 15 expert-corrected frames from four wells at about 0.18 um/px. On dim staining it finds only part of the neurites and often no somas; the classical model goes further there.',
+          'Two-class semantic segmentation of neurons for fluorescence images where the cell shows when several channels are taken together. You tick the channels before segmenting; each is normalised to its own noise and they are merged into one greyscale image, which an nnU-Net v2 ResEnc-M 4-fold ensemble segments. Held-out Dice 0.843 neurite / 0.879 soma on 15 expert-corrected frames from four wells at about 0.18 um/px. On dim staining it finds only part of the neurites and often no somas, so check those images in the editor.',
         size: 'large',
         defaultThreshold: 0.5,
         category: 'neurite',
