@@ -1945,9 +1945,9 @@ export default {
             'The same architecture as Sperm Morphology, fine-tuned from it on sperm annotated as head and tail only. Each cell comes back as two polylines — the head, which here covers the whole helical part, welded to the tail — so the head–tail boundary is learned rather than obtained by folding the midpiece into a neighbouring part.',
         },
         microtubule: {
-          name: 'Microtubule (SPARSE35)',
+          name: 'Microtubule (V16)',
           inferenceTime:
-            'About 0.6 s per frame · threshold fixed at 0.98 and not user-settable',
+            'About 0.6 s per frame · threshold fixed at 0.995 and not user-settable',
           bestFor: 'Used by: Microtubule projects. IRM images only.',
           description:
             'An nnU-Net ResEnc-M network predicts the filament foreground, then a curvature-bounded instancer separates it into individual centerlines, resolving every crossing under a hard curvature bound. Trained entirely on synthetic frames. Runtime scales with the number of filaments, not just frame size.',
@@ -1995,7 +1995,7 @@ export default {
       },
       thresholdNote: 'Detection thresholds are fixed per model.',
       thresholdNoteText:
-        'There is no threshold control in the interface: each model that uses a threshold applies the cut it was validated with — the microtubule model’s is 0.98 — and two models (Spheroid Disintegration, Neurite / Soma) have none at all: they decide by argmax. The classical neurite model has no setting either: it derives its cut from each image’s own noise. Lowering a threshold does not find more real objects — it finds more with weaker evidence, and on a non-IRM channel the microtubule output does not follow the image at any setting. If detections are missing, check the input channel instead.',
+        'There is no threshold control in the interface: each model that uses a threshold applies the cut it was validated with — the microtubule model’s is 0.995 — and two models (Spheroid Disintegration, Neurite / Soma) have none at all: they decide by argmax. The classical neurite model has no setting either: it derives its cut from each image’s own noise. Lowering a threshold does not find more real objects — it finds more with weaker evidence, and on a non-IRM channel the microtubule output does not follow the image at any setting. If detections are missing, check the input channel instead.',
       tip: 'Tip:',
       tipText:
         'Start with the default model. Reach for CBAM-ResUNet when boundaries matter more than speed, and for Mamba-UNet when your images do not look like anyone’s training set.',

@@ -270,7 +270,8 @@ export uses (`backend/segmentation/models/mt_measure.py`). See
 
 ## Related
 
-- [Microtubule projects](project-types/microtubules.md) — the interactive path
-  over the same model
-- [ML models: microtubule SPARSE35 ep040](../reference/ml-models.md#microtubule--microtubule-sparse35-ep040)
+- [Microtubule projects](project-types/microtubules.md) — the interactive path.
+  Since 2026-11-03 it runs a newer model (V16); this batch keeps SPARSE35 ep040,
+  so that a running assay's outputs do not change.
+- [ML models: microtubule](../reference/ml-models.md#microtubule--microtubule-v16-deb_s4-ep040)
 - [REST API](../api/README.md#automated-essays) — the endpoints behind this page

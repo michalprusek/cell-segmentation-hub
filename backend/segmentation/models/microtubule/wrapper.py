@@ -1,4 +1,4 @@
-"""Microtubule instance segmentation model wrapper (SPARSE35 ep040).
+"""Microtubule instance segmentation model wrapper (V16 DEB_S4 ep040, SPARSE35 ep040).
 
 Wraps the microtubule package -- an nnU-Net ResEnc-M semantic stage plus a
 curvature-bounded instancer -- so the ModelLoader can drive it through the same
@@ -12,6 +12,16 @@ TWO callers share this package, so it is not free to change:
 
 They used to be separate copies that silently drifted apart. Re-verify BOTH
 paths when changing this file or anything under ``instance/``.
+
+What changed on 2026-11-03 (SPARSE35 ep040 -> V16 DEB_S4 ep040, interactive only)
+-------------------------------------------------------------------------------
+The two callers now run different models, and the checkpoint decides which pipeline
+runs (``_PIPELINES``), so neither can be paired with the other's decoder by mistake.
+The interactive service loads the V16 checkpoint: Gaussian tile fusion and instancer
+L+H (``instance.instancer_lh``, ``params_v16.json``). The essays batch keeps the
+SPARSE35 checkpoint and, through it, the uniform fusion and ``instance_a`` below,
+bit for bit, because a new decoder would change a running assay's outputs. Read
+``MODEL_CARD.md`` for the numbers.
 
 What changed on 2026-09-19 (v5H -> SPARSE35 ep040)
 ---------------------------------------------------
@@ -71,8 +81,8 @@ for _extra_path in (_PKG_DIR, _PKG_DIR / "vendor"):
     if str(_extra_path) not in sys.path:
         sys.path.insert(0, str(_extra_path))
 
-#: Name of the deployed model, for logs and error messages.
-MODEL_NAME = "SPARSE35 ep040"
+#: Name of the model the interactive service runs, for logs and error messages.
+MODEL_NAME = "V16 DEB_S4 ep040"
 
 #: Scale of the INSTANCER's frame relative to the input. The network runs at
 #: native scale; its probabilities are resampled by this factor before
@@ -86,6 +96,14 @@ UP = 1.5
 KAPPA_MAX = 0.25
 
 DEFAULT_PARAMS_PATH = _PKG_DIR / "params_sparse35.json"
+
+#: Checkpoint file name -> the params vector it was MEASURED with. Fusion and decoder
+#: are read from the vector. A file name not listed here (a test's tmp checkpoint, a
+#: research run) falls back to DEFAULT_PARAMS_PATH with a warning.
+_PIPELINES = {
+    "microtubule_sparse35_ep040.pth": DEFAULT_PARAMS_PATH,
+    "microtubule_v16_deb_s4_ep040.pth": _PKG_DIR / "params_v16.json",
+}
 
 
 def _normalize(a: np.ndarray, p: tuple[float, float] = (1.0, 99.0)) -> np.ndarray:
@@ -175,7 +193,8 @@ class MicrotubuleModel:
     learned weights at all.
     """
 
-    #: Foreground cut. The shipped params vector carries 0.98 -- SPARSE35's own
+    #: Foreground cut, used only if a params vector has no ``prob_thr``. The
+    #: SPARSE35 vector carries 0.98 -- SPARSE35's own
     #: optimum on the roi303 validation block under the declared metric (the
     #: 13-node sweep 0.50..0.999 at per-model thresholds; the htw block
     #: preferred 0.995, and one value had to be chosen for production). The
@@ -187,16 +206,17 @@ class MicrotubuleModel:
         self._device: Optional[str] = None
         self._ckpt_path: Optional[Path] = None
         self._params: Optional[dict] = None
+        self._params_path: Path = DEFAULT_PARAMS_PATH
 
     @property
     def params(self) -> dict:
-        """Instancer hyperparameters: the DERIVED vector (``params_sparse35.json``).
+        """Instancer hyperparameters: the vector of the loaded checkpoint (``_PIPELINES``).
 
         Underscore-prefixed keys are provenance notes, not parameters, and
         ``kappa_max`` is a constant of the method, never read from a file.
         """
         if self._params is None:
-            params = json.loads(DEFAULT_PARAMS_PATH.read_text())
+            params = json.loads(self._params_path.read_text())
             params = {k: v for k, v in params.items() if not k.startswith("_")}
             params.pop("kappa_max", None)
             self._params = params
@@ -218,6 +238,14 @@ class MicrotubuleModel:
         from net import build, head_width
 
         path = Path(weights_path)
+        if path.name not in _PIPELINES:
+            logger.warning(
+                "unknown microtubule checkpoint name %s: running it with %s",
+                path.name,
+                DEFAULT_PARAMS_PATH.name,
+            )
+        self._params_path = _PIPELINES.get(path.name, DEFAULT_PARAMS_PATH)
+        self._params = None
         if not path.is_file():
             raise FileNotFoundError(
                 f"microtubule {MODEL_NAME} checkpoint not found at {path} (~535 MB). "
@@ -233,9 +261,9 @@ class MicrotubuleModel:
         self._model = model
         self._ckpt_path = path
         logger.info(
-            "Loaded microtubule %s from %s on %s (head width %d)",
-            MODEL_NAME,
+            "Loaded microtubule checkpoint %s with %s on %s (head width %d)",
             path,
+            self._params_path.name,
             self._device,
             width,
         )
@@ -252,6 +280,12 @@ class MicrotubuleModel:
         time rather than at load time. The stride is the evaluation harness's
         (``train_v5.predict``: ``round(512 * 392 / 518)`` = 387), and on CUDA
         the forward pass runs under bf16 autocast, as the measurement did.
+
+        ``fusion`` ``gauss`` in the params vector is the path V16 was measured
+        with (``train_v5.predict(fusion="gauss")``): a Gaussian-weighted mean of
+        LOGITS at stride TILE/2, because the uniform mean lets the context-starved
+        tile border pull a filament under the cut within ~8 px of a seam. It costs
+        about twice the tiles.
         """
         import torch
 
@@ -261,9 +295,11 @@ class MicrotubuleModel:
         std = torch.tensor(IMA_S).view(3, 1, 1)
         height, width = img01.shape
         use_bf16 = str(self._device).startswith("cuda")
+        gauss = self.params.get("fusion", "uniform") == "gauss"
+        stride = TILE // 2 if gauss else STRIDE
 
         def _starts(extent: int) -> list[int]:
-            starts = list(range(0, max(1, extent - TILE + 1), STRIDE)) or [0]
+            starts = list(range(0, max(1, extent - TILE + 1), stride)) or [0]
             if starts[-1] != max(0, extent - TILE):
                 starts.append(max(0, extent - TILE))
             return starts
@@ -310,12 +346,22 @@ class MicrotubuleModel:
                         out = self._model(t)
                     while isinstance(out, (tuple, list)):
                         out = out[0]   # deep supervision off, but be defensive
-                    out = torch.sigmoid(out.float())[0].cpu().numpy()
+                    if gauss:
+                        out = np.clip(out.float()[0].cpu().numpy(), -30.0, 30.0)
+                        wy = np.arange(th) - (th - 1) / 2
+                        wx = np.arange(tw) - (tw - 1) / 2
+                        weight = np.exp(-(wy[:, None] ** 2 + wx[None] ** 2) / (2 * (TILE / 8) ** 2))
+                        weight = np.maximum(weight, weight.max() * 1e-3)
+                    else:
+                        out = torch.sigmoid(out.float())[0].cpu().numpy()
+                        weight = 1.0
                     if acc is None:
                         acc = np.zeros((out.shape[0], height, width), dtype=np.float64)
                         cnt = np.zeros((height, width), dtype=np.float64)
-                    acc[:, y : y + th, x : x + tw] += out[:, :th, :tw]
-                    cnt[y : y + th, x : x + tw] += 1
+                    acc[:, y : y + th, x : x + tw] += out[:, :th, :tw] * weight
+                    cnt[y : y + th, x : x + tw] += weight
+        if gauss:
+            return 1 / (1 + np.exp(-acc / cnt[None]))
         return acc / np.maximum(cnt, 1)[None]
 
     def infer_maps(self, image_np: np.ndarray) -> dict:
@@ -354,10 +400,10 @@ class MicrotubuleModel:
                 frame. Higher-dimension arrays are reduced to grayscale (mean
                 over the channel axis) for convenience.
             seed_threshold: Foreground cut applied to the probability map before
-                instancing. ``None`` uses the shipped params vector's
-                ``prob_thr`` (0.98), which is what the model was measured with.
+                instancing. ``None`` uses the params vector's ``prob_thr``,
+                which is what the model was measured with.
             params: Overrides of the instancer hyperparameters. Also accepts
-                ``polyline_eps_px`` (default from params_sparse35.json), the RDP
+                ``polyline_eps_px`` (default from the params vector), the RDP
                 tolerance applied to the OUTPUT geometry -- see
                 :func:`_simplify_polyline`. It is not read by ``instance_a``;
                 the instancer's working resolution stays ``ds``, unaffected.
@@ -373,6 +419,7 @@ class MicrotubuleModel:
             silently tracking on zeros.
         """
         from instance.instancer_a import instance_a
+        from instance.instancer_lh import instance_lh
 
         maps = self.infer_maps(image_np)   # raises the same errors predict used to
         overrides = dict(params or {})
@@ -399,10 +446,18 @@ class MicrotubuleModel:
         # one full-frame boolean mask per polyline only to drop it cost 0.38 GB
         # and 0.133 s on a real 1476x1924 production frame, 2.84 GB on a dense
         # 2048^2 essays position. See instance_a's docstring.
-        polylines, _ = instance_a(
-            prob_eval > thr, KAPPA_MAX, merged, channels=chans_eval, prob=prob_eval,
-            return_masks=False,
-        )
+        if merged.get("decoder") == "lh":
+            # The declared numbers read a map stored as float16, whose step just below
+            # 1.0 is 2^-11 (about 5e-4, a tenth of the gap between the cuts 0.99 and
+            # 0.995). Round the same way, so the mask and the link logits are the measured ones.
+            polylines = instance_lh(
+                prob_eval.astype(np.float16).astype(np.float32), thr, KAPPA_MAX, merged
+            )
+        else:
+            polylines, _ = instance_a(
+                prob_eval > thr, KAPPA_MAX, merged, channels=chans_eval, prob=prob_eval,
+                return_masks=False,
+            )
 
         # instance_a returns (x=col, y=row) at the 1.5x instancer scale. Every
         # downstream consumer -- mt_measure, mt_metrics, the essays adapter --

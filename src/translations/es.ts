@@ -1946,9 +1946,9 @@ export default {
             'La misma arquitectura que Morfología de espermatozoides, ajustada a partir de ese modelo con espermatozoides anotados solo como cabeza y cola. Cada célula se devuelve como dos polilíneas —la cabeza, que aquí abarca toda la parte helicoidal, unida a la cola—, de modo que el límite entre cabeza y cola es aprendido y no el resultado de sumar la pieza intermedia a una parte vecina.',
         },
         microtubule: {
-          name: 'Microtúbulos (SPARSE35)',
+          name: 'Microtúbulos (V16)',
           inferenceTime:
-            'Unos 0,6 s por fotograma · umbral fijado en 0,98 y no configurable',
+            'Unos 0,6 s por fotograma · umbral fijado en 0,995 y no configurable',
           bestFor: 'Lo usan: los proyectos de microtúbulos. Solo imágenes IRM.',
           description:
             'Una red nnU-Net ResEnc-M predice el primer plano de los filamentos y después un separador acotado por curvatura lo divide en líneas centrales individuales, resolviendo cada cruce bajo un límite estricto de curvatura. Entrenado exclusivamente con fotogramas sintéticos. El tiempo de ejecución crece con el número de filamentos, no solo con el tamaño del fotograma.',
@@ -1995,7 +1995,7 @@ export default {
       },
       thresholdNote: 'Los umbrales de detección son fijos para cada modelo.',
       thresholdNoteText:
-        'No hay ningún control de umbral en la interfaz: cada modelo que usa un umbral aplica el corte con el que fue validado —el de microtúbulos es 0,98— y dos modelos (Disgregación de esferoides, Neurita / soma) no tienen ninguno: deciden por argmax. El modelo clásico de neuritas tampoco tiene ajuste: deriva su corte del ruido de cada imagen. Bajar un umbral no encuentra más objetos reales: encuentra más con evidencia más débil, y en un canal que no sea IRM la salida de microtúbulos no sigue la imagen con ningún ajuste. Si faltan detecciones, revise el canal de entrada.',
+        'No hay ningún control de umbral en la interfaz: cada modelo que usa un umbral aplica el corte con el que fue validado —el de microtúbulos es 0,995— y dos modelos (Disgregación de esferoides, Neurita / soma) no tienen ninguno: deciden por argmax. El modelo clásico de neuritas tampoco tiene ajuste: deriva su corte del ruido de cada imagen. Bajar un umbral no encuentra más objetos reales: encuentra más con evidencia más débil, y en un canal que no sea IRM la salida de microtúbulos no sigue la imagen con ningún ajuste. Si faltan detecciones, revise el canal de entrada.',
       tip: 'Consejo:',
       tipText:
         'Empiece con el modelo predeterminado. Recurra a CBAM-ResUNet cuando los bordes importen más que la velocidad, y a Mamba-UNet cuando sus imágenes no se parezcan al conjunto de entrenamiento de nadie.',

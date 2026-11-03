@@ -1952,9 +1952,9 @@ export default {
             'La même architecture que Morphologie des spermatozoïdes, affinée à partir de ce modèle sur des spermatozoïdes annotés uniquement en tête et flagelle. Chaque cellule est restituée sous forme de deux polylignes — la tête, qui couvre ici toute la partie hélicoïdale, raccordée au flagelle — si bien que la limite entre tête et flagelle est apprise, et non obtenue en rattachant la pièce intermédiaire à une partie voisine.',
         },
         microtubule: {
-          name: 'Microtubules (SPARSE35)',
+          name: 'Microtubules (V16)',
           inferenceTime:
-            'Environ 0,6 s par image · seuil fixé à 0,98 et non modifiable',
+            'Environ 0,6 s par image · seuil fixé à 0,995 et non modifiable',
           bestFor:
             'Utilisé par : les projets microtubules. Images IRM uniquement.',
           description:
@@ -2003,7 +2003,7 @@ export default {
       },
       thresholdNote: 'Les seuils de détection sont fixes pour chaque modèle.',
       thresholdNoteText:
-        'Il n’existe aucun réglage de seuil dans l’interface : chaque modèle qui utilise un seuil applique la coupure avec laquelle il a été validé — celle des microtubules étant 0,98 — et deux modèles (Désagrégation des sphéroïdes, Neurite / soma) n’en ont aucun : ils décident par argmax. Le modèle classique pour les neurites n’a pas de réglage non plus : il tire sa coupure du bruit de chaque image. Abaisser un seuil ne trouve pas davantage d’objets réels : il en trouve davantage avec des indices plus faibles, et sur un canal non IRM la sortie microtubules ne suit l’image à aucun réglage. S’il manque des détections, vérifiez plutôt le canal d’entrée.',
+        'Il n’existe aucun réglage de seuil dans l’interface : chaque modèle qui utilise un seuil applique la coupure avec laquelle il a été validé — celle des microtubules étant 0,995 — et deux modèles (Désagrégation des sphéroïdes, Neurite / soma) n’en ont aucun : ils décident par argmax. Le modèle classique pour les neurites n’a pas de réglage non plus : il tire sa coupure du bruit de chaque image. Abaisser un seuil ne trouve pas davantage d’objets réels : il en trouve davantage avec des indices plus faibles, et sur un canal non IRM la sortie microtubules ne suit l’image à aucun réglage. S’il manque des détections, vérifiez plutôt le canal d’entrée.',
       tip: 'Astuce :',
       tipText:
         'Commencez par le modèle par défaut. Passez à CBAM-ResUNet quand les contours comptent plus que la vitesse, et à Mamba-UNet quand vos images ne ressemblent au jeu d’entraînement de personne.',

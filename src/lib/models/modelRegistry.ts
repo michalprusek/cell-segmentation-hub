@@ -243,10 +243,10 @@ export const MODEL_REGISTRY = {
   },
   microtubule: {
     size: 'large',
-    // The model's own foreground cut (SPARSE35 ep040's optimum on its
-    // validation block; the ML route applies it from params_sparse35.json and
-    // ignores anything sent here). This model's foreground is very confident,
-    // so the generic 0.5 other models use would flood it.
+    // Ignored: the ML route applies the model's own cut (0.995 since 2026-11-03,
+    // from params_v16.json) and takes nothing from here. This value stays 0.98
+    // because it is sent on the wire and the API bound stops at 0.99. It is not
+    // the generic 0.5, so that a reader does not take that for this model's cut.
     defaultThreshold: 0.98,
     category: 'microtubule',
     performance: {
@@ -262,10 +262,10 @@ export const MODEL_REGISTRY = {
       p95Latency: 2.0,
       batchSize: 1,
     },
-    name: 'Microtubule (SPARSE35)',
+    name: 'Microtubule (V16)',
     displayName: 'Microtubule (ResEnc-M + curvature instancer)',
     description:
-      'Instance segmentation for IRM microtubule time-lapses. An nnU-Net ResEnc-M network predicts the filament foreground, then a curvature-bounded instancer separates it into individual centerlines, resolving every crossing by min-cost matching under a hard 0.25 rad/px bound. The network runs at native resolution. Trained entirely on synthetic frames — no human annotation at any stage. Cross-frame tracking for kymograph analysis is geometric. The only model in the platform producing polyline output.',
+      'Instance segmentation for IRM microtubule time-lapses. An nnU-Net ResEnc-M network predicts the filament foreground, then a curvature-bounded instancer separates it into individual centerlines, resolving every crossing by one global matching of arc ends under a hard 0.25 rad/px bound. The network runs at native resolution. Trained entirely on synthetic frames — no human annotation at any stage. Cross-frame tracking for kymograph analysis is geometric. The only model in the platform producing polyline output.',
     i18nKey: 'microtubule',
     compatibleProjectTypes: ['microtubules'],
   },

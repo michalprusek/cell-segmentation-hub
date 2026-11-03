@@ -77,7 +77,7 @@ registry's `defaultThreshold` is the cut. **Six never read it**, and editing
 the registry changes nothing for them:
 
 - `microtubule` applies `prob_thr` from
-  `backend/segmentation/models/microtubule/params_sparse35.json` (0.98);
+  `backend/segmentation/models/microtubule/params_v16.json` (0.995);
 - `sperm` and `sperm_2part` apply their own cut-offs inside the model wrapper
   (mask 0.3, score 0.95);
 - `spheroid_disintegration` and `neurite_soma` decide by argmax and have no

@@ -550,7 +550,7 @@ def frap_targets(
     """Segment the IRM page, choose bleach spots, return them in image pixels.
 
     There is deliberately NO threshold parameter. The microtubule model applies its own
-    foreground cut of 0.98 from params_sparse35.json, and forwarding a user value would
+    foreground cut of 0.995 from params_v16.json, and forwarding a user value would
     cut a very confident foreground at 0.5 and flood the instancer with noise. A
     knob that is silently ignored is worse than no knob.
 

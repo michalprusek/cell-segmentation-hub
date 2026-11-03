@@ -21,7 +21,7 @@ the Node backend.
 | `api/frap_targets.py`       | FRAP target selection                                                                |
 | `ml/model_loader.py`        | The model catalogue, loading, caching and unloading                                  |
 | `models/`                   | One wrapper per model                                                                |
-| `models/microtubule/`       | The microtubule network (SPARSE35 ep040), its instancer and its parameters           |
+| `models/microtubule/`       | The microtubule networks (V16, SPARSE35), their instancers and parameters           |
 | `models/mt_measure.py`      | Band/ring rasterisation and ImageJ-convention statistics                             |
 | `models/kymobutler/`        | Vendored KymoButler (MIT) — the kymograph trajectory networks                        |
 | `weights/`                  | Checkpoints; not in the repository                                                   |
@@ -114,10 +114,10 @@ one blocks that thread, not the event loop.
 
 ## Microtubule specifics
 
-- **The microtubule model is IRM-only** and applies its own foreground cut of 0.98; the
+- **The microtubule model is IRM-only** and applies its own foreground cut of 0.995; the
   `/segment` route passes no threshold for it. Lowering the threshold does not
   help — see
-  [ML models](../reference/ml-models.md#microtubule--microtubule-sparse35-ep040) for the
+  [ML models](../reference/ml-models.md#microtubule--microtubule-v16-deb_s4-ep040) for the
   measurement that settled it.
 - **Tracking is geometric.** No embeddings; symmetric curve distance with
   normal-flow drift removal. There is **no hard gate** — `CURVE_SCALE_PX` is a
