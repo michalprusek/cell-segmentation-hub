@@ -269,6 +269,10 @@ async def test_segment_route_dispatches_neurite_soma_to_its_own_predictor():
         model="neurite_soma",
         threshold=0.5,
         detect_holes=True,
+        # Called directly, so FastAPI does not resolve these Form() defaults.
+        page=0,
+        max_pixels=None,
+        extra_channels=None,
         loader=_Loader(),
     )
 
