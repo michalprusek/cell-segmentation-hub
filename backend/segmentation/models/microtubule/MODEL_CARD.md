@@ -81,7 +81,21 @@ it; the previous image is also tagged `cell-segmentation-hub-ml:pre-mt-v16` for 
 
 ### 8b. V16 deployment record
 
-@DEPLOY@
+| step | result |
+|---|---|
+| checkpoint staged on cvat2, copied into `backend/segmentation/weights/` (uid 999) | ✅ 2026-11-03, sha256 `8fc22555…f73` verified on arrival and in the container, 560 307 978 B; SPARSE35 untouched beside it |
+| built on top of `feat/neurite-soma-merged` `cc783e5c` (a concurrent deployment), local branch `deploy/mt-v16-on-neurite`, merge `2833871f` | ✅ `make build-service` ml, backend, frontend; rollback images tagged `:pre-mt-v16` |
+| tests in the new image, with both real checkpoints | ✅ 157 passed, 0 skipped |
+| `scripts/verify_microtubule_model.py` in the image, fixture + 6 real VAL frames | ✅ ALL OK at default tolerances: every curve count equal, median 0.000 px, max 0.397 px. `--strict` fails by design here: reference from torch 2.5.1, image torch 2.6.0, map max \|Δp\| 0.036, 0 flips outside the float16 band |
+| recreate ml, backend, frontend, restart nginx | ✅ 2026-11-03 09:01 CET, queue empty; `/health` `production-healthy` |
+| container pinned to the commit (`md5sum` of wrapper, params, instancer, loader, `frap_select`) | ✅ 5 of 5 match `HEAD`; `spheroseg-essays` still on its 2026-10-06 image, `wrapper.py` md5 `375135db`, SPARSE35 |
+| through the real queue, e2e account, project `5b9f24b4…`, 6 VAL frames, same frames before and after | ✅ curve counts equal to the research reference on all six, `threshold_used` 0.995 stored; pooled F1 0.681 before, 0.758 after (5 of 6 frames up; a small check, not a benchmark) |
+| FRAP targets on the running service | ✅ 2 VAL frames, 6 and 1 spots |
+| `neurite_soma_merged` survived the merge | ✅ the concurrent deployment's expected 19 polygons (12 neurite, 2 soma, 5 internal) |
+| in-app Documentation and landing page, browser, signed out | ✅ `Microtubule (V16)`, 0.995, no page errors |
+| browser check signed in (editor, overlay) | ⬜ not done: the sign-in needs the test account's password in a tool call |
+
+The landing page's outlines (`src/components/landing/specimens.ts`) still predate this model, as they predated SPARSE35; regenerating them is open.
 
 ---
 
