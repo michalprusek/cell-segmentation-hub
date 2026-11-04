@@ -490,7 +490,8 @@ on each candidate link, so a filament is split the same way from frame to frame.
 real videos the share of centerline length that keeps one curve three frames later rose by +0.026
 (CI [+0.018, +0.034]; the same on all six seeds of the recipe), and tracks per filament fell from
 2.09 to 2.00. A frame that was
-edited, re-segmented in the editor, or lacks two neighbours keeps its per-frame curves. Numbers,
+edited, re-segmented in the editor, or lacks two neighbours segmented in the same pass keeps its
+per-frame curves. Numbers,
 conditions and cost: `backend/segmentation/models/microtubule/MODEL_CARD.md` §0.
 
 More in [Microtubule projects](../guides/project-types/microtubules.md).

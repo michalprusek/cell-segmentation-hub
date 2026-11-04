@@ -95,7 +95,9 @@ function noteAll(frames: Array<ReturnType<typeof frame>>, at = WRITTEN) {
 /** One form field of a call to the ML service, parsed. */
 function fieldOf(form: unknown, name: string): unknown {
   const text = (form as { getBuffer(): Buffer }).getBuffer().toString('latin1');
-  const m = new RegExp(`name="${name}"\\r\\n\\r\\n([^\\r]*)`).exec(text);
+  const m = new RegExp(
+    `name="${name}"; filename="${name}\\.json"\\r\\nContent-Type: application/json\\r\\n\\r\\n([^\\r]*)`
+  ).exec(text);
   return m ? JSON.parse(m[1]) : undefined;
 }
 
@@ -204,16 +206,53 @@ describe('runTemporalVote', () => {
     expect(axiosPost).not.toHaveBeenCalled();
   });
 
-  it('votes only the frames the queue noted', async () => {
-    const frames = [0, 1, 2, 3].map(i => frame(i));
+  it('votes only noted frames whose two neighbours were noted too', async () => {
+    const frames = [0, 1, 2, 3, 4].map(i => frame(i));
     imageFindMany.mockResolvedValue(frames);
-    noteFreshFrame('vid', 'img-2', null, WRITTEN);
+    for (const i of [1, 2, 3]) {
+      noteFreshFrame('vid', `img-${i}`, null, WRITTEN);
+    }
     axiosPost.mockResolvedValue(voted(true));
 
-    await runTemporalVote('vid');
+    const summary = await runTemporalVote('vid');
 
+    // 1 and 3 have an un-noted neighbour (0, 4), whose curves may already be voted ones
     expect(axiosPost).toHaveBeenCalledTimes(1);
     expect(sent(0).current).toEqual([[[12, 20], [32, 40]]]);
+    expect(summary?.skipped).toEqual({ neighbour_not_per_frame: 2 });
+  });
+
+  it('does not let an edited neighbour vote', async () => {
+    const edited = new Date('2026-11-04T20:05:00.000Z');
+    const frames = [frame(0), frame(1), frame(2, 'microtubule', edited), frame(3), frame(4)];
+    imageFindMany.mockResolvedValue(frames);
+    noteAll(frames);
+    axiosPost.mockResolvedValue(voted(true));
+
+    const summary = await runTemporalVote('vid');
+
+    // 1 and 3 would take 2's edited curves as a neighbour; 2 itself changed
+    expect(axiosPost).not.toHaveBeenCalled();
+    expect(summary?.skipped).toMatchObject({
+      neighbour_not_per_frame: 2,
+      changed_since_segmented: 1,
+    });
+  });
+
+  it('gives up after three failures in a row instead of waiting out every frame', async () => {
+    const frames = Array.from({ length: 12 }, (_, i) => frame(i));
+    imageFindMany.mockResolvedValue(frames);
+    noteAll(frames);
+    axiosPost.mockRejectedValue(
+      Object.assign(new Error('Internal Server Error'), {
+        response: { status: 500 },
+      })
+    );
+
+    const summary = await runTemporalVote('vid');
+
+    expect(axiosPost.mock.calls.length).toBeLessThanOrEqual(4);
+    expect(summary?.skipped.gave_up).toBeGreaterThanOrEqual(6);
   });
 
   it('skips a frame whose row changed after the queue wrote it', async () => {
@@ -301,7 +340,9 @@ describe('runTemporalVote', () => {
   it('reads the channel the queue segmented', async () => {
     const frames = [0, 1, 2].map(i => frame(i));
     imageFindMany.mockResolvedValue(frames);
+    noteFreshFrame('vid', 'img-0', '640_nm', WRITTEN);
     noteFreshFrame('vid', 'img-1', '640_nm', WRITTEN);
+    noteFreshFrame('vid', 'img-2', '640_nm', WRITTEN);
     axiosPost.mockResolvedValue(voted(false));
 
     await runTemporalVote('vid');

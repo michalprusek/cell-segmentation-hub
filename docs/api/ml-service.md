@@ -122,7 +122,8 @@ is meaningful for the five spheroid models only. The backend does not use it.
 
 Re-decodes frame t of a microtubule video with the vote of frames t-1 and t+1. Multipart: `file`
 (the frame, the same file its per-frame segmentation read) and `previous`, `current`, `following`,
-each the stored per-frame curves of one frame as JSON `[[[x, y], ...], ...]` in input pixels. The
+each the stored per-frame curves of one frame as JSON `[[[x, y], ...], ...]` in input pixels, sent as
+**file parts** (Starlette caps a non-file part at 1 MB, which a dense frame's curves can exceed). The
 neighbours are aligned to frame t by an exhaustive translation search, the map is recomputed, and L+H
 decodes it with the vote (`models/microtubule/instance/instancer_lh_vote.py`).
 
@@ -130,10 +131,12 @@ Response: `applied`, `reason`, `changed`, `polylines` (the voted curves in `/seg
 `decoder` (`lh_vote` when applied), `shift_previous`, `shift_next`, `model_used`, `threshold_used`,
 `image_size`. `applied` is `false`, and the caller must write nothing, for `reason` `arc_limit` (the
 frame falls back to `instance_a`) or `not_per_frame` (the recomputed per-frame curves differ from
-`current`: an edited frame, another channel's file, another model). 422 on curves that do not parse.
+`current`: an edited frame, another channel's file, another model) or `too_large` (over 36 Mpx,
+refused before any work). 422 on curves that do not parse.
 The alignment runs off the event loop; the inference shares `/segment`'s single slot and lock.
 Called by the backend's `services/tracking/temporalVote.ts`; **deploy ml before that backend**, which
-otherwise sees 404 and stops asking after the first frame.
+otherwise sees 404 and stops asking after the first frame; it also gives up after three failed
+calls in a row.
 
 ### `POST /api/v1/track`
 

@@ -168,9 +168,14 @@ def _png():
     return buf.getvalue()
 
 
+def _part(name, text):
+    return UploadFile(filename=f"{name}.json", file=io.BytesIO(text.encode("utf-8")))
+
+
 def _call(loader, current="[[[1, 1], [5, 5]]]", previous="[]", following="[]"):
     upload = UploadFile(filename="frame.png", file=io.BytesIO(_png()))
-    return asyncio.run(routes.microtubule_temporal_vote(upload, previous, current, following, loader))
+    return asyncio.run(routes.microtubule_temporal_vote(
+        upload, _part("previous", previous), _part("current", current), _part("following", following), loader))
 
 
 def test_route_writes_nothing_for_an_edited_frame():
@@ -198,3 +203,44 @@ def test_route_answers_422_before_any_inference_on_malformed_curves():
         _call(loader, following="{}")
     assert err.value.status_code == 422 and "following" in str(err.value.detail)
     assert loader.calls == 0
+
+
+
+def test_route_refuses_a_frame_beyond_its_size_bound_before_any_work(monkeypatch):
+    loader = _VoteLoader([], [])
+    monkeypatch.setattr(routes, "VOTE_MAX_PIXELS", 63)  # the test frame is 8 x 8
+    out = _call(loader)
+    assert (out["applied"], out["reason"], out["polylines"]) == (False, "too_large", [])
+    assert loader.calls == 0
+
+
+def _multipart(name, payload, as_file):
+    head = f'Content-Disposition: form-data; name="{name}"'
+    if as_file:
+        head += f'; filename="{name}.json"\r\nContent-Type: application/json'
+    return (f"--B\r\n{head}\r\n\r\n").encode() + payload + b"\r\n--B--\r\n"
+
+
+def _parse_form(body):
+    from starlette.requests import Request
+
+    scope = {"type": "http", "method": "POST", "headers": [(b"content-type", b"multipart/form-data; boundary=B")]}
+
+    async def receive():
+        return {"type": "http.request", "body": body, "more_body": False}
+
+    async def go():
+        form = await Request(scope, receive).form()
+        value = form["previous"]
+        return (await value.read()) if hasattr(value, "read") else value.encode()
+
+    return asyncio.run(go())
+
+
+def test_dense_curves_need_file_parts_which_is_how_the_route_takes_them():
+    # Starlette caps a non-FILE part at 1 MB; a dense frame's full-precision curves can exceed it.
+    big = json.dumps([[[i + 0.123456789012, 1.5], [i + 1.987654321098, 2.5]] for i in range(40000)]).encode()
+    assert len(big) > 1024 * 1024
+    assert _parse_form(_multipart("previous", big, as_file=True)) == big
+    with pytest.raises(Exception, match="(?i)maximum size|exceeded"):
+        _parse_form(_multipart("previous", big, as_file=False))

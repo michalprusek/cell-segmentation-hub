@@ -533,6 +533,11 @@ async def segment_image(
             logger, f"Segmentation failed after {processing_time:.2f}s", e
         )
 
+#: Largest frame the temporal vote accepts, px. About 9x the largest frame it was measured on
+#: (4.2 Mpx); beyond it each of the alignment's two float64 distance maps passes 0.3 GB.
+VOTE_MAX_PIXELS = 36_000_000
+
+
 def _dispatch_vote(loader, image, neighbours_rc):
     """`predict_microtubule_voted`, holding the loader-wide lock, on the same
     single-slot executor as `/segment`: a vote is one more inference."""
@@ -545,9 +550,11 @@ def _dispatch_vote(loader, image, neighbours_rc):
 @router.post("/microtubule/temporal-vote")
 async def microtubule_temporal_vote(
     file: UploadFile = File(..., description="Frame t: the file its per-frame segmentation read"),
-    previous: str = Form(..., description="Frame t-1's stored per-frame curves, JSON [[[x, y], ...], ...], input px"),
-    current: str = Form(..., description="Frame t's stored per-frame curves, same shape"),
-    following: str = Form(..., description="Frame t+1's stored per-frame curves, same shape"),
+    # File parts, not form fields: Starlette caps a non-file part at 1 MB, and the
+    # full-precision curves of a dense frame can exceed that.
+    previous: UploadFile = File(..., description="Frame t-1's stored per-frame curves, JSON [[[x, y], ...], ...], input px"),
+    current: UploadFile = File(..., description="Frame t's stored per-frame curves, same shape"),
+    following: UploadFile = File(..., description="Frame t+1's stored per-frame curves, same shape"),
     loader = Depends(get_model_loader),
 ):
     """Re-decode frame t of a microtubule video with the vote of frames t-1 and t+1.
@@ -561,7 +568,9 @@ async def microtubule_temporal_vote(
     limit (`reason` "arc_limit") or when this model's per-frame curves for the image differ from
     `current` ("not_per_frame": an edited frame, another channel's file, another model).
     `changed` says whether the vote moved anything; `polylines` are the voted curves in
-    `/segment`'s shape.
+    `/segment`'s shape. A frame over `VOTE_MAX_PIXELS` is refused before any work
+    ("too_large"): the alignment allocates frame-sized distance maps, and the vote was measured
+    on frames of at most 4.2 Mpx.
     """
     start_time = time.time()
     try:
@@ -571,10 +580,20 @@ async def microtubule_temporal_vote(
                 detail="Invalid image file. Supported formats: PNG, JPG, JPEG, TIFF, TIF, BMP",
             )
         try:
-            curves = [parse_curves(raw, name) for name, raw in (("previous", previous), ("current", current), ("following", following))]
-        except ValueError as exc:
+            curves = [
+                parse_curves((await part.read()).decode("utf-8"), name)
+                for name, part in (("previous", previous), ("current", current), ("following", following))
+            ]
+        except (ValueError, UnicodeDecodeError) as exc:
             raise HTTPException(status_code=422, detail=str(exc))
         image, _ = open_image_page(await file.read(), 0)
+        if image.size[0] * image.size[1] > VOTE_MAX_PIXELS:
+            return {
+                "success": True, "applied": False, "reason": "too_large", "changed": False,
+                "polylines": [], "polygons": [], "decoder": None,
+                "image_size": {"width": image.size[0], "height": image.size[1]},
+                "processing_time": time.time() - start_time,
+            }
         loop = asyncio.get_running_loop()
         # The alignment is CPU work on the caller's own curves, about 1 s per shift on a dense
         # frame (an exhaustive search): off the event loop, and outside the inference slot so

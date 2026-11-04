@@ -148,8 +148,9 @@ Just before it, every frame segmented from the project page is decoded **once
 more with the curves of its two neighbouring frames**, so that a filament is
 split into the same pieces from frame to frame and its track breaks less often.
 You may see a frame's curves change once, when the last frame of the video
-finishes. Left as they are: the first and last frame, a frame without two
-segmented neighbours, and any frame you edited or re-segmented in the editor.
+finishes. Left as they are: the first and last frame, a frame whose two
+neighbours were not segmented in the same run, and any frame you edited or
+re-segmented in the editor.
 Each interior frame costs one more inference, so on a long video the colours
 appear later than the curves.
 

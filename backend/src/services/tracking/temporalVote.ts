@@ -25,8 +25,11 @@
  *   - The ML route recomputes the per-frame curves and refuses (`applied:
  *     false`) when they differ from the stored ones: an edited frame, another
  *     channel's file, another model.
- *   - The first and last frame, a frame without both neighbours, and a frame
- *     beyond the L+H arc limit keep their per-frame curves.
+ *   - The first and last frame, a frame whose neighbours were not both
+ *     segmented in this pass and left untouched since (so their curves are
+ *     per-frame, as measured), and a frame beyond the L+H arc limit keep their
+ *     per-frame curves. Re-queueing a single failed frame therefore votes
+ *     nothing: its neighbours already carry voted curves.
  *
  * Neighbours are read once, before any write: the vote of every frame uses the
  * per-frame curves of its neighbours, one pass, as measured.
@@ -60,6 +63,11 @@ const _fresh = new Map<string, Map<string, FreshFrame>>();
 /** Two requests in flight: the route aligns one frame's neighbours on the CPU
  *  while the card runs another's map. More would only queue on the ML side. */
 const VOTE_CONCURRENCY = 2;
+
+/** Consecutive failed calls after which the pass gives up: a route that fails
+ *  every frame (a rolled-back model, a wedged service) must not hold the
+ *  tracker for a full timeout per frame. */
+const MAX_CONSECUTIVE_ERRORS = 3;
 
 /** Note a frame the queue has just segmented with the microtubule model. */
 export function noteFreshFrame(
@@ -124,9 +132,12 @@ function storedCurves(segmentation: {
 let _thumbnails: Promise<ThumbnailManager> | null = null;
 function thumbnails(): Promise<ThumbnailManager> {
   if (!_thumbnails) {
-    _thumbnails = import('../thumbnailManager').then(
-      m => new m.ThumbnailManager(prisma)
-    );
+    _thumbnails = import('../thumbnailManager')
+      .then(m => new m.ThumbnailManager(prisma))
+      .catch(err => {
+        _thumbnails = null; // try again next time rather than never
+        throw err;
+      });
   }
   return _thumbnails;
 }
@@ -185,21 +196,36 @@ export async function runTemporalVote(
         },
       },
     });
-    // Read every frame's curves BEFORE any write: one pass, neighbours per-frame.
+    // Read every frame's curves BEFORE any write: one pass. A frame's curves
+    // count as per-frame only if the queue wrote them in this pass and nothing
+    // has touched the row since; only those may vote.
     const curves = new Map<number, Curves | null>();
+    const fresh = new Set<number>();
     for (const f of frames) {
       if (f.frameIndex != null && f.segmentation) {
         curves.set(f.frameIndex, storedCurves(f.segmentation));
+        const note = noted.get(f.id);
+        if (
+          note &&
+          f.segmentation.updatedAt.getTime() === note.segmentationUpdatedAt
+        ) {
+          fresh.add(f.frameIndex);
+        }
       }
     }
     const jobs = frames.filter(f => noted.has(f.id));
     let routeMissing = false;
+    let consecutiveErrors = 0;
     await mapWithConcurrency(jobs, VOTE_CONCURRENCY, async f => {
       const note = noted.get(f.id) as FreshFrame;
       const seg = f.segmentation;
       const t = f.frameIndex;
       if (routeMissing) {
         skip('route_missing');
+        return;
+      }
+      if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+        skip('gave_up');
         return;
       }
       if (!seg || t == null || seg.model !== 'microtubule') {
@@ -217,6 +243,10 @@ export async function runTemporalVote(
         skip('no_two_neighbours');
         return;
       }
+      if (!fresh.has(t - 1) || !fresh.has(t + 1)) {
+        skip('neighbour_not_per_frame');
+        return;
+      }
       try {
         const buffer = await getStorageProvider().getBuffer(
           resolveChannelPath(f.originalPath, note.channel)
@@ -226,9 +256,18 @@ export async function runTemporalVote(
           filename: safeMlFilename(f),
           contentType: f.mimeType || 'image/png',
         });
-        form.append('previous', JSON.stringify(previous));
-        form.append('current', JSON.stringify(current));
-        form.append('following', JSON.stringify(following));
+        // File parts, not fields: Starlette caps a non-file part at 1 MB,
+        // which the full-precision curves of a dense frame can exceed.
+        for (const [name, value] of [
+          ['previous', previous],
+          ['current', current],
+          ['following', following],
+        ] as const) {
+          form.append(name, Buffer.from(JSON.stringify(value)), {
+            filename: `${name}.json`,
+            contentType: 'application/json',
+          });
+        }
         summary.requested++;
         const res = await axios.post(
           `${config.SEGMENTATION_SERVICE_URL}/api/v1/microtubule/temporal-vote`,
@@ -240,6 +279,7 @@ export async function runTemporalVote(
             timeout: segmentationTimeoutMs(f.width, f.height),
           }
         );
+        consecutiveErrors = 0;
         const out = res.data ?? {};
         if (!out.applied) {
           skip(String(out.reason ?? 'not_applied'));
@@ -279,6 +319,7 @@ export async function runTemporalVote(
           return;
         }
         skip('error');
+        consecutiveErrors++;
         logger.warn(
           `Temporal vote: frame ${f.id} keeps its per-frame curves: ${(err as Error).message}`,
           'TemporalVote',

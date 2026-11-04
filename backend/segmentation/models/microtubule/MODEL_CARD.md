@@ -96,9 +96,11 @@ aligned by an exhaustive translation search (`api/mt_geometry_cost.best_shift`, 
 The declared line was +0.03, missed by 0.004; the owner accepted it after the read (2026-11-04), as
 it needs no training and costs nothing on any guard. Single frames and Essays are unaffected.
 
-What it touches: microtubule video frames the queue segmented in the current pass, with both
-neighbours segmented by this model. First and last frames, frames beyond the L+H arc limit, frames
-edited or re-segmented in the editor are left as they are; the ML route recomputes the per-frame
+What it touches: microtubule video frames the queue segmented in the current pass whose two
+neighbours were also segmented in that pass and left untouched since, so that every vote comes from
+per-frame curves as measured. First and last frames, frames beyond the L+H arc limit or over 36 Mpx,
+frames edited or re-segmented in the editor, and a frame re-queued on its own (its neighbours already
+carry voted curves) are left as they are; the ML route recomputes the per-frame
 curves and refuses a frame whose stored curves differ. Identity: on 211 of 211 interior frames of the
 12 real containers the hub code reproduces the research path bit for bit, and its lam-0 curves equal
 the stored per-frame curves on all 211 (`tests/fixtures/mt_vote` pins one synthetic triplet in CI).
