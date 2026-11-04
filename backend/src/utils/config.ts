@@ -102,6 +102,10 @@ const configSchema = z
         ? z.string().url()
         : z.string().url().default('http://localhost:8000'),
 
+    // Microtubule temporal vote before tracking (services/tracking/temporalVote.ts).
+    // `off` keeps every video frame's per-frame curves, without a rebuild.
+    MT_TEMPORAL_VOTE: z.enum(['on', 'off']).default('on'),
+
     // Automated Essays worker (batch MT assay of ND2 wells). Always has a
     // default so a missing var degrades the essays feature only, never the boot.
     ESSAYS_SERVICE_URL: z.string().url().default('http://essays:8000'),

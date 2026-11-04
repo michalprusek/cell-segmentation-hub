@@ -46,6 +46,7 @@ import {
 import { projectStaticChannelResult } from './staticChannelProjectionService';
 import { resolveSegmentationSource } from './video/types';
 import { serialiseImageMetricsForStorage } from './metrics/rasterImageMetrics';
+import { toDbPolygon, toStoredPolygon } from '../utils/storedPolygon';
 
 export interface SegmentationPoint {
   x: number;
@@ -107,27 +108,6 @@ export interface SegmentationPolygon {
  * editor for every pre-existing microtubule video.
  */
 export const EDITOR_OMITTED_POLYGON_FIELDS = ['_embedding'] as const;
-
-/**
- * Build the DB-storage shape from an internal/validated polygon: spread every
- * field through, then perform the one genuine transform — collapse the API's
- * `parentIds[]` to the DB's scalar `parent_id`. Editor-only fields are NOT
- * stripped here (they are server-side state that must persist); the serve
- * boundary handles omission. Operates on already-validated data, so a spread
- * is safe (the untrusted-input whitelist lives in the validator).
- */
-function toDbPolygon(
-  polygon: SegmentationPolygon & Record<string, unknown>
-): Record<string, unknown> {
-  const { parentIds, ...rest } = polygon;
-  const dbPolygon: Record<string, unknown> = { ...rest };
-  // parentIds[] (API) -> parent_id (DB scalar). Preserve any pre-existing
-  // scalar parent_id when no array form is present.
-  if (parentIds && parentIds.length > 0) {
-    dbPolygon.parent_id = parentIds[0];
-  }
-  return dbPolygon;
-}
 
 /**
  * Build the API/wire response shape from a stored/validated polygon: spread
@@ -1396,13 +1376,11 @@ export class SegmentationService {
           polygon.id = `polygon_${index + 1}`;
         }
 
-        const dbPolygon = toDbPolygon(
+        // toStoredPolygon also preserves the historical defaults of the two
+        // numeric fields; the temporal vote stores through the same helper.
+        return toStoredPolygon(
           polygon as SegmentationPolygon & Record<string, unknown>
         );
-        // Preserve historical defaults for the two numeric fields.
-        dbPolygon.area = polygon.area || 0;
-        dbPolygon.confidence = polygon.confidence || 0.8;
-        return dbPolygon;
       });
 
       // Validate parent_id references

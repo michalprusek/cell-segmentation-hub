@@ -43,21 +43,21 @@ incompatible pair with a 400 even if you post it directly.
 
 ## The catalogue at a glance
 
-| Model id                  | Display name                       | Project type        | Output          | Threshold (registry value)                                  | Typical time / image          | Size bucket |
-| ------------------------- | ---------------------------------- | ------------------- | --------------- | ----------------------------------------------------------- | ----------------------------- | ----------- |
-| `hrnet`                   | HRNet (Balanced)                   | `spheroid`          | Closed polygons | 0.5                                                         | ~0.20 s (p95 0.31 s)          | small       |
-| `cbam_resunet`            | CBAM-ResUNet (Precise)             | `spheroid`          | Closed polygons | 0.5                                                         | ~0.38 s (p95 0.48 s)          | medium      |
-| `unet_spherohq`           | UNet (Fastest)                     | `spheroid`          | Closed polygons | 0.5                                                         | ~0.18 s (p95 0.29 s)          | small       |
-| `segformer`               | SegFormer                          | `spheroid`          | Closed polygons | 0.5                                                         | ~0.20 s                       | small       |
-| `mamba_unet`              | Mamba-UNet                         | `spheroid`          | Closed polygons | 0.5                                                         | ~0.24 s                       | large       |
-| `spheroid_disintegration` | Spheroid Disintegration            | `spheroid_invasive` | Core + corona   | 0.5, **not read** (argmax)                                  | ~0.70 s                       | medium      |
-| `wound`                   | Wound Healing (Scratch Assay)      | `wound`             | Closed polygons | 0.5                                                         | ~0.03 s                       | medium      |
-| `sperm`                   | Sperm Morphology                   | `sperm`             | Part polylines  | 0.5, **not read** (own cut-offs: mask 0.3, score 0.95)      | ~0.30 s                       | medium      |
-| `sperm_2part`             | Sperm Morphology (head + tail)     | `sperm`             | Part polylines  | 0.5, **not read** (own cut-offs: mask 0.3, score 0.95)      | ~0.30 s (copied from `sperm`) | medium      |
-| `microtubule`             | Microtubule (ResEnc-M + instancer) | `microtubules`      | **Polylines**   | 0.98, **not read** (`prob_thr` 0.995 in its own params file) | ~2 s at 2048² (p95 ~4 s)             | large       |
-| `microcapsule`            | Microcapsule                       | `microcapsule`      | Closed polygons | 0.5                                                         | ~0.30 s                       | small       |
-| `neurite_soma`            | Neurite / Soma                     | `neurite`           | Closed polygons | 0.5, **not read** (argmax)                                  | ~12 s at 2048²                | large       |
-| `neurite_soma_classical`  | Neurite / Soma (classical)         | `neurite`           | Closed polygons | 0.5, **not read** (cut relative to the image's own noise)   | ~1.3 s at 1024², CPU          | small       |
+| Model id                  | Display name                       | Project type        | Output          | Threshold (registry value)                                   | Typical time / image          | Size bucket |
+| ------------------------- | ---------------------------------- | ------------------- | --------------- | ------------------------------------------------------------ | ----------------------------- | ----------- |
+| `hrnet`                   | HRNet (Balanced)                   | `spheroid`          | Closed polygons | 0.5                                                          | ~0.20 s (p95 0.31 s)          | small       |
+| `cbam_resunet`            | CBAM-ResUNet (Precise)             | `spheroid`          | Closed polygons | 0.5                                                          | ~0.38 s (p95 0.48 s)          | medium      |
+| `unet_spherohq`           | UNet (Fastest)                     | `spheroid`          | Closed polygons | 0.5                                                          | ~0.18 s (p95 0.29 s)          | small       |
+| `segformer`               | SegFormer                          | `spheroid`          | Closed polygons | 0.5                                                          | ~0.20 s                       | small       |
+| `mamba_unet`              | Mamba-UNet                         | `spheroid`          | Closed polygons | 0.5                                                          | ~0.24 s                       | large       |
+| `spheroid_disintegration` | Spheroid Disintegration            | `spheroid_invasive` | Core + corona   | 0.5, **not read** (argmax)                                   | ~0.70 s                       | medium      |
+| `wound`                   | Wound Healing (Scratch Assay)      | `wound`             | Closed polygons | 0.5                                                          | ~0.03 s                       | medium      |
+| `sperm`                   | Sperm Morphology                   | `sperm`             | Part polylines  | 0.5, **not read** (own cut-offs: mask 0.3, score 0.95)       | ~0.30 s                       | medium      |
+| `sperm_2part`             | Sperm Morphology (head + tail)     | `sperm`             | Part polylines  | 0.5, **not read** (own cut-offs: mask 0.3, score 0.95)       | ~0.30 s (copied from `sperm`) | medium      |
+| `microtubule`             | Microtubule (ResEnc-M + instancer) | `microtubules`      | **Polylines**   | 0.98, **not read** (`prob_thr` 0.995 in its own params file) | ~2 s at 2048² (p95 ~4 s)      | large       |
+| `microcapsule`            | Microcapsule                       | `microcapsule`      | Closed polygons | 0.5                                                          | ~0.30 s                       | small       |
+| `neurite_soma`            | Neurite / Soma                     | `neurite`           | Closed polygons | 0.5, **not read** (argmax)                                   | ~12 s at 2048²                | large       |
+| `neurite_soma_classical`  | Neurite / Soma (classical)         | `neurite`           | Closed polygons | 0.5, **not read** (cut relative to the image's own noise)    | ~1.3 s at 1024², CPU          | small       |
 
 The threshold column is `defaultThreshold` from the frontend registry — the
 value the request carries. **Six models never read it** (`threshold: null` in
@@ -480,6 +480,18 @@ The request body still accepts `embedding` and `emb_template_alpha` fields —
 they are accepted and ignored, because rows written by the previous model
 version still carry an `_embedding` and strict validation would otherwise
 reject them.
+
+### Video frames get a second decode with their neighbours' vote
+
+Before the tracker runs on a video container segmented through the queue, the backend sends each
+interior frame back to `POST /api/v1/microtubule/temporal-vote` with the stored curves of frames
+t-1 and t+1. The route recomputes the map and decodes it with L+H plus a vote of the two neighbours
+on each candidate link, so a filament is split the same way from frame to frame. On 12 unlabelled
+real videos the share of centerline length that keeps one curve three frames later rose by +0.026
+(CI [+0.018, +0.034]; the same on all six seeds of the recipe), and tracks per filament fell from
+2.09 to 2.00. A frame that was
+edited, re-segmented in the editor, or lacks two neighbours keeps its per-frame curves. Numbers,
+conditions and cost: `backend/segmentation/models/microtubule/MODEL_CARD.md` §0.
 
 More in [Microtubule projects](../guides/project-types/microtubules.md).
 

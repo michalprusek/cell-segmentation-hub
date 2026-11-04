@@ -62,6 +62,10 @@ vi.mock('../../utils/config', () => ({
 vi.mock('../tracking/trackerService', () => ({
   scheduleTrackingForContainer: vi.fn(),
 }));
+vi.mock('../tracking/temporalVote', () => ({ noteFreshFrame: vi.fn() }));
+vi.mock('../staticChannelProjectionService', () => ({
+  projectStaticChannelResult: vi.fn(),
+}));
 
 vi.mock('../../utils/logger');
 
@@ -125,6 +129,9 @@ const wsServiceMock = {
 };
 
 import { QueueService } from '../queueService';
+import { scheduleTrackingForContainer } from '../tracking/trackerService';
+import { noteFreshFrame } from '../tracking/temporalVote';
+import { projectStaticChannelResult } from '../staticChannelProjectionService';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 const resetSingleton = () => {
@@ -1106,6 +1113,97 @@ describe('processBatch', () => {
 // processing" the user reported. They are 2-item batches on purpose: the
 // stalls all come from one item's fate leaking into another's.
 // ═══════════════════════════════════════════════════════════════════════════
+
+describe('processBatch — a microtubule video frame is noted for the temporal vote', () => {
+  const WRITTEN = new Date('2026-11-04T20:00:00.000Z');
+
+  const primeVideoFrame = (item: SegmentationQueue) => {
+    imageServiceMock.getImageById.mockResolvedValueOnce({
+      id: 'img-1',
+      width: 100,
+      height: 100,
+    });
+    prismaMock.segmentationQueue.updateMany.mockResolvedValueOnce({ count: 1 });
+    prismaMock.image.updateMany.mockResolvedValueOnce({ count: 1 });
+    prismaMock.segmentationQueue.count.mockResolvedValueOnce(0);
+    segmentationServiceMock.requestSegmentation.mockResolvedValueOnce({
+      polygons: [],
+      polylines: [{ points: [] }],
+      confidence: 1,
+      processing_time: 150,
+      image_size: { width: 100, height: 100 },
+    });
+    segmentationServiceMock.saveSegmentationResults.mockResolvedValueOnce(
+      undefined
+    );
+    imageServiceMock.updateSegmentationStatus.mockResolvedValueOnce(undefined);
+    prismaMock.segmentationQueue.delete.mockResolvedValueOnce(item);
+    prismaMock.image.findUnique
+      .mockResolvedValueOnce({
+        parentVideoId: 'vid-1',
+        segmentation: { updatedAt: WRITTEN },
+      })
+      .mockResolvedValueOnce({
+        project: { id: 'project-id', type: 'microtubules' },
+      });
+    prismaMock.segmentationQueue.count
+      .mockResolvedValueOnce(0)
+      .mockResolvedValueOnce(0);
+  };
+
+  beforeEach(() => {
+    vi.mocked(noteFreshFrame).mockReset();
+    vi.mocked(scheduleTrackingForContainer).mockReset();
+    vi.mocked(projectStaticChannelResult).mockReset();
+  });
+
+  it('notes the frame with its channel and row timestamp, then schedules tracking', async () => {
+    const item = makeQueueEntry({ model: 'microtubule', channel: '640_nm' });
+    primeVideoFrame(item);
+    vi.mocked(projectStaticChannelResult).mockResolvedValue({
+      applied: false,
+    } as never);
+
+    await service.processBatch([item]);
+
+    expect(noteFreshFrame).toHaveBeenCalledWith(
+      'vid-1',
+      'img-1',
+      '640_nm',
+      WRITTEN
+    );
+    expect(scheduleTrackingForContainer).toHaveBeenCalledWith('vid-1');
+    expect(vi.mocked(noteFreshFrame).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(scheduleTrackingForContainer).mock.invocationCallOrder[0]
+    );
+  });
+
+  it('does not note a frame another model segmented', async () => {
+    const item = makeQueueEntry({ model: 'hrnet' });
+    primeVideoFrame(item);
+    vi.mocked(projectStaticChannelResult).mockResolvedValue({
+      applied: false,
+    } as never);
+
+    await service.processBatch([item]);
+
+    expect(noteFreshFrame).not.toHaveBeenCalled();
+    expect(scheduleTrackingForContainer).toHaveBeenCalledWith('vid-1');
+  });
+
+  it('notes nothing when a static channel was projected', async () => {
+    const item = makeQueueEntry({ model: 'microtubule' });
+    primeVideoFrame(item);
+    vi.mocked(projectStaticChannelResult).mockResolvedValue({
+      applied: true,
+    } as never);
+
+    await service.processBatch([item]);
+
+    expect(noteFreshFrame).not.toHaveBeenCalled();
+    expect(scheduleTrackingForContainer).not.toHaveBeenCalled();
+  });
+});
 
 describe("processBatch — nothing may stall in 'processing'", () => {
   const item1 = () => makeQueueEntry({ id: 'qe-1', imageId: 'img-1' });

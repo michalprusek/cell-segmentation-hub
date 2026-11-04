@@ -1,0 +1,29 @@
+{
+ "clip": "gliding_00",
+ "clip_seed_rule": "build_clips.py: 20261104 + 1000 * regime index + i",
+ "frames": [
+  4,
+  5,
+  6
+ ],
+ "png_scale": 1.0,
+ "ckpt": "/data2/prusek/mt_work/runs/ult/deploy/gate/weights/microtubule_v16_deb_s4_ep040.pth",
+ "ckpt_sha256": "8fc22555737b2054f89c73db417314e5f4f89be0d4514bc60c6993508ec42f73",
+ "thr": 0.995,
+ "polyline_eps_px": 0.3,
+ "vote_lam": 1.0,
+ "moved_curves": 4,
+ "n_per_frame": 40,
+ "n_voted": 39,
+ "negated_shift_differs": true,
+ "transposed_differs": true,
+ "sources": {
+  "lh_temporal.py": "64a32a88c059e7b3d7b1bc2c34754c7ad2d7bd3b0d9f1d69a8f37c6a6ca0783f",
+  "griddrift.py": "3039ac59fd68d37c9eb7d9caa1014acc3970a2db62207d834a5d193ae445b842",
+  "mt_geometry_cost.py": "7eb73cd0aafe6b22d5f53db69c64d3713411ea5ee71354a8eb2623e8d5f1f2b3",
+  "wrapper.py": "1f257683a09c5a9e8d627b59178c427b13485cd4d15a6bd2ef3ab175c1769f63",
+  "instancer_lh.py": "34636632d4c9280434fe7c41368dbfacfca0ebdd8e747da110553dbc1b81cb57",
+  "params_v16.json": "6a6f85b6f196b459ea754baa6f9794252d62b353a68d516feb7edb9e59831636"
+ },
+ "frame_png_sha256": "483d11b33a5cf70190b83cd29731412296c96eb84cc576eb937c3da38fef760b"
+}

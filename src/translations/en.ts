@@ -1860,7 +1860,7 @@ export default {
         addChannel:
           'Add channel: attach another channel to selected frames afterwards, either one image stamped onto every frame or a video paired frame by frame.',
         tracking:
-          'Cross-frame tracking runs automatically once every frame is finished, giving each filament a stable identity and colour.',
+          'Cross-frame tracking runs automatically once every frame is finished, giving each filament a stable identity and colour. Before it runs, each frame segmented from the project page is decoded once more with the curves of its two neighbouring frames, so a filament is split the same way from frame to frame; a frame you have edited, or re-segmented in the editor, is left as it is.',
       },
     },
 

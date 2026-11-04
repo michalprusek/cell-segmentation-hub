@@ -23,13 +23,17 @@ const {
   prismaTransaction,
   axiosPostMock,
   loggerErrorMock,
+  runTemporalVoteMock,
 } = vi.hoisted(() => ({
   prismaImageFindMany: vi.fn(),
   prismaSegmentationUpdate: vi.fn(),
   prismaTransaction: vi.fn(),
   axiosPostMock: vi.fn(),
   loggerErrorMock: vi.fn(),
+  runTemporalVoteMock: vi.fn(),
 }));
+
+vi.mock('../temporalVote', () => ({ runTemporalVote: runTemporalVoteMock }));
 
 vi.mock('../../../db/prismaClient', () => ({
   prisma: {
@@ -476,5 +480,94 @@ describe('trackerTimeoutMs', () => {
   it('caps a runaway job so one call cannot hold a connection for ever', async () => {
     const { trackerTimeoutMs } = await import('../trackerService');
     expect(trackerTimeoutMs(frames(new Array(10_000).fill(500)))).toBe(15 * 60_000);
+  });
+});
+
+describe('trackerService: the temporal vote runs first, in the same pass', () => {
+  const oneFrame = [
+    {
+      id: 'img-0',
+      frameIndex: 0,
+      segmentation: {
+        id: 'seg-0',
+        imageId: 'img-0',
+        polygons: JSON.stringify([
+          {
+            id: 'p0',
+            geometry: 'polyline',
+            points: [
+              { x: 1, y: 1 },
+              { x: 2, y: 2 },
+            ],
+          },
+        ]),
+      },
+    },
+  ];
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    prismaTransaction.mockImplementation(async (cb: unknown) =>
+      typeof cb === 'function'
+        ? cb({ segmentation: { update: prismaSegmentationUpdate } })
+        : undefined
+    );
+  });
+
+  it('votes before it reads the polygons it tracks', async () => {
+    const order: string[] = [];
+    runTemporalVoteMock.mockImplementation(async () => {
+      order.push('vote');
+      return null;
+    });
+    prismaImageFindMany.mockImplementation(async ({ select }) => {
+      if (select?.segmentationStatus) {
+        return [{ segmentationStatus: 'segmented' }];
+      }
+      order.push('read');
+      return oneFrame;
+    });
+    axiosPostMock.mockImplementation(async () => {
+      order.push('track');
+      return { data: { assignments: { '0::p0': 'track-A' } } };
+    });
+
+    await runTrackingForContainer('vid-vote');
+
+    expect(runTemporalVoteMock).toHaveBeenCalledWith('vid-vote');
+    expect(order).toEqual(['vote', 'read', 'track']);
+  });
+
+  it('still tracks when the vote throws', async () => {
+    runTemporalVoteMock.mockRejectedValue(new Error('bug in the vote'));
+    prismaImageFindMany.mockImplementation(async ({ select }) =>
+      select?.segmentationStatus
+        ? [{ segmentationStatus: 'segmented' }]
+        : oneFrame
+    );
+    axiosPostMock.mockResolvedValue({
+      data: { assignments: { '0::p0': 'track-A' } },
+    });
+
+    await runTrackingForContainer('vid-vote-throws');
+
+    expect(axiosPostMock).toHaveBeenCalledTimes(1);
+    expect(loggerErrorMock).toHaveBeenCalledWith(
+      expect.stringContaining('Temporal vote threw'),
+      expect.any(Error),
+      'TrackerService'
+    );
+  });
+
+  it('does not vote while a frame is still being segmented', async () => {
+    prismaImageFindMany.mockResolvedValue([
+      { segmentationStatus: 'segmented' },
+      { segmentationStatus: 'processing' },
+    ]);
+
+    await runTrackingForContainer('vid-partial');
+
+    expect(runTemporalVoteMock).not.toHaveBeenCalled();
+    expect(axiosPostMock).not.toHaveBeenCalled();
   });
 });

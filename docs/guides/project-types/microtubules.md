@@ -144,6 +144,15 @@ Tracking runs **automatically** once every frame of a container reaches a final
 state. It is fire-and-forget: a timeout is logged and produces no assignments,
 and a partial write-back can leave a container half-tracked.
 
+Just before it, every frame segmented from the project page is decoded **once
+more with the curves of its two neighbouring frames**, so that a filament is
+split into the same pieces from frame to frame and its track breaks less often.
+You may see a frame's curves change once, when the last frame of the video
+finishes. Left as they are: the first and last frame, a frame without two
+segmented neighbours, and any frame you edited or re-segmented in the editor.
+Each interior frame costs one more inference, so on a long video the colours
+appear later than the curves.
+
 **If some frames have consistent colours and others do not, the tracker needs
 re-running** — that is not a model failure.
 

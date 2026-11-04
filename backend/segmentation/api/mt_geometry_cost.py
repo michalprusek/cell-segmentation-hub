@@ -24,6 +24,7 @@ from __future__ import annotations
 from typing import Optional, Sequence
 
 import numpy as np
+from scipy import ndimage as ndi
 from scipy.spatial import cKDTree
 
 #: Scale at which the curve-to-curve distance saturates the cost term, px.
@@ -243,3 +244,75 @@ def estimate_drift(
     # motion along the unconstrained direction.
     sol, *_ = np.linalg.lstsq(A, y, rcond=None)
     return np.asarray(sol, dtype=float)
+
+
+#: Overlap tolerance of :func:`best_shift`, native px: the benchmark's 5 px at
+#: its 1.5x scale.
+SHIFT_TOL: float = 5 / 1.5
+
+#: Largest translation :func:`best_shift` searches, px per axis.
+SHIFT_RANGE: float = 60.0
+
+
+def _dt(P, lo, shape):
+    r = np.ones(shape, bool); q = np.rint(P - lo).astype(int)
+    r[q[:, 0], q[:, 1]] = False
+    return ndi.distance_transform_edt(r)
+
+
+def best_shift(A, B, tol=SHIFT_TOL, R=SHIFT_RANGE):
+    """Translation t that best lays point set A onto point set B, by exhaustive search.
+
+    Maximises the symmetric overlap at ``tol`` on distance transforms (A + t
+    against B, B - t against A): a 2 px grid over +-R, then a 0.5 px grid
+    around its winner. Ties go to the smallest shift, so an empty field stays
+    at zero. Same column order as the inputs.
+
+    This, not :func:`estimate_drift`, aligns the neighbours of the
+    microtubule temporal vote (``align_neighbours``). On 12 real IRM videos
+    (2026-11-03) ``estimate_drift`` erred by more than 3.33 px on 40 % of
+    consecutive pairs while the true shifts stayed under 4 px, and measuring
+    overlap after it produced a false +6.7 pp; it does no harm to the
+    tracker's costs, which is why the tracker keeps it. The vote was measured
+    with this function, verbatim from the research repository
+    (``scripts/ult/temporal/griddrift.py``).
+    """
+    if len(A) == 0 or len(B) == 0: return np.zeros(2)
+    A, B = np.asarray(A, float), np.asarray(B, float)
+    M = int(R) + 8; lo = np.floor(np.minimum(A.min(0), B.min(0))) - M; hi = np.ceil(np.maximum(A.max(0), B.max(0))) + M
+    shape = tuple((hi - lo).astype(int) + 1); dB, dA = _dt(B, lo, shape), _dt(A, lo, shape)
+    a, b = A[::3] - lo, B[::3] - lo
+    def score(t):
+        qa = np.rint(a + t).astype(int); qb = np.rint(b - t).astype(int)
+        return ((dB[qa[:, 0], qa[:, 1]] <= tol).mean() + (dA[qb[:, 0], qb[:, 1]] <= tol).mean()) / 2 - 1e-6 * np.hypot(*t)
+    def search(cy, cx, half, step):
+        best, arg = -1.0, np.zeros(2)
+        for y in np.arange(cy - half, cy + half + step / 2, step):
+            for x in np.arange(cx - half, cx + half + step / 2, step):
+                s = score(np.array([y, x]))
+                if s > best: best, arg = s, np.array([y, x])
+        return arg
+    t = search(0.0, 0.0, R, 2.0)
+    return search(t[0], t[1], 2.0, 0.5)
+
+
+def _points(curves):
+    a = [resample(c, 1.0) for c in curves]
+    return np.vstack(a) if a else np.zeros((0, 2))
+
+
+def align_neighbours(previous, current, following):
+    """The curves of frames t-1 and t+1, moved into frame t, as the temporal vote reads them.
+
+    Each argument is one frame's stored per-frame curves, ``(M, 2)`` in
+    (row, col) input px. Returns ``([prev_curves, next_curves], (d_prev,
+    d_next))``: every curve resampled at 1 px and translated by the shift
+    :func:`best_shift` finds between the two frames' point sets, t-1 -> t
+    forward and t -> t+1 backward. Single-point curves are dropped first.
+    This is ``s1_links.py``'s real-video path, operation for operation; the
+    replay of 211 real frames pins it.
+    """
+    C = [[np.asarray(c, dtype=float) for c in x if len(c) > 1] for x in (previous, current, following)]
+    P = [_points(c) for c in C]
+    d_prev, d_next = best_shift(P[0], P[1]), -best_shift(P[1], P[2])
+    return [[resample(c, 1.0) + d_prev for c in C[0]], [resample(c, 1.0) + d_next for c in C[2]]], (d_prev, d_next)
