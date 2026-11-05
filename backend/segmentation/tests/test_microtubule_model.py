@@ -76,9 +76,13 @@ def test_predict_before_load_raises():
 
 def test_predict_returns_row_col_and_no_embeddings():
     """embedding_samples must be ABSENT, not empty: a consumer that was not
-    updated should fail loudly rather than silently track on zeros."""
+    updated should fail loudly rather than silently track on zeros.
+
+    ``decoder`` names the instancer that produced the curves; the essays batch
+    writes it into results.csv per row, so it is part of the contract (#611)."""
     out = _loaded_model().predict(np.random.rand(256, 256).astype(np.float32))
-    assert set(out) == {"centerlines_rc", "prob"}
+    assert set(out) == {"centerlines_rc", "prob", "decoder"}
+    assert out["decoder"] in {"lh", "instance_a", "instance_a_fallback"}
     assert "embedding_samples" not in out
     for cl in out["centerlines_rc"]:
         assert cl.ndim == 2 and cl.shape[1] == 2

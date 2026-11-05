@@ -91,7 +91,20 @@ def test_registry_advertises_only_importable_models(loader):
     registry = loader.ModelLoader.AVAILABLE_MODELS
     assert registry, "AVAILABLE_MODELS is empty"
 
-    missing = [name for name, cfg in registry.items() if cfg.get("class") is None]
+    # Models of pure functions have no class by design: load_model() returns
+    # the module itself. Its import is not optional (a failure stops the
+    # service), so None here never means a failed import. Named one by one, so
+    # an import that does fail cannot hide behind the exemption.
+    classless = {"neurite_soma_classical": "neurite_classical"}
+    for name, module in classless.items():
+        assert name in registry, f"stale exemption: {name} is not in the registry"
+        assert registry[name].get("class") is None, f"{name} has a class now; drop the exemption"
+        assert getattr(loader, module, None) is not None, f"{module} did not import"
+
+    missing = [
+        name for name, cfg in registry.items()
+        if cfg.get("class") is None and name not in classless
+    ]
     assert not missing, (
         "registry advertises models whose class failed to import: "
         + ", ".join(sorted(missing))
