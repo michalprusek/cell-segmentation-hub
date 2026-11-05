@@ -8,7 +8,7 @@ length and its on-MT vs. background fluorescence, plus the well's solution
 concentration.
 
 It wraps a trained instance-segmentation model (**nnU-Net ResEnc-M → a
-curvature-bounded instancer**, "microtubule SPARSE35 ep040") that traces each microtubule
+curvature-bounded instancer**, "microtubule V16 DEB_S4 ep040") that traces each microtubule
 as an open centerline; a
 measurement layer turns those centerlines into numbers.
 
@@ -73,6 +73,7 @@ earlier runs):
 | `focus_reason` | `ok`, or a `;`-joined list of `oof:<channel>` (below threshold), `unscoreable:<channel>` (no noise floor could be measured — blank / saturated), and `out_of_calibration:<channel>` (the acquisition drifted outside the calibrated domain, so the absolute threshold may not apply). `detector_unavailable` / `error:<Type>` mean the check **could not run** |
 | `tirf_frame` | 0-based TIRF frame this row was measured on — `0` for a recording with a single TIRF frame |
 | `tirf_frames` | how many TIRF frames the position has (`1` for every run before 2026-10-07) |
+| `segmentation_model`, `decoder` | which checkpoint drew this row, and with which decoder: `lh`, or `instance_a_fallback` on a position past the L+H arc limit (a very dense field). Counts and lengths from different models are not comparable |
 | `tirf_frame_time_s` | seconds from the position's first TIRF frame to this one, from the ND2's timestamps; blank when the file does not say |
 | `segmentation_source_file` | the file that was **segmented** (IRM). `source_file` is the file the intensities were read from; they differ only for a well recorded as one file per channel |
 
@@ -249,17 +250,17 @@ CPU.
 
 ## 4. The model weights
 
-The 535 MB checkpoint `microtubule_sparse35_ep040.pth` is **not** stored in git — it is the
+The 535 MB checkpoint `microtubule_v16_deb_s4_ep040.pth` is **not** stored in git — it is the
 same file the ML service uses, staged out-of-band from the repo root:
 
 ```bash
-scripts/download-microtubule-weights.sh    # -> backend/segmentation/weights/microtubule_sparse35_ep040.pth
+scripts/download-microtubule-weights.sh    # -> backend/segmentation/weights/microtubule_v16_deb_s4_ep040.pth
 ```
 
 `evaluate.py` finds it automatically, looking in this order: `$ESSAYS_WEIGHTS`,
 `backend/segmentation/weights/`, then `/app/mt_weights/` (where the essays
 container bind-mounts that same directory read-only). Pass
-`--weights /path/to/microtubule_sparse35_ep040.pth` to override.
+`--weights /path/to/microtubule_v16_deb_s4_ep040.pth` to override.
 
 > **No HuggingFace token or login is required.** The checkpoint is a complete
 > `state_dict` with no frozen backbone to fetch — the pipeline runs with no network
@@ -525,7 +526,7 @@ core normally is free.
 
 | Symptom | Fix |
 | ------- | --- |
-| `microtubule SPARSE35 ep040 checkpoint not found` | Stage it with `scripts/download-microtubule-weights.sh` from the repo root, or pass `--weights /path/to/microtubule_v5h.pth`. The error lists every path that was searched. |
+| `microtubule V16 DEB_S4 ep040 checkpoint not found` | Stage it with `scripts/download-microtubule-weights.sh` from the repo root, or pass `--weights` with a path to a file of that name (the name selects the decoder). The error lists every path that was searched. |
 | `Could not locate the shared 'microtubule' package` | The model code lives in the ML service at `backend/segmentation/models/microtubule`. Run from a full checkout, or set `MT_PACKAGE_DIR` to the directory that *contains* the `microtubule` package. |
 | `no .nd2 files found` | Check `--data`; the folder is searched recursively for `*.nd2`. |
 | `no channel matching ('irm',)` | The well has no IRM channel under that name — pass `--irm-name <substring>`. Segmentation needs IRM; the well is skipped rather than segmented on another channel. |

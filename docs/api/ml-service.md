@@ -79,10 +79,10 @@ differently from the generic one — or does not exist:
 
 - **`sperm`** and **`sperm_2part`** use their own mask threshold (0.3) and
   score threshold (0.95);
-- **`microtubule`** applies its own `prob_thr` of 0.98 (SPARSE35 ep040; v5H
-  used 0.97) from its parameter file. The backend deliberately sends **no**
-  threshold for it. Note that 0.98 is not even expressible through some
-  callers' constraints, so forwarding a user value would either cut a very
+- **`microtubule`** applies its own `prob_thr` of 0.995 (V16 DEB_S4 ep040;
+  SPARSE35 used 0.98, v5H 0.97) from its parameter file. The route ignores the
+  threshold it receives. Note that 0.995 is not expressible through the API's
+  0.99 ceiling, so forwarding a user value would either cut a very
   confident foreground at 0.5 and flood the instancer with noise, or fail
   validation;
 - **`neurite_soma`**, **`neurite_soma_merged`** and **`spheroid_disintegration`** have no threshold at
@@ -278,7 +278,9 @@ See [Metrics](../reference/metrics.md#disintegration-index-di).
 ## FRAP targeting
 
 `POST /api/v1/frap/targets` — synchronous segment-and-select for a microscope
-control call.
+control call. Since 2026-11-03 it cuts each polyline where the probability map does not
+support it before selecting, because the instancer can link across a gap and a bleach
+is not recoverable; `n_polylines` counts the pieces.
 
 ## GPU monitoring
 

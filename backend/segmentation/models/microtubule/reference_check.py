@@ -56,13 +56,15 @@ def load_fixture(fixture_dir: str | Path) -> dict:
     from PIL import Image
 
     d = Path(fixture_dir)
-    img = np.asarray(Image.open(d / "mt_sparse35_synthetic_irm.png"))
+    manifest = json.loads((d / "manifest.json").read_text())
+    # A later model's fixture reuses the first one's frame rather than committing it twice.
+    frame_dir = (d / manifest.get("frame_fixture", ".")).resolve()
+    img = np.asarray(Image.open(frame_dir / "mt_sparse35_synthetic_irm.png"))
     if img.dtype != np.uint16:
         raise ValueError(f"fixture PNG is {img.dtype}, expected uint16")
     ref = json.loads((d / "reference_polylines.json").read_text())
-    gt = json.loads((d / "gt_polylines.json").read_text())
+    gt = json.loads((frame_dir / "gt_polylines.json").read_text())
     prob = np.load(d / "reference_prob_eval_scale.npz")["prob"].astype(np.float32)
-    manifest = json.loads((d / "manifest.json").read_text())
     return {
         "image": img,
         "gt_xy_native": [np.asarray(p, float) for p in gt["polylines"]],

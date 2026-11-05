@@ -1108,7 +1108,9 @@ export class QueueService {
               item.imageId,
               allPolygons,
               model,
-              threshold,
+              // What the model applied, not what was sent: microtubule ignores the
+              // request's value, and exports report this column as the cut used.
+              result.threshold_used ?? threshold,
               result.confidence || null,
               result.processing_time || null,
               imageWidth,

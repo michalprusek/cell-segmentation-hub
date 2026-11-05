@@ -30,13 +30,13 @@ from api.models import SegmentationRequest
 # the layout-independent way to find it.
 SEG_ROOT = Path(__file__).resolve().parents[2]
 
-# The value the microtubule model actually uses (params_sparse35.json prob_thr),
-# and the one src/lib/models/modelRegistry.ts sends as its defaultThreshold.
-MT_MODEL_CUT = 0.98
+# What src/lib/models/modelRegistry.ts sends as the microtubule defaultThreshold. The
+# model ignores it and applies its own prob_thr (0.995 since 2026-11-03, params_v16.json).
+MT_REGISTRY_THRESHOLD = 0.98
 
 
-def test_the_models_own_cut_is_accepted():
-    assert SegmentationRequest(threshold=MT_MODEL_CUT).threshold == MT_MODEL_CUT
+def test_what_the_frontend_sends_for_microtubule_is_accepted():
+    assert SegmentationRequest(threshold=MT_REGISTRY_THRESHOLD).threshold == MT_REGISTRY_THRESHOLD
 
 
 @pytest.mark.parametrize("value", [0.1, 0.5, 0.9, 0.97, 0.98, 0.99])

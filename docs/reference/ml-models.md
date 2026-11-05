@@ -54,7 +54,7 @@ incompatible pair with a 400 even if you post it directly.
 | `wound`                   | Wound Healing (Scratch Assay)      | `wound`             | Closed polygons | 0.5                                                         | ~0.03 s                       | medium      |
 | `sperm`                   | Sperm Morphology                   | `sperm`             | Part polylines  | 0.5, **not read** (own cut-offs: mask 0.3, score 0.95)      | ~0.30 s                       | medium      |
 | `sperm_2part`             | Sperm Morphology (head + tail)     | `sperm`             | Part polylines  | 0.5, **not read** (own cut-offs: mask 0.3, score 0.95)      | ~0.30 s (copied from `sperm`) | medium      |
-| `microtubule`             | Microtubule (ResEnc-M + instancer) | `microtubules`      | **Polylines**   | 0.98, **not read** (`prob_thr` 0.98 in its own params file) | ~0.6 s (p95 ~2 s)             | large       |
+| `microtubule`             | Microtubule (ResEnc-M + instancer) | `microtubules`      | **Polylines**   | 0.98, **not read** (`prob_thr` 0.995 in its own params file) | ~2 s at 2048² (p95 ~4 s)             | large       |
 | `microcapsule`            | Microcapsule                       | `microcapsule`      | Closed polygons | 0.5                                                         | ~0.30 s                       | small       |
 | `neurite_soma`            | Neurite / Soma                     | `neurite`           | Closed polygons | 0.5, **not read** (argmax)                                  | ~12 s at 2048²                | large       |
 | `neurite_soma_merged`     | Neurite / Soma (merged channels)   | `neurite`           | Closed polygons | 0.5, **not read** (argmax)                                  | ~2.6 s at 1024²               | large       |
@@ -371,30 +371,31 @@ images to get the other model's parts.
 
 ---
 
-## `microtubule` — Microtubule SPARSE35 ep040
+## `microtubule` — Microtubule V16 DEB_S4 ep040
 
-> Swapped 2026-09-19 (v5H → SPARSE35 ep040): same ResEnc-M topology, network now at NATIVE
-> resolution, derived instancer vector (`min_length` 15 at 1.5×), cut 0.98. Everything the model is,
-> scores and how it was verified: `backend/segmentation/models/microtubule/MODEL_CARD.md`. The
-> threshold evidence table below was measured on v5H at 0.97 and is kept as the record of why the
-> cut is not a setting.
+> Swapped 2026-11-03 (SPARSE35 ep040 → V16 DEB_S4 ep040): same ResEnc-M topology, new training
+> recipe, Gaussian tile fusion, instancer L+H, cut 0.995. The Automated Essays batch runs the same
+> model, and moves whenever this one does. The checkpoint's file name selects the pipeline
+> (`_PIPELINES` in `wrapper.py`). Everything the model is, scores and how it was verified:
+> `backend/segmentation/models/microtubule/MODEL_CARD.md`. The threshold evidence table below was
+> measured on v5H at 0.97 and is kept as the record of why the cut is not a setting.
 
 The most specialised model in the platform, and the only one producing **open
 polylines**. Read this section before running a microtubule project — several
 of its properties are deliberate and surprising.
 
 - Architecture: **nnU-Net ResEnc-M** (~140 M parameters) predicting the filament
-  foreground, followed by a pure-NumPy **curvature-bounded instancer** that cuts
-  the foreground into individual centerlines. Every crossing is resolved by
-  min-cost matching under a hard **0.25 rad/px** curvature bound.
-- Checkpoint: `weights/microtubule_sparse35_ep040.pth` (~535 MB). It is a complete
+  foreground, followed by a **curvature-bounded instancer** (L+H, no learned network)
+  that cuts the foreground into individual centerlines. Every crossing is resolved by
+  one global matching of arc ends under a hard **0.25 rad/px** curvature bound.
+- Checkpoint: `weights/microtubule_v16_deb_s4_ep040.pth` (~535 MB). It is a complete
   `state_dict` with no frozen backbone, so **nothing is downloaded at
   inference time** — no HuggingFace token, no network access, and the first call
   is no slower than the rest.
 - Trained **entirely on synthetic frames**. No human annotation at any stage.
-- Peak GPU: ~0.73 GiB. Runtime ~4.0–4.4 s for a 1024² frame carrying 65
-  microtubules on an A5000 — dominated by the _instancer_, so it scales with
-  microtubule count, not just with frame size.
+- Peak GPU: ~0.93 GiB. Runtime ~0.6 s for a 1024² frame and ~2 s for a 2048² one
+  on an A5000 — mostly the _instancer_, so it scales with microtubule count, not
+  just with frame size (about 10 s for the densest benchmark frame, with 1224 arcs).
 
 ### It is IRM-only
 
@@ -452,9 +453,9 @@ deliberately picks another channel in the dialog, every time.
 
 ### Its threshold is not a user setting
 
-The registry records a default of **0.98**, and the `/segment` route
-deliberately passes **no threshold at all** for `microtubule`: the model applies
-`prob_thr` from its own `params_sparse35.json`. Lowering it does not fix a low
+The registry records a default of **0.98**, sent on the wire and ignored: the
+`/segment` route deliberately passes **no threshold at all** for `microtubule`, and the
+model applies `prob_thr` (**0.995**) from its own `params_v16.json`. Lowering it does not fix a low
 detection count — the table above is the measurement that settled this. If you
 are getting too few microtubules, the input channel is the thing to check.
 

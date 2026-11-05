@@ -117,9 +117,9 @@ enumerated. Read the whole message — it is scrollable, not truncated.
   10 s for up to **30 minutes**, then runs on the CPU rather than blocking the
   queue forever.
 - **Memory cap:** the worker is capped at 12 % of the card (~2.83 GiB). The
-  measured v5H working set is **1.41 GiB reserved / 1.05 GiB allocated** and the
-  results are byte-identical across caps from 1.92 to 17.99 GiB, so the cap
-  costs nothing.
+  measured V16 working set is **1.22 GiB reserved / 0.93 GiB allocated**, the same
+  at 1024² and 2048² inputs. Results under the previous model were byte-identical
+  across caps from 1.92 to 17.99 GiB, so the cap costs nothing.
 - **Speed:** ~43 s for 3 positions of a 2048² well containing 162 microtubules,
   including model load — roughly 10–14 s per position on GPU.
 - **Retries:** a failed position is retried at 30 s / 120 s / 300 s (4 attempts),
@@ -216,9 +216,11 @@ users index by position.
 | 29  | `tirf_frames`               | How many TIRF frames the position has. `1` for every run before 2026-10-07                                                                                                                                                                                |
 | 30  | `tirf_frame_time_s`         | Seconds from the position's first TIRF frame to this one, from the ND2's own timestamps. Blank when the file does not say                                                                                                                                 |
 | 31  | `segmentation_source_file`  | The file that was **segmented** (IRM). `source_file` (16) is the file the intensities were read from; the two differ only for a well recorded as one file per channel                                                                                     |
+| 32  | `segmentation_model`        | The checkpoint that drew this row. Counts and lengths from different models are not comparable |
+| 33  | `decoder`                   | `lh`, or `instance_a_fallback` on a position past the L+H arc limit (a very dense field), whose curves come from a decoder the model was not measured with |
 
 **With a TIRF time series the table is one row per microtubule _per frame_.**
-Columns 1–6, 14–17 and 20–27 describe the microtubule or its position and
+Columns 1–6, 14–17, 20–27, 32 and 33 describe the microtubule or its position and
 repeat unchanged across its rows; the intensities (7–13, 18, 19) are per
 frame. To get the one-row-per-microtubule table of earlier runs, keep the rows
 where `tirf_frame` is `0`. The alignment (20–23) and focus (24–27) diagnostics
@@ -270,7 +272,9 @@ export uses (`backend/segmentation/models/mt_measure.py`). See
 
 ## Related
 
-- [Microtubule projects](project-types/microtubules.md) — the interactive path
-  over the same model
-- [ML models: microtubule SPARSE35 ep040](../reference/ml-models.md#microtubule--microtubule-sparse35-ep040)
+- [Microtubule projects](project-types/microtubules.md) — the interactive path.
+  Both run the same model (V16 DEB_S4 ep040 since 2026-11-03), and when the interactive
+  model changes this batch moves with it. Runs from before 2026-11-03 used SPARSE35 ep040,
+  so their counts and lengths are not comparable with later runs.
+- [ML models: microtubule](../reference/ml-models.md#microtubule--microtubule-v16-deb_s4-ep040)
 - [REST API](../api/README.md#automated-essays) — the endpoints behind this page
