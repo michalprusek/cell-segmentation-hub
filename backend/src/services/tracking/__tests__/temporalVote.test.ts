@@ -12,14 +12,14 @@ const {
   segmentationUpdateMany,
   axiosPost,
   getBuffer,
-  generateAllThumbnails,
+  notifyChanged,
   configMock,
 } = vi.hoisted(() => ({
   imageFindMany: vi.fn(),
   segmentationUpdateMany: vi.fn(),
   axiosPost: vi.fn(),
   getBuffer: vi.fn(),
-  generateAllThumbnails: vi.fn(),
+  notifyChanged: vi.fn(),
   configMock: {
     SEGMENTATION_SERVICE_URL: 'http://ml:8000',
     MT_TEMPORAL_VOTE: 'on' as 'on' | 'off',
@@ -40,12 +40,8 @@ vi.mock('../../../utils/logger', () => ({
 vi.mock('../../../storage/index', () => ({
   getStorageProvider: () => ({ getBuffer }),
 }));
-// A class, not vi.fn(): the vitest config restores mock implementations
-// between tests, and the module keeps the one instance it built.
-vi.mock('../../thumbnailManager', () => ({
-  ThumbnailManager: class {
-    generateAllThumbnails = generateAllThumbnails;
-  },
+vi.mock('../../previews/previewService', () => ({
+  previewService: { notifyChanged },
 }));
 
 import {
@@ -141,7 +137,6 @@ describe('runTemporalVote', () => {
     configMock.MT_TEMPORAL_VOTE = 'on';
     getBuffer.mockResolvedValue(Buffer.from('png'));
     segmentationUpdateMany.mockResolvedValue({ count: 1 });
-    generateAllThumbnails.mockResolvedValue(undefined);
   });
 
   it('votes the interior frames and writes only a changed one, in the stored shape', async () => {
@@ -170,7 +165,9 @@ describe('runTemporalVote', () => {
     expect(JSON.parse(write.data.polygons)).toEqual([
       expect.objectContaining({ id: 'polyline_1', area: 0, confidence: 1 }),
     ]);
-    expect(generateAllThumbnails).toHaveBeenCalledWith('seg-1');
+    // a new segmentation row version is a new preview: open pages are told
+    expect(notifyChanged).toHaveBeenCalledTimes(1);
+    expect(notifyChanged).toHaveBeenCalledWith(['img-1']);
     // every frame's file is the one the queue read: no channel was noted
     expect(getBuffer).toHaveBeenCalledWith(frames[1].originalPath);
   });
@@ -278,7 +275,7 @@ describe('runTemporalVote', () => {
 
     expect(summary?.changed).toBe(0);
     expect(summary?.skipped).toMatchObject({ changed_during_vote: 1 });
-    expect(generateAllThumbnails).not.toHaveBeenCalled();
+    expect(notifyChanged).not.toHaveBeenCalled();
   });
 
   it('writes nothing when the ML service refuses the frame', async () => {

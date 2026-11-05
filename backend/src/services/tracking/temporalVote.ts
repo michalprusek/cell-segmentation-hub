@@ -50,8 +50,8 @@ import { safeMlFilename } from '../../utils/mlFilename';
 import { mapWithConcurrency } from '../../utils/concurrency';
 import { segmentationTimeoutMs } from '../../constants/imageLimits';
 import { toStoredPolygon } from '../../utils/storedPolygon';
+import { previewService } from '../previews/previewService';
 import type { SegmentationPolygon } from '../segmentationService';
-import type { ThumbnailManager } from '../thumbnailManager';
 
 interface FreshFrame {
   channel: string | null;
@@ -124,22 +124,6 @@ function storedCurves(segmentation: {
     curves.push(pts.map(q => [q.x, q.y]));
   }
   return curves;
-}
-
-// Imported on first use: a static import would pull the thumbnail renderer
-// (sharp, canvas) into the module graph of the tracker and of everything that
-// imports the queue, which is most of the backend.
-let _thumbnails: Promise<ThumbnailManager> | null = null;
-function thumbnails(): Promise<ThumbnailManager> {
-  if (!_thumbnails) {
-    _thumbnails = import('../thumbnailManager')
-      .then(m => new m.ThumbnailManager(prisma))
-      .catch(err => {
-        _thumbnails = null; // try again next time rather than never
-        throw err;
-      });
-  }
-  return _thumbnails;
 }
 
 export interface TemporalVoteSummary {
@@ -301,14 +285,7 @@ export async function runTemporalVote(
           return;
         }
         summary.changed++;
-        try {
-          await (await thumbnails()).generateAllThumbnails(seg.id);
-        } catch (err) {
-          logger.warn(
-            `Temporal vote: thumbnail of ${f.id} not regenerated: ${(err as Error).message}`,
-            'TemporalVote'
-          );
-        }
+        previewService.notifyChanged([f.id]);
       } catch (err) {
         const status = (err as { response?: { status?: number } }).response
           ?.status;
