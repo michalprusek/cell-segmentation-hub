@@ -220,6 +220,47 @@ class ModelConfig:
         return self.config.get(key, default)
 
 
+def _mt_image_array(image: Image.Image) -> np.ndarray:
+    """PIL -> grayscale numpy (H, W) for the microtubule model, preserving native bit depth.
+
+    `convert('L')` would quantise 'I;16' (16-bit microscopy PNG) to 8-bit BEFORE the wrapper's
+    float32 percentile clip, so the model would run on truncated dynamic range. Pass the native
+    dtype through; `_normalize` handles the rest.
+    """
+    if image.mode in ('I;16', 'I;16B', 'I;16L'):
+        return np.array(image, dtype=np.uint16)
+    if image.mode == 'I':
+        return np.array(image, dtype=np.int32)
+    if image.mode == 'F':
+        return np.array(image, dtype=np.float32)
+    return np.array(image.convert('L'), dtype=np.uint8)
+
+
+def _mt_polylines(centerlines) -> List[Dict[str, Any]]:
+    """Centerlines, (M, 2) (row, col), as the polyline records the editor stores."""
+    import uuid as _uuid
+
+    polylines: List[Dict[str, Any]] = []
+    for idx, cl in enumerate(centerlines):
+        # centerline is (M, 2) in (row, col) → convert to (x=col, y=row)
+        # so it lines up with the rest of the editor's image coords.
+        points = [
+            {"x": float(cl[i, 1]), "y": float(cl[i, 0])}
+            for i in range(cl.shape[0])
+        ]
+        instance_id = f"mt_{_uuid.uuid4().hex[:8]}"
+        polylines.append({
+            "id": f"polyline_{idx + 1}",
+            "points": points,
+            "type": "external",
+            "class": "microtubule",
+            "geometry": "polyline",
+            "instanceId": instance_id,
+            "confidence": 1.0,  # the instancer is deterministic
+            "vertices_count": len(points),
+        })
+    return polylines
+
 class ModelLoader:
     """Loads and manages pretrained segmentation models with batch processing support"""
     
@@ -1938,7 +1979,6 @@ class ModelLoader:
         ask for it.
         """
         import time as _time
-        import uuid as _uuid
 
         self.get_model('microtubule')
         if 'microtubule' not in self.loaded_models:
@@ -1954,19 +1994,7 @@ class ModelLoader:
         start_time = _time.time()
 
         try:
-            # PIL → grayscale numpy (H, W), preserving native bit depth.
-            # `convert('L')` would quantise 'I;16' (16-bit microscopy PNG)
-            # to 8-bit BEFORE the wrapper's float32 percentile clip, so
-            # the model would run on truncated dynamic range. Pass the
-            # native dtype through; `_normalize` handles the rest.
-            if image.mode in ('I;16', 'I;16B', 'I;16L'):
-                image_np = np.array(image, dtype=np.uint16)
-            elif image.mode == 'I':
-                image_np = np.array(image, dtype=np.int32)
-            elif image.mode == 'F':
-                image_np = np.array(image, dtype=np.float32)
-            else:
-                image_np = np.array(image.convert('L'), dtype=np.uint8)
+            image_np = _mt_image_array(image)
 
             result = mt_model.predict(image_np, seed_threshold=threshold)
             threshold_used = (
@@ -1975,25 +2003,7 @@ class ModelLoader:
             )
             centerlines = result["centerlines_rc"]            # list of (M,2) float64
 
-            polylines: List[Dict[str, Any]] = []
-            for idx, cl in enumerate(centerlines):
-                # centerline is (M, 2) in (row, col) → convert to (x=col, y=row)
-                # so it lines up with the rest of the editor's image coords.
-                points = [
-                    {"x": float(cl[i, 1]), "y": float(cl[i, 0])}
-                    for i in range(cl.shape[0])
-                ]
-                instance_id = f"mt_{_uuid.uuid4().hex[:8]}"
-                polylines.append({
-                    "id": f"polyline_{idx + 1}",
-                    "points": points,
-                    "type": "external",
-                    "class": "microtubule",
-                    "geometry": "polyline",
-                    "instanceId": instance_id,
-                    "confidence": 1.0,  # the instancer is deterministic
-                    "vertices_count": len(points),
-                })
+            polylines = _mt_polylines(centerlines)
 
             processing_time = _time.time() - start_time
             logger.info(
@@ -2025,6 +2035,49 @@ class ModelLoader:
             # Maptimize: handing reserved-but-unallocated blocks back between
             # calls costs <5 ms against a ~4 s inference and keeps this service
             # from hoarding VRAM the other tenants are waiting on.
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+
+    def predict_microtubule_voted(self, image: Image.Image, neighbours_rc) -> Dict[str, Any]:
+        """Frame t of a microtubule video, decoded with the vote of frames t-1 and t+1.
+
+        ``neighbours_rc`` comes from ``api.mt_geometry_cost.align_neighbours``; see
+        ``MicrotubuleModel.predict_voted``. Returns its ``per_frame`` and ``voted`` curves,
+        (row, col) input px, and ``polylines``, the voted curves in ``predict_microtubule``'s
+        shape (``None`` beyond the L+H arc limit). The same bookkeeping as
+        ``predict_microtubule``: one inference, then the card handed back.
+        """
+        import time as _time
+
+        self.get_model('microtubule')
+        if 'microtubule' not in self.loaded_models:
+            raise ValueError(
+                "Microtubule model not loaded. Run load_model('microtubule') first."
+            )
+        mt_model = self.loaded_models['microtubule']
+        self.is_processing = True
+        self.current_model = 'microtubule'
+        start_time = _time.time()
+        try:
+            result = mt_model.predict_voted(_mt_image_array(image), neighbours_rc)
+            voted = result["voted"]
+            logger.info(
+                "Microtubule vote: %s centerlines per frame, %s voted in %.2fs",
+                None if result["per_frame"] is None else len(result["per_frame"]),
+                None if voted is None else len(voted),
+                _time.time() - start_time,
+            )
+            return {
+                **result,
+                "polylines": None if voted is None else _mt_polylines(voted),
+                "model_used": "microtubule",
+                "threshold_used": mt_model.params.get("prob_thr", mt_model.DEFAULT_SEED_THRESHOLD),
+                "image_size": {"width": image.size[0], "height": image.size[1]},
+            }
+        finally:
+            self.is_processing = False
+            self.current_model = None
+            self.release_model('microtubule')
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
 

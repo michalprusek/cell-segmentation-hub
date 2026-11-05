@@ -8,23 +8,24 @@ the Node backend.
 
 ## Layout of `backend/segmentation/`
 
-| Path                        | Contains                                                                             |
-| --------------------------- | ------------------------------------------------------------------------------------ |
-| `api/main.py`               | The FastAPI app: middleware, exception handlers, router mounting, Prometheus metrics |
-| `api/routes.py`             | `/segment`, `/batch-segment`, `/models`, `/status`, `/health`                        |
-| `api/tracker_kymograph.py`  | `/track`, `/kymograph` and `/kymograph/batch`                                        |
-| `api/kymograph_velocity.py` | Kymograph trajectory detection (KymoButler) + the per-track metrics                  |
-| `api/mt_geometry_cost.py`   | The geometric matching cost used by the tracker                                      |
-| `api/mt_metrics.py`         | `/mt-metrics` and `/mt-background-rois`                                              |
-| `api/metrics_endpoint.py`   | Shape metrics and the disintegration index                                           |
-| `api/monitoring.py`         | GPU status and memory endpoints                                                      |
-| `api/frap_targets.py`       | FRAP target selection                                                                |
-| `ml/model_loader.py`        | The model catalogue, loading, caching and unloading                                  |
-| `models/`                   | One wrapper per model                                                                |
-| `models/microtubule/`       | The microtubule networks (V16, SPARSE35), their instancers and parameters           |
-| `models/mt_measure.py`      | Band/ring rasterisation and ImageJ-convention statistics                             |
-| `models/kymobutler/`        | Vendored KymoButler (MIT) — the kymograph trajectory networks                        |
-| `weights/`                  | Checkpoints; not in the repository                                                   |
+| Path                        | Contains                                                                                                   |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `api/main.py`               | The FastAPI app: middleware, exception handlers, router mounting, Prometheus metrics                       |
+| `api/routes.py`             | `/segment`, `/batch-segment`, `/microtubule/temporal-vote`, `/models`, `/status`, `/health`                |
+| `api/tracker_kymograph.py`  | `/track`, `/kymograph` and `/kymograph/batch`                                                              |
+| `api/kymograph_velocity.py` | Kymograph trajectory detection (KymoButler) + the per-track metrics                                        |
+| `api/mt_geometry_cost.py`   | The geometric matching cost used by the tracker; `best_shift` and `align_neighbours` for the temporal vote |
+| `api/mt_temporal_vote.py`   | Request parsing and the apply / refuse verdict of `/microtubule/temporal-vote`, torch-free                 |
+| `api/mt_metrics.py`         | `/mt-metrics` and `/mt-background-rois`                                                                    |
+| `api/metrics_endpoint.py`   | Shape metrics and the disintegration index                                                                 |
+| `api/monitoring.py`         | GPU status and memory endpoints                                                                            |
+| `api/frap_targets.py`       | FRAP target selection                                                                                      |
+| `ml/model_loader.py`        | The model catalogue, loading, caching and unloading                                                        |
+| `models/`                   | One wrapper per model                                                                                      |
+| `models/microtubule/`       | The microtubule networks (V16, SPARSE35), their instancers and parameters                                  |
+| `models/mt_measure.py`      | Band/ring rasterisation and ImageJ-convention statistics                                                   |
+| `models/kymobutler/`        | Vendored KymoButler (MIT) — the kymograph trajectory networks                                              |
+| `weights/`                  | Checkpoints; not in the repository                                                                         |
 
 Router prefixes: most are mounted under `/api/v1`; the metrics router carries
 its own `/api` prefix. Endpoint list: [ML service API](../api/ml-service.md).
@@ -119,6 +120,10 @@ one blocks that thread, not the event loop.
   help — see
   [ML models](../reference/ml-models.md#microtubule--microtubule-v16-deb_s4-ep040) for the
   measurement that settled it.
+- **Video frames are decoded twice.** Before tracking, the backend sends each interior frame of a
+  queue-segmented video to `/microtubule/temporal-vote`, which decodes it with the vote of its two
+  neighbours' stored curves and refuses a frame whose stored curves are not this model's per-frame
+  output. See [ML models](../reference/ml-models.md) and the model card §0.
 - **Tracking is geometric.** No embeddings; symmetric curve distance with
   normal-flow drift removal. There is **no hard gate** — `CURVE_SCALE_PX` is a
   saturation scale, and the only infinite cost is a centerline too degenerate to

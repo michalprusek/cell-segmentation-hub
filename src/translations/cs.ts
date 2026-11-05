@@ -1839,7 +1839,7 @@ export default {
         addChannel:
           'Přidat kanál: dodatečně připojí další kanál k vybraným snímkům, buď jeden obrázek otisknutý na všechny, nebo video párované snímek po snímku.',
         tracking:
-          'Sledování napříč snímky proběhne automaticky, jakmile jsou hotové všechny snímky, a dá každému vláknu stabilní identitu i barvu.',
+          'Sledování napříč snímky proběhne automaticky, jakmile jsou hotové všechny snímky, a dá každému vláknu stabilní identitu i barvu. Předtím se každý snímek segmentovaný ze stránky projektu dekóduje ještě jednou s křivkami obou sousedních snímků, aby se vlákno dělilo ze snímku na snímek stejně; snímek, který jste upravili nebo znovu segmentovali v editoru, zůstane, jak je.',
       },
     },
 

@@ -11,6 +11,7 @@ import { batchProcessor } from '../utils/batchProcessor';
 import { SegmentationUpdateData } from '../types/websocket';
 import { QueueStatus } from '../types/queue';
 import { scheduleTrackingForContainer } from './tracking/trackerService';
+import { noteFreshFrame } from './tracking/temporalVote';
 import {
   findSparseChannel,
   findStaticChannel,
@@ -1144,7 +1145,10 @@ export class QueueService {
             try {
               const imageMeta = await this.prisma.image.findUnique({
                 where: { id: item.imageId },
-                select: { parentVideoId: true },
+                select: {
+                  parentVideoId: true,
+                  segmentation: { select: { updatedAt: true } },
+                },
               });
               if (imageMeta?.parentVideoId) {
                 // A static channel needs no tracker: the other frames get this
@@ -1164,6 +1168,21 @@ export class QueueService {
                   channel: item.channel ?? null,
                 });
                 if (!projected.applied) {
+                  // A microtubule frame segmented here is what the temporal
+                  // vote may re-decode before the tracker runs; nothing else
+                  // is (tracking/temporalVote.ts). The row's `updatedAt` is
+                  // how the vote tells an untouched frame from an edited one.
+                  if (
+                    item.model === 'microtubule' &&
+                    imageMeta.segmentation?.updatedAt
+                  ) {
+                    noteFreshFrame(
+                      imageMeta.parentVideoId,
+                      item.imageId,
+                      item.channel ?? null,
+                      imageMeta.segmentation.updatedAt
+                    );
+                  }
                   scheduleTrackingForContainer(imageMeta.parentVideoId);
                 }
               }

@@ -75,6 +75,40 @@ map stays under 0.5 for more than 3 px, before selection. On the 195 VAL frames,
 **Time bound.** The matching is cubic at worst and runs under the service's one inference lock with no deadline. Beyond `max_arcs` (2000;
 the densest VAL frame has 1224) a frame falls back to `instance_a` with a logged warning. That is a bound on garbage input, such as a non-IRM channel, not a measured operating point.
 
+**Video frames: the temporal vote.** The model is per-frame, and on a video the same filament is
+often split differently from one frame to the next, which fragments its track. Before the tracker
+runs on a container segmented through the queue, each interior frame is decoded once more by L+H
+with one term added to the link score: frames t-1 and t+1 each vote +1 on a candidate link when one
+of their curves covers both arc ends and runs along the bridge, -1 when two different curves cover
+them (`instance/instancer_lh_vote.py`, weight 1, chosen on held-out synthetic clips). The network,
+the map and every L+H constant are unchanged; the votes come from the neighbours' per-frame curves,
+aligned by an exhaustive translation search (`api/mt_geometry_cost.best_shift`, not
+`estimate_drift`, which errs by more than 3.33 px on 40 % of real frame pairs).
+
+| Measured 2026-11-04, research repo, unlabelled real IRM video | per frame | with the vote |
+|---|---|---|
+| Share of centerline length mapping to exactly one curve 3 frames later, 12 containers, 11 projects; this checkpoint | 0.663 | 0.689, **+0.026** CI [+0.018, +0.034], 12 of 12 containers |
+| The same, mean of the recipe's 6 seeds | 0.682 | 0.709, +0.026 CI [+0.018, +0.035], 6 of 6 seeds |
+| Tracks per filament, production tracker on every frame, this checkpoint (report only: neighbouring windows share frames) | 2.09 | 2.00, CI of the change [-0.146, -0.038] |
+| F1 on held-out synthetic clips (the only accuracy read with neighbours: no labelled real video exists) | 0.6543 | 0.6570 |
+| Curve length, all containers / the moving-filament container | | x 1.000 / -0.1 % |
+
+The declared line was +0.03, missed by 0.004; the owner accepted it after the read (2026-11-04), as
+it needs no training and costs nothing on any guard. Single frames and Essays are unaffected.
+
+What it touches: microtubule video frames the queue segmented in the current pass whose two
+neighbours were also segmented in that pass and left untouched since, so that every vote comes from
+per-frame curves as measured. First and last frames, frames beyond the L+H arc limit or over 36 Mpx,
+frames edited or re-segmented in the editor, and a frame re-queued on its own (its neighbours already
+carry voted curves) are left as they are; the ML route recomputes the per-frame
+curves and refuses a frame whose stored curves differ. Identity: on 211 of 211 interior frames of the
+12 real containers the hub code reproduces the research path bit for bit, and its lam-0 curves equal
+the stored per-frame curves on all 211 (`tests/fixtures/mt_vote` pins one synthetic triplet in CI).
+Cost on the research L40S, median 3.6 Mpx frame: 1.7 s of CPU alignment and 2.3 s of map and decode
+per interior frame; the backend keeps two frames in flight, so the alignment overlaps the card. On
+production it is one more inference per interior frame, and tracks appear that much later. Off
+switch: `MT_TEMPORAL_VOTE=off` in the backend environment.
+
 See §8b for the production record.
 
 **Rollback.** The previous checkpoint stays on disk, and its file name selects its own pipeline. Point

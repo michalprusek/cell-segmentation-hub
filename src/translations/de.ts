@@ -1883,7 +1883,7 @@ export default {
         addChannel:
           'Kanal hinzufügen: hängt nachträglich einen weiteren Kanal an ausgewählte Einzelbilder an — entweder ein Bild auf alle geprägt oder ein Video Bild für Bild zugeordnet.',
         tracking:
-          'Bildübergreifendes Tracking läuft automatisch, sobald alle Einzelbilder fertig sind, und gibt jedem Filament eine stabile Identität und Farbe.',
+          'Bildübergreifendes Tracking läuft automatisch, sobald alle Einzelbilder fertig sind, und gibt jedem Filament eine stabile Identität und Farbe. Vorher wird jedes von der Projektseite aus segmentierte Einzelbild noch einmal mit den Kurven seiner beiden Nachbarbilder dekodiert, damit ein Filament von Bild zu Bild gleich geteilt wird; ein Einzelbild, das Sie bearbeitet oder im Editor neu segmentiert haben, bleibt, wie es ist.',
       },
     },
 

@@ -1867,7 +1867,7 @@ export default {
         addChannel:
           'Añadir canal: adjunta después otro canal a los fotogramas seleccionados, ya sea una imagen estampada en todos ellos o un vídeo emparejado fotograma a fotograma.',
         tracking:
-          'El seguimiento entre fotogramas se ejecuta automáticamente cuando todos los fotogramas han terminado, y da a cada filamento una identidad y un color estables.',
+          'El seguimiento entre fotogramas se ejecuta automáticamente cuando todos los fotogramas han terminado, y da a cada filamento una identidad y un color estables. Antes, cada fotograma segmentado desde la página del proyecto se decodifica una vez más con las curvas de sus dos fotogramas vecinos, para que un filamento se divida igual de un fotograma a otro; un fotograma que usted haya editado, o vuelto a segmentar en el editor, se deja como está.',
       },
     },
 

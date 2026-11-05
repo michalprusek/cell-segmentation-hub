@@ -80,3 +80,11 @@ opencv-python-headless
 # python-multipart at ROUTE-DEFINITION time, so the import fails at collection
 # without it. It is a test-only dependency here; the ml image already has it.
 python-multipart
+
+# `segmentation_cpu_tests/test_mt_temporal_vote.py` runs the microtubule
+# instancer (L+H and its temporal vote) from a committed probability map, so
+# the decoder's identity with the research path is checked in CI and not only
+# on a GPU box. The instancer's matching is networkx. Same floor as the ml
+# image (backend/segmentation/requirements.txt): 3.4.2 is the last release
+# that installs on Python 3.10.
+networkx>=3.4.2

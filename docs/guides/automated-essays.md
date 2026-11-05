@@ -216,8 +216,8 @@ users index by position.
 | 29  | `tirf_frames`               | How many TIRF frames the position has. `1` for every run before 2026-10-07                                                                                                                                                                                |
 | 30  | `tirf_frame_time_s`         | Seconds from the position's first TIRF frame to this one, from the ND2's own timestamps. Blank when the file does not say                                                                                                                                 |
 | 31  | `segmentation_source_file`  | The file that was **segmented** (IRM). `source_file` (16) is the file the intensities were read from; the two differ only for a well recorded as one file per channel                                                                                     |
-| 32  | `segmentation_model`        | The checkpoint that drew this row. Counts and lengths from different models are not comparable |
-| 33  | `decoder`                   | `lh`, or `instance_a_fallback` on a position past the L+H arc limit (a very dense field), whose curves come from a decoder the model was not measured with |
+| 32  | `segmentation_model`        | The checkpoint that drew this row. Counts and lengths from different models are not comparable                                                                                                                                                            |
+| 33  | `decoder`                   | `lh`, or `instance_a_fallback` on a position past the L+H arc limit (a very dense field), whose curves come from a decoder the model was not measured with                                                                                                |
 
 **With a TIRF time series the table is one row per microtubule _per frame_.**
 Columns 1–6, 14–17, 20–27, 32 and 33 describe the microtubule or its position and

@@ -14,18 +14,18 @@ Routes → Controllers → Services → Prisma → PostgreSQL
 
 ## Layout of `backend/src/`
 
-| Path                 | Contains                                                  |
-| -------------------- | --------------------------------------------------------- |
-| `api/routes/`        | One router per resource; `index.ts` mounts them           |
-| `api/controllers/`   | HTTP shape: validate, call a service, format the response |
-| `services/`          | The actual behaviour                                      |
-| `services/export/`   | Format converters, ImageJ/CVAT encoders, archiving        |
-| `services/metrics/`  | Shape metrics and the disintegration path                 |
-| `services/video/`    | Extraction, channels, registration, playback proxy        |
-| `services/tracking/` | The microtubule cross-frame tracker client                |
-| `middleware/`        | Auth, uploads, rate limiting, validation, caching         |
-| `constants/`         | The backend model registry                                |
-| `utils/`             | Config, auth cookies, geometry, storage-path guards       |
+| Path                 | Contains                                                                                                                                       |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `api/routes/`        | One router per resource; `index.ts` mounts them                                                                                                |
+| `api/controllers/`   | HTTP shape: validate, call a service, format the response                                                                                      |
+| `services/`          | The actual behaviour                                                                                                                           |
+| `services/export/`   | Format converters, ImageJ/CVAT encoders, archiving                                                                                             |
+| `services/metrics/`  | Shape metrics and the disintegration path                                                                                                      |
+| `services/video/`    | Extraction, channels, registration, playback proxy                                                                                             |
+| `services/tracking/` | The microtubule cross-frame tracker client, and the temporal vote that re-decodes freshly queue-segmented frames before it (`temporalVote.ts`) |
+| `middleware/`        | Auth, uploads, rate limiting, validation, caching                                                                                              |
+| `constants/`         | The backend model registry                                                                                                                     |
+| `utils/`             | Config, auth cookies, geometry, storage-path guards                                                                                            |
 
 Routers are mounted at `/api/health`, `/api/auth`, `/api/users`,
 `/api/projects`, `/api/images`, `/api/segmentation`, `/api/queue`, `/api/ml`,

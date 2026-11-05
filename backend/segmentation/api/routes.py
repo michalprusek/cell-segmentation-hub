@@ -8,10 +8,13 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from fastapi import APIRouter, HTTPException, UploadFile, File, Depends, Form
+import numpy as np
 import torch
 
 from ._errors import internal_error
 from .input_depth import decode_or_400, open_image_page, prepare_for_model
+from .mt_geometry_cost import align_neighbours
+from .mt_temporal_vote import parse_curves, verdict
 from PIL import Image
 import io
 
@@ -538,6 +541,108 @@ async def segment_image(
         raise internal_error(
             logger, f"Segmentation failed after {processing_time:.2f}s", e
         )
+
+#: Largest frame the temporal vote accepts, px. About 9x the largest frame it was measured on
+#: (4.2 Mpx); beyond it each of the alignment's two float64 distance maps passes 0.3 GB.
+VOTE_MAX_PIXELS = 36_000_000
+
+
+def _dispatch_vote(loader, image, neighbours_rc):
+    """`predict_microtubule_voted`, holding the loader-wide lock, on the same
+    single-slot executor as `/segment`: a vote is one more inference."""
+    decode_or_400(image)
+    image, _ = prepare_for_model(image, "microtubule")
+    with _inference_lock:
+        return loader.predict_microtubule_voted(image, neighbours_rc)
+
+
+@router.post("/microtubule/temporal-vote")
+async def microtubule_temporal_vote(
+    file: UploadFile = File(..., description="Frame t: the file its per-frame segmentation read"),
+    # File parts, not form fields: Starlette caps a non-file part at 1 MB, and the
+    # full-precision curves of a dense frame can exceed that.
+    previous: UploadFile = File(..., description="Frame t-1's stored per-frame curves, JSON [[[x, y], ...], ...], input px"),
+    current: UploadFile = File(..., description="Frame t's stored per-frame curves, same shape"),
+    following: UploadFile = File(..., description="Frame t+1's stored per-frame curves, same shape"),
+    loader = Depends(get_model_loader),
+):
+    """Re-decode frame t of a microtubule video with the vote of frames t-1 and t+1.
+
+    `models/microtubule/instance/instancer_lh_vote.py` has the vote and what it was measured to
+    do. The backend calls this once per interior frame after a whole container was segmented,
+    before the tracker, with the curves it stored (the per-frame ones; voted neighbours were
+    never measured).
+
+    `applied` is false, and nothing should be written, when the frame is beyond the L+H arc
+    limit (`reason` "arc_limit") or when this model's per-frame curves for the image differ from
+    `current` ("not_per_frame": an edited frame, another channel's file, another model).
+    `changed` says whether the vote moved anything; `polylines` are the voted curves in
+    `/segment`'s shape. A frame over `VOTE_MAX_PIXELS` is refused before any work
+    ("too_large"): the alignment allocates frame-sized distance maps, and the vote was measured
+    on frames of at most 4.2 Mpx.
+    """
+    start_time = time.time()
+    try:
+        if not validate_image(file):
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid image file. Supported formats: PNG, JPG, JPEG, TIFF, TIF, BMP",
+            )
+        try:
+            curves = [
+                parse_curves((await part.read()).decode("utf-8"), name)
+                for name, part in (("previous", previous), ("current", current), ("following", following))
+            ]
+        except (ValueError, UnicodeDecodeError) as exc:
+            raise HTTPException(status_code=422, detail=str(exc))
+        image, _ = open_image_page(await file.read(), 0)
+        if image.size[0] * image.size[1] > VOTE_MAX_PIXELS:
+            return {
+                "success": True, "applied": False, "reason": "too_large", "changed": False,
+                "polylines": [], "polygons": [], "decoder": None,
+                "image_size": {"width": image.size[0], "height": image.size[1]},
+                "processing_time": time.time() - start_time,
+            }
+        loop = asyncio.get_running_loop()
+        # The alignment is CPU work on the caller's own curves, about 1 s per shift on a dense
+        # frame (an exhaustive search): off the event loop, and outside the inference slot so
+        # the card is not idle while it runs.
+        neighbours, (d_prev, d_next) = await loop.run_in_executor(None, align_neighbours, *curves)
+        result = await loop.run_in_executor(
+            _INFERENCE_EXECUTOR, _dispatch_vote, loader, image, neighbours
+        )
+        per_frame, voted = result["per_frame"], result["voted"]
+        applied, reason, changed = verdict(per_frame, voted, curves[1])
+        logger.info(
+            "Temporal vote: applied=%s reason=%s changed=%s per-frame %s voted %s shift %s %s in %.2fs",
+            applied, reason, changed,
+            None if per_frame is None else len(per_frame), None if voted is None else len(voted),
+            np.round(d_prev, 1).tolist(), np.round(d_next, 1).tolist(), time.time() - start_time,
+        )
+        return {
+            "success": True,
+            "applied": applied,
+            "reason": reason,
+            "changed": changed,
+            "polylines": result["polylines"] if applied else [],
+            "polygons": [],
+            "model_used": result["model_used"],
+            "threshold_used": result["threshold_used"],
+            "image_size": result["image_size"],
+            "decoder": "lh_vote" if applied else result["decoder"],
+            "shift_previous": [float(v) for v in d_prev],
+            "shift_next": [float(v) for v in d_next],
+            "processing_time": time.time() - start_time,
+        }
+    except HTTPException:
+        raise
+    except (InferenceTimeoutError, TimeoutError) as e:
+        raise HTTPException(status_code=504, detail={"error": "Model inference timeout", "message": str(e)})
+    except Exception as e:
+        raise internal_error(
+            logger, f"Temporal vote failed after {time.time() - start_time:.2f}s", e
+        )
+
 
 @router.post("/batch-segment")
 async def batch_segment_images(

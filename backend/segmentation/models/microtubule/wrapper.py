@@ -182,6 +182,16 @@ def _simplify_polyline(cl: np.ndarray, eps_px: float) -> np.ndarray:
     return cl
 
 
+def _to_input_rc(polylines, merged: dict) -> list:
+    """Instancer output, (x, y) at the 1.5x scale, as (row, col) INPUT px, then RDP-simplified
+    by the vector's ``polyline_eps_px``. ``predict`` and ``predict_voted`` share it."""
+    centerlines_rc = [np.asarray(pl, dtype=np.float64)[:, ::-1] / UP for pl in polylines]
+    eps_px = float(merged.get("polyline_eps_px", 0.0) or 0.0)
+    if eps_px > 0:
+        centerlines_rc = [_simplify_polyline(cl, eps_px) for cl in centerlines_rc]
+    return centerlines_rc
+
+
 class MicrotubuleModel:
     """Semantic stage + instancer, the pair the checkpoint name selects. Load once, then
     predict many frames.
@@ -474,14 +484,11 @@ class MicrotubuleModel:
 
         # instance_a returns (x=col, y=row) at the 1.5x instancer scale. Every
         # downstream consumer -- mt_measure, mt_metrics, the essays adapter --
-        # reads (row, col) at INPUT scale, so transpose and rescale here. A
+        # reads (row, col) at INPUT scale, so `_to_input_rc` transposes and rescales. A
         # silent flip is the single most expensive bug this pipeline has
         # shipped, twice; test_microtubule_model.py pins the orientation.
-        centerlines_rc = [
-            np.asarray(pl, dtype=np.float64)[:, ::-1] / UP for pl in polylines
-        ]
-
-        # RDP simplification, in INPUT-px space (after the /UP rescale above,
+        #
+        # RDP simplification follows, in INPUT-px space (after the /UP rescale,
         # so `polyline_eps_px` means what it says: pixels of the frame that
         # was passed in, not the 1.5x instancer scale). This is the ONE
         # chokepoint both callers share -- interactive segmentation via
@@ -489,10 +496,50 @@ class MicrotubuleModel:
         # `evaluate.py` / `infer.py` -- both consume `centerlines_rc` from
         # this method and neither has its own copy of the geometry. See
         # _simplify_polyline for the endpoint-preserving, fail-open contract.
-        eps_px = float(merged.get("polyline_eps_px", 0.0) or 0.0)
-        if eps_px > 0:
-            centerlines_rc = [_simplify_polyline(cl, eps_px) for cl in centerlines_rc]
+        # `predict_voted` goes through the same helper.
+        centerlines_rc = _to_input_rc(polylines, merged)
 
         # The network ran at input resolution, so its map IS the caller's frame:
         # no resampling back, no shape fitting.
         return {"centerlines_rc": centerlines_rc, "prob": maps["prob"], "decoder": decoder}
+
+    def predict_voted(self, image_np: np.ndarray, neighbours_rc) -> dict:
+        """Frame t of a video, decoded by L+H with the vote of frames t-1 and t+1.
+
+        See :mod:`instance.instancer_lh_vote` for the vote and what it was measured to do.
+        ``neighbours_rc`` is two lists of curves, t-1 then t+1, each ``(N, 2)`` in (row, col)
+        INPUT px, already moved into frame t and sampled about every px: what
+        ``api.mt_geometry_cost.align_neighbours`` returns. They must be the neighbours'
+        PER-FRAME curves; voted ones were never measured.
+
+        Returns ``{'per_frame': [...], 'voted': [...], 'decoder': 'lh'}``, both lists as
+        ``predict``'s ``centerlines_rc``. ``per_frame`` is the vote at lam 0, which is
+        ``predict``'s output for the same image: a caller compares it with the curves it stored
+        to prove the frame was not edited in between. Beyond the L+H arc limit both are ``None``
+        and ``decoder`` is ``'instance_a_fallback'``, the frame's per-frame decoder.
+        """
+        from instance.instancer_lh import TooManyArcs
+        from instance.instancer_lh_vote import VOTE_LAM, Neighbour, decode_ladder
+
+        merged = dict(self.params)
+        if merged.get("decoder") != "lh":
+            raise ValueError(
+                f"the neighbour vote extends instancer L+H; {self._params_path.name} decodes with "
+                f"{merged.get('decoder') or 'instance_a'}"
+            )
+        maps = self.infer_maps(image_np)
+        thr = merged.get("prob_thr", self.DEFAULT_SEED_THRESHOLD)
+        # The same float16 rounding as `predict`, so lam 0 reproduces it.
+        prob = maps["prob_eval"].astype(np.float16).astype(np.float32)
+        # (row, col) input px -> (x, y) at the instancer scale, the frame the votes are cast in.
+        neighbours = [Neighbour([(np.asarray(c, float) * UP)[:, ::-1] for c in n]) for n in neighbours_rc]
+        try:
+            out = decode_ladder(prob, thr, KAPPA_MAX, merged, neighbours, (0.0, VOTE_LAM))
+        except TooManyArcs as exc:
+            logger.warning("microtubule frame beyond the L+H arc limit, no vote: %s", exc)
+            return {"per_frame": None, "voted": None, "decoder": "instance_a_fallback"}
+        return {
+            "per_frame": _to_input_rc(out[0.0], merged),
+            "voted": _to_input_rc(out[VOTE_LAM], merged),
+            "decoder": "lh",
+        }

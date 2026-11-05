@@ -1874,7 +1874,7 @@ export default {
         addChannel:
           'Ajouter un canal : rattache après coup un canal supplémentaire aux images sélectionnées, soit une image apposée sur toutes, soit une vidéo appariée image par image.',
         tracking:
-          'Le suivi d’une image à l’autre se lance automatiquement dès que toutes les images sont terminées et donne à chaque filament une identité et une couleur stables.',
+          'Le suivi d’une image à l’autre se lance automatiquement dès que toutes les images sont terminées et donne à chaque filament une identité et une couleur stables. Auparavant, chaque image segmentée depuis la page du projet est décodée une fois de plus avec les courbes de ses deux images voisines, pour qu’un filament soit découpé de la même façon d’une image à l’autre ; une image que vous avez modifiée, ou re-segmentée dans l’éditeur, reste telle quelle.',
       },
     },
 

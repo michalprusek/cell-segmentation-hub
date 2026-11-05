@@ -5,6 +5,8 @@
  * every frame of a video container with the ``microtubule`` model
  * reaches status ``segmented``, this service:
  *
+ *   0. Runs the microtubule temporal vote on the frames the queue has just
+ *      segmented (temporalVote.ts), which may replace their geometry.
  *   1. Reads every per-frame Segmentation row's polyline geometry.
  *   2. POSTs the bundle to the ML service's /track endpoint.
  *   3. Receives an assignments map (polylineId → trackId).
@@ -19,6 +21,7 @@ import axios from 'axios';
 import { prisma } from '../../db/prismaClient';
 import { config } from '../../utils/config';
 import { logger } from '../../utils/logger';
+import { runTemporalVote } from './temporalVote';
 
 interface PolygonRecord {
   id: string;
@@ -159,6 +162,20 @@ export async function runTrackingForContainer(
         'TrackerService'
       );
       return;
+    }
+    // The vote first, inside the same in-flight slot: it replaces geometry, and
+    // the write-back below rewrites the polygons it read, so a vote running
+    // beside a tracker pass could have its curves overwritten. It only acts on
+    // frames the queue noted in this pass. It catches its own failures; the
+    // guard here is for a bug in it, which must not cost the tracks too.
+    try {
+      await runTemporalVote(containerId);
+    } catch (err) {
+      logger.error(
+        `Temporal vote threw; tracking ${containerId} on the stored curves`,
+        err as Error,
+        'TrackerService'
+      );
     }
     await _runTrackingForContainerInner(containerId);
   } finally {
