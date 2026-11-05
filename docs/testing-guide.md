@@ -12,13 +12,13 @@ worth it.
 
 ## The suites
 
-| Suite                        | Command                     | State                                                                                                                               |
-| ---------------------------- | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| **Vitest** (frontend unit)   | `make ci-test`              | **5037 pass / 5037**, 275 files, ~2 min. Not in `make ci`, but the `frontend` CI job runs it with coverage and is a required check. |
-| **Vitest** (backend unit)    | in the container, see below | **3740 pass / 3744** (4 skipped), 179 files, ~27 s. Not Jest. The `backend` CI job runs it with coverage and is a required check.   |
-| **Playwright E2E**           | `make test-e2e`             | Present in `tests/e2e/`, run manually, not a merge gate.                                                                            |
-| **Python (GPU-free subset)** | `make test-py`              | **400 pass / 401** (1 skipped), ~26 s. Runs in `make ci` and in the `python-tests` CI job.                                          |
-| **Python (full ML suite)**   | `make test-ml`              | Needs a GPU. Runs in a one-off container.                                                                                           |
+| Suite                        | Command                     | State                                                                                                                                                                  |
+| ---------------------------- | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Vitest** (frontend unit)   | `make ci-test`              | **5037 pass / 5037**, 275 files, ~2 min. Not in `make ci`, but the `frontend` CI job runs it with coverage and is a required check.                                    |
+| **Vitest** (backend unit)    | in the container, see below | **3740 pass / 3744** (4 skipped), 179 files, ~27 s. Not Jest. The `backend` CI job runs it with coverage and is a required check.                                      |
+| **Playwright E2E**           | `make test-e2e`             | Present in `tests/e2e/`, run manually, not a merge gate.                                                                                                               |
+| **Python (GPU-free subset)** | `make test-py`              | **400 pass / 401** (1 skipped), ~26 s. Runs in `make ci` and in the `python-tests` CI job.                                                                             |
+| **Python (full ML suite)**   | `make test-ml`              | **759 pass / 761** (2 skipped), ~4 min on the production A5000 (2026-11-05). Needs a GPU and the built ml image; runs in a one-off `docker run` over the working tree. |
 
 **`make ci` is not the whole gate.** It runs frontend TypeScript, backend
 TypeScript, ESLint at zero warnings, i18n completeness across six locales,
@@ -37,10 +37,11 @@ make test-py           # the Python suite `make ci` step 7 runs
 make docs-links        # documentation link integrity
 ```
 
-`make test`, `make test-e2e`, `make test-coverage` and `make test-ml` all shell
-into a running container via `docker compose` with no `-f` argument, so on a
-fresh clone they fail before they test anything — the repository tracks no
-`docker-compose.yml`. Run those suites directly instead:
+`make test`, `make test-e2e` and `make test-coverage` all shell into a running
+container via `docker compose` with no `-f` argument, so on a fresh clone they
+fail before they test anything — the repository tracks no `docker-compose.yml`.
+(`make test-ml` is not one of them: it starts its own container from the built
+ml image.) Run those suites directly instead:
 
 ```bash
 npx vitest run --coverage   # frontend, with the coverage floor CI enforces

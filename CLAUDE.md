@@ -255,6 +255,10 @@ This is where the real risk was, and none of it showed up as a failure:
   `backend/segmentation/models/microtubule/tests` — the instancer's real
   identity proofs, collected by **nothing**. Both now wired up; `make test-ml`
   is 670 pass / 1 skip / 11 errors (the 11 are documented async-fixture errors).
+  **2026-11-05:** 759 pass / 2 skip. It had gone red again unnoticed (two
+  assertions older than the code they checked) and hung after its summary:
+  `test_inference_timeout` left an executor worker blocked, and
+  `concurrent.futures` joins every worker at interpreter exit.
 - **GitHub CI cannot run the ML suite at all**: the runner has no GPU, so
   `import api.main` dies in `mamba_ssm` -> Triton -> "0 active drivers". See the
   comment above the "Python files parse" step in `ci.yml`.

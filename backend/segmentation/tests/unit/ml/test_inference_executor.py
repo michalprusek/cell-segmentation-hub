@@ -101,23 +101,29 @@ class TestInferenceExecutor:
         block_event = threading.Event()
         
         def slow_inference(x):
-            # Block indefinitely on event that never gets set
+            # Block until the test has seen the timeout
             block_event.wait()
             return torch.randn(1, 1, 256, 256)
-        
+
         slow_model.side_effect = slow_inference
         slow_model.eval = Mock(return_value=slow_model)
         slow_model.to = Mock(return_value=slow_model)
-        
-        with pytest.raises(InferenceTimeoutError) as exc_info:
-            executor.execute_inference(
-                model=slow_model,
-                input_tensor=sample_input,
-                model_name="slow_model",
-                timeout=0.5,  # Short timeout
-                image_size=(256, 256)
-            )
-        
+
+        try:
+            with pytest.raises(InferenceTimeoutError) as exc_info:
+                executor.execute_inference(
+                    model=slow_model,
+                    input_tensor=sample_input,
+                    model_name="slow_model",
+                    timeout=0.5,  # Short timeout
+                    image_size=(256, 256)
+                )
+        finally:
+            # A timeout abandons the future, not the worker: left blocked, the
+            # worker is joined by concurrent.futures at interpreter exit, and
+            # pytest hangs after printing its summary (it did, 85 min, 2026-11-05).
+            block_event.set()
+
         error = exc_info.value
         assert error.model_name == "slow_model"
         assert error.timeout == 0.5
