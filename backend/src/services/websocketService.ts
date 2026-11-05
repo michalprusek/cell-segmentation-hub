@@ -9,7 +9,6 @@ import { getAccessTokenFromCookieHeader } from '../utils/authCookies';
 import jwt from 'jsonwebtoken';
 import { PrismaClient } from '@prisma/client';
 import { QueueService } from './queueService';
-import { SegmentationPolygon } from './segmentationService';
 
 // Import WebSocket types
 import {
@@ -37,19 +36,6 @@ interface AuthenticatedSocket extends Socket {
 // Legacy exports for backward compatibility (will be removed in future)
 export type SegmentationUpdate = SegmentationUpdateData;
 export type QueueStatsUpdate = QueueStatsData;
-
-export interface ThumbnailUpdate {
-  imageId: string;
-  projectId: string;
-  segmentationId: string;
-  thumbnailData: {
-    levelOfDetail: 'low' | 'medium' | 'high';
-    polygons: SegmentationPolygon[];
-    polygonCount: number;
-    pointCount: number;
-    compressionRatio: number;
-  };
-}
 
 type WebSocketEventData = unknown;
 
@@ -746,41 +732,23 @@ export class WebSocketService {
   }
 
   /**
-   * Broadcast thumbnail update to project room
+   * Emit an event to everyone viewing a project — the owner AND collaborators
+   * (the project room), unlike `emitSegmentationUpdate`, which reaches only
+   * the user who queued the work.
    */
-  public broadcastThumbnailUpdate(
+  public emitToProject(
     projectId: string,
-    thumbnailUpdate: ThumbnailUpdate
+    event: WebSocketEvent | string,
+    data: WebSocketEventData
   ): void {
     try {
-      logger.debug('Broadcasting thumbnail update', 'WebSocketService', {
-        projectId,
-        imageId: thumbnailUpdate.imageId,
-        levelOfDetail: thumbnailUpdate.thumbnailData.levelOfDetail,
-        polygonCount: thumbnailUpdate.thumbnailData.polygonCount,
-      });
-
-      this.io
-        .to(`project:${projectId}`)
-        .emit('thumbnail:updated', thumbnailUpdate);
-
-      logger.debug(
-        'Thumbnail update broadcasted successfully',
-        'WebSocketService',
-        {
-          projectId,
-          imageId: thumbnailUpdate.imageId,
-        }
-      );
+      this.io.to(getProjectRoom(projectId)).emit(event, data);
     } catch (error) {
       logger.error(
-        'Error broadcasting thumbnail update',
+        'Error emitting project event',
         error instanceof Error ? error : undefined,
         'WebSocketService',
-        {
-          projectId,
-          imageId: thumbnailUpdate.imageId,
-        }
+        { projectId, event }
       );
     }
   }

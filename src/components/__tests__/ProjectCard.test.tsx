@@ -6,18 +6,8 @@ import ProjectCard from '@/components/ProjectCard';
 
 // Mock the child components
 vi.mock('@/components/project/ProjectThumbnail', () => ({
-  default: ({
-    projectId: _projectId,
-    fallbackSrc,
-  }: {
-    projectId: string;
-    fallbackSrc: string;
-  }) => (
-    <img
-      src={fallbackSrc}
-      alt="Project thumbnail"
-      data-testid="project-thumbnail"
-    />
+  default: ({ src }: { src: string }) => (
+    <img src={src} alt="Project thumbnail" data-testid="project-thumbnail" />
   ),
 }));
 

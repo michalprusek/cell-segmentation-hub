@@ -93,9 +93,29 @@ uploads/projects/<projectId>/images/<containerId>/
     original.<ext>
     thumbnail.jpg
     frames/<NNNN>/<channel>.png
-    frames/<NNNN>/<channel>.p<range>.webp
+    frames/<NNNN>/<channel>.p<range>.v2.webp   (playback proxy; v1 `.p<range>.webp` is dead)
     registration.json
+uploads/projects/<projectId>/previews/<imageId>/<version>.jpg
+uploads/<uploaderId>/<projectId>/{originals,thumbnails}/…   (still images)
+uploads/converted/<imageId>.png                               (display cache, 7 days)
 ```
+
+**Grid previews** (`services/previews/`) are rendered on demand at 512 px from
+the original and the stored segmentation, and named by a version hash of their
+inputs (`previewVersion.ts`), so no write path has to remember to invalidate
+one. `previewService.notifyChanged()` / `notifyContainerChanged()` only tell
+open pages; correctness does not depend on them.
+
+**Storage GC** (`services/maintenance/storageGc.ts`) reconciles the upload tree
+with one RepeatableRead snapshot of the database every 6 h (first run 10 min
+after start), mode `STORAGE_GC_MODE=off|dry-run|delete`. It deletes only kinds
+it knows, never anything a row references or a directory above one, only past
+a grace period on the NEWEST file mtime of the subtree (7 days for uploaded
+data, 1 day for derived, 1 h for a superseded preview), re-checks each owner
+row right before deleting, refuses an empty snapshot and aborts a plan above
+50 % of the scanned bytes. Each run writes a JSONL report to
+`<LOG_DIR>/storage-gc/`. Run it by hand with
+`docker exec spheroseg-backend npx tsx src/db/runStorageGc.ts [--delete]`.
 
 Every user-derived path segment goes through a safety assertion before it
 becomes part of a path, and channel names are restricted to

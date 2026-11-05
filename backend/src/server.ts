@@ -33,6 +33,7 @@ import {
   startCleanupSweeper,
   stopCleanupSweeper,
 } from './services/accountFiles';
+import { startStorageGc, stopStorageGc } from './services/maintenance/storageGc';
 import { WebSocketService } from './services/websocketService';
 import { initializeStorageDirectories } from './utils/initializeStorage';
 import { initializeRedis, closeRedis, redisHealthCheck } from './config/redis';
@@ -430,6 +431,11 @@ const startServer = async (): Promise<void> => {
       // account deleted while the process was going down). Same rule as the
       // job worker: cannot throw, does not block the start.
       startCleanupSweeper();
+
+      // Reconcile the upload tree with the database (orphaned files from any
+      // delete path that leaks). First run 10 min after start, then every 6 h;
+      // STORAGE_GC_MODE=off|dry-run|delete. Cannot throw.
+      startStorageGc();
     } catch (error) {
       logger.error('Failed to initialize critical services:', error as Error);
       logger.error('Server cannot start without required services. Exiting...');
@@ -458,6 +464,7 @@ const startServer = async (): Promise<void> => {
       // and is re-queued by `recoverInterrupted` on the next start.
       stopJobWorker();
       stopCleanupSweeper();
+      stopStorageGc();
 
       // Stop health check service
       try {

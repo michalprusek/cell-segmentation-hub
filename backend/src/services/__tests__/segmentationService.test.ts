@@ -46,14 +46,9 @@ vi.mock('../../storage/index', () => ({
   })),
 }));
 
-vi.mock('../segmentationThumbnailService');
-// Plain class inside the factory (methods created per instance) so
-// restoreMocks:true cannot wipe the body between tests, and each service
-// instance gets its own controllable generateAllThumbnails().
-vi.mock('../thumbnailManager', () => ({
-  ThumbnailManager: class {
-    generateAllThumbnails = vi.fn().mockResolvedValue(undefined);
-  },
+vi.mock('../previews/previewService', () => ({
+  previewService: { notifyChanged: vi.fn(), notifyContainerChanged: vi.fn() },
+  removePreviews: vi.fn(),
 }));
 vi.mock('../imageService');
 
@@ -450,36 +445,26 @@ describe('SegmentationService — saveSegmentationResults', () => {
     );
   });
 
-  it('swallows a thumbnail-generation error without throwing', async () => {
+  it('tells the preview service which image changed', async () => {
+    const { previewService } = await import('../previews/previewService');
     const { svc: svc2, prisma: prisma2 } = makeService();
-    prisma2.segmentation.upsert.mockResolvedValue({ id: 'seg-thumb' });
-    (
-      svc2 as unknown as {
-        thumbnailManager: { generateAllThumbnails: ReturnType<typeof vi.fn> };
-      }
-    ).thumbnailManager.generateAllThumbnails.mockRejectedValueOnce(
-      new Error('thumb error')
+    prisma2.segmentation.upsert.mockResolvedValue({ id: 'seg-1' });
+
+    await svc2.saveSegmentationResults(
+      'img-1',
+      [makePolygon() as unknown as SegmentationPolygon],
+      'hrnet',
+      0.5,
+      null,
+      null,
+      100,
+      100,
+      'user-1'
     );
 
-    await expect(
-      svc2.saveSegmentationResults(
-        'img-1',
-        [makePolygon() as unknown as SegmentationPolygon],
-        'hrnet',
-        0.5,
-        null,
-        null,
-        100,
-        100,
-        'user-1'
-      )
-    ).resolves.toBeUndefined();
-    expect(vi.mocked(logger.error)).toHaveBeenCalledWith(
-      expect.stringContaining('thumbnails'),
-      expect.any(Error),
-      expect.any(String),
-      expect.any(Object)
-    );
+    expect(vi.mocked(previewService.notifyChanged)).toHaveBeenCalledWith([
+      'img-1',
+    ]);
   });
 });
 

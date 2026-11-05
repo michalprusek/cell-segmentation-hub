@@ -12,6 +12,7 @@
  * PNGs that are gone (404 per frame), or hiding PNGs that are still on disk.
  */
 
+import { previewService } from './previews/previewService';
 import path from 'path';
 import fs from 'fs/promises';
 import { prisma } from '../db/prismaClient';
@@ -439,6 +440,9 @@ export async function removeChannelFromFrames(
         },
       });
     }
+
+    // A frame repointed at a surviving channel has different pixels.
+    previewService.notifyContainerChanged(containerId);
 
     result.framesAffected += plan.removedFrameIds.length;
     result.containersAffected++;
