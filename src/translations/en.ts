@@ -649,7 +649,7 @@ export default {
         microtubule: {
           name: 'Microtubule (ResEnc-M + curvature instancer)',
           description:
-            'Instance segmentation for IRM microtubule time-lapses. An nnU-Net ResEnc-M network predicts the filament foreground, then a curvature-bounded instancer separates it into individual centerlines, resolving every crossing under a hard 0.25 rad/px bound. Trained entirely on synthetic frames — no human annotation. ~0.6 s/frame; the only model in the platform with native polyline output.',
+            'Instance segmentation for IRM microtubule time-lapses. An nnU-Net ResEnc-M network predicts the filament foreground, then a curvature-bounded instancer separates it into individual centerlines, resolving every crossing under a hard 0.25 rad/px bound. Trained entirely on synthetic frames — no human annotation. ~0.6–2.5 s/frame; the only model in the platform with native polyline output.',
         },
         microcapsule: {
           name: 'Microcapsule',
@@ -660,6 +660,11 @@ export default {
           name: 'Neurite / Soma (nnU-Net ResEnc-M)',
           description:
             'Two-class semantic segmentation of neurons in fluorescence microscopy — neurite (processes) and soma (cell body) — from the tubulin channel alone. nnU-Net v2 ResEnc-M, 3-fold ensemble with mirroring TTA and a clDice topology term on the neurite class. Held-out Dice 0.832 neurite / 0.915 soma.',
+        },
+        neurite_soma_merged: {
+          name: 'Neurite / Soma – nnU-Net (merged channels)',
+          description:
+            'Two-class semantic segmentation of neurons — neurite and soma — for fluorescence images where the cell shows when several channels are taken together. You tick the channels before segmenting; each is normalised to its own noise and they are merged into one greyscale image, which an nnU-Net v2 ResEnc-M 4-fold ensemble segments. Held-out Dice 0.843 neurite / 0.879 soma. On dim staining it finds only part of the neurites and often no somas, so check those images in the editor.',
         },
         neurite_soma_classical: {
           name: 'Neurite / Soma – classical (merged channels)',
@@ -703,6 +708,8 @@ export default {
         'Compact U-Net (distilled from Meta SAM 3) for microcapsule instance segmentation — area, perimeter and compactness per capsule, with border-cut capsules excluded from metrics.',
       neurite_soma:
         'nnU-Net v2 ResEnc-M (2D, 3-fold ensemble) for neurite and soma segmentation in fluorescence microscopy. Reads the tubulin channel; held-out Dice 0.832 neurite / 0.915 soma. Trained on Leica confocal data at ~0.180 µm/px — validate soma counts on a different pixel size.',
+      neurite_soma_merged:
+        'nnU-Net v2 ResEnc-M (2D, 4-fold ensemble) for neurite and soma segmentation on fluorescence images merged from several channels: you tick the channels, each is normalised to its own background noise and they are merged into one greyscale image. Held-out Dice 0.843 neurite / 0.879 soma, on 15 expert-corrected frames from four wells at about 0.18 µm/px. On dim staining it finds only part of the neurites and often no somas, so check those images in the editor.',
       neurite_soma_classical:
         'Classical neurite and soma segmentation with no neural network and no weights (Meijering ridge filter plus shape rules; CPU only, about 1.3 s per 1024 × 1024 frame). For fluorescence images where a cell is only visible when several channels are taken together: you tick the channels, each is normalised to its own background noise and they are merged into one greyscale image. Faint, diffuse somas are found only some of the time — check them in the editor.',
     },
@@ -1945,9 +1952,9 @@ export default {
             'The same architecture as Sperm Morphology, fine-tuned from it on sperm annotated as head and tail only. Each cell comes back as two polylines — the head, which here covers the whole helical part, welded to the tail — so the head–tail boundary is learned rather than obtained by folding the midpiece into a neighbouring part.',
         },
         microtubule: {
-          name: 'Microtubule (SPARSE35)',
+          name: 'Microtubule (V16)',
           inferenceTime:
-            'About 0.6 s per frame · threshold fixed at 0.98 and not user-settable',
+            'About 0.6–2.5 s per frame · threshold fixed at 0.995 and not user-settable',
           bestFor: 'Used by: Microtubule projects. IRM images only.',
           description:
             'An nnU-Net ResEnc-M network predicts the filament foreground, then a curvature-bounded instancer separates it into individual centerlines, resolving every crossing under a hard curvature bound. Trained entirely on synthetic frames. Runtime scales with the number of filaments, not just frame size.',
@@ -1968,14 +1975,14 @@ export default {
           description:
             'An nnU-Net v2 ResEnc-M ensemble of three folds, averaged in logit space with mirroring test-time augmentation and a clDice topology term that keeps thin processes connected rather than beaded. Held-out Dice 0.832 neurite / 0.915 soma. Trained on Leica confocal data at about 0.180 µm/px — at half that pixel size each soma tends to come back split in two, so validate soma counts first.',
         },
-        neuriteSomaClassical: {
-          name: 'Neurite / Soma (classical)',
+        neuriteSomaMerged: {
+          name: 'Neurite / Soma (merged channels)',
           inferenceTime:
-            'About 1.3 s for a 1024 × 1024 frame, on the CPU · no threshold setting — the cut follows the image’s own noise',
+            'About 2.6 s for a 1024 × 1024 frame · no threshold — the decision is an argmax',
           bestFor:
-            'Used by: Neurite & soma projects, when you pick it instead of the default. For fluorescence images where a cell is only visible when several channels are taken together.',
+            'Used by: Neurite & soma projects, when you pick it. For fluorescence images where a cell shows when several channels are taken together, with reasonably bright staining.',
           description:
-            'A classical method: no neural network, no weights, no training. Before segmenting you tick one or more channels; each is normalised to its own background noise and they are merged by pixel-wise maximum into one greyscale image, which is what gets segmented. Neurites come from a Meijering ridge filter with a threshold relative to the image’s own noise, and short isolated fragments (under about 100 px) are discarded as background stains. Somas are wide, compact structures with neurites leaving them. Holes, such as the inside of a neurite loop, are kept as holes. Faint, diffuse somas are found only some of the time, so check and correct the somas in the editor. Images over 64 megapixels are refused.',
+            'An nnU-Net v2 ResEnc-M ensemble of four folds, averaged in logit space with mirroring test-time augmentation. Before segmenting you tick one or more channels; each is normalised to its own background noise and they are merged by pixel-wise maximum into one greyscale image, which is what the network sees. Trained on 15 frames corrected by hand, from four wells, at about 0.18 µm/px. Each well was held out once: Dice 0.843 neurite / 0.879 soma. That is the score of one fold; the ensemble has no held-out frames left to measure it on. On dim staining it finds only part of the neurites and often no somas, so check those images in the editor. It also marks large untidy cell bodies as somas, which an annotator may have left out.',
         },
       },
       howToSelect: 'Choosing a model',
@@ -1995,7 +2002,7 @@ export default {
       },
       thresholdNote: 'Detection thresholds are fixed per model.',
       thresholdNoteText:
-        'There is no threshold control in the interface: each model that uses a threshold applies the cut it was validated with — the microtubule model’s is 0.98 — and two models (Spheroid Disintegration, Neurite / Soma) have none at all: they decide by argmax. The classical neurite model has no setting either: it derives its cut from each image’s own noise. Lowering a threshold does not find more real objects — it finds more with weaker evidence, and on a non-IRM channel the microtubule output does not follow the image at any setting. If detections are missing, check the input channel instead.',
+        'There is no threshold control in the interface: each model that uses a threshold applies the cut it was validated with — the microtubule model’s is 0.995 — and two models (Spheroid Disintegration, Neurite / Soma) have none at all: they decide by argmax. The classical neurite model has no setting either: it derives its cut from each image’s own noise. Lowering a threshold does not find more real objects — it finds more with weaker evidence, and on a non-IRM channel the microtubule output does not follow the image at any setting. If detections are missing, check the input channel instead.',
       tip: 'Tip:',
       tipText:
         'Start with the default model. Reach for CBAM-ResUNet when boundaries matter more than speed, and for Mamba-UNet when your images do not look like anyone’s training set.',
@@ -2040,7 +2047,7 @@ export default {
       },
       processingNote: 'Processing time depends on the model:',
       processingTimes:
-        'the wound model takes about 0.03 s per image and the spheroid models about 0.2–0.4 s, while the microtubule model takes around 0.6 s per frame because separating individual filaments is the expensive part.',
+        'the wound model takes about 0.03 s per image and the spheroid models about 0.2–0.4 s, while the microtubule model takes around 0.6–2.5 s per frame because separating individual filaments is the expensive part.',
     },
 
     // Editor

@@ -634,7 +634,7 @@ export default {
         microtubule: {
           name: 'Mikrotubuly (ResEnc-M + zakřivený instancer)',
           description:
-            'Instanční segmentace mikrotubulů pro IRM časosběrná videa. Síť nnU-Net ResEnc-M předpoví popředí vláken a instancer je rozdělí na jednotlivé centerline, přičemž každé křížení řeší pod tvrdou mezí zakřivení 0,25 rad/px. Trénováno výhradně na syntetických snímcích — bez lidských anotací. ~0,6 s/frame; jediný model v platformě s nativním polyline výstupem.',
+            'Instanční segmentace mikrotubulů pro IRM časosběrná videa. Síť nnU-Net ResEnc-M předpoví popředí vláken a instancer je rozdělí na jednotlivé centerline, přičemž každé křížení řeší pod tvrdou mezí zakřivení 0,25 rad/px. Trénováno výhradně na syntetických snímcích — bez lidských anotací. ~0,6–2,5 s/frame; jediný model v platformě s nativním polyline výstupem.',
         },
         microcapsule: {
           name: 'Microcapsule',
@@ -645,6 +645,11 @@ export default {
           name: 'Neurit / Soma (nnU-Net ResEnc-M)',
           description:
             'Dvoutřídní sémantická segmentace neuronů ve fluorescenční mikroskopii — neurit (výběžky) a soma (tělo buňky) — pouze z tubulinového kanálu. nnU-Net v2 ResEnc-M, ansámbl 3 foldů se zrcadlovou TTA a topologickým členem clDice pro třídu neurit. Dice na testovací sadě 0,832 neurit / 0,915 soma.',
+        },
+        neurite_soma_merged: {
+          name: 'Neurit / Soma – nnU-Net (sloučené kanály)',
+          description:
+            'Dvoutřídní sémantická segmentace neuronů — neurit a soma — pro fluorescenční snímky, na nichž je buňka vidět až po spojení několika kanálů. Kanály zaškrtnete před segmentací; každý se normalizuje na vlastní šum a sloučí se do jednoho šedotónového obrazu, který segmentuje ansámbl 4 foldů nnU-Net v2 ResEnc-M. Dice na držených snímcích 0,843 neurit / 0,879 soma. Při slabém barvení najde jen část neuritů a často žádná somata, proto takové snímky zkontrolujte v editoru.',
         },
         neurite_soma_classical: {
           name: 'Neurit / Soma – klasický (sloučené kanály)',
@@ -688,6 +693,8 @@ export default {
         'Kompaktní U-Net (destilovaný z Meta SAM 3) pro instanční segmentaci mikrokapsulí — plocha, obvod a kompaktnost každé kapsule; kapsule přesahující okraj snímku jsou vyloučeny z metrik.',
       neurite_soma:
         'nnU-Net v2 ResEnc-M (2D, ansámbl 3 foldů) pro segmentaci neuritů a somat ve fluorescenční mikroskopii. Čte tubulinový kanál; Dice na testovací sadě 0,832 neurit / 0,915 soma. Trénováno na konfokálních datech Leica při ~0,180 µm/px — u jiné velikosti pixelu ověřte počty somat.',
+      neurite_soma_merged:
+        'nnU-Net v2 ResEnc-M (2D, ansámbl 4 foldů) pro segmentaci neuritů a somat na fluorescenčních snímcích sloučených z několika kanálů: kanály zaškrtnete, každý se normalizuje na vlastní šum pozadí a sloučí se do jednoho šedotónového obrazu. Dice na držených snímcích 0,843 neurit / 0,879 soma, na 15 ručně opravených snímcích ze čtyř jamek při asi 0,18 µm/px. Při slabém barvení najde jen část neuritů a často žádná somata, proto takové snímky zkontrolujte v editoru.',
       neurite_soma_classical:
         'Klasická segmentace neuritů a somat bez neuronové sítě a bez vah (Meijeringův hřebenový filtr a tvarová pravidla; jen CPU, asi 1,3 s na snímek 1024 × 1024). Pro fluorescenční snímky, na nichž je buňka vidět až po spojení několika kanálů: zaškrtnete kanály, každý se normalizuje na vlastní šum pozadí a sloučí se do jednoho obrazu ve stupních šedi. Slabá, rozplizlá somata najde jen někdy — zkontrolujte je v editoru.',
     },
@@ -1917,9 +1924,9 @@ export default {
             'Stejná architektura jako Morfologie spermií, doladěná z tohoto modelu na spermiích anotovaných jen jako hlavička a bičík. Každá buňka se vrací jako dvě polyline — hlavička, která zde zahrnuje celou šroubovicovou část, navázaná na bičík — takže hranici mezi hlavičkou a bičíkem se model naučil a nevzniká přičtením krčku k sousední části.',
         },
         microtubule: {
-          name: 'Mikrotubuly (SPARSE35)',
+          name: 'Mikrotubuly (V16)',
           inferenceTime:
-            'Přibližně 0,6 s na snímek · práh je pevně 0,98 a uživatel jej nemění',
+            'Přibližně 0,6–2,5 s na snímek · práh je pevně 0,995 a uživatel jej nemění',
           bestFor: 'Používá: projekty s mikrotubuly. Pouze snímky IRM.',
           description:
             'Síť nnU-Net ResEnc-M predikuje popředí vláken a pak instancer omezený křivostí rozdělí popředí na jednotlivé osy, přičemž každé křížení řeší pod pevnou mezí křivosti. Trénováno výhradně na syntetických snímcích. Doba běhu roste s počtem vláken, nejen s velikostí snímku.',
@@ -1940,14 +1947,14 @@ export default {
           description:
             'Ansámbl tří foldů nnU-Net v2 ResEnc-M, průměrovaný v prostoru logitů, s mirroring augmentací při inferenci a topologickým členem clDice, který drží tenké výběžky spojité místo přerušované. Na odložených datech Dice 0,832 pro neurity a 0,915 pro somata. Trénováno na konfokálních datech z Leiky při zhruba 0,180 µm/px — při poloviční velikosti pixelu se soma obvykle vrací rozdělená na dva kusy, takže si počty somat nejdřív ověřte.',
         },
-        neuriteSomaClassical: {
-          name: 'Neurit / soma (klasický)',
+        neuriteSomaMerged: {
+          name: 'Neurit / soma (sloučené kanály)',
           inferenceTime:
-            'Přibližně 1,3 s na snímek 1024 × 1024, na CPU · práh se nenastavuje — řídí se šumem samotného snímku',
+            'Přibližně 2,6 s na snímek 1024 × 1024 · bez prahu — rozhoduje argmax',
           bestFor:
-            'Používají: projekty s neurity a somaty, pokud ho zvolíte místo výchozího. Pro fluorescenční snímky, na nichž je buňka vidět až po spojení několika kanálů.',
+            'Používají: projekty s neurity a somaty, pokud ho zvolíte. Pro fluorescenční snímky, na nichž je buňka vidět až po spojení několika kanálů, s rozumně silným barvením.',
           description:
-            'Klasická metoda: žádná neuronová síť, žádné váhy, žádné trénování. Před segmentací zaškrtnete jeden nebo více kanálů; každý se normalizuje na vlastní šum pozadí a kanály se sloučí maximem po pixelech do jednoho obrazu ve stupních šedi, který se pak segmentuje. Neurity hledá Meijeringův hřebenový filtr s prahem vztaženým k šumu samotného snímku a krátké osamocené úlomky (pod zhruba 100 px) se zahazují jako skvrny v pozadí. Somata jsou široké, kompaktní útvary, ze kterých vycházejí neurity. Díry, například vnitřek smyčky neuritu, zůstávají dírami. Slabá, rozplizlá somata najde jen někdy, proto somata v editoru zkontrolujte a opravte. Snímky nad 64 megapixelů odmítne.',
+            'Ansámbl čtyř foldů nnU-Net v2 ResEnc-M, průměrovaný v prostoru logitů se zrcadlovou augmentací při inferenci. Před segmentací zaškrtnete jeden nebo více kanálů; každý se normalizuje na vlastní šum pozadí a kanály se sloučí maximem po pixelech do jednoho šedotónového obrazu, který síť vidí. Trénováno na 15 ručně opravených snímcích ze čtyř jamek při asi 0,18 µm/px. Každá jamka byla jednou držená stranou: Dice 0,843 neurit / 0,879 soma. To je skóre jednoho foldu; pro celý ansámbl už žádné držené snímky nezbyly. Při slabém barvení najde jen část neuritů a často žádná somata, proto takové snímky zkontrolujte v editoru. Označuje také velká neuklizená těla buněk jako somata, která anotátor mohl vynechat.',
         },
       },
       howToSelect: 'Výběr modelu',
@@ -1966,7 +1973,7 @@ export default {
       },
       thresholdNote: 'Prahy detekce jsou pevně dané pro každý model.',
       thresholdNoteText:
-        'V rozhraní žádné nastavení prahu není: každý model, který práh používá, pracuje s řezem, se kterým byl validován — u mikrotubulů je to 0,98 — a dva modely (Rozpad sferoidů, Neurit / soma) žádný práh nemají: rozhodují argmaxem. Ani klasický model pro neurity žádné nastavení nemá: řez si odvozuje ze šumu každého snímku. Snížení prahu nenajde více skutečných objektů — najde jich více se slabším důkazem, a na jiném než IRM kanálu výstup mikrotubulového modelu nesleduje obraz při žádném nastavení. Pokud detekce chybí, zkontrolujte raději vstupní kanál.',
+        'V rozhraní žádné nastavení prahu není: každý model, který práh používá, pracuje s řezem, se kterým byl validován — u mikrotubulů je to 0,995 — a dva modely (Rozpad sferoidů, Neurit / soma) žádný práh nemají: rozhodují argmaxem. Ani klasický model pro neurity žádné nastavení nemá: řez si odvozuje ze šumu každého snímku. Snížení prahu nenajde více skutečných objektů — najde jich více se slabším důkazem, a na jiném než IRM kanálu výstup mikrotubulového modelu nesleduje obraz při žádném nastavení. Pokud detekce chybí, zkontrolujte raději vstupní kanál.',
       tip: 'Tip:',
       tipText:
         'Začněte výchozím modelem. Po CBAM-ResUNetu sáhněte, když jsou hranice důležitější než rychlost, a po Mamba-UNetu, když vaše snímky nevypadají jako ničí trénovací data.',
@@ -2011,7 +2018,7 @@ export default {
       },
       processingNote: 'Doba zpracování závisí na modelu:',
       processingTimes:
-        'model hojení ran zabere zhruba 0,03 s na snímek a sferoidové modely 0,2–0,4 s, zatímco model mikrotubulů asi 0,6 s na snímek, protože oddělení jednotlivých vláken je ta nákladná část.',
+        'model hojení ran zabere zhruba 0,03 s na snímek a sferoidové modely 0,2–0,4 s, zatímco model mikrotubulů asi 0,6–2,5 s na snímek, protože oddělení jednotlivých vláken je ta nákladná část.',
     },
 
     // Editor

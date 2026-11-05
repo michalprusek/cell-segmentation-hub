@@ -12,7 +12,7 @@ import {
 
 /**
  * SSOT contract tests for the frontend model registry. These assert the
- * canonical 13-model set, declaration order, the verified project-type
+ * canonical 14-model set, declaration order, the verified project-type
  * compatibility matrix, and the full derived `ModelInfo` shape — guarding
  * against drift between the registry and what consumers expect.
  */
@@ -30,6 +30,7 @@ const CANONICAL_IDS: ModelType[] = [
   'microtubule',
   'microcapsule',
   'neurite_soma',
+  'neurite_soma_merged',
   'neurite_soma_classical',
 ];
 
@@ -45,10 +46,10 @@ const MODEL_INFO_KEYS: Array<keyof ModelInfo> = [
 ];
 
 describe('model registry SSOT', () => {
-  it('registry keys are exactly the canonical 13 models, in order', () => {
+  it('registry keys are exactly the canonical 14 models, in order', () => {
     expect(Object.keys(MODEL_REGISTRY)).toEqual(CANONICAL_IDS);
     expect(ALL_MODEL_IDS).toEqual(CANONICAL_IDS);
-    expect(ALL_MODEL_IDS).toHaveLength(13);
+    expect(ALL_MODEL_IDS).toHaveLength(14);
   });
 
   it('MODEL_TYPE_COMPATIBILITY deep-equals the verified matrix (incl. order)', () => {
@@ -65,7 +66,7 @@ describe('model registry SSOT', () => {
       sperm: ['sperm', 'sperm_2part'],
       microtubules: ['microtubule'],
       microcapsule: ['microcapsule'],
-      neurite: ['neurite_soma', 'neurite_soma_classical'],
+      neurite: ['neurite_soma', 'neurite_soma_merged'],
     });
   });
 
@@ -235,19 +236,19 @@ describe('model registry SSOT', () => {
       },
       microtubule: {
         id: 'microtubule',
-        name: 'Microtubule (SPARSE35)',
+        name: 'Microtubule (V16)',
         displayName: 'Microtubule (ResEnc-M + curvature instancer)',
         description:
-          'Instance segmentation for IRM microtubule time-lapses. An nnU-Net ResEnc-M network predicts the filament foreground, then a curvature-bounded instancer separates it into individual centerlines, resolving every crossing by min-cost matching under a hard 0.25 rad/px bound. The network runs at native resolution. Trained entirely on synthetic frames — no human annotation at any stage. Cross-frame tracking for kymograph analysis is geometric. The only model in the platform producing polyline output.',
+          'Instance segmentation for IRM microtubule time-lapses. An nnU-Net ResEnc-M network predicts the filament foreground, then a curvature-bounded instancer separates it into individual centerlines, resolving every crossing by one global matching of arc ends under a hard 0.25 rad/px bound. The network runs at native resolution. Trained entirely on synthetic frames — no human annotation at any stage. Cross-frame tracking for kymograph analysis is geometric. The only model in the platform producing polyline output.',
         size: 'large',
-        // NOT the generic 0.5: this model's foreground is very confident and
-        // the model's own vector cuts at 0.98.
+        // NOT the generic 0.5, and ignored on the wire: the ML route applies
+        // the model's own cut (0.995) from its params vector.
         defaultThreshold: 0.98,
         category: 'microtubule',
         performance: {
-          avgTimePerImage: 0.6,
-          throughput: 1.7,
-          p95Latency: 2.0,
+          avgTimePerImage: 2.0,
+          throughput: 0.5,
+          p95Latency: 4.0,
           batchSize: 1,
         },
       },
@@ -280,6 +281,22 @@ describe('model registry SSOT', () => {
           avgTimePerImage: 12,
           throughput: 0.083,
           p95Latency: 120,
+          batchSize: 1,
+        },
+      },
+      neurite_soma_merged: {
+        id: 'neurite_soma_merged',
+        name: 'Neurite / Soma (merged channels)',
+        displayName: 'Neurite / Soma – nnU-Net (merged channels)',
+        description:
+          'Two-class semantic segmentation of neurons for fluorescence images where the cell shows when several channels are taken together. You tick the channels before segmenting; each is normalised to its own noise and they are merged into one greyscale image, which an nnU-Net v2 ResEnc-M 4-fold ensemble segments. Held-out Dice 0.843 neurite / 0.879 soma on 15 expert-corrected frames from four wells at about 0.18 um/px. On dim staining it finds only part of the neurites and often no somas, so check those images in the editor.',
+        size: 'large',
+        defaultThreshold: 0.5,
+        category: 'neurite',
+        performance: {
+          avgTimePerImage: 2.6,
+          throughput: 0.38,
+          p95Latency: 3,
           batchSize: 1,
         },
       },
@@ -316,15 +333,17 @@ describe('model registry SSOT', () => {
       microtubule: 'microtubule',
       microcapsule: 'microcapsule',
       neurite_soma: 'neurite_soma',
+      neurite_soma_merged: 'neurite_soma_merged',
       neurite_soma_classical: 'neurite_soma_classical',
     });
   });
 
-  it('only the classical neurite model merges channels', () => {
+  it('only the two merged-channel neurite models merge channels', () => {
     // The flag is what turns the channel picker into checkboxes and what the
-    // backend accepts a `channels` list for; a second model gaining it by
+    // backend accepts a `channels` list for; another model gaining it by
     // accident would start sending lists its ML branch never reads.
     expect(ALL_MODEL_IDS.filter(id => modelMergesChannels(id))).toEqual([
+      'neurite_soma_merged',
       'neurite_soma_classical',
     ]);
     expect(modelMergesChannels(undefined)).toBe(false);

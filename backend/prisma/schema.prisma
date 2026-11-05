@@ -243,7 +243,8 @@ model SegmentationQueue {
   // of the path so the user's Segment-All channel choice is honored.
   channel     String?
   // The channels this item's image is MERGED from, for a model that segments
-  // one image built out of several channels (`neurite_soma_classical`). Empty
+  // one image built out of several channels (`neurite_soma_classical`,
+  // `neurite_soma_merged`). Empty
   // for every other model. Separate from `channel`, which names ONE channel to
   // read instead of the default and keys the static-channel collapse.
   mergeChannels String[] @default([])

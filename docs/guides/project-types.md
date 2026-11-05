@@ -35,7 +35,7 @@ model stay on disk but cannot be re-run.
 | ---------------------------------- | ----------------------------- | ------------------------------------ | ------------------------------------- | ---------------------------- | --------------------------------------------- | ---------------------------------- | --------------------------------------------------------------- |
 | **Models available**               | 5                             | 1                                    | 1                                     | 2                            | 1                                             | 1                                  | 2                                                               |
 | **Model choice honoured**          | yes                           | forced                               | forced                                | yes                          | forced                                        | forced                             | yes                                                             |
-| **Threshold**                      | 0.5                           | **none — the decision is an argmax** | 0.5                                   | 0.5 (model overrides it)     | **0.98**, fixed in the model's own parameters | 0.5                                | **none — an argmax, or a cut from the image's own noise**       |
+| **Threshold**                      | 0.5                           | **none — the decision is an argmax** | 0.5                                   | 0.5 (model overrides it)     | **0.995**, fixed in the model's own parameters | 0.5                                | **none — an argmax, or a cut from the image's own noise**       |
 | **Output geometry**                | closed polygons + holes       | closed polygons, core class          | closed polygons                       | open polylines, 3 or 2 parts | **open polylines**                            | closed polygons                    | closed polygons, two classes (+ holes from the classical model) |
 | **Per-shape fields**               | —                             | `partClass: core`                    | —                                     | `partClass`, `instanceId`    | `trackId`, `mtType`                           | `complete`                         | `partClass: neurite \| soma`, `somaIds`                         |
 | **Video / multi-channel**          | supported                     | supported                            | typical                               | supported                    | **central**                                   | supported                          | supported; the classical model merges the channels you tick     |
@@ -52,11 +52,11 @@ model stay on disk but cannot be re-run.
 
 - **`neurite_soma`** (default) — a trained network that reads ONE channel,
   tubulin. Use it when the cells are visible in that channel.
-- **`neurite_soma_classical`** — a classical, training-free method (no network,
-  no weights, CPU). Use it when a cell is only visible when several channels
-  are taken together. Its channel picker shows **checkboxes**: tick one or more
-  channels, and they are merged into one greyscale image that is segmented.
-  Nothing is ticked by default and Confirm is disabled until one is.
+- **`neurite_soma_merged`** — the same network retrained on several fluorescent
+  channels merged. Use it when a cell shows when they are taken together. Its
+  channel picker shows **checkboxes**: tick one or more channels, and they are
+  merged into one greyscale image that is segmented. Nothing is ticked by default
+  and Confirm is disabled until one is.
 
 Either way the export is `neurite_metrics/` — `Neurites`, `Somas` and an
 `Intensity` table with the intensity of somas and neurites on every channel of
@@ -77,13 +77,12 @@ registry's `defaultThreshold` is the cut. **Six never read it**, and editing
 the registry changes nothing for them:
 
 - `microtubule` applies `prob_thr` from
-  `backend/segmentation/models/microtubule/params_sparse35.json` (0.98);
+  `backend/segmentation/models/microtubule/params_v16.json` (0.995);
 - `sperm` and `sperm_2part` apply their own cut-offs inside the model wrapper
   (mask 0.3, score 0.95);
 - `spheroid_disintegration` and `neurite_soma` decide by argmax and have no
   threshold to change;
-- `neurite_soma_classical` cuts relative to each image's own noise, with the
-  parameters in `PARAMS` in `backend/segmentation/models/neurite_classical.py`.
+- `neurite_soma_merged` decides by argmax too.
 
 The authoritative list is the `threshold` field of each entry in
 `backend/src/api/v1/models.ts`, which mirrors

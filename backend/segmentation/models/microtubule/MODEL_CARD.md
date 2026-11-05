@@ -1,6 +1,115 @@
-# Microtubule model card — SPARSE35 ep040
+# Microtubule model card
 
-Deployed to SpheroSeg on 2026-09-19, replacing v5H (deployed 2026-08-17). This is the
+**V16 DEB_S4 ep040** serves interactive segmentation, FRAP targets and the Automated Essays batch
+since 2026-11-03 (§0). The batch follows the interactive model by the owner's rule, and
+`backend/essays/tests/test_batch_follows_interactive.py` fails if they differ. **SPARSE35 ep040** is
+loaded by no service any more; the rest of this card (§1–§12) is its record, unchanged except where
+it says so.
+
+## 0. V16 DEB_S4 ep040 (interactive and Essays, since 2026-11-03)
+
+| | |
+|---|---|
+| Model | `V16 DEB_S4 ep040` — same nnU-Net ResEnc-M topology as SPARSE35 + instancer L+H, **no learned decoder** |
+| Checkpoint | `weights/microtubule_v16_deb_s4_ep040.pth`, 560 307 978 bytes, sha256 `8fc22555737b2054f89c73db417314e5f4f89be0d4514bc60c6993508ec42f73` |
+| Source of record | `kajman:/data2/prusek/mt_work/runs/DEB_S4/ep040.pth` (trained 2026-11-01, seed 20260907) |
+| Parameters | `params_v16.json`: the derived graph constants of `params_sparse35.json`, the link score, reach 80, hysteresis 0.98 / 22.5 |
+| Foreground cut | **0.995** (not a user setting) |
+| Inference | native resolution, 512 px tiles, **stride 256, Gaussian mean of logits**, bf16 on CUDA, ×1.5 resampling, float16 rounding of the map |
+| Annotation used | **none** in training — synthetic frames only |
+
+**Training recipe.** 40 epochs of the project's synthetic generator with three changes over SPARSE35:
+a mixture of correlated noise models, anti-aliased filament rendering, and compact debris (0–40
+objects per 640 px crop) as unlabelled distractors. Calibration `calib_V16_debris.json`, research repo.
+
+**Decoder.** `instance/instancer_lh.py`. Pixels above 0.98 near a junction join the mask only if they
+connect at least two components at the cut (H). Every pair of arc ends within 80 px that does not break
+the curvature bound gets a link score, a logistic fit on synthetic links only, on five hand features.
+One max-weight matching over the frame then decides the chains (L). See the file's docstring for the
+source of record.
+
+**Scores.** Centerline F1, tol 5 px at the 1.5× frame, coverage 0.80 / 0.80, pooled micro, ep040.
+
+| | roi303 v2 TEST (128 fr, 39 fields) | htw TEST (33 fr) |
+|---|---|---|
+| SPARSE35 seed 1 + instancer A, block's own cut | 0.640 (0.99) | 0.601 (0.995) |
+| SPARSE35 seed 1 + instancer A, as it ran here (cut 0.98) | not measured | 0.565 |
+| **DEB_S4 + L+H, reach 60, block's own cut** | **0.717** (0.995) | **0.715** (0.99) |
+| V16 recipe, 4 seeds, reach 60, own cuts | 0.715 | 0.699 |
+
+| VAL, as deployed unless stated | roi303 v2 (145 fr) | htw (33 fr) | MT-34 (17 fr) |
+|---|---|---|---|
+| DEB_S4 + L+H, reach 80, cut 0.995 | **0.741** | **0.751** | **0.681** |
+| same at cut 0.99 | 0.732 | 0.754 | 0.675 |
+
+What the TEST table does not cover, stated so that nobody reads more into it: reach 80 and the
+single cut 0.995 were never read on TEST (at 0.995 the htw cell above would differ), the seed was chosen on VAL, and DEB_S4 is
+the high outlier of its recipe on htw, so 0.699 is the sober htw figure. TEST was used three
+times during development. The two models were measured on different hosts; the host of V16
+reads about +0.007 higher on roi303. Match reach 80 missed its declared VAL line and was accepted by the
+owner after the read. The MT-34 numbers of the research ledger were read under uniform fusion;
+the table above is under Gaussian fusion, as deployed.
+
+**Why 0.995.** DEB_S4's own VAL cuts differ by block (roi303 0.995, htw and MT-34 0.99) and production
+carries one. The rule, declared before reading: higher block mean of htw and roi303 on VAL, ties to the higher
+cut. It gives 0.7462 against 0.7427. MT-34, the block nearest to production frames by filament width,
+is not in the rule and agrees under Gaussian fusion (0.681 against 0.675; the uniform maps of the
+research ledger said the opposite, 0.666 against 0.686).
+
+**What users will notice.** Filaments keep their identity through crossings more often, and fewer
+detections land on debris. Curves under 20 px are found less often than the recipe without
+debris would find them: recall 0.54 / 0.70 (htw / roi303) for this seed against 0.53 / 0.74 for that
+recipe's mean. Large frames take about twice the tiles.
+
+**Verification, 2026-11-03.** On all 195 VAL frames (145 roi303, 33 htw, 17 MT-34): `instance_lh` on the research
+maps gives the research polylines at 0.000000 px, 9 754 curves; a mutated reach (60) fails that comparison.
+The whole wrapper on the same frames reproduces them within 1e-9 px on the research host, and its output after RDP keeps the counts:
+roi303 0.7411, htw 0.7513, MT-34 0.6810. Inside the ML image, whose scipy, skimage and networkx differ, the decoder
+is again identical on all 195. torch 2.6.0 against the research host's 2.5.1 moves the map by up to 0.04, which on the fixture and six real
+frames keeps every curve count and moves no matched curve by more than 0.4 px (`verify_microtubule_model.py`, default tolerances; strict ones need the same torch).
+
+**FRAP targets.** L+H links across gaps the network saw no filament in, and a spot in such a gap would bleach
+empty glass with nothing to catch it on a field without a fluorescence page. `frap_select.split_unsupported` therefore cuts a polyline where the
+map stays under 0.5 for more than 3 px, before selection. On the 195 VAL frames, at 0.11 µm/px, 2 of 1374 spots landed on such a stretch without it and none with it, and the spot count stays within 3.
+
+**Time bound.** The matching is cubic at worst and runs under the service's one inference lock with no deadline. Beyond `max_arcs` (2000;
+the densest VAL frame has 1224) a frame falls back to `instance_a` with a logged warning. That is a bound on garbage input, such as a non-IRM channel, not a measured operating point.
+
+See §8b for the production record.
+
+**Rollback.** The previous checkpoint stays on disk, and its file name selects its own pipeline. Point
+`pretrained_path` and `finetuned_path` in `model_loader.py` back at `microtubule_sparse35_ep040.pth`, rebuild `ml` and recreate
+it; the previous image is also tagged `cell-segmentation-hub-ml:pre-mt-v16` for an immediate switch.
+
+### 8b. V16 deployment record
+
+| step | result |
+|---|---|
+| checkpoint staged on cvat2, copied into `backend/segmentation/weights/` (uid 999) | ✅ 2026-11-03, sha256 `8fc22555…f73` verified on arrival and in the container, 560 307 978 B; SPARSE35 untouched beside it |
+| built on top of `feat/neurite-soma-merged` `cc783e5c` (a concurrent deployment), local branch `deploy/mt-v16-on-neurite`, merge `2833871f` | ✅ `make build-service` ml, backend, frontend; rollback images tagged `:pre-mt-v16` |
+| tests in the new image, with both real checkpoints | ✅ 157 passed, 0 skipped |
+| `scripts/verify_microtubule_model.py` in the image, fixture + 6 real VAL frames | ✅ ALL OK at default tolerances: every curve count equal, median 0.000 px, max 0.397 px. `--strict` fails by design here: reference from torch 2.5.1, image torch 2.6.0, map max \|Δp\| 0.036, 0 flips outside the float16 band |
+| recreate ml, backend, frontend, restart nginx | ✅ 2026-11-03 09:01 CET, queue empty; `/health` `production-healthy` |
+| container pinned to the commit (`md5sum` of wrapper, params, instancer, loader, `frap_select`) | ✅ 5 of 5 match `HEAD`; `spheroseg-essays` was then still on its 2026-10-06 image, `wrapper.py` md5 `375135db`, SPARSE35 (moved at 10:33, below) |
+| through the real queue, e2e account, project `5b9f24b4…`, 6 VAL frames, same frames before and after | ✅ curve counts equal to the research reference on all six, `threshold_used` 0.995 stored; pooled F1 0.681 before, 0.758 after (5 of 6 frames up; a small check, not a benchmark) |
+| FRAP targets on the running service | ✅ 2 VAL frames, 6 and 1 spots |
+| `neurite_soma_merged` survived the merge | ✅ the concurrent deployment's expected 19 polygons (12 neurite, 2 soma, 5 internal) |
+| in-app Documentation and landing page, browser, signed out | ✅ `Microtubule (V16)`, 0.995, no page errors |
+| browser check signed in (editor, overlay) | ⬜ not done: the sign-in needs the test account's password in a tool call |
+| **Essays moved to V16** (owner's word 2026-11-03 10:19: "dělej to vždy"): `spheroseg-essays` recreated | ✅ 2026-11-03 10:33 CET, no job running; old image tagged `cell-segmentation-hub-essays:pre-mt-v16` |
+| Essays through the real queue, e2e account, 4 VAL wells of the Alice recordings (060, 064, 066, 069), same files before and after | ✅ both jobs complete, empty `failures.csv`; `decoder` reads `lh` on all 4392 rows; curve counts equal to the research reference on all four (17, 25, 17, 13), p99 distance ≤ 0.43 px, max 1.32 px at 1.5×. Whole job 20.8 s before and after |
+| The same four frames scored against the MT-34 GT (a small check, not a benchmark) | pooled F1 0.871 before, 0.887 after: 060 0.824 → 0.970, 064 0.958 → 0.917, 066 0.737 → 0.686, 069 0.963 → 1.000 |
+| Essays GPU working set under V16, in the container, by a direct probe of `predict()` with no cap (the host-side watcher missed the job) | ✅ 1.22 GiB reserved, 0.93 allocated, the same at 1024² and 2048²; cap 2.88 GiB unchanged |
+| Tests in the images: Essays module suite with the real V16 checkpoint; microtubule suites | ✅ 138 passed, 0 skipped; 45 passed |
+
+The landing page's outlines (`src/components/landing/specimens.ts`) still predate this model, as they predated SPARSE35; regenerating them is open.
+
+---
+
+# SPARSE35 ep040
+
+Deployed to SpheroSeg on 2026-09-19, replacing v5H (deployed 2026-08-17), and since 2026-11-03
+loaded by no service. This is the
 reference for what the model is, how it was measured, what it scores, how the deployment
 was verified, and how to roll it back. Every number below has a source; none was re-typed
 from memory.

@@ -18,11 +18,12 @@ class ModelType(str, Enum):
     MICROTUBULE = "microtubule"
     NEURITE_SOMA = "neurite_soma"
     NEURITE_SOMA_CLASSICAL = "neurite_soma_classical"
+    NEURITE_SOMA_MERGED = "neurite_soma_merged"
 
 class SegmentationRequest(BaseModel):
     model: ModelType = Field(default=ModelType.HRNET, description="Model to use for segmentation")
-    # Ceiling 0.99, not 0.9. The microtubule model ships its OWN foreground
-    # cut (0.98; 0.97 under v5H), so a 0.9 bound rejected every request the
+    # Ceiling 0.99, not 0.9. The frontend sends 0.98 for the microtubule model,
+    # which applies its OWN cut anyway, so a 0.9 bound rejected every request the
     # frontend made for it. Kept in step with the Node API's
     # thresholdSchema (backend/src/types/validation.ts) — the two validate
     # the same value one hop apart, and only the second one is visible to

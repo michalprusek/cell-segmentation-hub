@@ -181,6 +181,24 @@ def test_a_black_8_bit_background_does_not_divide_by_zero():
     assert (label == 1).any()
 
 
+def test_native_depth_keeps_the_counts_of_a_16_bit_frame():
+    from PIL import Image
+
+    counts = np.array([[0, 300], [4000, 65535]], np.uint16)
+    out = nc.native_depth(Image.fromarray(counts))
+    assert out.dtype == np.uint16
+    assert out.tolist() == counts.tolist()
+
+
+def test_native_depth_reads_a_web_render_as_one_grey_channel():
+    from PIL import Image
+
+    grey = np.array([[0, 200], [17, 255]], np.uint8)
+    out = nc.native_depth(Image.fromarray(np.dstack([grey] * 3)))
+    assert out.dtype == np.uint8
+    assert out.tolist() == grey.tolist()
+
+
 def test_a_flat_channel_contributes_nothing(scene):
     # The constant fill of a plane the microscope did not acquire. Zeros are
     # not neutral in a maximum: merged in as zeros they clip the negative half

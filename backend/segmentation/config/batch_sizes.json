@@ -121,16 +121,16 @@
     "microtubule": {
       "optimal_batch_size": 1,
       "max_safe_batch_size": 1,
-      "expected_throughput": 1.7,
+      "expected_throughput": 0.5,
       "memory_limit_mb": 1500,
-      "p95_latency_ms": 2000.0,
+      "p95_latency_ms": 4000.0,
       "production_optimized": false,
       "concurrent_processing": {
         "max_concurrent_users": 1,
         "memory_per_user_mb": 1500,
-        "expected_concurrent_throughput": 1.7
+        "expected_concurrent_throughput": 0.5
       },
-      "note": "Microtubule SPARSE35 ep040 (2026-09-19; nnU-Net ResEnc-M + curvature-bounded instancer, NATIVE-scale inference). Throughput/latency MEASURED in this container 2026-09-19: 0.60-0.62 s predict() for a real 1024x1024 frame with 88 microtubules (= 1.6-1.7 img/s, which is what expected_throughput carries), and 1.79-1.88 s for 1924x1476 with 256 microtubules -- the modal production MT frame size, carrying more filaments than the production p95 of 146, which is what p95_latency_ms 2000 is sized for. Full table in models/microtubule/MODEL_CARD.md section 8. MEASURED in this container 2026-09-19 (not derived): peak 0.932 GiB allocated / 1.043 GiB reserved, FLAT across 512x512, 1024x1024 and 2048x2048 because the tile is always 512. That is HIGHER than v5H's 0.729 GiB measured the same day on the same frame -- the earlier note reasoned from pixel count and got the sign wrong, since native scale changes the tile COUNT and not the peak. The whole 0.203 GiB difference is the bf16 autocast weight cache (a bf16 copy of the 0.524 GiB of fp32 weights, live for the autocast region); with autocast off the figure returns to v5H's 0.205 GiB of activations exactly. memory_per_user_mb keeps 1500, which still clears the 1.043 GiB reserved plus CUDA context -- but the headroom is ~30%, not the comfortable margin the old note implied. Runtime is dominated by the single-threaded numpy instancer, so it scales with MT count rather than frame area. Batch size pinned to 1 -- frame-parallelism happens upstream via the queue. These numbers are SERVED over GET /api/v1/models and are what a VRAM-budget decision reads."
+      "note": "Microtubule V16 DEB_S4 ep040 (2026-11-03; nnU-Net ResEnc-M + instancer L+H, NATIVE-scale inference, Gaussian fusion at stride 256). MEASURED in the ML image on the production A5000 2026-11-03: 0.54 s predict() for a 1024x1024 frame with 22 microtubules, about 2 s for 2048x2048 with 36, about 4 s for 1952x1952 with 489; decoder alone on the densest benchmark frame (1224 arcs) 9.3 s on two cores. expected_throughput carries the 2048 figure. The essays batch keeps SPARSE35 ep040."
     },
     "microcapsule": {
       "optimal_batch_size": 1,
@@ -159,6 +159,20 @@
         "expected_concurrent_throughput": 0.25
       },
       "note": "Neurite/soma (nnU-Net v2 ResEnc-M, 2D, 3-fold logit-space ensemble, 3 classes). Measured 2026-08-28 on an A5000 with the live service already holding ~8.5 GB, across two runs at different card load: 2.5-4.0 s for 1024x1024, 12.9-14.9 s for 2048x2048, 132-150 s for the 6657x6664 frames it was trained on. Runtime is dominated by forward passes and scales with tile count, not content: a 1024x1024 frame is 9 tiles x 3 folds x 4 mirror variants = 108 passes of 512x512. VRAM: 1.70 GiB reserved for the three resident fold networks plus a per-call working set sized by the FRAME (the two fp16 accumulators are C x H x W) -- 3.35 GiB peak reserved on the 6657x6664 frame, ~2.2 GiB on 2048x2048; the 4000 MB here is the former plus the CUDA context. Batch size pinned to 1: batching would multiply the frame-sized accumulators, and frame-parallelism happens upstream via the queue. expected_throughput is the 1024x1024 figure (0.25 img/s); on native-resolution frames it is 0.0076. These numbers are SERVED over GET /api/v1/models and are what a VRAM-budget decision reads."
+    },
+    "neurite_soma_merged": {
+      "optimal_batch_size": 1,
+      "max_safe_batch_size": 1,
+      "expected_throughput": 0.38,
+      "memory_limit_mb": 3000,
+      "p95_latency_ms": 3000.0,
+      "production_optimized": false,
+      "concurrent_processing": {
+        "max_concurrent_users": 1,
+        "memory_per_user_mb": 3000,
+        "expected_concurrent_throughput": 0.38
+      },
+      "note": "Merged neurite/soma (nnU-Net v2 ResEnc-M, 2D, 4-fold logit-space ensemble, 3 classes). Measured 2026-11-03 in the ML image on the production A5000 with 5.6 GB already held: 2.52-2.71 s per 1024x1024 frame including polygons, peak 2.70 GB allocated and 2.96 GB reserved, 6.1 s to load 2.25 GB of weights. Scales with image area."
     },
     "neurite_soma_classical": {
       "optimal_batch_size": 1,

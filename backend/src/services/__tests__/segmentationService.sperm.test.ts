@@ -21,13 +21,9 @@ vi.mock('../../utils/config', () => ({
 }));
 
 vi.mock('../../storage');
-vi.mock('../segmentationThumbnailService');
-// Plain constructor inside factory: not a vi.fn(), so restoreMocks: true cannot
-// wipe the body between tests. metricsCalculator.sperm.test.ts has the same fix.
-vi.mock('../thumbnailManager', () => ({
-  ThumbnailManager: function MockThumbnailManager(this: any) {
-    this.generateAllThumbnails = vi.fn().mockResolvedValue(undefined);
-  },
+vi.mock('../previews/previewService', () => ({
+  previewService: { notifyChanged: vi.fn(), notifyContainerChanged: vi.fn() },
+  removePreviews: vi.fn(),
 }));
 vi.mock('../imageService');
 

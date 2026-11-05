@@ -10,7 +10,7 @@
  * storage/DB/ML is touched.
  *
  * A single module-level `controller` is constructed; its captured mock
- * instances (`imageServiceInstance`, `thumbService`) are reset per-test and
+ * instance (`imageServiceInstance`) is reset per-test and
  * configured per-test. Grouped per endpoint; each group covers request
  * validation, success + controller→service delegation, and error/permission
  * branches.
@@ -74,22 +74,6 @@ vi.mock('../../../services/imageService', () => {
   return { ImageService };
 });
 
-// SegmentationThumbnailService — capture the constructed instance so
-// regenerateThumbnails tests can drive generateBatchThumbnails per-test.
-let capturedThumb: Record<string, ReturnType<typeof vi.fn>> | undefined;
-vi.mock('../../../services/segmentationThumbnailService', () => {
-  const SegmentationThumbnailService = vi.fn().mockImplementation(function (
-    this: Record<string, unknown>
-  ) {
-    this.generateBatchThumbnails = vi.fn().mockResolvedValue(new Map());
-    this.getConcurrencyStatus = vi
-      .fn()
-      .mockReturnValue({ active: 0, queued: 0 });
-    capturedThumb = this as Record<string, ReturnType<typeof vi.fn>>;
-  });
-  return { SegmentationThumbnailService };
-});
-
 vi.mock('../../../services/websocketService', () => ({
   WebSocketService: {
     getInstance: vi.fn(() => ({
@@ -133,7 +117,6 @@ const imageServiceInstance = _instances[_instances.length - 1] as Record<
   string,
   ReturnType<typeof vi.fn>
 >;
-const thumbService = capturedThumb as Record<string, ReturnType<typeof vi.fn>>;
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const PROJECT_ID = 'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa';
@@ -242,10 +225,6 @@ describe('ImageController', () => {
     vi.mocked(prisma.image.count).mockReset();
     vi.mocked(prisma.segmentation.findUnique).mockReset();
     vi.mocked(SharingService.hasProjectAccess).mockReset();
-    thumbService.generateBatchThumbnails.mockReset().mockResolvedValue(new Map());
-    thumbService.getConcurrencyStatus
-      .mockReset()
-      .mockReturnValue({ active: 0, queued: 0 });
   });
 
   // ── uploadImages ─────────────────────────────────────────────────────────────
@@ -828,7 +807,6 @@ describe('ImageController', () => {
         projectId: PROJECT_ID,
         originalPath: 'projects/p/images/frame.png',
         thumbnailPath: null,
-        segmentationThumbnailPath: null,
         segmentationStatus: 'pending',
         fileSize: 1024,
         width: 800,
@@ -1046,12 +1024,41 @@ describe('ImageController', () => {
       expect(res.body.data.images[0].url).toBe(`/api/images/${IMAGE_ID}/display`);
     });
 
+    it('gives every row a previewUrl versioned by its segmentation', async () => {
+      const row = (updatedAt: string | null) =>
+        makePrismaImage({
+          segmentation: updatedAt
+            ? { id: 'seg-1', updatedAt: new Date(updatedAt), imageWidth: 8, imageHeight: 6 }
+            : null,
+        }) as never;
+      const list = async (segAt: string | null) => {
+        vi.mocked(prisma.image.findMany)
+          .mockResolvedValueOnce([row(segAt)])
+          .mockResolvedValueOnce([]);
+        vi.mocked(prisma.image.count).mockResolvedValue(1);
+        const res = await request(mountAuthed('get', '/:id', handler))
+          .get(`/${PROJECT_ID}`)
+          .query({ lod: 'low' })
+          .expect(200);
+        return res.body.data.images[0].previewUrl as string;
+      };
+
+      const bare = await list(null);
+      const saved = await list('2026-10-24T10:00:00.000Z');
+      const edited = await list('2026-10-24T10:05:00.000Z');
+
+      expect(bare).toMatch(/\/api\/images\/.+\/preview\?v=[0-9a-f]{16}$/);
+      expect(new Set([bare, saved, edited]).size).toBe(3);
+    });
+
     it('strips polygon data for LOD=low but keeps the count', async () => {
       const polygons = [{ id: 'p1', points: [{ x: 0, y: 0 }] }];
       vi.mocked(prisma.image.findMany)
         .mockResolvedValueOnce([
           makePrismaImage({
             segmentation: {
+              id: 'seg-1',
+              updatedAt: new Date('2026-10-24T10:00:00.000Z'),
               polygons: JSON.stringify(polygons),
               imageWidth: 800,
               imageHeight: 600,
@@ -1077,6 +1084,8 @@ describe('ImageController', () => {
         .mockResolvedValueOnce([
           makePrismaImage({
             segmentation: {
+              id: 'seg-1',
+              updatedAt: new Date('2026-10-24T10:00:00.000Z'),
               polygons: JSON.stringify(polygons),
               imageWidth: 800,
               imageHeight: 600,
@@ -1100,6 +1109,8 @@ describe('ImageController', () => {
         .mockResolvedValueOnce([
           makePrismaImage({
             segmentation: {
+              id: 'seg-1',
+              updatedAt: new Date('2026-10-24T10:00:00.000Z'),
               polygons: 'NOT_JSON',
               imageWidth: 800,
               imageHeight: 600,
@@ -1122,6 +1133,8 @@ describe('ImageController', () => {
         .mockResolvedValueOnce([
           makePrismaImage({
             segmentation: {
+              id: 'seg-1',
+              updatedAt: new Date('2026-10-24T10:00:00.000Z'),
               polygons: JSON.stringify({ not: 'array' }),
               imageWidth: 800,
               imageHeight: 600,
@@ -1287,167 +1300,6 @@ describe('ImageController', () => {
         .patch(`/${PROJECT_ID}`)
         .send(validBody)
         .expect(403);
-      expect(res.body.success).toBe(false);
-    });
-  });
-
-  // ── regenerateThumbnails ───────────────────────────────────────────────────
-  describe('regenerateThumbnails', () => {
-    function buildRegenApp(userId?: string) {
-      const app = express();
-      app.use(express.json());
-      if (userId) {
-        app.use((req: express.Request & { user?: unknown }, _res, next) => {
-          req.user = { id: userId };
-          next();
-        });
-      }
-      app.post('/:projectId', controller.regenerateThumbnails);
-      return app;
-    }
-
-    function makeImageWithSeg(name = 'cell.png') {
-      return {
-        id: IMAGE_ID,
-        name,
-        updatedAt: new Date(),
-        segmentation: { id: SEG_ID, imageId: IMAGE_ID },
-        segmentationThumbnailPath: null,
-      };
-    }
-
-    beforeEach(() => {
-      vi.mocked(SharingService.hasProjectAccess).mockResolvedValue({
-        hasAccess: true,
-      } as never);
-      vi.mocked(prisma.image.findMany).mockResolvedValue([
-        makeImageWithSeg() as never,
-      ]);
-    });
-
-    it('returns 401 when unauthenticated', async () => {
-      const res = await request(buildRegenApp())
-        .post(`/${PROJECT_ID}`)
-        .expect(401);
-      expect(res.body.success).toBe(false);
-    });
-
-    it('returns 400 when projectId param is absent', async () => {
-      const app = express();
-      app.use(express.json());
-      app.use((req: express.Request & { user?: unknown }, _res, next) => {
-        req.user = { id: USER_ID };
-        next();
-      });
-      app.post('/', controller.regenerateThumbnails);
-      const res = await request(app).post('/').expect(400);
-      expect(res.body.success).toBe(false);
-    });
-
-    it('returns 400 when limit is out of range', async () => {
-      const res = await request(buildRegenApp(USER_ID))
-        .post(`/${PROJECT_ID}`)
-        .query({ limit: '2000' })
-        .expect(400);
-      expect(res.body.success).toBe(false);
-    });
-
-    it('returns 404 when SharingService denies access', async () => {
-      vi.mocked(SharingService.hasProjectAccess).mockResolvedValue({
-        hasAccess: false,
-      } as never);
-      const res = await request(buildRegenApp(USER_ID))
-        .post(`/${PROJECT_ID}`)
-        .expect(404);
-      expect(res.body.success).toBe(false);
-    });
-
-    it('dry-run returns counts without regenerating', async () => {
-      vi.mocked(prisma.image.findMany).mockResolvedValue([
-        {
-          id: IMAGE_ID,
-          name: 'cell.png',
-          updatedAt: new Date(),
-          segmentation: { id: SEG_ID, imageId: IMAGE_ID },
-          segmentationThumbnailPath: null,
-        } as never,
-      ]);
-
-      const res = await request(buildRegenApp(USER_ID))
-        .post(`/${PROJECT_ID}`)
-        .query({ dryRun: 'true' })
-        .expect(200);
-
-      expect(res.body.success).toBe(true);
-      expect(res.body.data.imagesWithMissingThumbnails).toBe(1);
-      expect(thumbService.generateBatchThumbnails).not.toHaveBeenCalled();
-    });
-
-    it('returns 200 with zero counts when no image needs regeneration', async () => {
-      vi.mocked(prisma.image.findMany).mockResolvedValue([
-        {
-          id: IMAGE_ID,
-          name: 'no-seg.png',
-          updatedAt: new Date(),
-          segmentation: null,
-        } as never,
-      ]);
-
-      const res = await request(buildRegenApp(USER_ID))
-        .post(`/${PROJECT_ID}`)
-        .expect(200);
-      expect(res.body.data.regeneratedCount).toBe(0);
-    });
-
-    it('reports failedCount and failedImages when generation returns null values', async () => {
-      thumbService.generateBatchThumbnails.mockResolvedValueOnce(
-        new Map([[SEG_ID, null]])
-      );
-
-      const res = await request(buildRegenApp(USER_ID))
-        .post(`/${PROJECT_ID}`)
-        .expect(200);
-
-      expect(res.body.data.failedCount).toBe(1);
-      expect(res.body.data.regeneratedCount).toBe(0);
-      expect(res.body.data.failedImages).toContain('cell.png');
-      expect(res.body.message).toMatch(/selhalo/);
-    });
-
-    it('reports full success (failedCount 0) with processingTime + concurrencyStatus', async () => {
-      thumbService.generateBatchThumbnails.mockResolvedValueOnce(
-        new Map([[SEG_ID, 'http://storage/thumb.png']])
-      );
-
-      const res = await request(buildRegenApp(USER_ID))
-        .post(`/${PROJECT_ID}`)
-        .expect(200);
-
-      expect(res.body.data.regeneratedCount).toBe(1);
-      expect(res.body.data.failedCount).toBe(0);
-      expect(res.body.data.failedImages).toBeUndefined();
-      expect(res.body.message).not.toMatch(/selhalo/);
-      expect(typeof res.body.data.processingTime).toBe('number');
-      expect(res.body.data.concurrencyStatus).toBeDefined();
-    });
-
-    it('forwards an ApiError status (e.g. 403) from the service', async () => {
-      thumbService.generateBatchThumbnails.mockRejectedValueOnce(
-        ApiError.forbidden('Access denied')
-      );
-      const res = await request(buildRegenApp(USER_ID))
-        .post(`/${PROJECT_ID}`)
-        .expect(403);
-      expect(res.body.success).toBe(false);
-    });
-
-    it('returns 500 for an unexpected error', async () => {
-      thumbService.generateBatchThumbnails.mockRejectedValueOnce(
-        new Error('Database exploded')
-      );
-      const res = await request(buildRegenApp(USER_ID))
-        .post(`/${PROJECT_ID}`)
-        .expect(500);
       expect(res.body.success).toBe(false);
     });
   });

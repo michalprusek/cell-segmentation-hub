@@ -571,16 +571,25 @@ describe('field mapping', () => {
       });
     }
 
-    it('derives segmentationThumbnailUrl from segmentationThumbnailPath', async () => {
+    it('carries the versioned previewUrl through, resolvable', async () => {
       mockAxiosInstance.get.mockResolvedValue(
         imageResponse({
           originalUrl: 'http://host/img.png',
-          segmentationThumbnailPath: '/uploads/seg/thumb.jpg',
+          previewUrl: '/api/images/img-1/preview?v=0123456789abcdef',
         })
       );
       const result = await apiClient.getImage('proj-1', 'img-1');
-      expect(result.segmentationThumbnailUrl).toContain('thumb.jpg');
-      expect(result.segmentationThumbnailPath).toBe('/uploads/seg/thumb.jpg');
+      expect(result.previewUrl).toMatch(
+        /\/api\/images\/img-1\/preview\?v=0123456789abcdef$/
+      );
+    });
+
+    it('leaves previewUrl absent when the server sends none', async () => {
+      mockAxiosInstance.get.mockResolvedValue(
+        imageResponse({ originalUrl: 'http://host/img.png' })
+      );
+      const result = await apiClient.getImage('proj-1', 'img-1');
+      expect(result.previewUrl).toBeUndefined();
     });
 
     it('keeps a relative imageUrl resolvable', async () => {
@@ -652,6 +661,23 @@ describe('field mapping', () => {
       expect(Object.prototype.hasOwnProperty.call(result, 'folderId')).toBe(
         false
       );
+    });
+
+    it('carries the dashboard card previewUrl — this mapper drops what it does not name', async () => {
+      const previewUrl = '/api/images/img-1/preview?v=0123456789abcdef';
+      mockAxiosInstance.get.mockResolvedValue(
+        wrap({ ...baseProject, previewUrl })
+      );
+      const result = await apiClient.getProject('proj-1');
+      expect(result.previewUrl).toBe(previewUrl);
+    });
+
+    it('keeps previewUrl=null for an empty project', async () => {
+      mockAxiosInstance.get.mockResolvedValue(
+        wrap({ ...baseProject, previewUrl: null })
+      );
+      const result = await apiClient.getProject('proj-1');
+      expect(result.previewUrl).toBeNull();
     });
 
     it('uses _count.images as image_count when imageCount is absent', async () => {
@@ -791,8 +817,7 @@ describe('field mapping', () => {
       width: 1024,
       height: 768,
       segmentation_status: 'completed',
-      segmentationThumbnailPath: '/uploads/seg/thumb.jpg',
-      segmentationThumbnailUrl: 'http://host/seg/thumb.jpg',
+      previewUrl: '/api/images/img-42/preview?v=0123456789abcdef',
       created_at: '2024-03-01T00:00:00Z',
       updated_at: '2024-03-02T12:00:00Z',
     };
@@ -803,8 +828,9 @@ describe('field mapping', () => {
       expect(image.name).toBe('sample.tif');
       expect(image.project_id).toBe('proj-99');
       expect(image.segmentationStatus).toBe('completed');
-      expect(image.segmentationThumbnailPath).toBe('/uploads/seg/thumb.jpg');
-      expect(image.segmentationThumbnailUrl).toBe('http://host/seg/thumb.jpg');
+      expect(image.previewUrl).toBe(
+        '/api/images/img-42/preview?v=0123456789abcdef'
+      );
       expect(image.width).toBe(1024);
       expect(image.height).toBe(768);
     });

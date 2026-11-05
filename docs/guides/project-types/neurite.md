@@ -13,13 +13,24 @@ For cultured neurons in fluorescence microscopy, where the measurement is not
 Two models. The picker at the top of the project page offers both; only the
 project's owner can change it.
 
-| Model id                 | Name                       | Use it when                                                                                         |
-| ------------------------ | -------------------------- | --------------------------------------------------------------------------------------------------- |
-| `neurite_soma` (default) | Neurite / Soma             | The cells are visible in ONE channel — tubulin. A trained network with a measured accuracy.         |
-| `neurite_soma_classical` | Neurite / Soma (classical) | A cell is only visible when several channels are taken together. No network; you tick the channels. |
+| Model id                 | Name                             | Use it when                                                                               |
+| ------------------------ | -------------------------------- | ----------------------------------------------------------------------------------------- |
+| `neurite_soma` (default) | Neurite / Soma                   | The cells are visible in ONE channel — tubulin, confocal.                                 |
+| `neurite_soma_merged`    | Neurite / Soma (merged channels) | A cell shows when several fluorescent channels are taken together. You tick the channels. |
 
-A new project starts on `neurite_soma`. The classical model is not a more
-accurate replacement — it is for images the learned model cannot take.
+A new project starts on `neurite_soma`. Neither is a more accurate replacement
+for the other. Each loses by a wide margin on the other's images, so the choice
+follows the images:
+
+| Images                                                     | `neurite_soma`             | `neurite_soma_merged` |
+| ---------------------------------------------------------- | -------------------------- | --------------------- |
+| Two fluorescent channels merged, 15 frames, held-out wells | 0.622 / 0.834              | **0.843 / 0.879**     |
+| Leica confocal tubulin, 3 frames, held out from fold 0     | **0.851 / 0.924** (fold 0) | 0.465 / 0.825         |
+| Tubulin spinning disk, 3 frames neither model trained on   | 0.665 / 0.512              | 0.540 / 0.509         |
+
+Dice, neurite / soma. On the confocal frames the merged model marks about three
+times as much neurite as the expert annotation does (coverage 4.4 % against
+1.5 %).
 
 ### `neurite_soma` — the learned model (default)
 
@@ -41,32 +52,47 @@ count rather than with the number of cells. See
 > as its accuracy was measured. If detections look wrong, the input channel or
 > the pixel size is the thing to check, not a number.
 
-### `neurite_soma_classical` — the classical model (merged channels)
+### `neurite_soma_merged` — the merged-channel network
 
-**Neurite / Soma (classical)** — training-free: no neural network, no weights,
-CPU only. About **1.3 s per 1024 × 1024 frame** (measured 1.13–1.46 s on four
-production frames, 2026-10-08).
-
-It is for fluorescence images where a cell is only visible when several
-channels are taken together. What it does:
+**Neurite / Soma (merged channels)** — the same network as `neurite_soma`, a
+4-fold ensemble, retrained on 15 frames corrected by hand from four wells at
+about 0.18 µm/px. What it does:
 
 1. Each channel you ticked is normalised to its own background noise
    (median / MAD).
-2. The channels are merged by pixel-wise maximum into ONE greyscale image, and
-   that image is segmented.
-3. Neurites come from a Meijering ridge filter (neuriteness, Meijering et al.
-   2004), with a threshold relative to the image's own noise.
-4. Short isolated fragments (under about 100 px) are discarded as background
-   stains.
-5. Somas are wide, compact structures with neurites leaving them.
+2. The channels are merged by pixel-wise maximum into ONE greyscale image.
+3. That image goes through the same 1–99.5 percentile stretch, z-score and
+   sliding window as `neurite_soma`.
 
-`threshold` does not apply to this model either: its cut follows each image's
-own noise and is not a setting. See
+Held-out Dice **0.843 neurite / 0.879 soma**, mean of the four wells, each held
+out once. That is the score of one fold; the ensemble has no held-out frames left
+to measure it on. About **2.6 s per 1024 × 1024 frame** on an A5000. This model has
+no threshold either. See
+[ML models](../../reference/ml-models.md#neurite_soma_merged--neurite--soma-merged-channels).
+
+Where it falls short:
+
+- **Dim staining.** On seven frames from other batches, with no ground truth, it
+  traced whole cells where the staining was bright. Where it was dim it found
+  only part of the neurites and no somas. On those frames the classical model
+  found more, and on the dimmest of them nothing found anything. The training
+  frames do not cover this, so check dim images by eye.
+- **Untidy cell bodies.** Large, messy bright cells come back as somas. Where an
+  annotator left such a cell out on purpose, this counts against the model: one
+  frame scored soma Dice 0.47 for that reason alone.
+- **Different images.** See the table above.
+
+### The classical model is no longer offered
+
+`neurite_soma_classical`, the Meijering ridge filter with no network, left the
+picker on 2026-11-03. Projects that had chosen it now use `neurite_soma_merged`.
+Their stored segmentations keep the model that produced them, and the public API
+still serves it. See
 [ML models](../../reference/ml-models.md#neurite_soma_classical--neurite--soma-classical).
 
-### Choosing the channels (classical model only)
+### Choosing the channels (`neurite_soma_merged` only)
 
-With the classical model the channel picker shows **checkboxes** instead of
+With this model the channel picker shows **checkboxes** instead of
 radio buttons. Tick one or more channels; nothing is ticked by default, and
 **Confirm is disabled until at least one is ticked**.
 
@@ -81,9 +107,9 @@ _measured_: the export's Intensity table covers every channel of the file.
 
 ## Input expectations
 
-This section is about the learned `neurite_soma`. The classical model takes
-whichever channels you tick, at their native bit depth, and refuses an image
-over 64 megapixels.
+This section is about `neurite_soma`. `neurite_soma_merged` takes whichever
+channels you tick, at their native bit depth. Tick the fluorescent channels only:
+a transmitted-light channel merged in was not part of its training.
 
 The **tubulin channel**, single channel, fluorescence (confocal). The model
 applies a 1–99.5 percentile stretch and then a z-score, because the training
@@ -270,6 +296,7 @@ The learned model:
 ## Related
 
 - [ML models](../../reference/ml-models.md#neurite_soma--neurite--soma)
+- [ML models — the merged-channel model](../../reference/ml-models.md#neurite_soma_merged--neurite--soma-merged-channels)
 - [ML models — the classical model](../../reference/ml-models.md#neurite_soma_classical--neurite--soma-classical)
 - [Metrics](../../reference/metrics.md)
 - [Export](../export.md)

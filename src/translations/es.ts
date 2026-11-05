@@ -634,7 +634,7 @@ export default {
         microtubule: {
           name: 'Microtúbulos (ResEnc-M + instanciador por curvatura)',
           description:
-            'Segmentación de instancias para time-lapses de microtúbulos IRM. Una red nnU-Net ResEnc-M predice el primer plano de los filamentos y un instanciador acotado por curvatura lo separa en centerlines individuales, resolviendo cada cruce bajo un límite duro de 0,25 rad/px. Entrenado íntegramente con imágenes sintéticas, sin anotación humana. ~0,6 s por cuadro; único modelo de la plataforma con salida polilínea nativa.',
+            'Segmentación de instancias para time-lapses de microtúbulos IRM. Una red nnU-Net ResEnc-M predice el primer plano de los filamentos y un instanciador acotado por curvatura lo separa en centerlines individuales, resolviendo cada cruce bajo un límite duro de 0,25 rad/px. Entrenado íntegramente con imágenes sintéticas, sin anotación humana. ~0,6–2,5 s por cuadro; único modelo de la plataforma con salida polilínea nativa.',
         },
         microcapsule: {
           name: 'Microcapsule',
@@ -645,6 +645,11 @@ export default {
           name: 'Neurita / Soma (nnU-Net ResEnc-M)',
           description:
             'Segmentación semántica de dos clases de neuronas en microscopía de fluorescencia — neurita (prolongaciones) y soma (cuerpo celular) — solo a partir del canal de tubulina. nnU-Net v2 ResEnc-M, conjunto de 3 folds con TTA de espejo y término topológico clDice para la clase neurita. Dice en datos retenidos 0,832 neurita / 0,915 soma.',
+        },
+        neurite_soma_merged: {
+          name: 'Neurita / soma – nnU-Net (canales fusionados)',
+          description:
+            'Segmentación semántica de dos clases de neuronas — neurita y soma — para imágenes de fluorescencia en las que la célula se ve al tomar varios canales juntos. Se marcan los canales antes de segmentar; cada uno se normaliza a su propio ruido y se fusionan en una imagen en escala de grises, que segmenta un conjunto de 4 folds de nnU-Net v2 ResEnc-M. Dice en fotogramas reservados 0,843 neurita / 0,879 soma. Con una tinción débil solo encuentra parte de las neuritas y a menudo ningún soma, así que revise esas imágenes en el editor.',
         },
         neurite_soma_classical: {
           name: 'Neurita / Soma – clásico (canales fusionados)',
@@ -688,6 +693,8 @@ export default {
         'U-Net compacta (destilada de Meta SAM 3) para segmentación de instancias de microcápsulas — área, perímetro y compacidad por cápsula, con las cápsulas cortadas por el borde excluidas de las métricas.',
       neurite_soma:
         'nnU-Net v2 ResEnc-M (2D, conjunto de 3 folds) para segmentar neuritas y somas en microscopía de fluorescencia. Usa el canal de tubulina; Dice en datos retenidos 0,832 neurita / 0,915 soma. Entrenado con datos confocales Leica a ~0,180 µm/px: valide los recuentos de somas con otro tamaño de píxel.',
+      neurite_soma_merged:
+        'nnU-Net v2 ResEnc-M (2D, conjunto de 4 folds) para segmentar neuritas y somas en imágenes de fluorescencia fusionadas a partir de varios canales: se marcan los canales, cada uno se normaliza a su propio ruido de fondo y se fusionan en una imagen en escala de grises. Dice en fotogramas reservados 0,843 neurita / 0,879 soma, en 15 fotogramas corregidos a mano de cuatro pocillos a unos 0,18 µm/px. Con una tinción débil solo encuentra parte de las neuritas y a menudo ningún soma, así que revise esas imágenes en el editor.',
       neurite_soma_classical:
         'Segmentación clásica de neuritas y somas, sin red neuronal y sin pesos (filtro de crestas de Meijering más reglas de forma; solo CPU, unos 1,3 s por fotograma de 1024 × 1024). Para imágenes de fluorescencia en las que la célula solo se ve al tomar varios canales juntos: usted marca los canales, cada uno se normaliza a su propio ruido de fondo y se fusionan en una sola imagen en escala de grises. Los somas tenues y difusos solo se encuentran algunas veces: revíselos en el editor.',
     },
@@ -1946,9 +1953,9 @@ export default {
             'La misma arquitectura que Morfología de espermatozoides, ajustada a partir de ese modelo con espermatozoides anotados solo como cabeza y cola. Cada célula se devuelve como dos polilíneas —la cabeza, que aquí abarca toda la parte helicoidal, unida a la cola—, de modo que el límite entre cabeza y cola es aprendido y no el resultado de sumar la pieza intermedia a una parte vecina.',
         },
         microtubule: {
-          name: 'Microtúbulos (SPARSE35)',
+          name: 'Microtúbulos (V16)',
           inferenceTime:
-            'Unos 0,6 s por fotograma · umbral fijado en 0,98 y no configurable',
+            'Unos 0,6–2,5 s por fotograma · umbral fijado en 0,995 y no configurable',
           bestFor: 'Lo usan: los proyectos de microtúbulos. Solo imágenes IRM.',
           description:
             'Una red nnU-Net ResEnc-M predice el primer plano de los filamentos y después un separador acotado por curvatura lo divide en líneas centrales individuales, resolviendo cada cruce bajo un límite estricto de curvatura. Entrenado exclusivamente con fotogramas sintéticos. El tiempo de ejecución crece con el número de filamentos, no solo con el tamaño del fotograma.',
@@ -1969,14 +1976,14 @@ export default {
           description:
             'Un conjunto de tres pliegues de nnU-Net v2 ResEnc-M, promediados en el espacio de logits, con aumento por reflexión en inferencia y un término topológico clDice que mantiene conectadas las prolongaciones finas en lugar de fragmentarlas. Dice en datos reservados: 0,832 neurita / 0,915 soma. Entrenado con datos confocales de Leica a unos 0,180 µm/px; a la mitad de ese tamaño de píxel cada soma suele volver partido en dos, así que valide primero los recuentos de somas.',
         },
-        neuriteSomaClassical: {
-          name: 'Neurita / soma (clásico)',
+        neuriteSomaMerged: {
+          name: 'Neurita / soma (canales fusionados)',
           inferenceTime:
-            'Unos 1,3 s para un fotograma de 1024 × 1024, en la CPU · sin ajuste de umbral: el corte sigue el ruido de la propia imagen',
+            'Unos 2,6 s para un fotograma de 1024 × 1024 · sin umbral: decide un argmax',
           bestFor:
-            'Lo usan: los proyectos de neuritas y somas, cuando se elige en lugar del predeterminado. Para imágenes de fluorescencia en las que la célula solo se ve al tomar varios canales juntos.',
+            'Lo usan: los proyectos de neuritas y somas, cuando se elige. Para imágenes de fluorescencia en las que la célula se ve al tomar varios canales juntos, con una tinción razonablemente intensa.',
           description:
-            'Un método clásico: sin red neuronal, sin pesos y sin entrenamiento. Antes de segmentar se marcan uno o varios canales; cada uno se normaliza a su propio ruido de fondo y se fusionan por máximo píxel a píxel en una sola imagen en escala de grises, que es la que se segmenta. Las neuritas salen de un filtro de crestas de Meijering con un umbral relativo al ruido de la propia imagen, y los fragmentos cortos y aislados (de menos de unos 100 px) se descartan como manchas del fondo. Los somas son estructuras anchas y compactas de las que salen neuritas. Los huecos, como el interior de un bucle de neurita, se conservan como huecos. Los somas tenues y difusos solo se encuentran algunas veces, así que revise y corrija los somas en el editor. Las imágenes de más de 64 megapíxeles se rechazan.',
+            'Un conjunto de cuatro folds de nnU-Net v2 ResEnc-M, promediado en el espacio de logits con aumentación por espejo en la inferencia. Antes de segmentar se marcan uno o varios canales; cada uno se normaliza a su propio ruido de fondo y se fusionan por máximo píxel a píxel en una imagen en escala de grises, que es lo que ve la red. Entrenado con 15 fotogramas corregidos a mano, de cuatro pocillos, a unos 0,18 µm/px. Cada pocillo se reservó una vez: Dice 0,843 neurita / 0,879 soma. Esa es la puntuación de un fold; para el conjunto completo no quedan fotogramas reservados. Con una tinción débil solo encuentra parte de las neuritas y a menudo ningún soma, así que revise esas imágenes en el editor. También marca como somas cuerpos celulares grandes y desordenados que un anotador puede haber omitido.',
         },
       },
       howToSelect: 'Elegir un modelo',
@@ -1995,7 +2002,7 @@ export default {
       },
       thresholdNote: 'Los umbrales de detección son fijos para cada modelo.',
       thresholdNoteText:
-        'No hay ningún control de umbral en la interfaz: cada modelo que usa un umbral aplica el corte con el que fue validado —el de microtúbulos es 0,98— y dos modelos (Disgregación de esferoides, Neurita / soma) no tienen ninguno: deciden por argmax. El modelo clásico de neuritas tampoco tiene ajuste: deriva su corte del ruido de cada imagen. Bajar un umbral no encuentra más objetos reales: encuentra más con evidencia más débil, y en un canal que no sea IRM la salida de microtúbulos no sigue la imagen con ningún ajuste. Si faltan detecciones, revise el canal de entrada.',
+        'No hay ningún control de umbral en la interfaz: cada modelo que usa un umbral aplica el corte con el que fue validado —el de microtúbulos es 0,995— y dos modelos (Disgregación de esferoides, Neurita / soma) no tienen ninguno: deciden por argmax. El modelo clásico de neuritas tampoco tiene ajuste: deriva su corte del ruido de cada imagen. Bajar un umbral no encuentra más objetos reales: encuentra más con evidencia más débil, y en un canal que no sea IRM la salida de microtúbulos no sigue la imagen con ningún ajuste. Si faltan detecciones, revise el canal de entrada.',
       tip: 'Consejo:',
       tipText:
         'Empiece con el modelo predeterminado. Recurra a CBAM-ResUNet cuando los bordes importen más que la velocidad, y a Mamba-UNet cuando sus imágenes no se parezcan al conjunto de entrenamiento de nadie.',
@@ -2041,7 +2048,7 @@ export default {
       },
       processingNote: 'El tiempo de proceso depende del modelo:',
       processingTimes:
-        'el modelo de heridas tarda unos 0,03 s por imagen y los de esferoides entre 0,2 y 0,4 s, mientras que el de microtúbulos ronda los 0,6 s por fotograma porque separar filamentos individuales es la parte cara.',
+        'el modelo de heridas tarda unos 0,03 s por imagen y los de esferoides entre 0,2 y 0,4 s, mientras que el de microtúbulos ronda los 0,6–2,5 s por fotograma porque separar filamentos individuales es la parte cara.',
     },
 
     // Editor

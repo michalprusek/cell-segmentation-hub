@@ -148,6 +148,21 @@ def to_noise_units(channel: np.ndarray) -> Optional[np.ndarray]:
     return (x - np.float32(med)) / np.float32(sigma)
 
 
+def native_depth(image: Any) -> np.ndarray:
+    """A PIL image as an array at its own depth.
+
+    ``convert('L')`` on an 'I;16' frame clips at 255, and the per-channel noise
+    normalisation needs the real counts.
+    """
+    if image.mode in ("I;16", "I;16B", "I;16L", "I;16N"):
+        return np.array(image, dtype=np.uint16)
+    if image.mode == "I":
+        return np.array(image, dtype=np.int32)
+    if image.mode == "F":
+        return np.array(image, dtype=np.float32)
+    return np.array(image.convert("L"), dtype=np.uint8)
+
+
 def merge_channels(channels: Sequence[np.ndarray]) -> np.ndarray:
     """N same-shaped channels -> one float32 image, pixel-wise maximum of each
     channel in its own noise units."""

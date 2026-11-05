@@ -54,10 +54,6 @@ const ProjectListItem = React.memo(
       }
     };
 
-    const handleAccessError = (projectId: string, _error: unknown) => {
-      onProjectUpdate?.(projectId, 'access-denied');
-    };
-
     return (
       <Card
         {...drag}
@@ -68,12 +64,7 @@ const ProjectListItem = React.memo(
       >
         <div className="flex items-center p-4">
           <div className="flex-shrink-0 w-16 h-16 mr-4 overflow-hidden rounded-md">
-            <ProjectThumbnail
-              projectId={id}
-              fallbackSrc={thumbnail}
-              imageCount={imageCount}
-              onAccessError={handleAccessError}
-            />
+            <ProjectThumbnail src={thumbnail} />
           </div>
 
           <div className="flex-1 min-w-0">

@@ -253,6 +253,7 @@ async def test_segment_route_dispatches_neurite_soma_to_its_own_predictor():
     class _Loader:
         device = "cpu"
         last_batch_size = 1
+        AVAILABLE_MODELS = {"neurite_soma": {}}
 
         def predict_neurite_soma(self, image, threshold, detect_holes):
             calls.append(("neurite_soma", threshold, detect_holes))
@@ -268,6 +269,10 @@ async def test_segment_route_dispatches_neurite_soma_to_its_own_predictor():
         model="neurite_soma",
         threshold=0.5,
         detect_holes=True,
+        # Called directly, so FastAPI does not resolve these Form() defaults.
+        page=0,
+        max_pixels=None,
+        extra_channels=None,
         loader=_Loader(),
     )
 
@@ -365,6 +370,78 @@ def test_a_short_neurite_survives_the_min_area_filter():
         "a 36 px neurite was filtered away — min_area is back above it, and "
         "every process shorter than 3.6 um is being dropped before staging"
     )
+
+
+def _capturing_loader(label):
+    """A real ModelLoader around a stub net that records what it was handed."""
+    from ml.model_loader import ModelLoader
+
+    class _StubNet:
+        seen = None
+
+        def predict(self, image_np):
+            type(self).seen = image_np
+            return label
+
+    loader = ModelLoader(base_path=str(SEG_ROOT))
+    loader.loaded_models["neurite_soma_merged"] = _StubNet()
+    return loader, _StubNet
+
+
+def test_merged_prediction_feeds_the_net_the_merge_it_was_trained_on():
+    """The input definition of this model is the merge, at native depth.
+
+    Handing the net one channel, or an 8-bit copy of them, does not fail: it
+    returns confident polygons on an input the model never saw.
+    """
+    torch = pytest.importorskip("torch")
+    if not torch.cuda.is_available():
+        pytest.skip("ml.model_loader imports mamba_ssm/Triton, which need CUDA")
+    from PIL import Image
+
+    from models import neurite_classical
+
+    rng = np.random.default_rng(0)
+    first = rng.integers(100, 9000, (64, 64), dtype=np.uint16)
+    second = rng.integers(40, 300, (64, 64), dtype=np.uint16)
+    label = np.zeros((64, 64), np.uint8)
+    label[10:30, 10:30] = 2
+
+    loader, net = _capturing_loader(label)
+    result = loader.predict_neurite_soma_merged(
+        [Image.fromarray(first), Image.fromarray(second)]
+    )
+
+    np.testing.assert_array_equal(net.seen, neurite_classical.merge_channels([first, second]))
+    assert result["model_used"] == "neurite_soma_merged"
+    assert result["processing_info"]["num_channels_merged"] == 2
+    assert result["processing_info"]["num_per_class"]["soma"] == 1
+    assert {p["partClass"] for p in result["polygons"]} == {"soma"}
+
+
+def test_merged_prediction_refuses_an_empty_channel_list():
+    torch = pytest.importorskip("torch")
+    if not torch.cuda.is_available():
+        pytest.skip("ml.model_loader imports mamba_ssm/Triton, which need CUDA")
+    loader, _ = _capturing_loader(np.zeros((4, 4), np.uint8))
+    with pytest.raises(ValueError, match="at least one channel"):
+        loader.predict_neurite_soma_merged([])
+
+
+def test_merged_model_runs_its_own_params_and_the_single_channel_one_keeps_its():
+    pytest.importorskip("torch")
+    from models.neurite_soma import MERGED_PARAMS_PATH, NeuriteSomaModel
+
+    assert NeuriteSomaModel().params["folds"] == [0, 1, 2]
+    assert NeuriteSomaModel(params_path=MERGED_PARAMS_PATH).params["folds"] == [0, 1, 2, 3]
+
+
+def test_merged_load_names_its_own_staging_script(tmp_path):
+    pytest.importorskip("torch")
+    from models.neurite_soma import MERGED_PARAMS_PATH, NeuriteSomaModel
+
+    with pytest.raises(FileNotFoundError, match="download-neurite-soma-merged-weights"):
+        NeuriteSomaModel(params_path=MERGED_PARAMS_PATH).load_weights(tmp_path / "absent")
 
 
 def test_registry_entry_points_at_a_directory_bundle():

@@ -378,6 +378,28 @@ class WebSocketManager {
       this.emitToListeners('notification', notification);
     });
 
+    // A project's images got new previews (any segmentation change, by
+    // anyone viewing the project). Dropped when malformed: listeners index
+    // `previews` without a check.
+    this.socket.on('imagePreviewsUpdated', (data: unknown) => {
+      const d = data as { projectId?: unknown; previews?: unknown } | null;
+      if (!d || typeof d.projectId !== 'string' || !Array.isArray(d.previews)) {
+        logger.debug('Dropping malformed imagePreviewsUpdated', data);
+        return;
+      }
+      this.emitToListeners('image-previews-updated', d);
+    });
+
+    // The server has emitted these all along, and `useSegmentationQueue`
+    // registers handlers for them — but nothing forwarded them, so a
+    // cancelled image kept its "queued" badge until the next reconciliation.
+    this.socket.on('segmentation:cancelled', (data: unknown) => {
+      this.emitToListeners('segmentation:cancelled', data);
+    });
+    this.socket.on('segmentation:bulk-cancelled', (data: unknown) => {
+      this.emitToListeners('segmentation:bulk-cancelled', data);
+    });
+
     this.socket.on('system-message', (message: SystemMessage) => {
       if (import.meta.env.DEV) {
         logger.debug('System message received:', message);

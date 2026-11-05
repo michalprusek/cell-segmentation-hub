@@ -64,7 +64,7 @@ _inference_lock = threading.Lock()
 
 #: Models that merge several channels of one image. Everything else segments
 #: exactly one, and `/segment` answers 400 if it is sent more.
-MULTI_CHANNEL_MODELS = frozenset({"neurite_soma_classical"})
+MULTI_CHANNEL_MODELS = frozenset({"neurite_soma_classical", "neurite_soma_merged"})
 
 #: Channels beyond the first. A real acquisition has 2-4 channels; this only
 #: stops a request from making the service decode an unbounded list.
@@ -180,9 +180,9 @@ def _dispatch_inference(
 ):
     """Run one inference, holding the loader-wide lock.
 
-    `extra_images` are further channels of the SAME image, for the one model
-    that merges channels (`neurite_soma_classical`). `segment_image` refuses
-    them for every other model before this is reached.
+    `extra_images` are further channels of the SAME image, for the two models
+    that merge channels (`MULTI_CHANNEL_MODELS`). `segment_image` refuses them
+    for every other model before this is reached.
 
     Split out of `segment_image` so the async route can hand it to
     `_INFERENCE_EXECUTOR` instead of running it on the event loop. The branch
@@ -207,6 +207,12 @@ def _dispatch_inference(
             result = loader.predict_neurite_classical(
                 [image, *extra_images], threshold, detect_holes
             )
+        elif model == 'neurite_soma_merged':
+            # The learned model on the same merge. `threshold` is echoed, not
+            # applied, for the reason `neurite_soma` documents below.
+            result = loader.predict_neurite_soma_merged(
+                [image, *extra_images], threshold, detect_holes
+            )
         elif model in ('sperm', 'sperm_2part'):
             # Sperm models use their own mask_threshold (0.3) and score_threshold (0.95)
             # Don't override with the user's segmentation threshold — it's calibrated differently
@@ -215,15 +221,15 @@ def _dispatch_inference(
             # Wound model expects grayscale 512×512 — custom preprocessing lives in WoundModel
             result = loader.predict_wound(image, threshold, detect_holes)
         elif model == 'microtubule':
-            # The microtubule model uses its OWN foreground cut (0.98, from
-            # params_sparse35.json), not the user's threshold — the same reason
+            # The microtubule model uses its OWN foreground cut (0.995, from
+            # params_v16.json), not the user's threshold — the same reason
             # sperm ignores it above: it is calibrated differently.
             #
             # This is not merely a preference. `threshold` is declared
-            # `le=0.9`, so 0.98 is not even expressible on this endpoint:
+            # `le=0.99`, so 0.995 is not even expressible on this endpoint:
             # forwarding the user's value would silently cut this model's
             # (very confident) foreground at 0.5 and flood the instancer with
-            # noise, and "fixing" that by sending 0.98 would 422. The cut
+            # noise, and "fixing" that by sending 0.995 would 422. The cut
             # belongs to the fitted parameter vector, so it travels with it.
             #
             # detect_holes is not meaningful for polylines.
@@ -329,7 +335,7 @@ async def segment_image(
     threshold: float = Form(
         0.5,
         ge=0.1,
-        le=0.99,  # the microtubule model's own cut is 0.98 — see api/models.py
+        le=0.99,  # what the frontend sends for the microtubule model is 0.98 — see api/models.py
         description="Segmentation threshold",
     ),
     detect_holes: bool = Form(True, description="Whether to detect holes in segmentation"),
@@ -347,7 +353,8 @@ async def segment_image(
     extra_channels: Optional[List[UploadFile]] = File(
         None,
         description="Further channels of the same image, merged with `file` "
-        "before segmentation. Accepted by `neurite_soma_classical` only.",
+        "before segmentation. Accepted by `neurite_soma_classical` and "
+        "`neurite_soma_merged` only.",
     ),
     loader = Depends(get_model_loader)
 ):
@@ -389,9 +396,11 @@ async def segment_image(
                 },
             )
 
-        if model in MULTI_CHANNEL_MODELS and width * height > CLASSICAL_MAX_PIXELS:
+        if model == "neurite_soma_classical" and width * height > CLASSICAL_MAX_PIXELS:
             # The model would raise the same thing as a ValueError, which
             # reaches the caller as a 500. Answered here, from the header.
+            # Classical only: the learned merged model tiles the frame like
+            # `neurite_soma` does and has no such ceiling.
             raise HTTPException(
                 status_code=413,
                 detail={
@@ -537,7 +546,7 @@ async def batch_segment_images(
     threshold: float = Form(
         0.5,
         ge=0.1,
-        le=0.99,  # the microtubule model's own cut is 0.98 — see api/models.py
+        le=0.99,  # what the frontend sends for the microtubule model is 0.98 — see api/models.py
         description="Segmentation threshold",
     ),
     detect_holes: bool = Form(True, description="Whether to detect holes in segmentation"),

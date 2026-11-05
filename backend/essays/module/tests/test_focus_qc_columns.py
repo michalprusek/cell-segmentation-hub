@@ -308,9 +308,9 @@ def test_focus_columns_are_appended_never_inserted():
     assert COLUMNS.index("irm_tirf_reason") < COLUMNS.index("focus_irm_score")
     # The 23 columns that existed before this change keep their indices, and
     # so do these four now that the TIRF time-series columns follow them.
-    assert len(COLUMNS) == 31
-    assert COLUMNS[27:] == ["tirf_frame", "tirf_frames", "tirf_frame_time_s",
-                            "segmentation_source_file"]
+    assert len(COLUMNS) == 33
+    assert COLUMNS[27:31] == ["tirf_frame", "tirf_frames", "tirf_frame_time_s",
+                              "segmentation_source_file"]
     assert COLUMNS[18] == "signal_minus_background"
     assert COLUMNS[19:23] == ["irm_tirf_dy", "irm_tirf_dx",
                               "irm_tirf_quality", "irm_tirf_reason"]

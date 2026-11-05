@@ -18,20 +18,20 @@ your first run.
 
 ## Model
 
-One model, forced: **Microtubule SPARSE35 ep040** — an nnU-Net ResEnc-M network (~140 M
+One model, forced: **Microtubule V16 DEB_S4 ep040** — an nnU-Net ResEnc-M network (~140 M
 parameters) predicting the filament foreground, followed by a curvature-bounded
-instancer that separates it into individual centerlines, resolving every
-crossing by min-cost matching under a hard 0.25 rad/px curvature bound.
+instancer (L+H) that separates it into individual centerlines, resolving every
+crossing by one global matching of arc ends under a hard 0.25 rad/px curvature bound.
 
 Trained **entirely on synthetic frames** — no human annotation at any stage.
 Nothing is downloaded at inference time.
 
-Roughly 4.0–4.4 s for a 1024² frame carrying 65 microtubules on an A5000. The
-cost is dominated by the _instancer_, so it scales with the number of
+Roughly 0.6 s for a 1024² frame and 2 s for a 2048² one on an A5000. The
+instancer takes most of that, so it scales with the number of
 microtubules, not just with frame size — a dense field is slower than a large
-empty one.
+empty one (about 10 s for the densest benchmark frame, with 1224 arcs).
 
-See [ML models](../../reference/ml-models.md#microtubule--microtubule-sparse35-ep040).
+See [ML models](../../reference/ml-models.md#microtubule--microtubule-v16-deb_s4-ep040).
 
 ---
 
@@ -51,7 +51,7 @@ IRM is _darker_ than its surround):
 | ----- | --------- | ---------- | ------------------- |
 | IRM   | 0.97      | 128        | **−1.73 SD**        |
 
-_Measured on v5H at its 0.97 cut (2026-08-17); the argument carries over to SPARSE35 ep040 at 0.98 and was not re-measured._
+_Measured on v5H at its 0.97 cut (2026-08-17); the argument carries over to the later models and their cuts and was not re-measured._
 | IRM | 0.35 | 155 | −1.44 SD |
 | TIRF | any | many | **≈ −0.02 SD** |
 
@@ -284,7 +284,7 @@ measurement code, and returns one CSV row per microtubule.
 
 ## Related
 
-- [ML models: microtubule SPARSE35 ep040](../../reference/ml-models.md#microtubule--microtubule-sparse35-ep040)
+- [ML models: microtubule](../../reference/ml-models.md#microtubule--microtubule-v16-deb_s4-ep040)
 - [Videos, frames and channels](../videos-and-channels.md)
 - [Metrics](../../reference/metrics.md#microtubule-intensity)
 - [Export](../export.md#microtubule-exports)

@@ -23,6 +23,7 @@
  * projected, and the caller falls back to the ordinary tracking path.
  */
 
+import { previewService } from './previews/previewService';
 import { randomUUID } from 'crypto';
 import { prisma } from '../db';
 import { logger } from '../utils/logger';
@@ -332,6 +333,9 @@ export async function projectStaticChannelResult(
     }
     const projected = projectedIds.length;
     const incomplete = projected < writable.length;
+    if (projected > 0 || minted > 0) {
+      previewService.notifyChanged([sourceImageId, ...projectedIds]);
+    }
 
     logger.info(
       `${isSparse ? 'Sparse' : 'Static'} channel '${channel}': projected ${polygons.length} polyline(s) from frame ${sourceImageId} onto ${projected} frame(s)` +

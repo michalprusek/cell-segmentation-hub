@@ -79,6 +79,12 @@ services:
       - WS_PARALLEL_PROCESSING_ENABLED=true
       # Automated Essays worker (batch MT assay). Reached over the docker network.
       - ESSAYS_SERVICE_URL=${ESSAYS_SERVICE_URL:-http://essays:8000}
+      # Storage GC (services/maintenance/storageGc.ts): reconcile the upload
+      # tree with the database every 6 h and delete orphans past their grace
+      # period. `dry-run` plans and reports to logs/backend/storage-gc/ without
+      # deleting; `off` disables it. The code default is dry-run; production
+      # deletes, by the decision recorded in the PR that added it.
+      - STORAGE_GC_MODE=${STORAGE_GC_MODE:-delete}
     volumes:
       - ./backend/uploads/blue:/app/uploads
       - ./backend/data:/app/data
@@ -332,6 +338,10 @@ services:
       # Runtime was flat too (43.0 / 43.6 / 44.0 / 43.9 s) and `results.csv` came
       # out BYTE-IDENTICAL at all four caps, because 1.41 GiB sits far below
       # every one of them and cuDNN's workspace is never constrained.
+      #
+      # RE-MEASURED 2026-11-03 for V16 DEB_S4 (Gaussian fusion, in the container), by a
+      # direct probe of predict() with no cap, not from a job: 1.22 GiB reserved, 0.93
+      # allocated, the same at 1024^2 and 2048^2 inputs.
       #
       # 0.12 (2.88 GiB) is TWICE the measured working set. The cardinal rule is
       # that the cap must sit ABOVE the working set: the old 0.6 (14.13 GiB) sat

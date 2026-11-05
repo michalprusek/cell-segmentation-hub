@@ -657,7 +657,7 @@ export default {
         microtubule: {
           name: 'Mikrotubuli (ResEnc-M + krümmungsbegrenzter Instancer)',
           description:
-            'Instanz-Segmentierung für IRM-Mikrotubuli-Zeitrafferaufnahmen. Ein nnU-Net-ResEnc-M-Netz sagt den Filament-Vordergrund vorher, ein krümmungsbegrenzter Instancer trennt ihn in einzelne Centerlines und löst jede Kreuzung unter einer harten Schranke von 0,25 rad/px. Ausschließlich auf synthetischen Bildern trainiert — ohne menschliche Annotation. ~0,6 s/Bild; einziges Modell der Plattform mit nativer Polylinien-Ausgabe.',
+            'Instanz-Segmentierung für IRM-Mikrotubuli-Zeitrafferaufnahmen. Ein nnU-Net-ResEnc-M-Netz sagt den Filament-Vordergrund vorher, ein krümmungsbegrenzter Instancer trennt ihn in einzelne Centerlines und löst jede Kreuzung unter einer harten Schranke von 0,25 rad/px. Ausschließlich auf synthetischen Bildern trainiert — ohne menschliche Annotation. ~0,6–2,5 s/Bild; einziges Modell der Plattform mit nativer Polylinien-Ausgabe.',
         },
         microcapsule: {
           name: 'Microcapsule',
@@ -668,6 +668,11 @@ export default {
           name: 'Neurit / Soma (nnU-Net ResEnc-M)',
           description:
             'Semantische Zwei-Klassen-Segmentierung von Neuronen in der Fluoreszenzmikroskopie — Neurit (Fortsätze) und Soma (Zellkörper) — allein aus dem Tubulin-Kanal. nnU-Net v2 ResEnc-M, Ensemble aus 3 Folds mit Spiegel-TTA und clDice-Topologieterm für die Neurit-Klasse. Dice auf Holdout-Daten 0,832 Neurit / 0,915 Soma.',
+        },
+        neurite_soma_merged: {
+          name: 'Neurit / Soma – nnU-Net (zusammengeführte Kanäle)',
+          description:
+            'Zweiklassige semantische Segmentierung von Neuronen — Neurit und Soma — für Fluoreszenzbilder, in denen die Zelle erst sichtbar wird, wenn mehrere Kanäle zusammengenommen werden. Sie haken die Kanäle vor dem Segmentieren an; jeder wird auf sein eigenes Rauschen normiert und sie werden zu einem Graustufenbild zusammengeführt, das ein 4-Fold-Ensemble aus nnU-Net v2 ResEnc-M segmentiert. Dice auf zurückgehaltenen Bildern 0,843 Neurit / 0,879 Soma. Bei schwacher Färbung findet es nur einen Teil der Neuriten und oft keine Somata, prüfen Sie solche Bilder daher im Editor.',
         },
         neurite_soma_classical: {
           name: 'Neurit / Soma – klassisch (zusammengeführte Kanäle)',
@@ -711,6 +716,8 @@ export default {
         'Kompaktes U-Net (destilliert aus Meta SAM 3) zur Instanz-Segmentierung von Mikrokapseln — Fläche, Umfang und Kompaktheit je Kapsel; am Bildrand abgeschnittene Kapseln werden von den Metriken ausgeschlossen.',
       neurite_soma:
         'nnU-Net v2 ResEnc-M (2D, Ensemble aus 3 Folds) zur Segmentierung von Neuriten und Somata in der Fluoreszenzmikroskopie. Liest den Tubulin-Kanal; Dice auf Holdout-Daten 0,832 Neurit / 0,915 Soma. Trainiert auf Leica-Konfokaldaten bei ~0,180 µm/px — Soma-Zahlen bei anderer Pixelgröße prüfen.',
+      neurite_soma_merged:
+        'nnU-Net v2 ResEnc-M (2D, 4-Fold-Ensemble) zur Segmentierung von Neuriten und Somata auf Fluoreszenzbildern, die aus mehreren Kanälen zusammengeführt werden: Sie haken die Kanäle an, jeder wird auf sein eigenes Hintergrundrauschen normiert und sie werden zu einem Graustufenbild zusammengeführt. Dice auf zurückgehaltenen Bildern 0,843 Neurit / 0,879 Soma, auf 15 von Hand korrigierten Bildern aus vier Wells bei etwa 0,18 µm/px. Bei schwacher Färbung findet es nur einen Teil der Neuriten und oft keine Somata, prüfen Sie solche Bilder daher im Editor.',
       neurite_soma_classical:
         'Klassische Segmentierung von Neuriten und Somata ohne neuronales Netz und ohne Gewichte (Meijering-Gratfilter plus Formregeln; nur CPU, etwa 1,3 s pro Bild von 1024 × 1024). Für Fluoreszenzbilder, in denen eine Zelle erst sichtbar wird, wenn mehrere Kanäle zusammengenommen werden: Sie haken die Kanäle an, jeder wird auf sein eigenes Hintergrundrauschen normiert, und sie werden zu einem Graustufenbild zusammengeführt. Schwache, diffuse Somata werden nur manchmal gefunden — prüfen Sie sie im Editor.',
     },
@@ -1961,9 +1968,9 @@ export default {
             'Dieselbe Architektur wie Spermienmorphologie, ausgehend von diesem Modell feinabgestimmt auf Spermien, die nur als Kopf und Schwanz annotiert sind. Jede Zelle wird als zwei Polylinien ausgegeben — der Kopf, der hier den gesamten helikalen Abschnitt umfasst, verbunden mit dem Schwanz. Die Grenze zwischen Kopf und Schwanz ist damit gelernt und entsteht nicht dadurch, dass das Mittelstück einem Nachbarteil zugeschlagen wird.',
         },
         microtubule: {
-          name: 'Mikrotubuli (SPARSE35)',
+          name: 'Mikrotubuli (V16)',
           inferenceTime:
-            'Etwa 0,6 s pro Bild · Schwellwert fest auf 0,98, nicht einstellbar',
+            'Etwa 0,6–2,5 s pro Bild · Schwellwert fest auf 0,995, nicht einstellbar',
           bestFor: 'Verwendet von: Mikrotubuli-Projekten. Nur IRM-Bilder.',
           description:
             'Ein nnU-Net-ResEnc-M-Netz sagt den Filamentvordergrund vorher; ein krümmungsbegrenzter Instancer trennt ihn anschließend in einzelne Mittellinien und löst jede Kreuzung unter einer festen Krümmungsschranke auf. Ausschließlich auf synthetischen Bildern trainiert. Die Laufzeit skaliert mit der Zahl der Filamente, nicht nur mit der Bildgröße.',
@@ -1984,14 +1991,14 @@ export default {
           description:
             'Ein Ensemble aus drei Folds von nnU-Net v2 ResEnc-M, im Logit-Raum gemittelt, mit Spiegelungs-Augmentierung zur Inferenzzeit und einem clDice-Topologieterm, der dünne Fortsätze zusammenhängend statt perlenartig hält. Auf zurückgehaltenen Daten Dice 0,832 Neurit / 0,915 Soma. Trainiert auf Leica-Konfokaldaten bei etwa 0,180 µm/px — bei halber Pixelgröße kommt jedes Soma meist zweigeteilt zurück, prüfen Sie Somazahlen also zuerst.',
         },
-        neuriteSomaClassical: {
-          name: 'Neurit / Soma (klassisch)',
+        neuriteSomaMerged: {
+          name: 'Neurit / Soma (zusammengeführte Kanäle)',
           inferenceTime:
-            'Etwa 1,3 s für ein Bild von 1024 × 1024, auf der CPU · kein einstellbarer Schwellenwert — der Schnitt folgt dem Rauschen des Bildes selbst',
+            'Etwa 2,6 s für ein Bild von 1024 × 1024 · kein Schwellenwert — es entscheidet ein Argmax',
           bestFor:
-            'Verwendet von: Neuriten- und Soma-Projekten, wenn Sie es statt des Standardmodells wählen. Für Fluoreszenzbilder, in denen eine Zelle erst sichtbar wird, wenn mehrere Kanäle zusammengenommen werden.',
+            'Verwendet von: Neuriten- und Soma-Projekten, wenn Sie es wählen. Für Fluoreszenzbilder, in denen eine Zelle erst sichtbar wird, wenn mehrere Kanäle zusammengenommen werden, bei einigermaßen kräftiger Färbung.',
           description:
-            'Ein klassisches Verfahren: kein neuronales Netz, keine Gewichte, kein Training. Vor dem Segmentieren haken Sie einen oder mehrere Kanäle an; jeder wird auf sein eigenes Hintergrundrauschen normiert, und sie werden per pixelweisem Maximum zu einem Graustufenbild zusammengeführt, das dann segmentiert wird. Neuriten stammen aus einem Meijering-Gratfilter mit einem Schwellenwert relativ zum Rauschen des Bildes selbst; kurze, isolierte Fragmente (unter etwa 100 px) werden als Flecken im Hintergrund verworfen. Somata sind breite, kompakte Strukturen, von denen Neuriten ausgehen. Löcher, etwa das Innere einer Neuritenschleife, bleiben als Löcher erhalten. Schwache, diffuse Somata werden nur manchmal gefunden, prüfen und korrigieren Sie die Somata also im Editor. Bilder über 64 Megapixel werden abgelehnt.',
+            'Ein Ensemble aus vier Folds von nnU-Net v2 ResEnc-M, gemittelt im Logit-Raum mit Spiegel-Augmentierung zur Testzeit. Vor dem Segmentieren haken Sie einen oder mehrere Kanäle an; jeder wird auf sein eigenes Hintergrundrauschen normiert und sie werden per pixelweisem Maximum zu einem Graustufenbild zusammengeführt, das das Netz sieht. Trainiert auf 15 von Hand korrigierten Bildern aus vier Wells bei etwa 0,18 µm/px. Jedes Well wurde einmal zurückgehalten: Dice 0,843 Neurit / 0,879 Soma. Das ist der Wert eines Folds; für das ganze Ensemble bleiben keine zurückgehaltenen Bilder übrig. Bei schwacher Färbung findet es nur einen Teil der Neuriten und oft keine Somata, prüfen Sie solche Bilder daher im Editor. Außerdem markiert es große unaufgeräumte Zellkörper als Somata, die ein Annotator ausgelassen haben kann.',
         },
       },
       howToSelect: 'Ein Modell wählen',
@@ -2011,7 +2018,7 @@ export default {
       },
       thresholdNote: 'Erkennungsschwellwerte sind je Modell fest.',
       thresholdNoteText:
-        'Es gibt keine Schwellwert-Einstellung in der Oberfläche: Jedes Modell, das einen Schwellwert nutzt, verwendet den Schnitt, mit dem es validiert wurde — beim Mikrotubuli-Modell 0,98 —, und zwei Modelle (Sphäroid-Zerfall, Neurit / Soma) haben gar keinen: Sie entscheiden per Argmax. Auch das klassische Neuritenmodell hat keine Einstellung: Es leitet seinen Schnitt aus dem Rauschen des jeweiligen Bildes ab. Ein niedrigerer Schwellwert findet nicht mehr echte Objekte — er findet mehr mit schwächerer Evidenz, und auf einem Nicht-IRM-Kanal folgt die Mikrotubuli-Ausgabe bei keiner Einstellung dem Bild. Fehlen Detektionen, prüfen Sie stattdessen den Eingangskanal.',
+        'Es gibt keine Schwellwert-Einstellung in der Oberfläche: Jedes Modell, das einen Schwellwert nutzt, verwendet den Schnitt, mit dem es validiert wurde — beim Mikrotubuli-Modell 0,995 —, und zwei Modelle (Sphäroid-Zerfall, Neurit / Soma) haben gar keinen: Sie entscheiden per Argmax. Auch das klassische Neuritenmodell hat keine Einstellung: Es leitet seinen Schnitt aus dem Rauschen des jeweiligen Bildes ab. Ein niedrigerer Schwellwert findet nicht mehr echte Objekte — er findet mehr mit schwächerer Evidenz, und auf einem Nicht-IRM-Kanal folgt die Mikrotubuli-Ausgabe bei keiner Einstellung dem Bild. Fehlen Detektionen, prüfen Sie stattdessen den Eingangskanal.',
       tip: 'Tipp:',
       tipText:
         'Beginnen Sie mit dem Standardmodell. Greifen Sie zu CBAM-ResUNet, wenn Ränder wichtiger sind als Geschwindigkeit, und zu Mamba-UNet, wenn Ihre Bilder niemandes Trainingsdaten ähneln.',
@@ -2058,7 +2065,7 @@ export default {
       },
       processingNote: 'Die Rechenzeit hängt vom Modell ab:',
       processingTimes:
-        'Das Wundmodell braucht rund 0,03 s pro Bild und die Sphäroidmodelle 0,2–0,4 s, während das Mikrotubuli-Modell etwa 0,6 s pro Bild benötigt, weil das Trennen einzelner Filamente der teure Teil ist.',
+        'Das Wundmodell braucht rund 0,03 s pro Bild und die Sphäroidmodelle 0,2–0,4 s, während das Mikrotubuli-Modell etwa 0,6–2,5 s pro Bild benötigt, weil das Trennen einzelner Filamente der teure Teil ist.',
     },
 
     // Editor
