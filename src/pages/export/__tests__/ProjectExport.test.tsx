@@ -105,8 +105,9 @@ const mockExport = {
   setIncludeObjectMetrics: vi.fn(),
   setIncludeSegmentation: vi.fn(),
 };
+const mockUseExportFunctions = vi.fn((..._args: unknown[]) => mockExport);
 vi.mock('../hooks/useExportFunctions', () => ({
-  useExportFunctions: () => mockExport,
+  useExportFunctions: (...args: unknown[]) => mockUseExportFunctions(...args),
 }));
 
 // ── tests ────────────────────────────────────────────────────────────────────
@@ -116,6 +117,15 @@ describe('ProjectExport', () => {
     vi.clearAllMocks();
     mockExport.getSelectedCount.mockReturnValue(0);
     mockExport.isExporting = false;
+  });
+
+  it('tells the export which project to fetch polygons from', () => {
+    render(<ProjectExport />);
+    expect(mockUseExportFunctions).toHaveBeenCalledWith(
+      [],
+      'My Research Project',
+      'proj-123'
+    );
   });
 
   // 1
