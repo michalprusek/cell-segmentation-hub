@@ -35,8 +35,11 @@ import { PROJECT_TYPES } from '@/types';
 const PUBLIC_DIR = join(process.cwd(), 'public');
 
 describe('specimen preview index', () => {
-  it('gives every model in the registry a set of tiles', () => {
-    for (const model of ALL_MODEL_IDS) {
+  it('gives every model a project can select a set of tiles', () => {
+    const selectable = ALL_MODEL_IDS.filter(
+      id => MODEL_REGISTRY[id].compatibleProjectTypes.length > 0
+    );
+    for (const model of selectable) {
       expect(
         previewsForModel(model).length,
         `${model} has no preview tiles`

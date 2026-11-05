@@ -101,6 +101,12 @@ if str(_SHARED_VENDOR) not in sys.path:
 
 DEFAULT_PARAMS_PATH: Path = _PKG_DIR / "params.json"
 
+#: The same network and the same inference, retrained on frames merged from
+#: several fluorescent channels. It has its own folds and its own weights, so it
+#: has its own params: the numbers in a params file are the configuration one
+#: held-out score was measured with, and they do not transfer between models.
+MERGED_PARAMS_PATH: Path = _PKG_DIR / "params_merged.json"
+
 #: The label ids the network emits, and the polygon class each becomes. This is
 #: the ONE place the mapping lives -- ``ModelLoader.predict_neurite_soma``
 #: iterates it rather than repeating the literals -- and ``load_weights`` checks
@@ -209,7 +215,8 @@ class NeuriteSomaModel:
     ``torch.load`` + single-channel-sigmoid path.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, params_path: str | os.PathLike = DEFAULT_PARAMS_PATH) -> None:
+        self._params_path = Path(params_path)
         self._nets: list[Any] = []
         self._device: str = "cpu"
         self._patch: tuple[int, int] = (512, 512)
@@ -222,7 +229,7 @@ class NeuriteSomaModel:
     def params(self) -> dict:
         """Inference configuration shipped beside this wrapper (see params.json)."""
         if self._params is None:
-            self._params = json.loads(DEFAULT_PARAMS_PATH.read_text())
+            self._params = json.loads(self._params_path.read_text())
         return self._params
 
     # ------------------------------------------------------------------ loading
@@ -244,12 +251,15 @@ class NeuriteSomaModel:
         params = self.params
         configuration = params.get("configuration", "2d")
         folds = params.get("folds", [0, 1, 2])
+        staging_script = params.get(
+            "staging_script", "scripts/download-neurite-soma-weights.sh"
+        )
 
         if not directory.is_dir():
             raise FileNotFoundError(
                 f"neurite/soma weights directory not found at {directory} "
-                f"(~1.6 GB: fold_0/1/2.pth + plans.json + dataset.json). "
-                "Stage it with scripts/download-neurite-soma-weights.sh."
+                f"(folds {folds} as fold_N.pth + plans.json + dataset.json). "
+                f"Stage it with {staging_script}."
             )
         plans_path = directory / "plans.json"
         dataset_path = directory / "dataset.json"
@@ -257,7 +267,7 @@ class NeuriteSomaModel:
             if not required.is_file():
                 raise FileNotFoundError(
                     f"neurite/soma weights directory {directory} is missing "
-                    f"{required.name}; re-run scripts/download-neurite-soma-weights.sh."
+                    f"{required.name}; re-run {staging_script}."
                 )
 
         plans = json.loads(plans_path.read_text())
@@ -285,9 +295,8 @@ class NeuriteSomaModel:
 
         if not folds:
             raise ValueError(
-                "neurite/soma params.json declares no folds; the validated model is "
-                "the 3-fold ensemble [0, 1, 2] and a 0-fold load would 'succeed' and "
-                "then fail on the first frame."
+                f"neurite/soma {self._params_path.name} declares no folds; a 0-fold "
+                "load would 'succeed' and then fail on the first frame."
             )
 
         nets: list[Any] = []
@@ -298,7 +307,7 @@ class NeuriteSomaModel:
             if not ckpt_path.is_file():
                 raise FileNotFoundError(
                     f"neurite/soma fold {fold} checkpoint not found at {ckpt_path} "
-                    "(~560 MB). Stage it with scripts/download-neurite-soma-weights.sh."
+                    f"(~560 MB). Stage it with {staging_script}."
                 )
             # weights_only=False: the checkpoint is a training blob that also
             # carries `inference_allowed_mirroring_axes`, which the TTA below

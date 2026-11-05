@@ -193,7 +193,7 @@ const buildCocoCategories = (
 // they are written per image while the export streams.
 
 /** Project types whose model classifies closed polygons. Mirrors the model
- *  registry: `neurite_soma` is the only classifying model and it is bound to
+ *  registry: the classifying models are the three neurite ones, all bound to
  *  the `neurite` project type. */
 const NEURON_CLASS_PROJECT_TYPES: ReadonlySet<string> = new Set(['neurite']);
 

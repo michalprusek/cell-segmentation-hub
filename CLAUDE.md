@@ -631,7 +631,7 @@ only a bare ML-status dot.
   changing one default in either copy, exits 1.
 - **Only `spheroid` (5 models), `sperm` (2: `sperm`, the default, and
   `sperm_2part` — head + tail, no midpiece; PR #566) and `neurite` (2:
-  `neurite_soma`, the default, and `neurite_soma_classical`) have a real
+  `neurite_soma`, the default, and `neurite_soma_merged`) have a real
   choice**; the other four project types have exactly one each, so their
   picker is a single disabled row.
 - **The server must read the column too.** It shipped once with
@@ -856,6 +856,19 @@ Bearer sseg_…` only. A key in the query string is refused with 400 rather
   object — 62 real results across all twelve models of that date were identical
   before and after. It is three frames with no ground truth; re-measure before moving
   either percentile.
+- **`neurite_soma_merged` replaced the classical model in the picker
+  (2026-11-03).** The network of `neurite_soma`, 4 folds, retrained on 15
+  hand-corrected frames merged by `neurite_classical.merge_channels`; held-out
+  Dice 0.843 / 0.879, ~2.6 s per 1024² frame, weights in
+  `weights/neurite_soma_merged/`. It is NOT a replacement for `neurite_soma`, which
+  stays the default: on Leica confocal tubulin the merged model scores 0.465 / 0.825
+  against 0.851 / 0.924, and on merged frames `neurite_soma` scores 0.622 / 0.834.
+  Known limit: dim staining, where it finds part of the neurites and no somas.
+  `neurite_soma_classical` has `compatibleProjectTypes: []`, so the picker omits it
+  and a stored value resolves to the default; migration
+  `20261103_retire_classical_neurite` moved its projects. It stays a known id:
+  stored results name it and the public API serves it. It left the picker on the
+  owner's decision, knowing it found more on dim frames.
 - **`neurite_soma_classical` is a classical model that segments a MERGE of
   channels (2026-10-08).** `models/neurite_classical.py`: no network, no
   weights, CPU only; ~1.3 s per 1024² frame (1.13–1.46 s on four production

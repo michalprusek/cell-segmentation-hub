@@ -160,6 +160,20 @@
       },
       "note": "Neurite/soma (nnU-Net v2 ResEnc-M, 2D, 3-fold logit-space ensemble, 3 classes). Measured 2026-08-28 on an A5000 with the live service already holding ~8.5 GB, across two runs at different card load: 2.5-4.0 s for 1024x1024, 12.9-14.9 s for 2048x2048, 132-150 s for the 6657x6664 frames it was trained on. Runtime is dominated by forward passes and scales with tile count, not content: a 1024x1024 frame is 9 tiles x 3 folds x 4 mirror variants = 108 passes of 512x512. VRAM: 1.70 GiB reserved for the three resident fold networks plus a per-call working set sized by the FRAME (the two fp16 accumulators are C x H x W) -- 3.35 GiB peak reserved on the 6657x6664 frame, ~2.2 GiB on 2048x2048; the 4000 MB here is the former plus the CUDA context. Batch size pinned to 1: batching would multiply the frame-sized accumulators, and frame-parallelism happens upstream via the queue. expected_throughput is the 1024x1024 figure (0.25 img/s); on native-resolution frames it is 0.0076. These numbers are SERVED over GET /api/v1/models and are what a VRAM-budget decision reads."
     },
+    "neurite_soma_merged": {
+      "optimal_batch_size": 1,
+      "max_safe_batch_size": 1,
+      "expected_throughput": 0.38,
+      "memory_limit_mb": 3000,
+      "p95_latency_ms": 3000.0,
+      "production_optimized": false,
+      "concurrent_processing": {
+        "max_concurrent_users": 1,
+        "memory_per_user_mb": 3000,
+        "expected_concurrent_throughput": 0.38
+      },
+      "note": "Merged neurite/soma (nnU-Net v2 ResEnc-M, 2D, 4-fold logit-space ensemble, 3 classes). Measured 2026-11-03 in the ML image on the production A5000 with 5.6 GB already held: 2.52-2.71 s per 1024x1024 frame including polygons, peak 2.70 GB allocated and 2.96 GB reserved, 6.1 s to load 2.25 GB of weights. Scales with image area."
+    },
     "neurite_soma_classical": {
       "optimal_batch_size": 1,
       "max_safe_batch_size": 1,

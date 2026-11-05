@@ -52,11 +52,11 @@ model stay on disk but cannot be re-run.
 
 - **`neurite_soma`** (default) — a trained network that reads ONE channel,
   tubulin. Use it when the cells are visible in that channel.
-- **`neurite_soma_classical`** — a classical, training-free method (no network,
-  no weights, CPU). Use it when a cell is only visible when several channels
-  are taken together. Its channel picker shows **checkboxes**: tick one or more
-  channels, and they are merged into one greyscale image that is segmented.
-  Nothing is ticked by default and Confirm is disabled until one is.
+- **`neurite_soma_merged`** — the same network retrained on several fluorescent
+  channels merged. Use it when a cell shows when they are taken together. Its
+  channel picker shows **checkboxes**: tick one or more channels, and they are
+  merged into one greyscale image that is segmented. Nothing is ticked by default
+  and Confirm is disabled until one is.
 
 Either way the export is `neurite_metrics/` — `Neurites`, `Somas` and an
 `Intensity` table with the intensity of somas and neurites on every channel of
@@ -82,8 +82,7 @@ the registry changes nothing for them:
   (mask 0.3, score 0.95);
 - `spheroid_disintegration` and `neurite_soma` decide by argmax and have no
   threshold to change;
-- `neurite_soma_classical` cuts relative to each image's own noise, with the
-  parameters in `PARAMS` in `backend/segmentation/models/neurite_classical.py`.
+- `neurite_soma_merged` decides by argmax too.
 
 The authoritative list is the `threshold` field of each entry in
 `backend/src/api/v1/models.ts`, which mirrors

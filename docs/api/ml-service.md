@@ -36,18 +36,18 @@ documents it for people debugging the pipeline or extending it.
 
 `multipart/form-data`:
 
-| Field            | Type   | Default | Notes                                                                                                         |
-| ---------------- | ------ | ------- | ------------------------------------------------------------------------------------------------------------- |
-| `file`           | file   | —       | PNG, JPG, JPEG, TIFF, TIF or BMP. The extension of the filename is checked first                              |
-| `model`          | string | `hrnet` | A model id from the registry — one of thirteen. An unknown id is a 400                                        |
-| `threshold`      | float  | `0.5`   | Constrained to 0.1–0.99                                                                                       |
-| `detect_holes`   | bool   | `true`  | Detect internal contours                                                                                      |
-| `page`           | int    | `0`     | Zero-based page of a multi-page image. Past the end is a 400                                                  |
-| `max_pixels`     | int    | none    | Refuse (413) an image with more pixels, judged from the header before anything decodes                        |
-| `extra_channels` | files  | none    | Further channels of the same image, merged with `file` before segmentation. `neurite_soma_classical` **only** |
+| Field            | Type   | Default | Notes                                                                                                       |
+| ---------------- | ------ | ------- | ----------------------------------------------------------------------------------------------------------- |
+| `file`           | file   | —       | PNG, JPG, JPEG, TIFF, TIF or BMP. The extension of the filename is checked first                            |
+| `model`          | string | `hrnet` | A model id from the registry — one of thirteen. An unknown id is a 400                                      |
+| `threshold`      | float  | `0.5`   | Constrained to 0.1–0.99                                                                                     |
+| `detect_holes`   | bool   | `true`  | Detect internal contours                                                                                    |
+| `page`           | int    | `0`     | Zero-based page of a multi-page image. Past the end is a 400                                                |
+| `max_pixels`     | int    | none    | Refuse (413) an image with more pixels, judged from the header before anything decodes                      |
+| `extra_channels` | files  | none    | Further channels of the same image, merged with `file` before segmentation. The two merging models **only** |
 
-**`extra_channels`** exists for the one model that merges channels,
-`neurite_soma_classical`: `file` is the first channel and each `extra_channels`
+**`extra_channels`** exists for the two models that merge channels,
+`neurite_soma_merged` and `neurite_soma_classical`: `file` is the first channel and each `extra_channels`
 part is another channel of the same image. They are normalised and merged in
 the ML service, at native bit depth, into the one greyscale image that is
 segmented. For any other model the field is **refused with a 400**, not
@@ -69,7 +69,7 @@ of 3 475 in the affected project types) the model saw 1, 1 and 5 grey levels
 and returned no polygons. They are now stretched first, from the frame's
 0.1–99.9 percentile range to 0–255 (`api/input_depth.py`, which also records
 why it is not min-max), and the response carries `input_conversion` with the
-range used. `microtubule`, `neurite_soma` and `neurite_soma_classical` read
+range used. `microtubule` and the three neurite models read
 the native depth and are not converted. An 8-bit image is passed through as the
 same object — verified on 62 real results across the twelve models that
 existed on 2026-10-06, identical before and after.
@@ -85,7 +85,7 @@ differently from the generic one — or does not exist:
   0.99 ceiling, so forwarding a user value would either cut a very
   confident foreground at 0.5 and flood the instancer with noise, or fail
   validation;
-- **`neurite_soma`** and **`spheroid_disintegration`** have no threshold at
+- **`neurite_soma`**, **`neurite_soma_merged`** and **`spheroid_disintegration`** have no threshold at
   all: the classes are an **argmax**, so there is no probability cut to move.
   The request value is accepted and echoed in the response, and then ignored
   (`spheroid_disintegration` says so: `threshold_applies: false`);

@@ -414,7 +414,7 @@ describe('QueueController — behavioral', () => {
     };
 
     it('reach the queue for the model that merges', async () => {
-      wire('neurite', 'neurite_soma_classical');
+      wire('neurite', 'neurite_soma_merged');
       const app = buildApp(queueController.addBatchToQueue);
       await request(app)
         .post('/')
@@ -426,7 +426,7 @@ describe('QueueController — behavioral', () => {
         .expect(200);
 
       const call = queueServiceInstance.addBatchToQueue.mock.calls[0];
-      expect(call?.[3]).toBe('neurite_soma_classical');
+      expect(call?.[3]).toBe('neurite_soma_merged');
       expect(call?.[8]).toBeUndefined(); // no single-channel override
       expect(call?.[9]).toEqual(['Channel_1', 'Channel_2']);
     });
@@ -468,7 +468,7 @@ describe('QueueController — behavioral', () => {
         .send({
           imageIds: [IMAGE_ID],
           projectId: PROJECT_ID,
-          model: 'neurite_soma_classical',
+          model: 'neurite_soma_merged',
           channels: ['Channel_1'],
         })
         .expect(400);

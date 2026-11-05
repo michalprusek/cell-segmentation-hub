@@ -661,6 +661,11 @@ export default {
           description:
             'Segmentation sémantique à deux classes de neurones en microscopie de fluorescence — neurite (prolongements) et soma (corps cellulaire) — à partir du seul canal tubuline. nnU-Net v2 ResEnc-M, ensemble de 3 folds avec TTA par miroir et terme topologique clDice sur la classe neurite. Dice sur données réservées 0,832 neurite / 0,915 soma.',
         },
+        neurite_soma_merged: {
+          name: 'Neurite / soma – nnU-Net (canaux fusionnés)',
+          description:
+            'Segmentation sémantique à deux classes des neurones — neurite et soma — pour les images de fluorescence où la cellule apparaît lorsque plusieurs canaux sont pris ensemble. Vous cochez les canaux avant de segmenter ; chacun est normalisé par son propre bruit et ils sont fusionnés en une image en niveaux de gris, segmentée par un ensemble de 4 folds de nnU-Net v2 ResEnc-M. Dice sur images réservées 0,843 neurite / 0,879 soma. Sur un marquage faible, il ne trouve qu’une partie des neurites et souvent aucun soma : vérifiez donc ces images dans l’éditeur.',
+        },
         neurite_soma_classical: {
           name: 'Neurite / Soma – classique (canaux fusionnés)',
           description:
@@ -703,6 +708,8 @@ export default {
         "U-Net compact (distillé de Meta SAM 3) pour la segmentation d'instances de microcapsules — aire, périmètre et compacité par capsule, les capsules coupées par le bord étant exclues des métriques.",
       neurite_soma:
         'nnU-Net v2 ResEnc-M (2D, ensemble de 3 folds) pour la segmentation des neurites et des somas en microscopie de fluorescence. Lit le canal tubuline ; Dice sur données réservées 0,832 neurite / 0,915 soma. Entraîné sur des données confocales Leica à ~0,180 µm/px : vérifier les comptages de somas à une autre taille de pixel.',
+      neurite_soma_merged:
+        'nnU-Net v2 ResEnc-M (2D, ensemble de 4 folds) pour segmenter neurites et somas sur des images de fluorescence fusionnées à partir de plusieurs canaux : vous cochez les canaux, chacun est normalisé par son propre bruit de fond et ils sont fusionnés en une image en niveaux de gris. Dice sur images réservées 0,843 neurite / 0,879 soma, sur 15 images corrigées à la main provenant de quatre puits à environ 0,18 µm/px. Sur un marquage faible, il ne trouve qu’une partie des neurites et souvent aucun soma : vérifiez donc ces images dans l’éditeur.',
       neurite_soma_classical:
         'Segmentation classique des neurites et des somas, sans réseau de neurones et sans poids (filtre de crêtes de Meijering et règles de forme ; CPU uniquement, environ 1,3 s par image de 1024 × 1024). Pour les images de fluorescence où une cellule n’est visible que lorsque plusieurs canaux sont pris ensemble : vous cochez les canaux, chacun est normalisé par son propre bruit de fond et ils sont fusionnés en une seule image en niveaux de gris. Les somas faibles et diffus ne sont trouvés qu’une partie du temps : vérifiez-les dans l’éditeur.',
     },
@@ -1976,14 +1983,14 @@ export default {
           description:
             "Un ensemble de trois plis de nnU-Net v2 ResEnc-M, moyennés dans l'espace des logits, avec augmentation par miroir à l'inférence et un terme topologique clDice qui maintient les prolongements fins connectés plutôt que fragmentés. Dice sur données réservées : 0,832 neurite / 0,915 soma. Entraîné sur des données confocales Leica à environ 0,180 µm/px ; à la moitié de cette taille de pixel, chaque soma revient généralement coupé en deux, validez donc d'abord les comptages de somas.",
         },
-        neuriteSomaClassical: {
-          name: 'Neurite / soma (classique)',
+        neuriteSomaMerged: {
+          name: 'Neurite / soma (canaux fusionnés)',
           inferenceTime:
-            'Environ 1,3 s pour une image de 1024 × 1024, sur le CPU · pas de réglage de seuil : la coupure suit le bruit de l’image elle-même',
+            'Environ 2,6 s pour une image de 1024 × 1024 · pas de seuil : un argmax décide',
           bestFor:
-            'Utilisé par : les projets neurites et somas, lorsque vous le choisissez à la place du modèle par défaut. Pour les images de fluorescence où une cellule n’est visible que lorsque plusieurs canaux sont pris ensemble.',
+            'Utilisé par : les projets neurites et somas, lorsque vous le choisissez. Pour les images de fluorescence où une cellule apparaît lorsque plusieurs canaux sont pris ensemble, avec un marquage raisonnablement intense.',
           description:
-            'Une méthode classique : ni réseau de neurones, ni poids, ni entraînement. Avant de segmenter, vous cochez un ou plusieurs canaux ; chacun est normalisé par son propre bruit de fond et ils sont fusionnés par maximum pixel à pixel en une seule image en niveaux de gris, qui est celle que l’on segmente. Les neurites proviennent d’un filtre de crêtes de Meijering avec un seuil relatif au bruit de l’image elle-même, et les fragments courts et isolés (moins de 100 px environ) sont écartés comme des taches du fond. Les somas sont des structures larges et compactes d’où partent des neurites. Les trous, comme l’intérieur d’une boucle de neurite, sont conservés comme trous. Les somas faibles et diffus ne sont trouvés qu’une partie du temps ; vérifiez et corrigez donc les somas dans l’éditeur. Les images de plus de 64 mégapixels sont refusées.',
+            'Un ensemble de quatre folds de nnU-Net v2 ResEnc-M, moyenné dans l’espace des logits avec augmentation par miroir à l’inférence. Avant de segmenter, vous cochez un ou plusieurs canaux ; chacun est normalisé par son propre bruit de fond et ils sont fusionnés par maximum pixel à pixel en une image en niveaux de gris, celle que voit le réseau. Entraîné sur 15 images corrigées à la main, provenant de quatre puits, à environ 0,18 µm/px. Chaque puits a été réservé une fois : Dice 0,843 neurite / 0,879 soma. C’est le score d’un fold ; pour l’ensemble complet, il ne reste aucune image réservée. Sur un marquage faible, il ne trouve qu’une partie des neurites et souvent aucun soma : vérifiez donc ces images dans l’éditeur. Il marque aussi comme somas de grands corps cellulaires désordonnés qu’un annotateur a pu laisser de côté.',
         },
       },
       howToSelect: 'Choisir un modèle',

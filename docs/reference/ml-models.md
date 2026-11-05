@@ -57,7 +57,8 @@ incompatible pair with a 400 even if you post it directly.
 | `microtubule`             | Microtubule (ResEnc-M + instancer) | `microtubules`      | **Polylines**   | 0.98, **not read** (`prob_thr` 0.995 in its own params file) | ~2 s at 2048² (p95 ~4 s)             | large       |
 | `microcapsule`            | Microcapsule                       | `microcapsule`      | Closed polygons | 0.5                                                         | ~0.30 s                       | small       |
 | `neurite_soma`            | Neurite / Soma                     | `neurite`           | Closed polygons | 0.5, **not read** (argmax)                                  | ~12 s at 2048²                | large       |
-| `neurite_soma_classical`  | Neurite / Soma (classical)         | `neurite`           | Closed polygons | 0.5, **not read** (cut relative to the image's own noise)   | ~1.3 s at 1024², CPU          | small       |
+| `neurite_soma_merged`     | Neurite / Soma (merged channels)   | `neurite`           | Closed polygons | 0.5, **not read** (argmax)                                  | ~2.6 s at 1024²               | large       |
+| `neurite_soma_classical`  | Neurite / Soma (classical)         | none, retired       | Closed polygons | 0.5, **not read** (cut relative to the image's own noise)   | ~1.3 s at 1024², CPU          | small       |
 
 The threshold column is `defaultThreshold` from the frontend registry — the
 value the request carries. **Six models never read it** (`threshold: null` in
@@ -89,15 +90,16 @@ its figure is a CPU measurement.
 | `sperm`             | `sperm` (default), `sperm_2part`                                    |
 | `microtubules`      | `microtubule`                                                       |
 | `microcapsule`      | `microcapsule`                                                      |
-| `neurite`           | `neurite_soma` (default), `neurite_soma_classical`                  |
+| `neurite`           | `neurite_soma` (default), `neurite_soma_merged`                     |
 
 Three types offer a real choice: `spheroid` (five models), `sperm` (two) and
 `neurite` (two). The other four have exactly one, so their picker is a single
 locked row. A new `sperm` project starts on `sperm` and a new `neurite` project
-on `neurite_soma`; `sperm_2part` and `neurite_soma_classical` are used only
-when the owner picks them. `neurite_soma_classical` is not a more accurate
-replacement for the learned model — it is for images the learned model cannot
-take.
+on `neurite_soma`; `sperm_2part` and `neurite_soma_merged` are used only
+when the owner picks them. `neurite_soma_merged` is not a more accurate
+replacement for `neurite_soma`: each loses by a wide margin on the other's
+images. `neurite_soma_classical` is offered to no project type since 2026-11-03,
+and a stored value resolves to the type's default.
 
 `spheroid_disintegration` is deliberately **absent** from plain `spheroid`
 projects: core detection is tied to its post-processing path, so anyone who
@@ -568,7 +570,62 @@ More in [Neurite and soma projects](../guides/project-types/neurite.md).
 
 ---
 
+## `neurite_soma_merged` — Neurite / Soma (merged channels)
+
+Long display name: _Neurite / Soma – nnU-Net (merged channels)_.
+
+The network of `neurite_soma`, retrained for fluorescence images in which a cell
+shows when several channels are taken together.
+
+- Input: the ticked channels, each normalised to its own noise and merged by
+  pixel-wise maximum with `neurite_classical.merge_channels`, at native depth. The
+  merged frame then takes the path of `neurite_soma`: 1–99.5 percentile stretch,
+  z-score, sliding window at step 0.5, mirroring TTA.
+- Network: `NeuriteSomaModel` with `params_merged.json`, **4 folds averaged in
+  logit space**.
+- Checkpoint: `weights/neurite_soma_merged/` (`fold_0.pth` … `fold_3.pth` plus
+  `plans.json` and `dataset.json`), staged by
+  `scripts/download-neurite-soma-merged-weights.sh`.
+- Training: `Dataset103_NeuriteSomaMerged`, 15 frames of 1024 × 1024 from four
+  wells of two batches, corrected by hand starting from the classical model's
+  output, about 0.183 µm/px derived from the TIFF resolution tag. 150 epochs per
+  fold, warm-started from fold 0 of `neurite_soma`. Dice + cross-entropy + clDice.
+- Held-out accuracy, leave-one-well-out, mean of wells: **Dice 0.843 neurite /
+  0.879 soma**, clDice 0.904. Per well, neurite / soma: 0.793 / 0.846, 0.881 /
+  0.798, 0.828 / 0.950, 0.870 / 0.920. This is one fold's score: the shipped
+  ensemble has no held-out frames left. There is no separate test set.
+- Verified against `nnUNetv2_predict -f 0 1 2 3` from the raw channel PNGs, in the
+  ML image's versions: 167 of 15 728 640 pixels differ. The stretch differs by at
+  most one grey level from the training frames on 3 of 15 frames, from NumPy 1.26
+  against 2.5 rounding the percentiles differently.
+- Baselines on the same frames: `neurite_soma` 0.622 / 0.834, classical 0.757 /
+  0.599 (an upper bound: the annotations started from its output), a fine-tuned
+  Cellpose-SAM 0.835 / 0.883. Cellpose-SAM is a tie within noise and was not
+  chosen because this path already existed.
+- Runtime: ~2.6 s at 1024² on an A5000. Serialised in the queue like `neurite_soma`.
+
+### Known limits
+
+- **Dim staining.** On seven frames from other batches with no ground truth, it
+  traced whole cells on bright staining, and on dim staining it found part of the
+  neurites and no somas. The classical model found more there, and on the dimmest
+  frame nothing found anything. The two training batches do not cover this.
+- **Not for Leica confocal tubulin.** On three frames `neurite_soma` fold 0 had
+  not trained on, Dice 0.465 / 0.825 against its 0.851 / 0.924, with about three
+  times the expert's neurite coverage.
+- **Untidy cell bodies come back as somas**, including ones an annotator left out.
+
+More in [Neurite and soma projects](../guides/project-types/neurite.md).
+
+---
+
 ## `neurite_soma_classical` — Neurite / Soma (classical)
+
+**Offered to no project type since 2026-11-03.** The picker does not list it, a
+project cannot select it, and migration `20261103_retire_classical_neurite` moved
+the projects that had it to `neurite_soma_merged`. It is still a known id: stored
+results name it, the public API serves it, and `neurite_soma_merged` uses its
+`merge_channels`.
 
 Long display name: _Neurite / Soma – classical (merged channels)_.
 
@@ -576,8 +633,7 @@ A classical, training-free segmentation of neurites and somas: **no neural
 network, no weights, CPU only**. It exists for fluorescence images in which a
 cell is only visible when several channels are taken together, which the
 learned `neurite_soma` cannot take — that model reads exactly one tubulin
-channel and rejects a genuinely multi-channel frame. It is **not** the default
-for `neurite` projects; the owner picks it.
+channel and rejects a genuinely multi-channel frame.
 
 - Code: `backend/segmentation/models/neurite_classical.py`. It sits beside the
   `models` package's heavy members, like `mt_measure.py`, and needs only NumPy,

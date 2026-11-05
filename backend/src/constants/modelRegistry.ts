@@ -63,8 +63,15 @@ export const MODEL_REGISTRY = {
   microtubule: { compatibleProjectTypes: ['microtubules'] },
   microcapsule: { compatibleProjectTypes: ['microcapsule'] },
   neurite_soma: { compatibleProjectTypes: ['neurite'] },
-  neurite_soma_classical: {
+  neurite_soma_merged: {
     compatibleProjectTypes: ['neurite'],
+    mergesChannels: true,
+  },
+  // Retired from the picker. No project type may select it, so a stored value
+  // resolves to the type's default. Still a known id because stored results
+  // name it and the public API serves it.
+  neurite_soma_classical: {
+    compatibleProjectTypes: [],
     mergesChannels: true,
   },
 } as const satisfies Record<string, BackendModelSpec>;
