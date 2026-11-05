@@ -1,4 +1,9 @@
 import {
+  PROJECT_CARD_IMAGE_QUERY,
+  projectCardPreviewUrl,
+  withoutSegmentation,
+} from './previews/projectCardImage';
+import {
   collectProjectFiles,
   completeCleanup,
   discardPendingCleanup,
@@ -178,19 +183,7 @@ export async function getUserProjects(
             images: true,
           },
         },
-        images: {
-          take: 1,
-          orderBy: { createdAt: 'desc' },
-          select: {
-            id: true,
-            name: true,
-            thumbnailPath: true,
-            originalPath: true,
-            segmentationStatus: true,
-            createdAt: true,
-            updatedAt: true,
-          },
-        },
+        images: PROJECT_CARD_IMAGE_QUERY,
         user: {
           select: {
             id: true,
@@ -270,6 +263,9 @@ export async function getUserProjects(
 
       return {
         ...project,
+        // Same versioned preview as the grid card, so the dashboard shows the
+        // segmentation and follows every edit without a request per card.
+        previewUrl: projectCardPreviewUrl(project.images),
         isOwned: project.userId === userId,
         isShared: project.userId !== userId && project.shares.length > 0,
         owner: project.user,
@@ -287,7 +283,7 @@ export async function getUserProjects(
         images: latestImage
           ? [
               {
-                ...latestImage,
+                ...withoutSegmentation(latestImage),
                 thumbnailUrl,
                 displayUrl: `/api/images/${latestImage.id}/display`,
               },

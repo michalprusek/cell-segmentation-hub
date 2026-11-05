@@ -182,6 +182,20 @@ const DETAILS: Record<KnownModelId, V1Model> = {
       'Single-channel images. A colour image is accepted only if its channels are identical.',
     ],
   },
+  neurite_soma_merged: {
+    name: 'Neurite / Soma (merged channels)',
+    description:
+      'Neurites and cell bodies (somata) as closed outlines, from a network trained on images merged from several fluorescent channels.',
+    geometry: 'polygon',
+    classes: ['neurite', 'soma'],
+    threshold: null,
+    detectHoles: true,
+    inputDepth: 'native',
+    notes: [
+      'One image is one channel here. Merging several channels before segmentation is a feature of the application; this endpoint does not take them.',
+      'A colour image is reduced to its luminance.',
+    ],
+  },
   neurite_soma_classical: {
     name: 'Neurite / Soma (classical)',
     description:

@@ -19,6 +19,9 @@ import {
 import * as UserService from './userService';
 import { resolveSegmentationSource } from './video/types';
 import { convertImageForDisplay } from './video/pythonExtractor';
+import { previewUrlFor } from './previews/previewVersion';
+import { removePreviews } from './previews/previewFiles';
+import { assertSafeStorageSegment } from '../utils/storagePath';
 import { readCellSensPixelSizeUm } from './olympusCellSensScale';
 
 async function pathExists(p: string): Promise<boolean> {
@@ -40,7 +43,8 @@ export interface UploadImageData {
 export interface ImageWithUrls extends Image {
   originalUrl: string;
   thumbnailUrl?: string;
-  segmentationThumbnailUrl?: string; // URL for segmentation thumbnail
+  /** The grid preview: image + segmentation, versioned (see previewVersion). */
+  previewUrl: string;
   displayUrl: string; // Browser-compatible URL for display
 }
 
@@ -381,14 +385,12 @@ export class ImageService {
           ? await storage.getUrl(uploadResult.thumbnailPath)
           : undefined;
 
-        // No segmentation thumbnail yet for newly uploaded images
-        const segmentationThumbnailUrl = undefined;
-
         uploadedImages.push({
           ...image,
           originalUrl,
           thumbnailUrl,
-          segmentationThumbnailUrl,
+          // A new upload has no segmentation: its preview is the bare image.
+          previewUrl: previewUrlFor({ ...image, segmentation: null }),
           displayUrl: this.getDisplayUrl(image.id),
         });
 
@@ -543,14 +545,12 @@ export class ImageService {
           ? await storage.getUrl(uploadResult.thumbnailPath)
           : undefined;
 
-        // No segmentation thumbnail yet for newly uploaded images
-        const segmentationThumbnailUrl = undefined;
-
         uploadedImages.push({
           ...image,
           originalUrl,
           thumbnailUrl,
-          segmentationThumbnailUrl,
+          // A new upload has no segmentation: its preview is the bare image.
+          previewUrl: previewUrlFor({ ...image, segmentation: null }),
           displayUrl: this.getDisplayUrl(image.id),
         });
 
@@ -673,6 +673,7 @@ export class ImageService {
       orderBy,
       skip,
       take: limit,
+      include: { segmentation: { select: { id: true, updatedAt: true } } },
     });
 
     // Bubble calibration metadata from each frame's parent container
@@ -722,15 +723,10 @@ export class ImageService {
     // Add URLs to images
     const storage = getStorageProvider();
     const imagesWithUrls: ImageWithUrls[] = await Promise.all(
-      images.map(async image => {
+      images.map(async ({ segmentation, ...image }) => {
         const originalUrl = await storage.getUrl(image.originalPath);
         const thumbnailUrl = image.thumbnailPath
           ? await storage.getUrl(image.thumbnailPath)
-          : undefined;
-
-        // Include segmentation thumbnail URL if available
-        const segmentationThumbnailUrl = image.segmentationThumbnailPath
-          ? await storage.getUrl(image.segmentationThumbnailPath)
           : undefined;
 
         // Prefer parent container's calibration over the row's own
@@ -750,7 +746,7 @@ export class ImageService {
           frameIntervalMs,
           originalUrl,
           thumbnailUrl,
-          segmentationThumbnailUrl,
+          previewUrl: previewUrlFor({ ...image, segmentation }),
           displayUrl: this.getDisplayUrl(image.id),
         };
       })
@@ -894,7 +890,7 @@ export class ImageService {
       return null;
     }
 
-    const image = await this.prisma.image.findFirst({
+    const found = await this.prisma.image.findFirst({
       where: {
         id: imageId,
         project: {
@@ -916,11 +912,13 @@ export class ImageService {
           ],
         },
       },
+      include: { segmentation: { select: { id: true, updatedAt: true } } },
     });
 
-    if (!image) {
+    if (!found) {
       return null;
     }
+    const { segmentation, ...image } = found;
 
     // Add URLs
     const storage = getStorageProvider();
@@ -929,16 +927,11 @@ export class ImageService {
       ? await storage.getUrl(image.thumbnailPath)
       : undefined;
 
-    // Include segmentation thumbnail URL if available
-    const segmentationThumbnailUrl = image.segmentationThumbnailPath
-      ? await storage.getUrl(image.segmentationThumbnailPath)
-      : undefined;
-
     return {
       ...image,
       originalUrl,
       thumbnailUrl,
-      segmentationThumbnailUrl,
+      previewUrl: previewUrlFor({ ...image, segmentation }),
       displayUrl: this.getDisplayUrl(image.id),
     };
   }
@@ -976,53 +969,36 @@ export class ImageService {
       throw ApiError.forbidden('Access denied to this image');
     }
 
-    const storage = getStorageProvider();
-
     try {
-      // Delete from storage
-      await storage.delete(image.originalPath);
+      // A container's frames go with it (ON DELETE CASCADE); their previews
+      // and legacy thumbnails are files the cascade cannot see.
+      const frames = image.isVideoContainer
+        ? await this.prisma.image.findMany({
+            where: { parentVideoId: image.id },
+            select: { id: true, segmentationThumbnailPath: true },
+          })
+        : [];
 
-      if (image.thumbnailPath) {
-        await storage.delete(image.thumbnailPath);
-      }
-
-      // Video containers own a whole directory subtree
-      // (projects/<pid>/images/<videoId>/frames/NNNN/<channel>.png) that
-      // sits outside originalPath/thumbnailPath. Without explicit
-      // cleanup, deleting a 200-frame multi-channel ND2 leaves several GB
-      // orphaned on disk while DB cascade removes the rows. Recursive rm
-      // is best-effort — failure logs but doesn't abort the delete.
-      if (image.isVideoContainer) {
-        try {
-          const fs = await import('fs/promises');
-          const path = await import('path');
-          const { config } = await import('../utils/config');
-          const containerDir = path.join(
-            config.UPLOAD_DIR,
-            'projects',
-            image.projectId,
-            'images',
-            image.id
-          );
-          await fs.rm(containerDir, { recursive: true, force: true });
-          logger.info('Removed video container directory', 'ImageService', {
-            imageId,
-            containerDir,
-          });
-        } catch (rmErr) {
-          logger.error(
-            `Failed to remove video container directory: ${(rmErr as Error).message}`,
-            rmErr as Error,
-            'ImageService',
-            { imageId }
-          );
-        }
-      }
-
-      // Delete from database (cascades to child frame Image rows + Segmentation)
+      // Row first, files after: a failed delete must never leave a row
+      // pointing at files that are already gone. Files left behind by a
+      // failure below are reclaimed by the storage GC.
       await this.prisma.image.delete({
         where: { id: imageId },
       });
+
+      await this.deleteImageFiles(image);
+      if (frames.length > 0) {
+        await removePreviews(
+          image.projectId,
+          frames.map(f => f.id)
+        );
+        const storage = getStorageProvider();
+        for (const frame of frames) {
+          if (frame.segmentationThumbnailPath) {
+            await storage.delete(frame.segmentationThumbnailPath);
+          }
+        }
+      }
 
       logger.info('Image deleted successfully', 'ImageService', {
         imageId,
@@ -1045,6 +1021,75 @@ export class ImageService {
 
       throw new Error(
         `Chyba při mazání obrázku: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
+    }
+  }
+
+  /**
+   * Every file an image row owns, and the caches derived from it: the
+   * original and its upload thumbnail, the legacy grid thumbnail, the display
+   * cache, the previews, and for a container its whole directory. Each piece
+   * is best-effort; what fails is left to the storage GC.
+   */
+  private async deleteImageFiles(image: {
+    id: string;
+    projectId: string;
+    originalPath: string;
+    thumbnailPath: string | null;
+    segmentationThumbnailPath: string | null;
+    isVideoContainer: boolean;
+  }): Promise<void> {
+    const storage = getStorageProvider();
+    // An `extraction_failed` container has `originalPath: ''`, which would
+    // resolve to the upload directory itself.
+    for (const key of [
+      image.originalPath,
+      image.thumbnailPath,
+      image.segmentationThumbnailPath,
+    ]) {
+      if (key) {
+        await storage.delete(key);
+      }
+    }
+    await fs.rm(
+      path.join(
+        config.UPLOAD_DIR,
+        'converted',
+        `${path.basename(image.id)}.png`
+      ),
+      { force: true }
+    );
+    await removePreviews(image.projectId, [image.id]);
+    if (image.isVideoContainer) {
+      await this.removeContainerDir(image.projectId, image.id);
+    }
+  }
+
+  /** `projects/<pid>/images/<containerId>/`: frames of every channel,
+   *  playback proxies, registration and drift data. */
+  private async removeContainerDir(
+    projectId: string,
+    containerId: string
+  ): Promise<void> {
+    const containerDir = path.join(
+      config.UPLOAD_DIR,
+      'projects',
+      assertSafeStorageSegment(projectId, 'projectId'),
+      'images',
+      assertSafeStorageSegment(containerId, 'containerId')
+    );
+    try {
+      await fs.rm(containerDir, { recursive: true, force: true });
+      logger.info('Removed video container directory', 'ImageService', {
+        containerId,
+        containerDir,
+      });
+    } catch (rmErr) {
+      logger.error(
+        `Failed to remove video container directory: ${(rmErr as Error).message}`,
+        rmErr as Error,
+        'ImageService',
+        { containerId }
       );
     }
   }
@@ -1131,22 +1176,22 @@ export class ImageService {
     }
 
     const storage = getStorageProvider();
+    // Files are removed only AFTER the transaction commits. They used to be
+    // removed inside it, before the row: a transaction that then rolled back
+    // left rows pointing at files that no longer existed. In this order a
+    // failure leaves, at worst, files without rows — which the storage GC
+    // reclaims — never rows without files.
+    const afterCommit: Array<() => Promise<void>> = [];
 
     // Process deletions in transaction for database operations
     await this.prisma.$transaction(async tx => {
       for (const image of imagesToDelete) {
         try {
-          // Delete from storage first
-          await storage.delete(image.originalPath);
-
-          if (image.thumbnailPath) {
-            await storage.delete(image.thumbnailPath);
-          }
-
           // Delete from database (CASCADE will handle segmentation data)
           await tx.image.delete({
             where: { id: image.id },
           });
+          afterCommit.push(() => this.deleteImageFiles(image));
 
           deletedCount++;
 
@@ -1217,11 +1262,18 @@ export class ImageService {
             continue;
           }
 
-          await storage.delete(container.originalPath);
-          if (container.thumbnailPath) {
-            await storage.delete(container.thumbnailPath);
-          }
           await tx.image.delete({ where: { id: container.id } });
+          // The whole directory, not just original + thumbnail: frames,
+          // every channel, playback proxies and registration data live under
+          // it. Removing only the two files left 168 directories / 8.6 GB on
+          // production by 2026-10-24.
+          afterCommit.push(async () => {
+            await storage.delete(container.originalPath);
+            if (container.thumbnailPath) {
+              await storage.delete(container.thumbnailPath);
+            }
+            await this.removeContainerDir(projectId, container.id);
+          });
           // Track cascaded container separately from user-requested
           // deletes so the returned `deletedCount` keeps its existing
           // semantic ("images the user asked to delete that were
@@ -1248,6 +1300,17 @@ export class ImageService {
         }
       }
     });
+
+    for (const cleanup of afterCommit) {
+      try {
+        await cleanup();
+      } catch (error) {
+        logger.warn('File cleanup after batch delete failed', 'ImageService', {
+          projectId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
 
     // Check for images that weren't found
     const foundIds = imagesToDelete.map(img => img.id);
@@ -1522,11 +1585,9 @@ export class ImageService {
     }
 
     if (await pathExists(convertedPath)) {
-      // Periodically clean up old converted files (don't await to avoid blocking)
-      this.cleanupConvertedCache().catch(error =>
-        logger.error('Background cleanup failed', error)
-      );
-
+      // The cache's 7-day expiry is the storage GC's job now
+      // (services/maintenance/storageGc.ts). It used to run here, on EVERY
+      // cache hit: a readdir + a stat per cached file, per display request.
       logger.info('Serving cached converted image', 'ImageService', {
         imageId,
         originalType: image.mimeType,
@@ -1794,87 +1855,6 @@ export class ImageService {
       // For other storage providers, implement buffer retrieval
       throw new Error(
         'Buffer retrieval not implemented for this storage provider'
-      );
-    }
-  }
-
-  /**
-   * Clean up old converted PNG files from cache
-   */
-  private async cleanupConvertedCache(retentionDays = 7): Promise<void> {
-    try {
-      const convertedDir = path.join(
-        process.env.UPLOAD_DIR || './uploads',
-        'converted'
-      );
-
-      let files: string[];
-      try {
-        files = await fs.readdir(convertedDir);
-      } catch (err) {
-        if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
-          return;
-        }
-        throw err;
-      }
-      const cutoffTime = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
-
-      for (const file of files) {
-        const filePath = path.join(convertedDir, file);
-
-        try {
-          const stats = await fs.stat(filePath);
-          if (stats.mtimeMs < cutoffTime) {
-            await fs.unlink(filePath);
-            logger.info('Removed old converted file', 'ImageService', {
-              file,
-              ageInDays: Math.floor(
-                (Date.now() - stats.mtimeMs) / (24 * 60 * 60 * 1000)
-              ),
-            });
-          }
-        } catch (error) {
-          logger.error(
-            'Failed to process converted file during cleanup',
-            error instanceof Error ? error : new Error(String(error))
-          );
-        }
-      }
-    } catch (error) {
-      logger.error(
-        'Failed to cleanup converted cache',
-        error instanceof Error ? error : new Error(String(error))
-      );
-    }
-  }
-
-  /**
-   * Remove converted files for a specific image
-   */
-  async removeConvertedFile(imageId: string): Promise<void> {
-    try {
-      const convertedPath = path.join(
-        process.env.UPLOAD_DIR || './uploads',
-        'converted',
-        `${imageId}.png`
-      );
-
-      try {
-        await fs.unlink(convertedPath);
-        logger.info(
-          'Removed converted file for deleted image',
-          'ImageService',
-          { imageId }
-        );
-      } catch (err) {
-        if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
-          throw err;
-        }
-      }
-    } catch (error) {
-      logger.error(
-        'Failed to remove converted file',
-        error instanceof Error ? error : new Error(String(error))
       );
     }
   }

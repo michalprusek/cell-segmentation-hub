@@ -202,6 +202,7 @@ def test_the_models_that_read_native_depth_are_left_alone():
         "microtubule",
         "neurite_soma",
         "neurite_soma_classical",
+        "neurite_soma_merged",
     }
 
 
@@ -241,6 +242,10 @@ class _RecordingLoader:
         self.channels = list(images)
         return self._record("neurite_soma_classical", images[0])
 
+    def predict_neurite_soma_merged(self, images, *a, **k):
+        self.channels = list(images)
+        return self._record("neurite_soma_merged", images[0])
+
 
 EIGHT_BIT_MODELS = [
     "hrnet",
@@ -257,11 +262,11 @@ EIGHT_BIT_MODELS = [
 
 
 def test_every_model_is_accounted_for():
-    # 12 models in the registry: these ten plus the two native-depth ones. A
-    # thirteenth must be put on one side or the other deliberately.
+    # These ten plus the native-depth ones. A new model must be put on one side
+    # or the other deliberately.
     assert len(EIGHT_BIT_MODELS) == 10
     assert not set(EIGHT_BIT_MODELS) & input_depth.NATIVE_DEPTH_MODELS
-    assert len(set(EIGHT_BIT_MODELS) | input_depth.NATIVE_DEPTH_MODELS) == 13
+    assert len(set(EIGHT_BIT_MODELS) | input_depth.NATIVE_DEPTH_MODELS) == 14
 
 
 @pytest.mark.parametrize("model", EIGHT_BIT_MODELS)
@@ -405,6 +410,7 @@ class _MergeLoader(_RouteLoader):
     AVAILABLE_MODELS = {
         **_RouteLoader.AVAILABLE_MODELS,
         "neurite_soma_classical": {},
+        "neurite_soma_merged": {},
     }
 
 
@@ -412,14 +418,15 @@ def _png16(seed):
     return _tiff_stack([_camera_frame() + seed])
 
 
-def test_extra_channels_reach_the_merging_model_in_order():
+@pytest.mark.parametrize("model", sorted(routes.MULTI_CHANNEL_MODELS))
+def test_extra_channels_reach_the_merging_model_in_order(model):
     loader = _MergeLoader()
     first, second, third = _png16(0), _png16(7), _png16(19)
 
     result = _segment(
         loader,
         first,
-        model="neurite_soma_classical",
+        model=model,
         extra_channels=[_Upload(second), _Upload(third)],
     )
 
@@ -473,6 +480,15 @@ def test_the_merging_model_refuses_an_oversized_image_from_the_header(monkeypatc
         _segment(loader, _png16(0), model="neurite_soma_classical")
     assert caught.value.status_code == 413
     assert loader.seen == {}
+
+
+def test_the_pixel_limit_of_the_classical_model_does_not_bind_the_learned_merge(monkeypatch):
+    # The limit is the classical model's own. The learned one tiles the frame.
+    monkeypatch.setattr(routes, "CLASSICAL_MAX_PIXELS", 100)
+    loader = _MergeLoader()
+    result = _segment(loader, _png16(0), model="neurite_soma_merged")
+    assert result["success"] is True
+    assert "neurite_soma_merged" in loader.seen
 
 
 def test_the_route_segments_the_requested_page_and_reports_the_count():

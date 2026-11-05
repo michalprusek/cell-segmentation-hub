@@ -467,6 +467,9 @@ export interface Project {
   // this raw when you need a model to run — a stored value can be stranded by
   // a later type change.
   segmentationModel?: string | null;
+  /** Dashboard card picture: the versioned preview of the first image the
+   *  project grid shows. Also declared on `Project` in `@/lib/api`. */
+  previewUrl?: string | null;
   // Whether the CALLER owns this project rather than having it shared with
   // them. Owner-only writes: title, description, type, model. A shared
   // annotator may still segment, annotate and set `verified`. `undefined`
@@ -598,8 +601,10 @@ export interface ProjectImage {
   segmentationResult?: SegmentationData;
   project_id?: string;
   thumbnail_url?: string;
-  segmentationThumbnailPath?: string; // New field for segmentation thumbnail (deprecated)
-  segmentationThumbnailUrl?: string; // New field for segmentation thumbnail URL
+  /** The grid preview: the image with its segmentation drawn on it. The URL
+   *  is versioned by the server and changes whenever either does, so it can
+   *  be swapped in place and cached forever. */
+  previewUrl?: string;
   image_url?: string; // Alternative field for backward compatibility
   status?: string;
   created_at?: string; // Alternative date format

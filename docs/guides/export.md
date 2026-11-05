@@ -250,8 +250,8 @@ any microtubule: `video`, `channel`, `totalIntensity`, `meanIntensity`,
 
 The polygon report is skipped for neurite projects: the specialised exporter
 owns the metrics files, and writes them to `neurite_metrics/` whenever a
-metrics format is selected. It is the same for both neurite models
-(`neurite_soma` and `neurite_soma_classical`).
+metrics format is selected. It is the same for every neurite model
+(`neurite_soma`, `neurite_soma_merged`, and stored `neurite_soma_classical` results).
 
 | Table     | Sheet in `neurite_metrics.xlsx` | CSV file        | Key in `neurite_metrics.json` |
 | --------- | ------------------------------- | --------------- | ----------------------------- |

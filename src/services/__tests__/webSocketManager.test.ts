@@ -244,6 +244,58 @@ describe('WebSocketManager', () => {
       await connectPromise;
     });
 
+    const serverHandler = (event: string) => {
+      const handler = mockSocket.on.mock.calls.find(
+        (call: unknown[]) => call[0] === event
+      )?.[1];
+      expect(handler).toBeDefined();
+      return handler as (data: unknown) => void;
+    };
+
+    it('forwards imagePreviewsUpdated to image-previews-updated listeners', () => {
+      const listener = vi.fn();
+      wsManager.on('image-previews-updated', listener);
+      const message = {
+        projectId: 'proj-1',
+        previews: [
+          { imageId: 'img-1', previewUrl: '/api/images/img-1/preview?v=1' },
+        ],
+      };
+
+      serverHandler('imagePreviewsUpdated')(message);
+
+      expect(listener).toHaveBeenCalledWith(message);
+    });
+
+    it('drops a malformed imagePreviewsUpdated instead of forwarding it', () => {
+      const listener = vi.fn();
+      wsManager.on('image-previews-updated', listener);
+
+      for (const bad of [
+        null,
+        {},
+        { projectId: 'p' },
+        { projectId: 1, previews: [] },
+      ]) {
+        serverHandler('imagePreviewsUpdated')(bad);
+      }
+
+      expect(listener).not.toHaveBeenCalled();
+    });
+
+    it('forwards the cancellation events the server has always sent', () => {
+      const single = vi.fn();
+      const bulk = vi.fn();
+      wsManager.on('segmentation:cancelled', single);
+      wsManager.on('segmentation:bulk-cancelled', bulk);
+
+      serverHandler('segmentation:cancelled')({ imageId: 'img-1' });
+      serverHandler('segmentation:bulk-cancelled')({ cancelledCount: 3 });
+
+      expect(single).toHaveBeenCalledWith({ imageId: 'img-1' });
+      expect(bulk).toHaveBeenCalledWith({ cancelledCount: 3 });
+    });
+
     it('should register and call segmentation-update listeners', () => {
       const listener = vi.fn();
       wsManager.on('segmentation-update', listener);

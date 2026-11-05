@@ -16,9 +16,13 @@
  * own state-machine logic (flag transitions, filtering, API call decisions).
  */
 
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import type { ProjectImage } from '@/types';
+import apiClient from '@/lib/api';
+import { createExcelExport } from '@/services/excelExportService';
+import { downloadJSON } from '@/lib/downloadUtils';
+import { toast } from 'sonner';
 import { useExportFunctions } from '../useExportFunctions';
 
 // ------------------------------------------------------------------
@@ -39,23 +43,16 @@ vi.mock('@/contexts/useLanguage', () => ({
   }),
 }));
 
-// Mock the heavy lazy imports used inside the hook
+// The real calculator on purpose. A mock here used to return a `Sphericity`
+// that `calculateMetrics` has never returned, which hid a crash in the xlsx.
 vi.mock('@/lib/lazyImports', () => ({
-  lazyLoadMetricCalculations: vi.fn().mockResolvedValue({
-    calculateMetrics: vi.fn().mockReturnValue({
-      Area: 100,
-      Perimeter: 40,
-      Circularity: 0.9,
-      EquivalentDiameter: 11,
-      Compactness: 0.85,
-      Convexity: 0.95,
-      Solidity: 0.9,
-      Sphericity: 0.88,
-      FeretDiameterMax: 12,
-      FeretDiameterMin: 10,
-      FeretAspectRatio: 1.2,
-    }),
-  }),
+  lazyLoadMetricCalculations: vi.fn(() =>
+    vi.importActual('@/pages/segmentation/utils/metricCalculations')
+  ),
+}));
+
+vi.mock('@/lib/api', () => ({
+  default: { getProjectImagesWithThumbnails: vi.fn() },
 }));
 
 vi.mock('@/services/excelExportService', () => ({
@@ -80,13 +77,40 @@ vi.mock('@/lib/downloadUtils', () => ({
   downloadJSON: vi.fn(),
 }));
 
-vi.mock('@/lib/polygonGeometry', () => ({
-  isPolygonInsidePolygon: vi.fn().mockReturnValue(false),
-}));
-
 // ------------------------------------------------------------------
 // Helpers
 // ------------------------------------------------------------------
+
+const SQUARE = {
+  id: 'square',
+  type: 'external',
+  points: [
+    { x: 0, y: 0 },
+    { x: 10, y: 0 },
+    { x: 10, y: 10 },
+    { x: 0, y: 10 },
+  ],
+};
+
+/** What the server answers at lod:'high', one page at a time. */
+function serve(rows: Array<{ id: string; segmentationResult?: unknown }>) {
+  (apiClient.getProjectImagesWithThumbnails as Mock).mockImplementation(
+    async (_projectId: string, { page, limit }) => ({
+      images: rows.slice((page - 1) * limit, page * limit),
+      pagination: {
+        page,
+        limit,
+        total: rows.length,
+        pages: Math.ceil(rows.length / limit),
+      },
+    })
+  );
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  (apiClient.getProjectImagesWithThumbnails as Mock).mockReset();
+});
 
 function makeImage(
   id: string,
@@ -308,9 +332,11 @@ describe('useExportFunctions — handleExport (JSON path)', () => {
   });
 
   it('does not call xlsx export when includeObjectMetrics=false', async () => {
-    const { createExcelExport } = await import('@/services/excelExportService');
     const images = [makeImage('a', 'A', true)];
-    const { result } = renderHook(() => useExportFunctions(images, 'Project'));
+    serve([{ id: 'a', segmentationResult: { polygons: [SQUARE] } }]);
+    const { result } = renderHook(() =>
+      useExportFunctions(images, 'Project', 'project-1')
+    );
 
     await waitFor(() => result.current.selectedImages['a'] === true);
 
@@ -360,7 +386,10 @@ describe('useExportFunctions — handleExport (JSON path)', () => {
 describe('useExportFunctions — handleExportMetricsAsXlsx', () => {
   it('resets isExporting=false after completion', async () => {
     const images = [makeImage('a', 'WithSeg', true)];
-    const { result } = renderHook(() => useExportFunctions(images, 'Project'));
+    serve([{ id: 'a', segmentationResult: { polygons: [SQUARE] } }]);
+    const { result } = renderHook(() =>
+      useExportFunctions(images, 'Project', 'project-1')
+    );
 
     await waitFor(() => result.current.selectedImages['a'] === true);
 
@@ -384,5 +413,151 @@ describe('useExportFunctions — handleExportMetricsAsXlsx', () => {
 
     expect(toast.error).toHaveBeenCalled();
     expect(result.current.isExporting).toBe(false);
+  });
+});
+
+// ------------------------------------------------------------------
+
+/**
+ * The page lists its images at lod:'low', so every image it holds looks like
+ * `listedImage` below. These tests are what was missing while the export wrote
+ * `polygons: []` for every model: the older ones hand the hook images with
+ * polygons, which the page never does.
+ */
+describe('useExportFunctions — polygons come from the server at export time', () => {
+  const listedImage = (id: string) =>
+    ({
+      id,
+      name: `${id}.png`,
+      url: `http://example.com/${id}.png`,
+      createdAt: new Date('2024-01-01'),
+      updatedAt: new Date('2024-01-01'),
+      segmentationStatus: 'completed',
+      segmentationResult: { polygons: [], levelOfDetail: 'low' },
+    }) as unknown as ProjectImage;
+
+  const worksheet = async () => {
+    const service = await (createExcelExport as Mock)();
+    return service.createWorkbook().addWorksheet();
+  };
+
+  it('writes the polygons of each selected image into the JSON', async () => {
+    serve([{ id: 'a', segmentationResult: { polygons: [SQUARE] } }]);
+    const images = [listedImage('a')];
+    const { result } = renderHook(() =>
+      useExportFunctions(images, 'Project', 'project-1')
+    );
+    await waitFor(() => expect(result.current.selectedImages['a']).toBe(true));
+    act(() => result.current.setIncludeObjectMetrics(false));
+
+    await act(async () => {
+      await result.current.handleExport();
+    });
+
+    const [data] = (downloadJSON as Mock).mock.calls[0];
+    expect(data[0].segmentation.polygons).toEqual([SQUARE]);
+  });
+
+  it('asks the server once when JSON and xlsx are exported together', async () => {
+    serve([{ id: 'a', segmentationResult: { polygons: [SQUARE] } }]);
+    const images = [listedImage('a')];
+    const { result } = renderHook(() =>
+      useExportFunctions(images, 'Project', 'project-1')
+    );
+    await waitFor(() => expect(result.current.selectedImages['a']).toBe(true));
+
+    await act(async () => {
+      await result.current.handleExport();
+    });
+
+    expect(apiClient.getProjectImagesWithThumbnails).toHaveBeenCalledTimes(1);
+    expect(downloadJSON).toHaveBeenCalledTimes(1);
+    expect((await worksheet()).addRow).toHaveBeenCalledTimes(1);
+  });
+
+  it('writes no file and reports a failure when polygons cannot be loaded', async () => {
+    (apiClient.getProjectImagesWithThumbnails as Mock).mockRejectedValue(
+      new Error('500')
+    );
+    const images = [listedImage('a')];
+    const { result } = renderHook(() =>
+      useExportFunctions(images, 'Project', 'project-1')
+    );
+    await waitFor(() => expect(result.current.selectedImages['a']).toBe(true));
+
+    await act(async () => {
+      await result.current.handleExport();
+    });
+
+    expect(downloadJSON).not.toHaveBeenCalled();
+    expect(createExcelExport).not.toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalledWith('export.exportFailed');
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(result.current.isExporting).toBe(false);
+  });
+
+  it('does not ask the server when neither segmentation nor metrics are exported', async () => {
+    const images = [listedImage('a')];
+    const { result } = renderHook(() =>
+      useExportFunctions(images, 'Project', 'project-1')
+    );
+    await waitFor(() => expect(result.current.selectedImages['a']).toBe(true));
+    act(() => {
+      result.current.setIncludeObjectMetrics(false);
+      result.current.setIncludeSegmentation(false);
+    });
+
+    await act(async () => {
+      await result.current.handleExport();
+    });
+
+    expect(apiClient.getProjectImagesWithThumbnails).not.toHaveBeenCalled();
+    expect(downloadJSON).toHaveBeenCalledTimes(1);
+  });
+
+  it('measures real polygons in the xlsx, without a sphericity column', async () => {
+    serve([{ id: 'a', segmentationResult: { polygons: [SQUARE] } }]);
+    const images = [listedImage('a')];
+    const { result } = renderHook(() =>
+      useExportFunctions(images, 'Project', 'project-1')
+    );
+    await waitFor(() => expect(result.current.selectedImages['a']).toBe(true));
+
+    await act(async () => {
+      await result.current.handleExportMetricsAsXlsx();
+    });
+
+    expect(toast.error).not.toHaveBeenCalled();
+    const sheet = await worksheet();
+    expect(sheet.addRow).toHaveBeenCalledTimes(1);
+    const row = sheet.addRow.mock.calls[0][0];
+    expect(row.area).toBe(100);
+    expect(row.perimeter).toBe(40);
+    expect(row).not.toHaveProperty('sphericity');
+    expect(sheet.columns.map((c: { key: string }) => c.key)).not.toContain(
+      'sphericity'
+    );
+  });
+
+  it('leaves polylines out of the object metrics', async () => {
+    serve([
+      {
+        id: 'a',
+        segmentationResult: {
+          polygons: [SQUARE, { ...SQUARE, id: 'line', geometry: 'polyline' }],
+        },
+      },
+    ]);
+    const images = [listedImage('a')];
+    const { result } = renderHook(() =>
+      useExportFunctions(images, 'Project', 'project-1')
+    );
+    await waitFor(() => expect(result.current.selectedImages['a']).toBe(true));
+
+    await act(async () => {
+      await result.current.handleExportMetricsAsXlsx();
+    });
+
+    expect((await worksheet()).addRow).toHaveBeenCalledTimes(1);
   });
 });

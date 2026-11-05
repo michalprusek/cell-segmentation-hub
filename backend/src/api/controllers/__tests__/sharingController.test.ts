@@ -599,6 +599,49 @@ describe('SharingController', () => {
       expect(Array.isArray(response.body.data)).toBe(true);
     });
 
+    it('carries the card previewUrl, like the owner project list', async () => {
+      const updatedAt = new Date('2026-10-24T10:00:00.000Z');
+      (
+        MockedSharingService.getSharedProjects as Mock<any>
+      ).mockResolvedValueOnce([
+        {
+          id: shareId,
+          projectId,
+          project: {
+            id: projectId,
+            title: 'Shared Project',
+            description: null,
+            createdAt: new Date('2024-01-01'),
+            updatedAt: new Date('2024-01-01'),
+            user: { id: 'owner-id', email: 'owner@example.com' },
+            _count: { images: 1 },
+            images: [
+              {
+                id: 'img-1',
+                name: 'a.png',
+                thumbnailPath: null,
+                originalPath: 'o/p/originals/a.png',
+                segmentation: { id: 'seg-1', updatedAt },
+              },
+            ],
+          },
+          sharedBy: { id: 'owner-id', email: 'owner@example.com' },
+          status: 'accepted',
+          createdAt: new Date('2024-01-01'),
+        },
+      ]);
+      installResponseMocks();
+
+      const response = await request(app).get('/projects/shared').expect(200);
+
+      const project = response.body.data[0].project;
+      expect(project.previewUrl).toMatch(
+        /^\/api\/images\/img-1\/preview\?v=[0-9a-f]{16}$/
+      );
+      // The version stamp stays server-side.
+      expect(project.images[0]).not.toHaveProperty('segmentation');
+    });
+
     it('should return empty array when no shared projects', async () => {
       (
         MockedSharingService.getSharedProjects as Mock<any>

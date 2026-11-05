@@ -1,3 +1,4 @@
+import { previewService } from './previews/previewService';
 import { PrismaClient, SegmentationQueue, Prisma } from '@prisma/client';
 import { logger } from '../utils/logger';
 import {
@@ -541,6 +542,12 @@ export class QueueService {
         });
       });
 
+      // A forced resegment deleted the old result: until the new one lands,
+      // the preview is the bare image, not the result being replaced.
+      if (idsNeedingSegmentationReset.length > 0) {
+        previewService.notifyChanged(idsNeedingSegmentationReset);
+      }
+
       logger.info('Batch added to segmentation queue', 'QueueService', {
         batchId,
         totalImages: imageIds.length,
@@ -723,7 +730,11 @@ export class QueueService {
     // concurrent /api/v1/segment requests which OOM the ML container.  When the
     // first batch we picked is one of these, cap the dispatch to a single
     // batch and let the next tick pick up the rest.
-    const SERIAL_DISPATCH_MODELS = new Set(['microtubule', 'neurite_soma']);
+    const SERIAL_DISPATCH_MODELS = new Set([
+      'microtubule',
+      'neurite_soma',
+      'neurite_soma_merged',
+    ]);
 
     for (let i = 0; i < maxBatches; i++) {
       const batchItems = await this.getNextBatchExcluding(processedImageIds);
@@ -986,32 +997,10 @@ export class QueueService {
         }
       }
 
-      // Check if this batch will empty the queue (making it the last batch)
-      const remainingQueuedCount = await this.prisma.segmentationQueue.count({
-        where: { status: 'queued' },
+      logger.info('Batch processing details', 'QueueService', {
+        batchSize: batch.length,
+        model,
       });
-      const isLastBatch = remainingQueuedCount === batch.length;
-
-      if (isLastBatch) {
-        logger.info(
-          '🏁 Processing LAST BATCH - will coordinate thumbnail generation',
-          'QueueService',
-          {
-            batchSize: batch.length,
-            remainingQueuedCount,
-            model,
-            message:
-              'Thumbnails will be generated synchronously to prevent race condition',
-          }
-        );
-      } else {
-        logger.info('Batch processing details', 'QueueService', {
-          batchSize: batch.length,
-          remainingQueuedCount,
-          isLastBatch,
-          model,
-        });
-      }
 
       // Prepare images for batch processing
       const imageData = [];
@@ -1128,7 +1117,6 @@ export class QueueService {
               imageWidth,
               imageHeight,
               item.userId,
-              isLastBatch,
               result.image_metrics ?? null
             );
 
@@ -1282,7 +1270,6 @@ export class QueueService {
               imageWidth,
               imageHeight,
               item.userId,
-              isLastBatch,
               result?.image_metrics ?? null
             );
 

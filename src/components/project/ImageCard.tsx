@@ -101,8 +101,7 @@ export const ImageCard = ({
     [
       image.id,
       image.name,
-      image.segmentationThumbnailUrl,
-      image.segmentationThumbnailPath,
+      image.previewUrl,
       image.thumbnail_url,
       image.url,
       image.image_url,

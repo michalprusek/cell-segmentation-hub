@@ -33,7 +33,7 @@ import {
   type PolygonPartClass,
 } from '../utils/polygonValidation';
 import { ImageService } from './imageService';
-import { ThumbnailManager } from './thumbnailManager';
+import { previewService } from './previews/previewService';
 import { getStorageProvider } from '../storage/index';
 import { safeMlFilename } from '../utils/mlFilename';
 import { mapWithConcurrency } from '../utils/concurrency';
@@ -604,7 +604,6 @@ export interface ImageForSegmentation {
 export class SegmentationService {
   private httpClient: AxiosInstance;
   private pythonServiceUrl: string;
-  private thumbnailManager: ThumbnailManager;
   private concurrentRequestsPool: Map<string, Promise<SegmentationResponse>> =
     new Map(); // Track concurrent requests
   private maxConcurrentRequests = 4; // Limit concurrent ML service requests
@@ -613,7 +612,6 @@ export class SegmentationService {
     private prisma: PrismaClient,
     private imageService: ImageService
   ) {
-    this.thumbnailManager = new ThumbnailManager(prisma);
     // Python microservice URL - can be configured via environment
     this.pythonServiceUrl = config.SEGMENTATION_SERVICE_URL;
 
@@ -1197,7 +1195,6 @@ export class SegmentationService {
     imageWidth: number | null = null,
     imageHeight: number | null = null,
     _userId: string,
-    awaitThumbnails = false,
     // The ML service's raster read-out (spheroid_disintegration). Must be
     // passed through: the queue worker saves AFTER requestSegmentation already
     // saved, and dropping it here would overwrite the stored read-out with null.
@@ -1217,11 +1214,7 @@ export class SegmentationService {
       image_metrics: imageMetrics,
     };
 
-    return this.saveSegmentationResultsInternal(
-      imageId,
-      segmentationResult,
-      awaitThumbnails
-    );
+    return this.saveSegmentationResultsInternal(imageId, segmentationResult);
   }
 
   /**
@@ -1229,8 +1222,7 @@ export class SegmentationService {
    */
   private async saveSegmentationResultsInternal(
     imageId: string,
-    segmentationResult: SegmentationResponse,
-    awaitThumbnails = false
+    segmentationResult: SegmentationResponse
   ): Promise<void> {
     try {
       // Log the full segmentation result for debugging
@@ -1487,35 +1479,7 @@ export class SegmentationService {
       // Save to database - create or update segmentation data
       const result = await this.prisma.segmentation.upsert(upsertData);
 
-      // Generate thumbnails synchronously for ALL batches to prevent silent failures
-      // This is critical for ensuring thumbnails are created reliably in batch processing
-      try {
-        // Use unified ThumbnailManager for both polygon and image thumbnails with retry logic
-        await this.thumbnailManager.generateAllThumbnails(result.id);
-
-        logger.info(
-          'Thumbnails generated successfully',
-          'SegmentationService',
-          {
-            imageId,
-            segmentationId: result.id,
-            batchType: awaitThumbnails ? 'last-batch' : 'regular-batch',
-          }
-        );
-      } catch (error) {
-        logger.error(
-          `Failed to generate thumbnails after ML segmentation for ${imageId}`,
-          error instanceof Error ? error : new Error(String(error)),
-          'SegmentationService',
-          {
-            segmentationId: result.id,
-            batchType: awaitThumbnails ? 'last-batch' : 'regular-batch',
-            errorMessage:
-              error instanceof Error ? error.message : String(error),
-          }
-        );
-        // Continue processing - don't block the queue, but log the failure for potential regeneration
-      }
+      previewService.notifyChanged([imageId]);
 
       logger.info(
         'Segmentation results saved to database',
@@ -2050,17 +2014,12 @@ export class SegmentationService {
         );
       }
 
-      // Generate thumbnails asynchronously for the edited frame only.
-      // Sibling frames only got metadata mutations (rename/partClass/
-      // delete-by-track), not pixel changes — their existing thumbnails
-      // stay valid.
-      this.thumbnailManager.generateAllThumbnails(updated.id).catch(error => {
-        logger.error(
-          `Failed to generate thumbnails after segmentation update for ${imageId}`,
-          error instanceof Error ? error : new Error(String(error)),
-          'SegmentationService'
-        );
-      });
+      previewService.notifyChanged([imageId]);
+      if (siblingUpdateOps.length > 0) {
+        // A delete-by-track removes polylines from the siblings, which is a
+        // change in what their previews draw.
+        previewService.notifyContainerChanged(image.parentVideoId);
+      }
 
       logger.info('Segmentation results updated', 'SegmentationService', {
         imageId,
@@ -2143,14 +2102,7 @@ export class SegmentationService {
         userId
       );
 
-      // Generate thumbnails asynchronously after creation
-      this.thumbnailManager.generateAllThumbnails(created.id).catch(error => {
-        logger.error(
-          `Failed to generate thumbnails after segmentation creation for ${imageId}`,
-          error instanceof Error ? error : new Error(String(error)),
-          'SegmentationService'
-        );
-      });
+      previewService.notifyChanged([imageId]);
 
       logger.info('Segmentation results created', 'SegmentationService', {
         imageId,
@@ -2333,6 +2285,7 @@ export class SegmentationService {
     await this.prisma.segmentation.deleteMany({
       where: { imageId },
     });
+    previewService.notifyChanged([imageId]);
 
     // Reset image segmentation status
     await this.imageService.updateSegmentationStatus(
@@ -2938,6 +2891,7 @@ export class SegmentationService {
 
     if (ops.length > 0) {
       await this.prisma.$transaction(ops);
+      previewService.notifyContainerChanged(videoId);
     }
 
     logger.info('Deleted microtubule track across video', 'SegmentationService', {
@@ -3011,6 +2965,7 @@ export class SegmentationService {
       where: { id: segmentation.id },
       data: { polygons: JSON.stringify(polygons), updatedAt: new Date() },
     });
+    previewService.notifyChanged([imageId]);
 
     logger.info(
       'Deleted microtubule track from a single frame',
@@ -3083,6 +3038,7 @@ export class SegmentationService {
 
     if (ops.length > 0) {
       await this.prisma.$transaction(ops);
+      previewService.notifyContainerChanged(videoId);
     }
 
     logger.info(
@@ -3297,6 +3253,7 @@ export class SegmentationService {
 
     if (ops.length > 0) {
       await this.prisma.$transaction(ops);
+      previewService.notifyContainerChanged(videoId);
     }
 
     logger.info('Propagated microtubule track forward', 'SegmentationService', {
@@ -3452,6 +3409,7 @@ export class SegmentationService {
         where: { id: segmentation.id },
         data: { polygons: JSON.stringify(polygons), updatedAt: new Date() },
       });
+      previewService.notifyChanged([imageId]);
     }
 
     const neuriteCount = parsed.filter(

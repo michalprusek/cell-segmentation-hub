@@ -1,6 +1,5 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { vi } from 'vitest';
-import ProjectCard from '../ProjectCard';
 import ProjectsList from '../ProjectsList';
 
 // Mock React Router
@@ -24,7 +23,7 @@ vi.mock('@/contexts/useAuth', () => ({
   }),
 }));
 
-// Mock the API client
+// The card makes no request; a rejecting client proves nothing calls it.
 vi.mock('@/lib/api', () => ({
   default: {
     getProjectImages: vi.fn().mockRejectedValue({
@@ -34,31 +33,7 @@ vi.mock('@/lib/api', () => ({
 }));
 
 describe('Project Callback Chain', () => {
-  describe('Access Error Propagation', () => {
-    it('should propagate access errors from ProjectThumbnail to ProjectCard', async () => {
-      const mockProjectUpdate = vi.fn();
-
-      render(
-        <ProjectCard
-          id="test-project-123"
-          title="Test Project"
-          description="Test Description"
-          thumbnail="/test.jpg"
-          date="2025-01-01"
-          imageCount={5}
-          onProjectUpdate={mockProjectUpdate}
-        />
-      );
-
-      // Wait for the 403 error to be handled
-      await waitFor(() => {
-        expect(mockProjectUpdate).toHaveBeenCalledWith(
-          'test-project-123',
-          'access-denied'
-        );
-      });
-    });
-
+  describe('Callback propagation', () => {
     it('should propagate callbacks through ProjectsList', () => {
       const mockProjectUpdate = vi.fn();
       const mockOpenProject = vi.fn();

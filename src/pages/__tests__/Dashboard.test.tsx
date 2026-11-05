@@ -210,9 +210,6 @@ vi.mock('@/components/dashboard/ProjectsTab', () => ({
           <button onClick={() => onProjectUpdate(p.id, 'unshare')}>
             Unshare {p.id}
           </button>
-          <button onClick={() => onProjectUpdate(p.id, 'access-denied')}>
-            AccessDenied {p.id}
-          </button>
           <button onClick={() => onRequestProjectMove(p.id)}>
             Move {p.id}
           </button>
@@ -482,17 +479,6 @@ describe('Dashboard page', () => {
         screen.getByRole('button', { name: /unshare p-unshare/i })
       );
       expect(mockRemoveProjectOptimistically).toHaveBeenCalledWith('p-unshare');
-    });
-
-    it('onProjectUpdate with action="access-denied" removes project optimistically', () => {
-      mockUseDashboardProjects.mockReturnValue(
-        makeHookReturn({ projects: [{ id: 'p-denied', title: 'Denied' }] })
-      );
-      renderDashboard();
-      fireEvent.click(
-        screen.getByRole('button', { name: /accessdenied p-denied/i })
-      );
-      expect(mockRemoveProjectOptimistically).toHaveBeenCalledWith('p-denied');
     });
 
     it('handleRequestProjectMove opens MoveToFolderDialog with project subject', async () => {

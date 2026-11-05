@@ -96,6 +96,10 @@ export interface Project {
   // `mapProjectFields` fills it, and `useProjectData` reads it off THIS
   // interface.
   folderId?: string | null;
+  /** The card picture: the versioned preview of the first image the project
+   *  grid shows, or null for an empty project. Declared in both `Project`
+   *  interfaces, and listed in `mapProjectFields`, for the reasons above. */
+  previewUrl?: string | null;
 }
 
 /**
@@ -116,8 +120,8 @@ export interface ProjectImageDTO {
   displayUrl?: string;
   width?: number | null;
   height?: number | null;
-  segmentationThumbnailPath?: string;
-  segmentationThumbnailUrl?: string; // New field for segmentation thumbnails
+  /** Versioned grid preview (image + segmentation). */
+  previewUrl?: string;
   segmentation_status:
     'pending' | 'processing' | 'completed' | 'failed' | 'no_segmentation';
   created_at: string;
@@ -818,6 +822,12 @@ class ApiClient {
       result.verified = project.verified as boolean;
     }
 
+    // Dashboard card picture. Unlisted, this mapper drops it like every other
+    // field it does not name — which is why the card used to fetch its own.
+    if (project.previewUrl !== undefined) {
+      result.previewUrl = (project.previewUrl as string | null) ?? null;
+    }
+
     return result;
   }
 
@@ -884,12 +894,10 @@ class ApiClient {
     thumbnailUrl = thumbnailUrl ? ensureAbsoluteUrl(thumbnailUrl) : imageUrl;
     displayUrl = ensureAbsoluteUrl(displayUrl);
 
-    // Get segmentation thumbnail fields
-    const segmentationThumbnailPath = image.segmentationThumbnailPath as
-      string | undefined;
-    const segmentationThumbnailUrl = segmentationThumbnailPath
-      ? ensureAbsoluteUrl(segmentationThumbnailPath)
-      : (image.segmentationThumbnailUrl as string | undefined);
+    const previewUrl =
+      typeof image.previewUrl === 'string'
+        ? ensureAbsoluteUrl(image.previewUrl)
+        : undefined;
 
     return {
       id: image.id as string,
@@ -905,8 +913,7 @@ class ApiClient {
       segmentation_status: this.mapSegmentationStatus(
         image.segmentationStatus || image.segmentation_status
       ),
-      segmentationThumbnailPath: segmentationThumbnailPath,
-      segmentationThumbnailUrl: segmentationThumbnailUrl,
+      previewUrl,
       created_at: (image.createdAt as string) || (image.created_at as string),
       updated_at: (image.updatedAt as string) || (image.updated_at as string),
     };
@@ -2860,8 +2867,7 @@ export function dtoToProjectImage(dto: ProjectImageDTO): ProjectImage {
     segmentationStatus: dto.segmentation_status,
     project_id: dto.project_id,
     thumbnail_url: dto.thumbnail_url,
-    segmentationThumbnailPath: dto.segmentationThumbnailPath,
-    segmentationThumbnailUrl: dto.segmentationThumbnailUrl,
+    previewUrl: dto.previewUrl,
     image_url: dto.image_url,
     created_at: dto.created_at,
     updated_at: dto.updated_at,

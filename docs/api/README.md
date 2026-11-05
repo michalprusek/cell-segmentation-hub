@@ -211,7 +211,7 @@ Mounted twice, so the same handlers are reachable as
 | GET    | `/api/images/:imageId/display`                   | **no** | The image's pixels, for `<img>`                                                                                                                                        |
 | GET    | `/api/images/:imageId/frame-data?channel=&repr=` | **no** | One frame of one channel; `repr=proxy` requests the fast 8-bit playback copy                                                                                           |
 | GET    | `/api/projects/:id/images`                       |  yes   | List images (paginated, filterable)                                                                                                                                    |
-| GET    | `/api/projects/:id/images-with-thumbnails`       |  yes   | List with thumbnail URLs                                                                                                                                               |
+| GET    | `/api/projects/:id/images-with-thumbnails`       |  yes   | List for the project grid; every row carries `previewUrl`                                                                                                              |
 | GET    | `/api/projects/:id/images/stats`                 |  yes   | Counts by segmentation status                                                                                                                                          |
 | GET    | `/api/projects/:projectId/images/:imageId`       |  yes   | One image                                                                                                                                                              |
 | GET    | `/api/images/:imageId`                           |  yes   | One image **with** its segmentation                                                                                                                                    |
@@ -221,13 +221,23 @@ Mounted twice, so the same handlers are reachable as
 | PATCH  | `/api/projects/:id/images/reorder`               |  yes   | Set display order (time series)                                                                                                                                        |
 | PATCH  | `/api/images/:imageId/channels`                  |  yes   | Replace the container's channel list                                                                                                                                   |
 | GET    | `/api/images/:imageId/video-frames`              |  yes   | Frames of a video container                                                                                                                                            |
-| POST   | `/api/projects/:id/regenerate-thumbnails`        |  yes   | Rebuild thumbnails                                                                                                                                                     |
+| GET    | `/api/images/:imageId/preview?v=`                |  yes   | The grid preview: image + segmentation, 512 px JPEG, versioned (see below)                                                                                             |
 | DELETE | `/api/projects/:projectId/images/:imageId`       |  yes   | Delete one image                                                                                                                                                       |
 | DELETE | `/api/images/batch`                              |  yes   | Delete many by id                                                                                                                                                      |
 
 > **`/display` and `/frame-data` are intentionally unauthenticated.** A browser
 > `<img>` cannot carry a bearer token, so the image UUID _is_ the capability.
 > Treat an image URL as equivalent to sharing that image.
+
+> **Previews are addressed by version.** Every image listing (and the project
+> list, for the dashboard card) returns `previewUrl =
+/api/images/:id/preview?v=<version>`, where the version is a hash of the
+> image's `originalPath`, its segmentation row's `id` + `updatedAt` and the
+> renderer version. Any change to the segmentation therefore changes the URL.
+> A request for the current version is cached `immutable`; any other `v` gets
+> the current picture with `no-cache`. Rendered on first request, so a listing
+> never waits for one. Access is the project's (owner or accepted share), by
+> the session cookie an `<img>` sends.
 
 > **Channel replacement is whole-array.** `PATCH /channels` replaces the list, so
 > send every channel back with all of its fields, not just the one you changed.

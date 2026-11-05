@@ -18,6 +18,7 @@ class ModelType(str, Enum):
     MICROTUBULE = "microtubule"
     NEURITE_SOMA = "neurite_soma"
     NEURITE_SOMA_CLASSICAL = "neurite_soma_classical"
+    NEURITE_SOMA_MERGED = "neurite_soma_merged"
 
 class SegmentationRequest(BaseModel):
     model: ModelType = Field(default=ModelType.HRNET, description="Model to use for segmentation")

@@ -70,7 +70,7 @@ export const getImageFallbackUrls = (image: {
   displayUrl?: string;
   thumbnail_url?: string;
   image_url?: string;
-  segmentationThumbnailUrl?: string;
+  previewUrl?: string;
 }): string[] => {
   const urls: string[] = [];
 
@@ -79,15 +79,14 @@ export const getImageFallbackUrls = (image: {
     const isTiff = image.name && isTiffFile(image.name);
 
     // For TIFF files, use a smart priority:
-    // 1. Segmentation thumbnail (if available) - best for gallery
+    // 1. Preview (image + segmentation, server-rendered) - best for gallery
     // 2. Regular thumbnail (JPEG converted from TIFF) - good for gallery
     // 3. Display endpoint (converts TIFF to PNG) - fallback
     // 4. Other URLs as final fallbacks
 
     if (isTiff) {
       // For TIFF files, prioritize actual thumbnails over display endpoint
-      if (image.segmentationThumbnailUrl)
-        urls.push(image.segmentationThumbnailUrl);
+      if (image.previewUrl) urls.push(image.previewUrl);
       if (image.thumbnail_url) urls.push(image.thumbnail_url);
       // Display endpoint as fallback for TIFF
       urls.push(displayEndpoint);
@@ -97,8 +96,7 @@ export const getImageFallbackUrls = (image: {
       if (image.image_url) urls.push(image.image_url);
     } else {
       // For non-TIFF files, use normal priority
-      if (image.segmentationThumbnailUrl)
-        urls.push(image.segmentationThumbnailUrl);
+      if (image.previewUrl) urls.push(image.previewUrl);
       if (image.thumbnail_url) urls.push(image.thumbnail_url);
       if (image.displayUrl) urls.push(image.displayUrl);
       if (image.url) urls.push(image.url);
@@ -110,8 +108,7 @@ export const getImageFallbackUrls = (image: {
     }
   } else {
     // No ID available, use what we have
-    if (image.segmentationThumbnailUrl)
-      urls.push(image.segmentationThumbnailUrl);
+    if (image.previewUrl) urls.push(image.previewUrl);
     if (image.thumbnail_url) urls.push(image.thumbnail_url);
     if (image.displayUrl) urls.push(image.displayUrl);
     if (image.url) urls.push(image.url);

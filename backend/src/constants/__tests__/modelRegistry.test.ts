@@ -24,11 +24,12 @@ const CANONICAL_IDS = [
   'microtubule',
   'microcapsule',
   'neurite_soma',
+  'neurite_soma_merged',
   'neurite_soma_classical',
 ] as const;
 
 describe('backend model registry SSOT', () => {
-  it('registry keys are exactly the canonical 13 models', () => {
+  it('registry keys are exactly the canonical 14 models', () => {
     expect(Object.keys(MODEL_REGISTRY).sort()).toEqual(
       [...CANONICAL_IDS].sort()
     );
@@ -54,7 +55,7 @@ describe('backend model registry SSOT', () => {
       sperm: ['sperm', 'sperm_2part'],
       microtubules: ['microtubule'],
       microcapsule: ['microcapsule'],
-      neurite: ['neurite_soma', 'neurite_soma_classical'],
+      neurite: ['neurite_soma', 'neurite_soma_merged'],
     });
   });
 });

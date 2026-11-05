@@ -342,7 +342,7 @@ the project page. Plain spheroid projects choose among five models, sperm
 projects and neurite projects between two each; every other type has exactly
 one compatible model and is forced to it.
 
-With the classical neurite model (`neurite_soma_classical`) the channel picker
+With the merged-channel neurite model (`neurite_soma_merged`) the channel picker
 shows **checkboxes** instead: tick one or more channels and they are merged
 into one greyscale image, which is what gets segmented. Nothing is ticked by
 default and Confirm is disabled until at least one is. See

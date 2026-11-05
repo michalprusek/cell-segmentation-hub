@@ -296,7 +296,7 @@ added, unshifted.
 item and the worker reads that channel's PNG. It is not remembered for the next
 batch.
 
-One model takes **several** channels: with `neurite_soma_classical` (neurite
+One model takes **several** channels: with `neurite_soma_merged` (neurite
 projects) the picker shows checkboxes, nothing is ticked by default, and the
 channels you tick are merged into one greyscale image that is segmented. See
 [Neurite and soma projects](project-types/neurite.md).

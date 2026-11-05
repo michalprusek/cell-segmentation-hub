@@ -1407,8 +1407,8 @@ describe("processBatch — nothing may stall in 'processing'", () => {
     ).mock.calls;
     const forImg1 = calls.find(c => c[0] === 'img-1');
     const forImg2 = calls.find(c => c[0] === 'img-2');
-    expect(forImg1?.[10]).toEqual(imageMetrics);
-    expect(forImg2?.[10]).toBeNull();
+    expect(forImg1?.[9]).toEqual(imageMetrics);
+    expect(forImg2?.[9]).toBeNull();
   });
 
   it('accepts a genuinely empty result and clears it out of the queue', async () => {
@@ -1439,7 +1439,6 @@ describe("processBatch — nothing may stall in 'processing'", () => {
       100,
       100,
       'user-id',
-      expect.anything(),
       null
     );
     expect(prismaMock.segmentationQueue.delete).toHaveBeenCalledWith({

@@ -75,7 +75,7 @@ Written for the person in front of the browser. No code knowledge assumed.
 
 | Page                                                  | Covers                                                                      |
 | ----------------------------------------------------- | --------------------------------------------------------------------------- |
-| [ML models](reference/ml-models.md)                   | All thirteen models: architecture, training data, speed, thresholds, limits |
+| [ML models](reference/ml-models.md)                   | All fourteen models: architecture, training data, speed, thresholds, limits |
 | [Metrics](reference/metrics.md)                       | Exact formula and convention behind every measured number                   |
 | [Keyboard shortcuts](reference/keyboard-shortcuts.md) | One table, whole app                                                        |
 | [Database schema](reference/database-schema.md)       | Every Prisma model, column, index and its purpose                           |
