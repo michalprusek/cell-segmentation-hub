@@ -61,8 +61,9 @@ describe('ProjectHeader', () => {
         onPixelSizeChange={vi.fn()}
       />
     );
-    // A number box is the only thing this header renders one for.
-    expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('textbox', { name: /pixel size/i })
+    ).not.toBeInTheDocument();
     expect(screen.queryByTestId('project-pixel-size')).not.toBeInTheDocument();
   });
 
@@ -409,22 +410,56 @@ describe('ProjectHeader — pixel size (spheroid_invasive)', () => {
     return {
       user,
       onPixelSizeChange,
-      input: () => screen.getByRole('spinbutton', { name: /pixel size/i }),
+      input: () => screen.getByRole('textbox', { name: /pixel size/i }),
     };
   };
 
-  it('shows the stored value, labelled, with the resampling hint', () => {
+  it('shows the stored value, labelled, with the resampling hint and its range', () => {
     const { input } = renderScale({ pixelSizeUm: 1.6 });
-    expect(input()).toHaveValue(1.6);
-    const hint = screen.getByText(/resamples each frame to 1\.28/i);
+    expect(input()).toHaveValue('1.6');
+    // The hint states the range the module resamples (factors 0.5-2x of
+    // 1.28 µm/px); outside it a frame is segmented as uploaded.
+    const hint = screen.getByText(/between 0\.64 and 2\.56 µm\/px/i);
+    expect(hint).toHaveTextContent(/resampled to the 1\.28 µm\/px/i);
+    expect(hint).toHaveTextContent(/others are segmented as uploaded/i);
     expect(hint).toHaveTextContent(/applies to new segmentations/i);
     expect(input()).toHaveAttribute('aria-describedby', hint.id);
   });
 
   it('shows an unset value as an empty box, not as zero', () => {
     const { input } = renderScale({ pixelSizeUm: null });
-    expect(input()).toHaveValue(null);
+    expect(input()).toHaveValue('');
     expect(input()).toHaveAttribute('placeholder', 'not set');
+  });
+
+  it.each(['1e', '1.6.6', 'abc', '--1', '0x10', 'Infinity', '1,6,6'])(
+    'keeps the stored value when %s is typed and the box is left',
+    async text => {
+      // A number input reported '' for such text, so leaving the box cleared
+      // the stored pixel size and the toast said it was saved.
+      const { user, input, onPixelSizeChange } = renderScale({
+        pixelSizeUm: 1.6,
+      });
+      await user.clear(input());
+      await user.type(input(), text);
+      await user.tab();
+      expect(onPixelSizeChange).not.toHaveBeenCalled();
+      // the typo stays visible, marked, with the reason
+      expect(input()).toHaveValue(text);
+      expect(input()).toHaveAttribute('aria-invalid', 'true');
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        /between 0\.001 and 1000/
+      );
+    }
+  );
+
+  it('reads a decimal comma, which is all a comma-locale keypad offers', async () => {
+    const { user, input, onPixelSizeChange } = renderScale({
+      pixelSizeUm: null,
+    });
+    await user.type(input(), '1,6');
+    await user.tab();
+    expect(onPixelSizeChange).toHaveBeenCalledWith(1.6);
   });
 
   it('commits a new value on Enter and on blur', async () => {
@@ -479,7 +514,7 @@ describe('ProjectHeader — pixel size (spheroid_invasive)', () => {
         /between 0\.001 and 1000/
       );
       await user.type(input(), '{Escape}');
-      expect(input()).toHaveValue(1.6);
+      expect(input()).toHaveValue('1.6');
       expect(input()).not.toHaveAttribute('aria-invalid');
       expect(onPixelSizeChange).not.toHaveBeenCalled();
     }
@@ -487,7 +522,9 @@ describe('ProjectHeader — pixel size (spheroid_invasive)', () => {
 
   it('is a static pill for a viewer who may not change it', () => {
     renderScale({ pixelSizeUm: 1.6, onPixelSizeChange: undefined });
-    expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('textbox', { name: /pixel size/i })
+    ).not.toBeInTheDocument();
     expect(screen.getByTestId('project-pixel-size-readonly')).toHaveTextContent(
       '1.6 µm/px'
     );

@@ -270,7 +270,7 @@ export default {
     pixelSize: 'Pixelgröße (µm/px)',
     pixelSizeUnset: 'nicht gesetzt',
     pixelSizeHint:
-      'Das Sphäroid-Zerfallsmodell skaliert jedes Bild auf 1,28 µm/px um; 2048 × 2048-Bilder mit 1,28 µm/px brauchen nichts. Gilt für neue Segmentierungen.',
+      'Bilder zwischen 0,64 und 2,56 µm/px werden auf die 1,28 µm/px umgerechnet, bei denen das Sphäroid-Zerfallsmodell validiert wurde; andere werden so segmentiert, wie sie hochgeladen wurden, und 2048 × 2048-Bilder mit 1,28 µm/px brauchen nichts. Gilt für neue Segmentierungen.',
     pixelSizeInvalid:
       'Geben Sie eine Pixelgröße zwischen {{min}} und {{max}} µm/px ein oder lassen Sie das Feld leer.',
     pixelSizeUpdated:
@@ -1950,7 +1950,7 @@ export default {
             'Etwa 0,70 s pro Bild · kein Schwellenwert — entschieden wird per Argmax',
           bestFor: 'Verwendet von: Projekten mit zerfallenden Sphäroiden.',
           description:
-            'UNet++ mit EfficientNet-B5-Encoder, das drei Klassen vorhersagt — Hintergrund, Korona und dichter Kern. Der Kern wird direkt vorhergesagt statt abgeleitet, und erst das macht den Anteil außerhalb des Kerns und den Zerfallsindex belastbar. Ist die Pixelgröße des Bildes bekannt – aus der Datei oder dem Projektkopf –, wird das Bild auf die 1,28 µm/px umgerechnet, bei denen das Modell validiert wurde, und die Umrisse werden auf Ihr Bild zurückübertragen.',
+            'UNet++ mit EfficientNet-B5-Encoder, das drei Klassen vorhersagt — Hintergrund, Korona und dichter Kern. Der Kern wird direkt vorhergesagt statt abgeleitet, und erst das macht den Anteil außerhalb des Kerns und den Zerfallsindex belastbar. Ist die Pixelgröße des Bildes bekannt – aus der Datei oder dem Projektkopf – und liegt sie zwischen 0,64 und 2,56 µm/px, wird das Bild auf die 1,28 µm/px umgerechnet, bei denen das Modell validiert wurde, und die Umrisse werden auf Ihr Bild zurückübertragen.',
         },
         wound: {
           name: 'Wundheilung',

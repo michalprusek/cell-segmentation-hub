@@ -271,7 +271,7 @@ export default {
     pixelSize: 'Taille de pixel (µm/px)',
     pixelSizeUnset: 'non définie',
     pixelSizeHint:
-      "Le modèle de désintégration des sphéroïdes rééchantillonne chaque image à 1,28 µm/px ; les images 2048 × 2048 à 1,28 µm/px n'ont besoin de rien. S'applique aux nouvelles segmentations.",
+      "Les images entre 0,64 et 2,56 µm/px sont rééchantillonnées aux 1,28 µm/px auxquels le modèle de désintégration des sphéroïdes a été validé ; les autres sont segmentées telles qu'envoyées, et les images 2048 × 2048 à 1,28 µm/px n'ont besoin de rien. S'applique aux nouvelles segmentations.",
     pixelSizeInvalid:
       'Saisissez une taille de pixel entre {{min}} et {{max}} µm/px, ou laissez le champ vide.',
     pixelSizeUpdated:
@@ -1941,7 +1941,7 @@ export default {
             'Environ 0,70 s par image · pas de seuil : la décision est un argmax',
           bestFor: 'Utilisé par : les projets de sphéroïdes en désagrégation.',
           description:
-            "UNet++ à encodeur EfficientNet-B5 prédisant trois classes : fond, couronne et noyau dense. Le noyau est prédit directement plutôt que déduit, et c’est ce qui rend fiables la fraction hors noyau et l’indice de désagrégation. Lorsque la taille de pixel de l'image est connue — par son fichier ou l'en-tête du projet —, l'image est rééchantillonnée aux 1,28 µm/px auxquels le modèle a été validé, et les contours sont reportés sur votre image.",
+            "UNet++ à encodeur EfficientNet-B5 prédisant trois classes : fond, couronne et noyau dense. Le noyau est prédit directement plutôt que déduit, et c’est ce qui rend fiables la fraction hors noyau et l’indice de désagrégation. Lorsque la taille de pixel de l'image est connue — par son fichier ou l'en-tête du projet — et comprise entre 0,64 et 2,56 µm/px, l'image est rééchantillonnée aux 1,28 µm/px auxquels le modèle a été validé, et les contours sont reportés sur votre image.",
         },
         wound: {
           name: 'Cicatrisation',

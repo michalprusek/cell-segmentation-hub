@@ -269,7 +269,7 @@ export default {
     pixelSize: 'Velikost pixelu (µm/px)',
     pixelSizeUnset: 'nenastaveno',
     pixelSizeHint:
-      'Model rozpadu sféroidů převzorkuje každý snímek na 1,28 µm/px; snímky 2048 × 2048 při 1,28 µm/px nepotřebují nic. Platí pro nové segmentace.',
+      'Snímky mezi 0,64 a 2,56 µm/px se převzorkují na 1,28 µm/px, při kterých byl model rozpadu sféroidů ověřen; ostatní se segmentují tak, jak byly nahrány, a snímky 2048 × 2048 při 1,28 µm/px nepotřebují nic. Platí pro nové segmentace.',
     pixelSizeInvalid:
       'Zadejte velikost pixelu mezi {{min}} a {{max}} µm/px, nebo pole nechte prázdné.',
     pixelSizeUpdated: 'Velikost pixelu uložena; platí pro nové segmentace',
@@ -1905,7 +1905,7 @@ export default {
             'Přibližně 0,70 s na snímek · bez prahu — rozhoduje argmax',
           bestFor: 'Používá: projekty s rozpadajícími se sferoidy.',
           description:
-            'UNet++ s enkodérem EfficientNet-B5 predikující tři třídy — pozadí, koronu a husté jádro. Jádro je predikováno přímo, nikoli odvozeno, což teprve dělá podíl mimo jádro i index rozpadu důvěryhodnými. Je-li známa velikost pixelu snímku (ze souboru nebo z hlavičky projektu), snímek se převzorkuje na 1,28 µm/px, při kterých byl model ověřen, a obrysy se přenesou zpět na váš snímek.',
+            'UNet++ s enkodérem EfficientNet-B5 predikující tři třídy — pozadí, koronu a husté jádro. Jádro je predikováno přímo, nikoli odvozeno, což teprve dělá podíl mimo jádro i index rozpadu důvěryhodnými. Je-li známa velikost pixelu snímku (ze souboru nebo z hlavičky projektu) a leží mezi 0,64 a 2,56 µm/px, snímek se převzorkuje na 1,28 µm/px, při kterých byl model ověřen, a obrysy se přenesou zpět na váš snímek.',
         },
         wound: {
           name: 'Hojení ran',

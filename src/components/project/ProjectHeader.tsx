@@ -96,11 +96,22 @@ const PROJECT_TYPES_WITH_SEGMENTATION_PIXEL_SIZE: readonly ProjectType[] = [
   'spheroid_invasive',
 ];
 
-/** The pixel-size draft as a value: `null` clears it, `undefined` is invalid. */
+/** A plain decimal: digits with at most one separator. No sign, exponent,
+ *  hex or `Infinity`, all of which `Number()` would otherwise accept. */
+const DECIMAL_DRAFT = /^(\d+([.,]\d*)?|[.,]\d+)$/;
+
+/** The pixel-size draft as a value: `null` clears it, `undefined` is invalid.
+ *
+ *  A comma is read as the decimal separator: in a Czech (or German, French,
+ *  Spanish) locale it is the only one the phone's decimal keypad offers
+ *  (`inputMode="decimal"`), so refusing it would make the box unusable there.
+ *  Exactly ONE separator is accepted, so `1,000` is 1, never 1000; pixel sizes
+ *  near 1000 µm/px do not occur. */
 function parseScaleDraft(text: string): number | null | undefined {
   const trimmed = text.trim();
   if (trimmed === '') return null;
-  const value = Number(trimmed);
+  if (!DECIMAL_DRAFT.test(trimmed)) return undefined;
+  const value = Number(trimmed.replace(',', '.'));
   if (
     !Number.isFinite(value) ||
     value < SCALE_MIN_UM_PER_PX ||
@@ -371,11 +382,16 @@ const ProjectHeader = ({
                   {onPixelSizeChange ? (
                     <input
                       id={scaleInputId}
-                      type="number"
+                      // TEXT, not type="number": a number input reports
+                      // `value === ''` for anything it cannot parse ("1e",
+                      // "1.6.6", "1,6" outside a comma locale), so the draft
+                      // could not tell a typo from an emptied box and a typo
+                      // CLEARED the stored value on blur. The raw text reaches
+                      // the draft here and parseScaleDraft decides.
+                      type="text"
                       inputMode="decimal"
-                      step="any"
-                      min={SCALE_MIN_UM_PER_PX}
-                      max={SCALE_MAX_UM_PER_PX}
+                      autoComplete="off"
+                      spellCheck={false}
                       // Empty string, not "0": a project without a pixel size
                       // must not look like one measured at zero.
                       value={

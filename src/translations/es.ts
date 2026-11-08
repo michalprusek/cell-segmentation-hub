@@ -270,7 +270,7 @@ export default {
     pixelSize: 'Tamaño de píxel (µm/px)',
     pixelSizeUnset: 'sin definir',
     pixelSizeHint:
-      'El modelo de desintegración de esferoides remuestrea cada imagen a 1,28 µm/px; las imágenes de 2048 × 2048 a 1,28 µm/px no necesitan nada. Se aplica a las segmentaciones nuevas.',
+      'Las imágenes de entre 0,64 y 2,56 µm/px se remuestrean a los 1,28 µm/px con los que se validó el modelo de desintegración de esferoides; las demás se segmentan tal como se subieron, y las imágenes de 2048 × 2048 a 1,28 µm/px no necesitan nada. Se aplica a las segmentaciones nuevas.',
     pixelSizeInvalid:
       'Introduzca un tamaño de píxel entre {{min}} y {{max}} µm/px, o deje el campo vacío.',
     pixelSizeUpdated:
@@ -1935,7 +1935,7 @@ export default {
             'Unos 0,70 s por imagen · sin umbral: la decisión es un argmax',
           bestFor: 'La usan: los proyectos de esferoides en disgregación.',
           description:
-            'UNet++ con codificador EfficientNet-B5 que predice tres clases: fondo, corona y núcleo denso. El núcleo se predice directamente en lugar de inferirse, y eso es lo que hace fiables la fracción fuera del núcleo y el índice de disgregación. Si se conoce el tamaño de píxel de la imagen —por su archivo o la cabecera del proyecto—, la imagen se remuestrea a los 1,28 µm/px con los que se validó el modelo y los contornos se trasladan de vuelta a su imagen.',
+            'UNet++ con codificador EfficientNet-B5 que predice tres clases: fondo, corona y núcleo denso. El núcleo se predice directamente en lugar de inferirse, y eso es lo que hace fiables la fracción fuera del núcleo y el índice de disgregación. Si se conoce el tamaño de píxel de la imagen —por su archivo o la cabecera del proyecto— y está entre 0,64 y 2,56 µm/px, la imagen se remuestrea a los 1,28 µm/px con los que se validó el modelo y los contornos se trasladan de vuelta a su imagen.',
         },
         wound: {
           name: 'Cicatrización de heridas',
