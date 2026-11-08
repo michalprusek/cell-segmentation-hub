@@ -1304,7 +1304,7 @@ describe('MetricsCalculator — exportToExcel (spheroid_invasive)', () => {
     const headers = primaryColumns.map(c => c.header ?? '');
     expect(headers.some(h => h.includes('um^2'))).toBe(true);
     expect(headers).toContain('Outside-core Fraction (Index B)');
-    expect(headers).toContain('Unvalidated Regime: Outside-core Fraction 0.08-0.47 (0/1)');
+    expect(headers).toContain('Unvalidated Regime: Outside-core Fraction 0.08-0.61 (0/1)');
     expect(headers).toContain('Below Validated Floor: Outside-core Fraction < 0.61 (0/1)');
     expect(headers.some(h => /DI < 0\.6|0\.15-0\.30/.test(h))).toBe(false);
     expect(headers).toContain('Reach p90 (R_core)');

@@ -1547,7 +1547,7 @@ export class MetricsCalculator {
       },
       { header: 'Core Fragmented (0/1)', key: 'coreFragmented', width: 22 },
       {
-        header: 'Unvalidated Regime: Outside-core Fraction 0.08-0.47 (0/1)',
+        header: 'Unvalidated Regime: Outside-core Fraction 0.08-0.61 (0/1)',
         key: 'unvalidatedRegime',
         width: 52,
       },
