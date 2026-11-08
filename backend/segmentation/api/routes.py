@@ -69,6 +69,10 @@ _inference_lock = threading.Lock()
 #: exactly one, and `/segment` answers 400 if it is sent more.
 MULTI_CHANNEL_MODELS = frozenset({"neurite_soma_classical", "neurite_soma_merged"})
 
+#: Models that read `pixel_size_um` on `/segment`. Everything else answers 400
+#: if it is sent one.
+PIXEL_SIZE_MODELS = frozenset({"spheroid_disintegration"})
+
 #: Channels beyond the first. A real acquisition has 2-4 channels; this only
 #: stops a request from making the service decode an unbounded list.
 MAX_EXTRA_CHANNELS = 7
@@ -179,13 +183,25 @@ async def get_status(loader = Depends(get_model_loader)):
 
 
 def _dispatch_inference(
-    loader, model, image, threshold, detect_holes, extra_images: Sequence = ()
+    loader,
+    model,
+    image,
+    threshold,
+    detect_holes,
+    extra_images: Sequence = (),
+    pixel_size_um: Optional[float] = None,
+    max_pixels: Optional[int] = None,
 ):
     """Run one inference, holding the loader-wide lock.
 
     `extra_images` are further channels of the SAME image, for the two models
     that merge channels (`MULTI_CHANNEL_MODELS`). `segment_image` refuses them
     for every other model before this is reached.
+
+    `pixel_size_um` reaches `spheroid_disintegration` only (it resamples the
+    frame to the 1.28 um/px it was validated at); `segment_image` refuses it
+    for every other model, like `extra_channels`. `max_pixels` travels with
+    it because it bounds how far that resample may grow the frame.
 
     Split out of `segment_image` so the async route can hand it to
     `_INFERENCE_EXECUTOR` instead of running it on the event loop. The branch
@@ -304,7 +320,12 @@ def _dispatch_inference(
             # Spheroid-disintegration model (UNet++/EffB5, 3-class). Uses its own
             # CLAHE preprocessing and emits foreground + core polygons directly,
             # so it can't flow through the generic single-channel predict path.
-            result = loader.predict_disintegration(image, threshold, detect_holes)
+            # The pixel size, when known, resamples the frame to 1.28 um/px.
+            # Both default to None, which is the path this branch always ran.
+            result = loader.predict_disintegration(
+                image, threshold, detect_holes,
+                um_per_px=pixel_size_um, max_pixels=max_pixels,
+            )
         else:
             result = loader.predict(image, model, threshold, detect_holes)
     if input_conversion is not None and isinstance(result, dict):
@@ -359,6 +380,15 @@ async def segment_image(
         "before segmentation. Accepted by `neurite_soma_classical` and "
         "`neurite_soma_merged` only.",
     ),
+    pixel_size_um: Optional[float] = Form(
+        None,
+        gt=0,
+        allow_inf_nan=False,
+        description="Pixel size of the image, um/px. Accepted by "
+        "`spheroid_disintegration` only, which resamples the frame to the "
+        "1.28 um/px it was validated at before inference (factors 0.5-2x; "
+        "within 2 % of 1.28 nothing is resampled).",
+    ),
     loader = Depends(get_model_loader)
 ):
     """Main segmentation endpoint"""
@@ -378,6 +408,17 @@ async def segment_image(
         # under memory pressure, and then answered 500.
         if model not in loader.AVAILABLE_MODELS:
             raise HTTPException(status_code=400, detail=f"Unknown model: {model!r}")
+
+        # Refused, not ignored, for a model that does not resample: a caller
+        # who sent a pixel size and got a segmentation at the uploaded scale
+        # would have no way to tell (the reasoning of `extra_channels` below).
+        if pixel_size_um is not None and model not in PIXEL_SIZE_MODELS:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Model {model!r} does not read a pixel size; "
+                "pixel_size_um is accepted only by "
+                f"{sorted(PIXEL_SIZE_MODELS)}",
+            )
 
         # Read image data and convert to PIL Image
         image_data = await file.read()
@@ -447,6 +488,9 @@ async def segment_image(
                 extra_images.append(extra_image)
 
         logger.info(f"Processing image: {file.filename}, Model: {model}, Threshold: {threshold}, Detect holes: {detect_holes}")
+        if pixel_size_um is not None:
+            # Its own line, and a validated float only.
+            logger.info("Pixel size of that image: %.6g um/px", pixel_size_um)
         if extra_images:
             # Its own line, and an integer only: nothing a caller typed.
             logger.info("Merging %d channels of that image", 1 + len(extra_images))
@@ -463,6 +507,8 @@ async def segment_image(
             threshold,
             detect_holes,
             extra_images,
+            pixel_size_um,
+            max_pixels,
         )
         inference_time = time.time() - inference_start
         

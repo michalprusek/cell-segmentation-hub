@@ -1495,7 +1495,9 @@ class ModelLoader:
 
     def predict_disintegration(self, image: Image.Image, threshold: float = 0.5,
                                detect_holes: bool = True,
-                               timeout: Optional[float] = None) -> Dict[str, Any]:
+                               timeout: Optional[float] = None,
+                               um_per_px: Optional[float] = None,
+                               max_pixels: Optional[int] = None) -> Dict[str, Any]:
         """Run the spheroid-disintegration model (UNet++/EffB5, 3-class).
 
         The model predicts 0 = background, 1 = corona, 2 = core. The foreground
@@ -1522,10 +1524,24 @@ class ModelLoader:
         < 50 px components and the holes, which moved DI by up to 0.039 on the
         deposited masks. ``warnings`` carries the input-scale check (validated
         regime: 2048 x 2048 px at ~1.28 um/px).
+
+        ``um_per_px`` is the frame's pixel size, when known. A frame more than
+        2 % away from 1.28 um/px (and within 0.5-2x of it) is resampled to
+        1.28 um/px BEFORE the three-channel stack, so CLAHE runs on it as in
+        training; the read-out is computed on that grid and the mask is mapped
+        back to the uploaded grid for the polygons and the pixel areas (see
+        ``api.disintegration_scale``, which says why and what was measured).
+        ``image_metrics['resample']`` is present exactly when that happened.
+        Without a pixel size, or within 2 % of 1.28, the path is the one this
+        method always ran, with no resize anywhere. ``max_pixels`` (the
+        caller's ceiling, if any) bounds how far a resample may GROW a frame;
+        past it the frame is segmented as uploaded, with a warning.
         """
         import time as _time
         from services.postprocessing import PostprocessingService
-        from api.disintegration_metrics import raster_metrics
+        from api.disintegration_scale import (
+            plan_resample, predict_on_model_grid, read_out,
+        )
 
         self.get_model('spheroid_disintegration')
         if 'spheroid_disintegration' not in self.loaded_models:
@@ -1547,13 +1563,32 @@ class ModelLoader:
             # convert('RGB'); for a colour upload it uses the luma, as the paper
             # pipeline does, instead of feeding the colour channels.
             gray = np.asarray(image.convert('L'))
-            rgb = np.ascontiguousarray(np.stack([gray] * 3, axis=2))
-            mask3 = model.predict(rgb)  # (H, W) uint8: 0 bg / 1 corona / 2 core
-
-            # The paper's read-out, from the raster (not from the polygons).
-            image_metrics = raster_metrics(
-                mask3, original_size[0], original_size[1]
+            # Resampled to 1.28 um/px first when the pixel size is known and
+            # off; `plan` is None (and nothing is resized) otherwise.
+            plan, scale_warnings = plan_resample(
+                original_size[0], original_size[1], um_per_px, max_pixels
             )
+            # mask3: (H, W) uint8 0 bg / 1 corona / 2 core on the UPLOADED
+            # grid; mask_model: the same on the model grid (the same array
+            # when there is no plan).
+            mask3, mask_model = predict_on_model_grid(gray, plan, model.predict)
+
+            # The paper's read-out, from the raster (not from the polygons),
+            # on the model grid. Without a plan this is exactly
+            # raster_metrics(mask3, W, H): no pixel size reaches the warning,
+            # because the export adds the pixel-size warning for a read-out
+            # that was not resampled, and it would otherwise appear twice.
+            image_metrics = read_out(
+                mask3, mask_model, plan, extra_warnings=scale_warnings
+            )
+            if plan is not None:
+                logger.info(
+                    "Disintegration: resampled %dx%d px at %.4g um/px by %.4f "
+                    "to %dx%d px at %.2f um/px",
+                    plan.width, plan.height, plan.input_um_per_px, plan.factor,
+                    plan.model_width, plan.model_height,
+                    image_metrics["resample"]["model_um_per_px"],
+                )
             for w in image_metrics["warnings"]:
                 logger.warning("Disintegration input outside validated regime: %s", w)
             if image_metrics["reference"] != "core":
