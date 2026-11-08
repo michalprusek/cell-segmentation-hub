@@ -488,9 +488,6 @@ async def segment_image(
                 extra_images.append(extra_image)
 
         logger.info(f"Processing image: {file.filename}, Model: {model}, Threshold: {threshold}, Detect holes: {detect_holes}")
-        if pixel_size_um is not None:
-            # Its own line, and a validated float only.
-            logger.info("Pixel size of that image: %.6g um/px", pixel_size_um)
         if extra_images:
             # Its own line, and an integer only: nothing a caller typed.
             logger.info("Merging %d channels of that image", 1 + len(extra_images))
