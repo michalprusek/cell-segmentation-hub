@@ -7,12 +7,15 @@
  * that model, and the field's ABSENCE for every other one.
  */
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import { SegmentationService } from '../segmentationService';
 import { ImageService } from '../imageService';
 import { PrismaClient } from '@prisma/client';
 import axios from 'axios';
 import { getStorageProvider } from '../../storage/index';
 import {
+  MODELS_READING_PIXEL_SIZE,
   pixelSizeFormValue,
   resolveSegmentationPixelSizeUm,
 } from '../segmentationPixelSize';
@@ -56,6 +59,22 @@ const STILL = {
   pixelSizeUm: null as number | null,
 };
 
+describe('MODELS_READING_PIXEL_SIZE', () => {
+  it('is the set the ML route accepts the field for', () => {
+    // Two hand-kept copies of one rule. If this side named a model the route
+    // does not, every segmentation with that model would get a 400; if the
+    // route named one this side does not, the field would never be sent.
+    const py = readFileSync(
+      join(__dirname, '../../../segmentation/api/routes.py'),
+      'utf8'
+    );
+    const m = /^PIXEL_SIZE_MODELS = frozenset\(\{([^}]*)\}\)$/m.exec(py);
+    expect(m).not.toBeNull();
+    const fromPython = [...m![1]!.matchAll(/"([a-z0-9_]+)"/g)].map(x => x[1]);
+    expect(fromPython.sort()).toEqual([...MODELS_READING_PIXEL_SIZE].sort());
+  });
+});
+
 describe('resolveSegmentationPixelSizeUm', () => {
   it('takes the container, then the image, then the project', () => {
     expect(
@@ -97,9 +116,9 @@ describe('SegmentationService — pixel_size_um on /segment', () => {
 
   /** The value of one multipart field, or null when it was not sent. */
   const field = (name: string): string | null => {
-    const body = (
-      post.mock.calls[0]?.[1] as { getBuffer(): Buffer }
-    ).getBuffer().toString();
+    const body = (post.mock.calls[0]?.[1] as { getBuffer(): Buffer })
+      .getBuffer()
+      .toString();
     const m = new RegExp(`name="${name}"\\r\\n\\r\\n([^\\r]*)\\r\\n`).exec(
       body
     );
@@ -174,7 +193,10 @@ describe('SegmentationService — pixel_size_um on /segment', () => {
 
   it("sends the image's own pixel size for spheroid_disintegration", async () => {
     image.pixelSizeUm = 1.6;
-    findProject.mockResolvedValue({ type: 'spheroid_invasive', pixelSizeUm: 1 });
+    findProject.mockResolvedValue({
+      type: 'spheroid_invasive',
+      pixelSizeUm: 1,
+    });
     await run('spheroid_disintegration');
     expect(field('pixel_size_um')).toBe('1.6');
     // a still has no container to ask
@@ -182,14 +204,20 @@ describe('SegmentationService — pixel_size_um on /segment', () => {
   });
 
   it("falls back to the project's pixel size", async () => {
-    findProject.mockResolvedValue({ type: 'spheroid_invasive', pixelSizeUm: 1.1 });
+    findProject.mockResolvedValue({
+      type: 'spheroid_invasive',
+      pixelSizeUm: 1.1,
+    });
     await run('spheroid_disintegration');
     expect(field('pixel_size_um')).toBe('1.1');
   });
 
   it("takes a video frame's pixel size from its container", async () => {
     image = { ...STILL, parentVideoId: 'video-1', frameIndex: 3 } as never;
-    findProject.mockResolvedValue({ type: 'spheroid_invasive', pixelSizeUm: 1.1 });
+    findProject.mockResolvedValue({
+      type: 'spheroid_invasive',
+      pixelSizeUm: 1.1,
+    });
     await run('spheroid_disintegration');
     expect(findImage).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: 'video-1' } })
