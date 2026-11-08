@@ -140,10 +140,12 @@ def test_w1_is_the_mean_distance_less_two_thirds(name):
 
 # The paper's read-out is the outside-core fraction (Index B), so both flags are
 # statements about it: below 0.61 the model was not verified against expert masks
-# (the detection floor), and no expert mask of the release lies in [0.08, 0.47).
-# Until 2026-10-07 the floor keyed on DI < 0.6 and the gap was [0.15, 0.30).
+# (the detection floor), and [0.08, 0.61) is unvalidated: no expert mask of the
+# release up to 0.4755, then only three half-dispersed spheroids the model under-reads.
+# Until 2026-10-07 the floor keyed on DI < 0.6 and the gap was [0.15, 0.30); until
+# 2026-11-08 the unvalidated range ended at 0.47.
 def test_flag_bounds_are_the_papers():
-    assert (dm.VALIDATED_FRACTION_FLOOR, dm.UNVALIDATED_LO, dm.UNVALIDATED_HI) == (0.61, 0.08, 0.47)
+    assert (dm.VALIDATED_FRACTION_FLOOR, dm.UNVALIDATED_LO, dm.UNVALIDATED_HI) == (0.61, 0.08, 0.61)
     assert not hasattr(dm, "VALIDATED_DI_FLOOR")
 
 
@@ -151,7 +153,7 @@ def test_flag_bounds_are_the_papers():
 def test_flags_follow_the_fraction_on_every_defined_fixture(name):
     r = dm.disintegration_index(MASKS[name])
     assert r["below_validated_regime"] == int(r["index_B"] < 0.61)
-    assert r["unvalidated_regime"] == int(0.08 <= r["index_B"] < 0.47)
+    assert r["unvalidated_regime"] == int(0.08 <= r["index_B"] < 0.61)
 
 
 def test_fixtures_separate_the_fraction_rule_from_the_old_di_rule():
