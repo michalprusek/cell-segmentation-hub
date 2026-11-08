@@ -43,11 +43,45 @@ typically a 0 h control against later time points. Both the core and the
 dispersing corona need to be visible.
 
 > **Validated regime: 2048 × 2048 px frames at ~1.28 µm/px (5× objective).**
-> Nothing else was tested. A frame of another size, or a µm/px scale entered at
-> export that differs from 1.28 by more than 10 %, is still scored, but the row
-> carries an `Input-Scale Warning`. Cores smaller than 16 048 px — the smallest
-> expert core in the paper's dataset — leave DI undefined, so a down-sampled
-> frame will often read `N/A`.
+> Nothing else was tested. A frame whose pixel size is known is brought to
+> 1.28 µm/px before the model sees it (next section). A frame of another size,
+> or one of unknown pixel size scored at export with a µm/px scale that differs
+> from 1.28 by more than 10 %, is still scored, but the row carries an
+> `Input-Scale Warning`. Cores smaller than 16 048 px at 1.28 µm/px — the
+> smallest expert core in the paper's dataset — leave DI undefined, so a
+> down-sampled frame of unknown pixel size will often read `N/A`.
+
+### Pixel size
+
+**Set it in the project header**: a disintegrated-spheroid project shows a
+**Pixel size (µm/px)** box beside the model picker (owner only; empty = not
+set). Frames taken at 1.28 µm/px, the 2048 × 2048 frames of the paper, need
+nothing.
+
+When a frame's pixel size is known and more than 2 % away from 1.28 µm/px, the
+model **resamples the frame to 1.28 µm/px** before inference (shrinking with
+area averaging, enlarging with bilinear interpolation, before CLAHE, as in
+training), computes the read-out there, and maps the mask back to the uploaded
+frame, so the polygons overlay your image as usual. On the paper's held-out
+batch (37 images at 48 h), frames simulated at 1.10 and 1.50 µm/px changed the
+outside-core fraction by up to 0.028 when fed as acquired, and by at most
+0.0051 (median 0.0016 and 0.0015) when resampled first.
+
+- **Which value is used**: the image's own calibration (a video frame's
+  container, or an Olympus cellSens JPEG/TIFF that carries one), else the
+  project's value.
+- **What is computed where**: DI, the outside-core fraction, reach, fragment
+  counts, the core-size minimum and the regime flags at 1.28 µm/px; the three
+  areas on your frame's own pixels, so the export's µm² are real. The `Note`
+  column says `scored at 1.28 um/px: resampled from … um/px`, and such a row
+  gets no pixel-size warning: that mismatch was corrected.
+- **Limits**: only factors 0.5–2× (0.64–2.56 µm/px) are resampled, and a frame
+  is never grown past 4096 × 4096 px. Outside that, the frame is scored at its
+  uploaded scale and the row says why.
+- **It applies to new segmentations.** Changing the value does not re-run the
+  stored ones; re-segment the images for it to take effect. An edited
+  segmentation is re-scored at export with the image's pixel size, the same
+  way.
 
 ---
 

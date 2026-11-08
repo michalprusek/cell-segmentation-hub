@@ -267,6 +267,15 @@ export default {
     projectTypeUpdated: 'Projekttyp aktualisiert',
     failedToUpdateProject: 'Projekt konnte nicht aktualisiert werden',
     changeProjectType: 'Projekttyp ändern',
+    pixelSize: 'Pixelgröße (µm/px)',
+    pixelSizeUnset: 'nicht gesetzt',
+    pixelSizeHint:
+      'Das Sphäroid-Zerfallsmodell skaliert jedes Bild auf 1,28 µm/px um; 2048 × 2048-Bilder mit 1,28 µm/px brauchen nichts. Gilt für neue Segmentierungen.',
+    pixelSizeInvalid:
+      'Geben Sie eine Pixelgröße zwischen {{min}} und {{max}} µm/px ein oder lassen Sie das Feld leer.',
+    pixelSizeUpdated:
+      'Pixelgröße gespeichert; sie gilt für neue Segmentierungen',
+    pixelSizeUpdateFailed: 'Pixelgröße konnte nicht gespeichert werden',
     typeChangeSegmentationsWarning:
       '{{count}} bestehende Segmentierungen entsprechen möglicherweise nicht mehr dem Exportformat "{{type}}". Erneut segmentieren, um Metriken zu aktualisieren.',
     verified: 'Verifiziert',
@@ -1941,7 +1950,7 @@ export default {
             'Etwa 0,70 s pro Bild · kein Schwellenwert — entschieden wird per Argmax',
           bestFor: 'Verwendet von: Projekten mit zerfallenden Sphäroiden.',
           description:
-            'UNet++ mit EfficientNet-B5-Encoder, das drei Klassen vorhersagt — Hintergrund, Korona und dichter Kern. Der Kern wird direkt vorhergesagt statt abgeleitet, und erst das macht den Anteil außerhalb des Kerns und den Zerfallsindex belastbar.',
+            'UNet++ mit EfficientNet-B5-Encoder, das drei Klassen vorhersagt — Hintergrund, Korona und dichter Kern. Der Kern wird direkt vorhergesagt statt abgeleitet, und erst das macht den Anteil außerhalb des Kerns und den Zerfallsindex belastbar. Ist die Pixelgröße des Bildes bekannt – aus der Datei oder dem Projektkopf –, wird das Bild auf die 1,28 µm/px umgerechnet, bei denen das Modell validiert wurde, und die Umrisse werden auf Ihr Bild zurückübertragen.',
         },
         wound: {
           name: 'Wundheilung',

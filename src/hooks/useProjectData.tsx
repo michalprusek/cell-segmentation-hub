@@ -517,6 +517,9 @@ export const useProjectData = (
     setProjectType,
     projectVerified,
     projectPixelSizeUm,
+    // For the header's pixel-size field (spheroid_invasive projects only),
+    // which writes optimistically like the type and model pickers.
+    setProjectPixelSizeUm,
     projectSegmentationModel,
     setProjectSegmentationModel,
     projectIsOwned,

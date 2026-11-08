@@ -106,6 +106,17 @@ the stored external polygons with the cores drawn on top (`DI Source` =
 **16 048 px** (the smallest expert core of the paper's dataset) leaves DI
 undefined, like a missing one.
 
+**Pixel size.** When the image's pixel size is known at segmentation (its own
+calibration, else the project's) and is more than 2 % from 1.28 µm/px, the
+frame is resampled to 1.28 µm/px first, and every number of the panel above —
+the 16 048 px minimum included — is computed on that grid; only factors 0.5–2×
+are resampled. The three areas stay counted on the uploaded frame, so they
+convert to µm² with the image's own scale, and `(total − core) / total` from them can differ slightly from the outside-core fraction (by up to 2.4 × 10⁻⁴ on synthetic masks; not measured on real ones). Such a row's
+`Note` reads `scored at 1.28 um/px: resampled from … um/px`. The polygon path
+resamples the same way with the image's pixel size (else the export's), so an
+edited image is scored on the grid a fresh one was. See
+[Disintegrated spheroid projects → Pixel size](../guides/project-types/spheroid-invasive.md#pixel-size).
+
 > **A core is required. There is deliberately no fallback.** Without a usable
 > core polygon the index is undefined and every DI-derived column is reported as
 > the literal string `N/A` — never as a computed zero. An earlier
@@ -128,7 +139,7 @@ undefined, like a missing one.
 | `Core Fragmented (0/1)`           | largest core piece < 99 % of the core, or centroid shift > 0.1 `R_C` — inspect                                 |
 | `Unvalidated Regime (0/1)`        | outside-core fraction in `[0.08, 0.47)`, where the paper's release holds no expert mask                        |
 | `Below Validated Floor (0/1)`     | outside-core fraction < 0.61 (the detection floor): a screen ("not grossly disintegrated"), not a graded value |
-| `Input-Scale Warning`             | frame ≠ 2048 × 2048 px, or an entered scale ≠ 1.28 µm/px by more than 10 %                                     |
+| `Input-Scale Warning`             | frame ≠ 2048 × 2048 px (after any resample), or a scale ≠ 1.28 µm/px by more than 10 % that was not resampled  |
 
 If the index calculation fails outright the areas are still computed locally and
 reported; only the DI columns drop out.

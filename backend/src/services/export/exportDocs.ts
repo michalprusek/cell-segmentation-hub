@@ -780,13 +780,30 @@ dispersed one: read it as "not grossly disintegrated", a screen rather than a
 graded value. Both flags key on the outside-core fraction (until October 2026
 they keyed on \`[0.15, 0.30)\` and on DI < 0.6).
 
-## Input-scale warning
+## Pixel size, resampling and the input-scale warning
 
 The model and the index were validated only on **2048 × 2048 px brightfield
-frames at ~1.28 μm/px** (5× objective). A frame of another size, or a μm/px
-scale entered at export that differs from 1.28 by more than 10 %, adds a
-warning to the row. The numbers are still returned; they were never tested
-there.
+frames at ~1.28 μm/px** (5× objective).
+
+**Resampling.** When an image's pixel size was known at segmentation (its own
+calibration, its video's, else the project's) and differed from 1.28 μm/px by
+more than 2 %, the frame was resampled to 1.28 μm/px before the model ran
+(factors 0.5–2× only, and never grown past 4096 × 4096 px). Every read-out
+column — DI, the outside-core fraction, reach, fragments, the core diagnostics,
+the flags and the 16 048 px core minimum — is then computed at 1.28 μm/px,
+while the three areas are counted on the uploaded frame's own pixels, so
+\`(total − core) / total\` from them can differ slightly from the outside-core
+fraction (by up to 2.4 × 10⁻⁴ on synthetic masks; not measured on real ones).
+The **Note** of such a row reads \`scored at 1.28 um/px: resampled from
+<pixel size> um/px (x<factor>, <W>x<H> px)\`. A scale entered here afterwards
+changes only the area units, not those read-outs; re-segment for a new pixel
+size to take effect. An edited segmentation is scored from its polygons with
+the image's own pixel size, else the one entered here, resampled the same way.
+
+**Warning.** A frame of another size (after any resampling), or a μm/px scale
+entered at export that differs from 1.28 by more than 10 % on a row that was
+not resampled, adds a warning to the row. The numbers are still returned; they
+were never tested there.
 
 ## The model
 
