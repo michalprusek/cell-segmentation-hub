@@ -275,6 +275,14 @@ export default {
     projectTypeUpdated: 'Project type updated',
     failedToUpdateProject: 'Failed to update project',
     changeProjectType: 'Change project type',
+    pixelSize: 'Pixel size (µm/px)',
+    pixelSizeUnset: 'not set',
+    pixelSizeHint:
+      'Frames between 0.64 and 2.56 µm/px are resampled to the 1.28 µm/px the spheroid-disintegration model was validated at; others are segmented as uploaded, and 2048 × 2048 frames at 1.28 µm/px need nothing. Applies to new segmentations.',
+    pixelSizeInvalid:
+      'Enter a pixel size between {{min}} and {{max}} µm/px, or leave the field empty.',
+    pixelSizeUpdated: 'Pixel size saved; it applies to new segmentations',
+    pixelSizeUpdateFailed: 'Could not save the pixel size',
     typeChangeSegmentationsWarning:
       '{{count}} existing segmentation(s) may no longer match the new "{{type}}" export format. Re-segment to refresh metrics.',
     verified: 'Verified',
@@ -1925,7 +1933,7 @@ export default {
             'About 0.70 s per image · no threshold — the decision is an argmax',
           bestFor: 'Used by: Disintegrated spheroid projects.',
           description:
-            'UNet++ with an EfficientNet-B5 encoder predicting three classes — background, corona and dense core. The core is predicted directly rather than inferred, which is what makes the outside-core fraction and the Disintegration Index trustworthy.',
+            "UNet++ with an EfficientNet-B5 encoder predicting three classes — background, corona and dense core. The core is predicted directly rather than inferred, which is what makes the outside-core fraction and the Disintegration Index trustworthy. When the image's pixel size is known — from its file or the project header — and lies between 0.64 and 2.56 µm/px, the frame is resampled to the 1.28 µm/px the model was validated at, and the outlines are mapped back onto your image.",
         },
         wound: {
           name: 'Wound Healing',

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useId, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -53,6 +53,13 @@ interface ProjectHeaderProps {
   /** Omitted for a viewer who may not change it, which renders a static pill
    *  instead of a menu (same convention as `onTypeChange`). */
   onModelChange?: (model: ModelType) => void | Promise<void>;
+  /** The project's pixel size, µm per pixel; `null` = not set. Shown only for
+   *  the project types whose model reads it at segmentation
+   *  (`PROJECT_TYPES_WITH_SEGMENTATION_PIXEL_SIZE`). */
+  pixelSizeUm?: number | null;
+  /** Omitted for a viewer who may not change it (a shared project is
+   *  read-only for the annotator), which renders the value as a static pill. */
+  onPixelSizeChange?: (pixelSizeUm: number | null) => void | Promise<void>;
   /** Hole detection, carried here only because the model menu hosts its
    *  checkbox — it is a per-user setting, not a project property. */
   detectHoles?: boolean;
@@ -69,10 +76,55 @@ interface ProjectHeaderProps {
   folderId?: string | null;
 }
 
-/** Accepted range, mirroring the export modal's (`AdvancedExportDialog.tsx`):
- *  0.001 is 1 nm/px, finer than any light microscope resolves; 1000 is a
- *  millimetre per pixel, coarser than any objective in use here. A value the
- *  modal accepts must not be refused here, and vice versa. */
+/** Accepted range, mirroring the export modal's (`AdvancedExportDialog.tsx`)
+ *  and the backend's `updateProjectSchema`: 0.001 is 1 nm/px, finer than any
+ *  light microscope resolves; 1000 is a millimetre per pixel, coarser than any
+ *  objective in use here. A value the modal accepts must not be refused here,
+ *  and vice versa. */
+const SCALE_MIN_UM_PER_PX = 0.001;
+const SCALE_MAX_UM_PER_PX = 1000;
+
+/** The project types whose segmentation reads the project's pixel size.
+ *
+ *  Only `spheroid_invasive`: its model (`spheroid_disintegration`, the only one
+ *  compatible with it) resamples a frame to the 1.28 µm/px it was validated
+ *  at when the pixel size is known and within 0.64-2.56 µm/px (factors
+ *  0.5-2x; outside them the frame is used as uploaded, with a warning). Until
+ *  2026-09-13 this header showed a
+ *  µm/px box on EVERY project, which nothing on their path read, and it was
+ *  removed for that reason; it is back only where something reads it. Another
+ *  type joins this list together with a model that reads the value. */
+const PROJECT_TYPES_WITH_SEGMENTATION_PIXEL_SIZE: readonly ProjectType[] = [
+  'spheroid_invasive',
+];
+
+/** A plain decimal: digits with at most one separator. No sign, exponent,
+ *  hex or `Infinity`, all of which `Number()` would otherwise accept. */
+const DECIMAL_DRAFT = /^(\d+([.,]\d*)?|[.,]\d+)$/;
+
+/** The pixel-size draft as a value: `null` clears it, `undefined` is invalid.
+ *
+ *  A comma is read as the decimal separator: in a Czech (or German, French,
+ *  Spanish) locale it is the only one the phone's decimal keypad offers
+ *  (`inputMode="decimal"`), so refusing it would make the box unusable there.
+ *  Exactly ONE separator is accepted, so `1,000` is 1, never 1000; pixel sizes
+ *  near 1000 µm/px do not occur. */
+function parseScaleDraft(text: string): number | null | undefined {
+  const trimmed = text.trim();
+  if (trimmed === '') return null;
+  if (!DECIMAL_DRAFT.test(trimmed)) return undefined;
+  const value = Number(trimmed.replace(',', '.'));
+  if (
+    !Number.isFinite(value) ||
+    value < SCALE_MIN_UM_PER_PX ||
+    value > SCALE_MAX_UM_PER_PX
+  ) {
+    return undefined;
+  }
+  // Six decimals, matching the export modal: a Nikon ND2 reports 0.0722222
+  // µm/px, and rounding to three would cost 0.3 % on every length.
+  return Math.round(value * 1e6) / 1e6;
+}
 
 const ProjectHeader = ({
   projectTitle,
@@ -83,6 +135,8 @@ const ProjectHeader = ({
   onTypeChange,
   segmentationModel,
   onModelChange,
+  pixelSizeUm = null,
+  onPixelSizeChange,
   detectHoles = true,
   onDetectHolesChange,
   verified,
@@ -99,6 +153,28 @@ const ProjectHeader = ({
   // from the number on every keystroke makes "0." and a trailing zero
   // impossible to type. `null` means "not being edited", so the input shows
   // the stored value.
+  const [scaleDraft, setScaleDraft] = useState<string | null>(null);
+  const scaleInputId = useId();
+  const scaleHintId = useId();
+  const scaleInvalid =
+    scaleDraft !== null && parseScaleDraft(scaleDraft) === undefined;
+
+  const commitScale = () => {
+    if (scaleDraft === null) return;
+    const next = parseScaleDraft(scaleDraft);
+    // An invalid entry stays in the box, marked, rather than vanishing: the
+    // user sees what was refused and why. Escape restores the stored value.
+    if (next === undefined) return;
+    setScaleDraft(null);
+    // Emptying the box CLEARS the pixel size rather than meaning zero, and
+    // re-entering the stored value is not a change.
+    if (next !== pixelSizeUm) void onPixelSizeChange?.(next);
+  };
+
+  const showsPixelSize =
+    !!projectType &&
+    PROJECT_TYPES_WITH_SEGMENTATION_PIXEL_SIZE.includes(projectType) &&
+    (!!onPixelSizeChange || pixelSizeUm !== null);
 
   // No effect syncs the draft to `projectTitle`: `startRename` is the only way
   // into the editor and it seeds the draft itself, so an effect would be dead
@@ -291,6 +367,88 @@ const ProjectHeader = ({
                   detectHoles={detectHoles}
                   onDetectHolesChange={onDetectHolesChange ?? (() => {})}
                 />
+              </div>
+            )}
+            {showsPixelSize && (
+              <div
+                className="flex min-w-0 flex-col gap-0.5"
+                data-testid="project-pixel-size"
+              >
+                <div className="flex items-center gap-2">
+                  <label
+                    htmlFor={scaleInputId}
+                    className="whitespace-nowrap text-xs text-gray-500 dark:text-gray-400"
+                  >
+                    {t('projects.pixelSize')}
+                  </label>
+                  {onPixelSizeChange ? (
+                    <input
+                      id={scaleInputId}
+                      // TEXT, not type="number": a number input reports
+                      // `value === ''` for anything it cannot parse ("1e",
+                      // "1.6.6", "1,6" outside a comma locale), so the draft
+                      // could not tell a typo from an emptied box and a typo
+                      // CLEARED the stored value on blur. The raw text reaches
+                      // the draft here and parseScaleDraft decides.
+                      type="text"
+                      inputMode="decimal"
+                      autoComplete="off"
+                      spellCheck={false}
+                      // Empty string, not "0": a project without a pixel size
+                      // must not look like one measured at zero.
+                      value={
+                        scaleDraft ??
+                        (pixelSizeUm !== null ? String(pixelSizeUm) : '')
+                      }
+                      onChange={e => setScaleDraft(e.target.value)}
+                      onBlur={commitScale}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          commitScale();
+                        } else if (e.key === 'Escape') {
+                          e.preventDefault();
+                          setScaleDraft(null);
+                        }
+                      }}
+                      placeholder={String(t('projects.pixelSizeUnset'))}
+                      aria-invalid={scaleInvalid || undefined}
+                      aria-describedby={scaleHintId}
+                      data-testid="project-pixel-size-input"
+                      className={cn(
+                        'h-8 w-24 rounded-md border bg-transparent px-2 text-xs dark:text-gray-100',
+                        scaleInvalid
+                          ? 'border-red-500 dark:border-red-500'
+                          : 'border-gray-300 dark:border-gray-600'
+                      )}
+                    />
+                  ) : (
+                    <Badge
+                      variant="outline"
+                      className="h-8 px-3 text-xs"
+                      data-testid="project-pixel-size-readonly"
+                    >
+                      {pixelSizeUm} µm/px
+                    </Badge>
+                  )}
+                </div>
+                <p
+                  id={scaleHintId}
+                  role={scaleInvalid ? 'alert' : undefined}
+                  className={cn(
+                    'max-w-[26rem] text-[11px] leading-snug',
+                    scaleInvalid
+                      ? 'text-red-600 dark:text-red-400'
+                      : 'text-gray-500 dark:text-gray-400'
+                  )}
+                >
+                  {scaleInvalid
+                    ? t('projects.pixelSizeInvalid', {
+                        min: SCALE_MIN_UM_PER_PX,
+                        max: SCALE_MAX_UM_PER_PX,
+                      })
+                    : t('projects.pixelSizeHint')}
+                </p>
               </div>
             )}
             {(onVerifiedChange || verified) && (

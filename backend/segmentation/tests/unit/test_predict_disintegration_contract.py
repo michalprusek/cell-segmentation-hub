@@ -167,3 +167,97 @@ def test_inference_path_reproduces_compute_di_on_the_parity_fixtures():
             continue
         for k, v in e["metrics"].items():
             assert abs(im[k] - v) <= exp["tolerance"], (name, k, im[k], v)
+
+
+# ---- the pixel size: resampled to 1.28 um/px when known (api.disintegration_scale) ----
+
+class _ScaleFreeModel:
+    """Class from the grey level, on whatever grid it is handed; records shapes."""
+
+    def __init__(self):
+        self.shapes = []
+
+    def predict(self, rgb):
+        self.shapes.append(rgb.shape)
+        g = rgb[:, :, 0].astype(np.int16)
+        out = np.zeros(g.shape, np.uint8)
+        out[g < 160] = 1
+        out[g < 80] = 2
+        return out
+
+
+def _frame_of(mask):
+    return Image.fromarray(np.choose(mask, [200, 120, 40]).astype(np.uint8), mode="L")
+
+
+def _without_timing(out):
+    out = dict(out)
+    out["processing_info"] = {k: v for k, v in out["processing_info"].items()
+                              if k != "processing_time_s"}
+    return out
+
+
+@pytest.mark.parametrize("um", [None, 1.28, 1.29])
+def test_no_pixel_size_or_1_28_is_the_old_path_exactly(um):
+    mask = _dispersed_with_specks()
+    loader = ModelLoader(base_path=".")
+    loader.loaded_models["spheroid_disintegration"] = _FakeModel(mask)
+    base = loader.predict_disintegration(Image.new("RGB", (512, 512)), threshold=0.5)
+    loader.loaded_models["spheroid_disintegration"] = _FakeModel(mask)
+    out = loader.predict_disintegration(Image.new("RGB", (512, 512)), threshold=0.5,
+                                        um_per_px=um)
+    assert _without_timing(out) == _without_timing(base)
+    assert "resample" not in out["image_metrics"]
+
+
+def test_a_coarse_frame_is_segmented_at_1_28_and_drawn_on_the_upload():
+    # 2.56 um/px: the model runs on a frame twice the size, the polygons and
+    # the reported size stay on the uploaded 300 x 260 grid.
+    mask = _concentric_mask(260, 300, r_out=80, r_core=40)  # core ~5 000 px
+    model = _ScaleFreeModel()
+    loader = ModelLoader(base_path=".")
+    loader.loaded_models["spheroid_disintegration"] = model
+    out = loader.predict_disintegration(_frame_of(mask), um_per_px=2.56)
+    assert model.shapes == [(520, 600, 3)]
+    im = out["image_metrics"]
+    assert im["resample"] == {"input_um_per_px": 2.56, "model_um_per_px": 1.28,
+                              "factor": 2.0, "model_w": 600, "model_h": 520}
+    # MIN_CORE_PX is a 1.28 um/px quantity: ~20 000 px there, ~5 000 here
+    assert im["reference"] == "core"
+    assert im["area_core_px"] < dm.MIN_CORE_PX
+    assert out["image_size"] == {"width": 300, "height": 260}
+    assert (im["image_width"], im["image_height"]) == (300, 260)
+    xs = [pt["x"] for p in out["polygons"] for pt in p["points"]]
+    ys = [pt["y"] for p in out["polygons"] for pt in p["points"]]
+    assert 0 <= min(xs) and max(xs) < 300 and 0 <= min(ys) and max(ys) < 260
+    json.dumps(im, allow_nan=False)
+
+
+def test_an_out_of_range_pixel_size_is_not_resampled_and_warns():
+    mask = _dispersed_with_specks()
+    loader = ModelLoader(base_path=".")
+    loader.loaded_models["spheroid_disintegration"] = _FakeModel(mask)
+    out = loader.predict_disintegration(Image.new("RGB", (512, 512)), um_per_px=0.1)
+    assert "resample" not in out["image_metrics"]
+    assert any("resamples only factors" in w for w in out["warnings"])
+    assert out["warnings"] == out["image_metrics"]["warnings"]
+
+
+def test_the_callers_pixel_ceiling_bounds_the_resample():
+    # 2.0 um/px would grow the 300 x 260 frame to ~469 x 406; with the
+    # caller's ceiling at the frame's own size the loader must not resample,
+    # and must say why. Without the ceiling the same call resamples.
+    mask = _concentric_mask(260, 300, r_out=80, r_core=40)
+    model = _ScaleFreeModel()
+    loader = ModelLoader(base_path=".")
+    loader.loaded_models["spheroid_disintegration"] = model
+    out = loader.predict_disintegration(_frame_of(mask), um_per_px=2.0,
+                                        max_pixels=300 * 260)
+    assert model.shapes == [(260, 300, 3)]
+    assert "resample" not in out["image_metrics"]
+    assert out["image_metrics"]["resample_skipped"]["input_um_per_px"] == 2.0
+    assert any("would grow" in w for w in out["warnings"])
+
+    out = loader.predict_disintegration(_frame_of(mask), um_per_px=2.0)
+    assert model.shapes[-1] == (406, 469, 3)
+    assert out["image_metrics"]["resample"]["factor"] == pytest.approx(2.0 / 1.28)

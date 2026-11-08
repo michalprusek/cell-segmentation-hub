@@ -59,7 +59,23 @@ describe('generateMetricsGuide — type-specific dispatch', () => {
       expect(guide).toContain('## Where the numbers come from');
       expect(guide).toContain('## Index B and the panel');
       expect(guide).toContain('## Quality flags (0/1)');
-      expect(guide).toContain('## Input-scale warning');
+      expect(guide).toContain(
+        '## Pixel size, resampling and the input-scale warning'
+      );
+    });
+
+    it('documents the resample to 1.28 um/px and the Note it leaves', () => {
+      // The Note text the export writes (resampleNote) is what a reader looks
+      // for, so the guide quotes its opening words.
+      expect(guide).toContain('scored at 1.28 um/px: resampled from');
+      expect(guide).toContain('factors 0.5–2× only');
+      expect(guide).toContain('counted on the uploaded frame');
+      // the area-ratio gap is the measured one, on real masks
+      expect(guide).toContain('1.1 × 10⁻³');
+      expect(guide).not.toContain('2.4 × 10⁻⁴');
+      // an edited image keeps its segmentation's grid
+      expect(guide).toContain('on the grid their own');
+      expect(guide).not.toContain('else the one entered here');
     });
 
     it('documents the paper definitions, not the retired speckle-guarded panel', () => {

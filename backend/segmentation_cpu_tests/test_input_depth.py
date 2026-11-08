@@ -399,6 +399,7 @@ def _segment(loader, data, **form):
         # Called as a plain function, a parameter left out keeps its FastAPI
         # `File(None)` marker object as its value instead of None.
         "extra_channels": None,
+        "pixel_size_um": None,
     }
     params.update(form)
     return asyncio.run(

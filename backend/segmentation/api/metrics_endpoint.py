@@ -1,5 +1,5 @@
 import logging
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 import cv2
 import numpy as np
@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from utils.characteristic_functions import calculate_all
 from api._errors import internal_error
 from api import disintegration_metrics as dm
+from api import disintegration_scale as dsc
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +37,17 @@ class DisintegrationRequest(BaseModel):
     Holes are not represented: the disintegration model's polygons keep only
     the outer contour of each region, which is one of the reasons this path
     differs from the raster read-out.
-    `pixel_size_um` (optional) only feeds the input-scale warning.
+    `pixel_size_um` (optional) is the image's pixel size. When it is more than
+    2 % away from 1.28 um/px and within 0.5-2x of it, the mask rasterised on
+    the image grid is resampled (nearest neighbour) to 1.28 um/px and scored
+    there, exactly as `/segment` scores a fresh segmentation of that image
+    (`api.disintegration_scale`); the response then carries `resample`.
+    Outside 0.5-2x it is not resampled and the response carries one warning
+    saying so. Otherwise it only feeds the input-scale warning, as it always
+    did. The backend sends it only for an image whose segmentation was itself
+    resampled (its stored read-out, now stale, carries `resample`), with the
+    pixel size that segmentation used, so the edited image is scored on the
+    grid its fresh segmentation was.
     """
     mask_polygon: Optional[List[List[float]]] = None
     mask_polygons: Optional[List[List[List[float]]]] = None
@@ -84,6 +95,11 @@ class DisintegrationResponse(BaseModel):
     unvalidated_regime: Optional[int] = None
     below_validated_regime: Optional[int] = None
     warnings: List[str] = []
+    # Present only when the mask was scored at 1.28 um/px after resampling:
+    # {input_um_per_px, model_um_per_px, factor, model_w, model_h}. The panel
+    # is from that grid; n_pixels and the three areas are counted on the
+    # image's own grid.
+    resample: Optional[Dict[str, Any]] = None
 
 
 class Point(BaseModel):
@@ -279,7 +295,20 @@ def disintegration_index(request: DisintegrationRequest):
         _fill_valid(mask3, mask_polys, 1)
         n_core_valid = _fill_valid(mask3, candidate_cores, 2)
 
-        r = dm.raster_metrics(mask3, W, H, request.pixel_size_um)
+        # At the model's pixel size, as `/segment` scored the fresh
+        # segmentation, when the pixel size is known and off (same rule, same
+        # helper). Without a plan this is raster_metrics(mask3, W, H,
+        # pixel_size_um), exactly what this endpoint always computed -- except
+        # for a pixel size the module declines (outside 0.5-2x), whose one
+        # warning is plan_resample's rather than that plus the generic one.
+        plan, scale_warnings = dsc.plan_resample(W, H, request.pixel_size_um)
+        mask_model = mask3 if plan is None else dsc.mask_to_model_grid(mask3, plan)
+        r = dsc.read_out(
+            mask3, mask_model, plan,
+            um_per_px=request.pixel_size_um, extra_warnings=scale_warnings,
+            skipped_um_per_px=request.pixel_size_um if scale_warnings else None,
+        )
+        resample = r.get("resample")
         n_fg = int(r["area_total_px"] or 0)
         if r["reference"] != "core":
             if r["reference"] == "no_core":
@@ -299,6 +328,7 @@ def disintegration_index(request: DisintegrationRequest):
                 n_core_components=r["n_core_components"] if n_fg else None,
                 largest_core_component_frac=r["largest_core_component_frac"],
                 core_centroid_shift=r["core_centroid_shift"],
+                resample=resample,
             )
 
         return DisintegrationResponse(
@@ -316,6 +346,7 @@ def disintegration_index(request: DisintegrationRequest):
             core_fragmented=r["core_fragmented"],
             unvalidated_regime=r["unvalidated_regime"],
             below_validated_regime=r["below_validated_regime"],
+            resample=resample,
         )
     except HTTPException:
         raise

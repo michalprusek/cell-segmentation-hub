@@ -21,7 +21,12 @@ import type {
   PolygonPoint,
 } from '../../types/polygon';
 import { polylineLength } from '../../utils/polygonGeometry';
-import { readStoredImageMetrics, pixelSizeWarning } from './rasterImageMetrics';
+import {
+  readStoredImageMetrics,
+  exportScaleWarning,
+  resampleNote,
+  type RasterResample,
+} from './rasterImageMetrics';
 import { groupPolylinesByInstanceId, findPart } from '../../utils/spermGrouping';
 import {
   calculatePolygonArea,
@@ -309,8 +314,12 @@ export interface ImageWithSegmentation {
   name: string;
   width?: number;
   height?: number;
-  /** The image's own calibration in µm/px (null/undefined: none). Read only
-   *  by the sperm report, which converts every image by its own scale. */
+  /** The image's own calibration in µm/px (null/undefined: none; a video
+   *  frame's comes from its container). Read by the sperm report, which
+   *  converts every image by its own scale. NOT read by the spheroid-
+   *  disintegration report: its polygon fallback resamples only with the
+   *  pixel size the image's own segmentation used (see
+   *  `readStoredImageMetrics`'s `staleResample`). */
   pixelSizeUm?: number | null;
   segmentation?: SegmentationData;
 }
@@ -717,13 +726,20 @@ export class MetricsCalculator {
         image.segmentation.imageMetrics,
         image.segmentation.polygons
       );
-      const scaleWarning = pixelSizeWarning(pixelToMicrometerScale);
       if (stored.metrics) {
         const r = stored.metrics;
+        // A read-out that carries `resample` was computed at 1.28 µm/px after
+        // resampling the frame from the pixel size known at segmentation; the
+        // export-time warning then fires only if the export's scale disagrees
+        // with that pixel size (`exportScaleWarning`), and the Note says what
+        // was done. The areas below convert by the export scale: they are
+        // counted on the uploaded grid.
+        const exportWarning = exportScaleWarning(pixelToMicrometerScale, r);
         const di = panelToDiFields(
           r,
           'model_raster',
-          scaleWarning ? [scaleWarning] : []
+          exportWarning ? [exportWarning] : [],
+          resampleNote(r.resample)
         );
         const totalPx = r.area_total_px ?? 0;
         const corePx = r.area_core_px ?? 0;
@@ -743,6 +759,16 @@ export class MetricsCalculator {
       const fallbackNote = image.segmentation.imageMetrics
         ? `scored from polygons: ${stored.reason}`
         : '';
+      // The grid this image's own segmentation was scored on: resampled from
+      // `input_um_per_px` when its (now stale) read-out says so, otherwise the
+      // uploaded grid — also when no read-out exists at all. The export's
+      // scale never picks the grid: it is the same for every row of the
+      // export, while the segmentations it would re-grid were not, so an
+      // edited row would land on a grid its unedited siblings never used.
+      const staleResample = stored.staleResample ?? null;
+      const fallbackWarning = exportScaleWarning(pixelToMicrometerScale, {
+        resample: staleResample,
+      });
 
       // Step 2b: DI + panel from the polygons. Network call to ML; failures
       // must NOT void the area metrics already computed in step 1.
@@ -756,7 +782,7 @@ export class MetricsCalculator {
           'no_core',
           'polygons',
           ['no core: DI undefined', fallbackNote].filter(Boolean).join('; '),
-          scaleWarning ? [scaleWarning] : []
+          fallbackWarning ? [fallbackWarning] : []
         );
       } else if (usableExternals.length > 0) {
         try {
@@ -772,13 +798,16 @@ export class MetricsCalculator {
               'MetricsCalculator'
             );
           } else {
+            // Resampled exactly as the segmentation was (see staleResample
+            // above), so an edited image is scored on its fresh grid.
             di = await this.calculateImageDisintegrationIndex(
               maskPolygons,
               corePolygonsForDi,
               image.width,
               image.height,
-              pixelToMicrometerScale,
-              fallbackNote
+              staleResample?.input_um_per_px,
+              fallbackNote,
+              pixelToMicrometerScale
             );
           }
         } catch (err) {
@@ -820,13 +849,23 @@ export class MetricsCalculator {
     };
   }
 
+  /**
+   * DI + panel from the polygons via `/api/disintegration-index`.
+   *
+   * `resampleFromUmPerPx` is the pixel size the image's segmentation was
+   * resampled from, if it was; it is the only value sent as `pixel_size_um`,
+   * which the endpoint resamples with. Without it the endpoint scores the
+   * uploaded grid and gets no pixel size, and the export-time warning about
+   * `exportScale` is added here instead, worded as the endpoint's own.
+   */
   private async calculateImageDisintegrationIndex(
     maskPolygons: Point[][],
     corePolygons: Point[][],
     imageWidth: number,
     imageHeight: number,
-    pixelToMicrometerScale?: number,
-    extraNote = ''
+    resampleFromUmPerPx?: number,
+    extraNote = '',
+    exportScale?: number
   ): Promise<DiFields> {
     const mask_polygons = maskPolygons.map(pts => pts.map(p => [p.x, p.y]));
     // DI requires a core; callers only reach here with a non-empty core set.
@@ -849,17 +888,22 @@ export class MetricsCalculator {
       core_fragmented: number | null;
       unvalidated_regime: number | null;
       below_validated_regime: number | null;
+      resample?: RasterResample | null;
     }>('/api/disintegration-index', {
       mask_polygons,
       core_polygons,
       image_width: imageWidth,
       image_height: imageHeight,
-      // Only feeds the endpoint's input-scale warning; nothing is rescaled.
-      ...(pixelToMicrometerScale && pixelToMicrometerScale > 0
-        ? { pixel_size_um: pixelToMicrometerScale }
+      // The endpoint resamples the rasterised mask to 1.28 µm/px with it, as
+      // /segment did for this image. Sent only for such an image.
+      ...(isUsableScale(resampleFromUmPerPx)
+        ? { pixel_size_um: resampleFromUmPerPx }
         : {}),
     });
     const d = response.data;
+    const exportWarning = exportScaleWarning(exportScale, {
+      resample: d.resample,
+    });
     // Every panel field is scale-free (fractions, counts, core radii), so the
     // µm/px scale only reaches the areas, which are computed by the caller.
     return panelToDiFields(
@@ -883,8 +927,8 @@ export class MetricsCalculator {
         below_validated_regime: d.below_validated_regime,
       },
       'polygons',
-      [],
-      extraNote
+      exportWarning ? [exportWarning] : [],
+      [resampleNote(d.resample), extraNote].filter(Boolean).join('; ')
     );
   }
 

@@ -26,7 +26,10 @@ import {
   UNVALIDATED_FRACTION_HI,
   VALIDATED_FRACTION_FLOOR,
 } from '../metricsCalculator';
-import { serialiseImageMetricsForStorage } from '../rasterImageMetrics';
+import {
+  pixelSizeWarning,
+  serialiseImageMetricsForStorage,
+} from '../rasterImageMetrics';
 
 // ── logger (hoisted so tests can assert warn/error calls) ──────────────────────
 const { mockLogger } = vi.hoisted(() => ({
@@ -803,17 +806,20 @@ describe('MetricsCalculator — calculateAllImageMetrics (DI / panel)', () => {
     expect(row.totalSpheroidArea).toBeCloseTo(100, 3);
   });
 
-  it('sends the entered scale to the polygon path only as pixel_size_um', async () => {
-    postMock.mockResolvedValue({ data: { ...corePanel, warnings: ['pixel size is 2 um/px; …'] } });
+  it('scores a row with no stored read-out on its uploaded grid, and warns about the entered scale itself', async () => {
+    // No read-out says which grid this image was segmented on, so none is
+    // assumed: the endpoint gets no pixel size (it would resample with one),
+    // and the export adds the warning the endpoint used to word identically.
+    postMock.mockResolvedValue({ data: { ...corePanel, warnings: ['frame is 100x100 px; …'] } });
     const image = buildImage('a8b', [
       extPolygon(square(10)),
       corePolygon(square(4)),
     ], { width: 100, height: 100 });
     const row = (await calc.calculateAllImageMetrics([image], 2))[0]!;
     const body = postMock.mock.calls[0][1] as Record<string, unknown>;
-    expect(body.pixel_size_um).toBe(2);
+    expect('pixel_size_um' in body).toBe(false);
     expect(row.reachP90).toBeCloseTo(2.5, 5); // scale-free
-    expect(row.warnings).toEqual(['pixel size is 2 um/px; …']);
+    expect(row.warnings).toEqual(['frame is 100x100 px; …', pixelSizeWarning(2)]);
   });
 
   it('maps an undefined-DI reference (core_too_small) to N/A with its note', async () => {
@@ -923,6 +929,136 @@ describe('MetricsCalculator — calculateAllImageMetrics (DI / panel)', () => {
       // stored frame warning + the export-time pixel-size warning
       expect(row.warnings).toHaveLength(2);
       expect(row.warnings[1]).toContain('pixel size is 2 um/px');
+    });
+
+    it('drops the export-time pixel-size warning for a read-out resampled at segmentation', async () => {
+      // Computed at 1.28 um/px after resampling from 2.56: the mismatch the
+      // warning reports was corrected, and the Note says so instead.
+      const resampled = {
+        ...raster,
+        warnings: [],
+        resample: {
+          input_um_per_px: 2.56,
+          model_um_per_px: 1.28,
+          factor: 2,
+          model_w: 2048,
+          model_h: 2048,
+        },
+      };
+      const stored = serialiseImageMetricsForStorage(resampled, polygonsJson);
+      const row = (await calc.calculateAllImageMetrics([withStored('rs1', polygonsJson, stored)], 2.56))[0]!;
+      expect(postMock).not.toHaveBeenCalled();
+      expect(row.diSource).toBe('model_raster');
+      expect(row.warnings).toEqual([]);
+      expect(row.note).toContain('resampled from 2.56 um/px');
+      // the stored areas are the uploaded grid's, so they still convert by the scale
+      expect(row.totalSpheroidArea).toBeCloseTo(55000 * 2.56 * 2.56, 3);
+
+      // the same read-out WITHOUT the block keeps the warning, as before
+      const plain = serialiseImageMetricsForStorage({ ...raster, warnings: [] }, polygonsJson);
+      const old = (await calc.calculateAllImageMetrics([withStored('rs2', polygonsJson, plain)], 2.56))[0]!;
+      expect(old.warnings).toHaveLength(1);
+      expect(old.warnings[0]).toContain('pixel size is 2.56 um/px');
+      expect(old.note).toBe('');
+
+      // exported with no scale at all: nothing to disagree with
+      const bare = (await calc.calculateAllImageMetrics([withStored('rs1b', polygonsJson, stored)]))[0]!;
+      expect(bare.warnings).toEqual([]);
+    });
+
+    it('warns when the export scale disagrees with the pixel size a read-out was resampled from', async () => {
+      // Resampled from 1.6 at segmentation, exported at 3.0: the areas convert
+      // at 3.0 while the panel assumed 1.6, so the row must say so.
+      const resampled = {
+        ...raster,
+        warnings: [],
+        resample: { input_um_per_px: 1.6, model_um_per_px: 1.28, factor: 1.25, model_w: 1280, model_h: 1280 },
+      };
+      const stored = serialiseImageMetricsForStorage(resampled, polygonsJson);
+      const row = (await calc.calculateAllImageMetrics([withStored('rm1', polygonsJson, stored)], 3.0))[0]!;
+      expect(row.warnings).toHaveLength(1);
+      expect(row.warnings[0]).toContain('pixel size is 3 um/px at export');
+      expect(row.warnings[0]).toContain('resampled from 1.6 um/px');
+      expect(row.totalSpheroidArea).toBeCloseTo(55000 * 9, 3);
+      // within the 10 % band of 1.6: the same pixel size, no warning
+      const near = (await calc.calculateAllImageMetrics([withStored('rm2', polygonsJson, stored)], 1.65))[0]!;
+      expect(near.warnings).toEqual([]);
+    });
+
+    it('does not repeat a declined pixel size the read-out already warns about', async () => {
+      const declined = 'pixel size is 3 um/px, 2.34x the model\'s 1.28 um/px; the module resamples only factors 0.5-2.0x (0.64-2.56 um/px), so the frame was scored at its uploaded scale, where the model and the Disintegration Index were never tested.';
+      const stored = serialiseImageMetricsForStorage(
+        {
+          ...raster,
+          warnings: [declined],
+          resample_skipped: { input_um_per_px: 3.0, model_um_per_px: 1.28, factor: 2.34375 },
+        },
+        polygonsJson
+      );
+      const same = (await calc.calculateAllImageMetrics([withStored('rk1', polygonsJson, stored)], 3.0))[0]!;
+      expect(same.warnings).toEqual([declined]);
+      // another scale entered at export is another claim, and is warned
+      const other = (await calc.calculateAllImageMetrics([withStored('rk2', polygonsJson, stored)], 1.6))[0]!;
+      expect(other.warnings).toEqual([declined, pixelSizeWarning(1.6)]);
+    });
+
+    it('re-scores edited polygons with the pixel size their segmentation was resampled from, whatever the export or image says', async () => {
+      const resample = { input_um_per_px: 1.6, model_um_per_px: 1.28, factor: 1.25, model_w: 1280, model_h: 1280 };
+      postMock.mockResolvedValue({ data: { ...corePanel, resample } });
+      const stored = serialiseImageMetricsForStorage({ ...raster, resample }, polygonsJson);
+      const edited = JSON.stringify([extPolygon(square(11)), corePolygon(square(4))]);
+      // The image row says 0.9 and the export box is EMPTY (areas in px):
+      // neither may pick the grid; the segmentation's 1.6 does.
+      const image = { ...withStored('rs3', edited, stored), pixelSizeUm: 0.9 };
+      const row = (await calc.calculateAllImageMetrics([image]))[0]!;
+      const body = postMock.mock.calls[0][1] as Record<string, unknown>;
+      expect(body.pixel_size_um).toBe(1.6);
+      expect(row.warnings).toEqual([]);
+      expect(row.note).toContain('resampled from 1.6 um/px');
+      expect(row.note).toContain('polygons edited since segmentation');
+
+      // exported at 3.0 instead: still resampled from 1.6, and the row says
+      // the two disagree
+      postMock.mockClear();
+      const at3 = (await calc.calculateAllImageMetrics([image], 3.0))[0]!;
+      expect((postMock.mock.calls[0][1] as Record<string, unknown>).pixel_size_um).toBe(1.6);
+      expect(at3.warnings).toHaveLength(1);
+      expect(at3.warnings[0]).toContain('resampled from 1.6 um/px at segmentation');
+    });
+
+    it('scores an edited image on the grid its unedited sibling uses when nothing was resampled', async () => {
+      // Two images of one export, both segmented WITHOUT a pixel size (every
+      // segmentation before the resample existed). One is edited. Exported at
+      // 1.6: the edited row must not be resampled with the export's scale
+      // while its sibling stays on the uploaded grid.
+      postMock.mockResolvedValue({ data: { ...corePanel, warnings: [] } });
+      const stored = serialiseImageMetricsForStorage({ ...raster, warnings: [] }, polygonsJson);
+      const edited = JSON.stringify([extPolygon(square(11)), corePolygon(square(4))]);
+      const rows = await calc.calculateAllImageMetrics(
+        [withStored('sib1', polygonsJson, stored), withStored('sib2', edited, stored)],
+        1.6
+      );
+      expect(postMock).toHaveBeenCalledTimes(1);
+      const body = postMock.mock.calls[0][1] as Record<string, unknown>;
+      expect('pixel_size_um' in body).toBe(false);
+      expect(rows[0]!.diSource).toBe('model_raster');
+      expect(rows[1]!.diSource).toBe('polygons');
+      expect(rows[0]!.warnings).toEqual([pixelSizeWarning(1.6)]);
+      expect(rows[1]!.warnings).toEqual(rows[0]!.warnings);
+      expect(rows[1]!.note).not.toContain('resampled');
+    });
+
+    it('gives an edited image without a core the same warning rule', async () => {
+      const resample = { input_um_per_px: 1.6, model_um_per_px: 1.28, factor: 1.25, model_w: 1280, model_h: 1280 };
+      const stored = serialiseImageMetricsForStorage({ ...raster, resample }, polygonsJson);
+      const noCore = JSON.stringify([extPolygon(square(11))]);
+      const row = (await calc.calculateAllImageMetrics([withStored('nc1', noCore, stored)], 1.6))[0]!;
+      expect(postMock).not.toHaveBeenCalled();
+      expect(row.referenceMode).toBe('no_core');
+      expect(row.warnings).toEqual([]);
+      const plain = serialiseImageMetricsForStorage(raster, polygonsJson);
+      const row2 = (await calc.calculateAllImageMetrics([withStored('nc2', noCore, plain)], 1.6))[0]!;
+      expect(row2.warnings).toEqual([pixelSizeWarning(1.6)]);
     });
 
     it('re-derives both regime flags from the stored Index B, whatever flags were stored', async () => {

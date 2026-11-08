@@ -117,6 +117,7 @@ const ProjectDetail = () => {
     projectVerified,
     setProjectVerified,
     projectPixelSizeUm,
+    setProjectPixelSizeUm,
     projectFolderId,
     images,
     projectChannels,
@@ -258,6 +259,31 @@ const ProjectDetail = () => {
       }
     },
     [id, projectSegmentationModel, setProjectSegmentationModel, t]
+  );
+
+  const handlePixelSizeChange = useCallback(
+    async (nextPixelSizeUm: number | null) => {
+      if (!id) return;
+      // Optimistic, like the type and model pickers beside it: the box is
+      // what the user just edited. It also feeds the export dialog's scale
+      // prefill, so the two never disagree. Put the old value back if the
+      // server refuses. Stored segmentations are NOT re-run: the value applies
+      // to the next segmentation of each image, which the toast says.
+      const previousPixelSizeUm = projectPixelSizeUm;
+      setProjectPixelSizeUm(nextPixelSizeUm);
+      try {
+        await apiClient.updateProject(id, { pixelSizeUm: nextPixelSizeUm });
+        toast.success(String(t('projects.pixelSizeUpdated')));
+      } catch (err) {
+        setProjectPixelSizeUm(previousPixelSizeUm);
+        logger.error('Failed to update project pixel size', err);
+        toast.error(
+          getErrorMessage(err, k => String(t(k))) ||
+            String(t('projects.pixelSizeUpdateFailed'))
+        );
+      }
+    },
+    [id, projectPixelSizeUm, setProjectPixelSizeUm, t]
   );
 
   const handleVerifiedChange = useCallback(
@@ -1366,6 +1392,8 @@ const ProjectDetail = () => {
         onTypeChange={canEditProject ? handleProjectTypeChange : undefined}
         segmentationModel={projectSegmentationModel}
         onModelChange={canEditProject ? handleModelChange : undefined}
+        pixelSizeUm={projectPixelSizeUm}
+        onPixelSizeChange={canEditProject ? handlePixelSizeChange : undefined}
         detectHoles={detectHoles}
         onDetectHolesChange={setDetectHoles}
         verified={projectVerified}

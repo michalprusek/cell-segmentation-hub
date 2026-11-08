@@ -267,6 +267,15 @@ export default {
     projectTypeUpdated: 'Tipo de proyecto actualizado',
     failedToUpdateProject: 'Error al actualizar el proyecto',
     changeProjectType: 'Cambiar tipo de proyecto',
+    pixelSize: 'Tamaño de píxel (µm/px)',
+    pixelSizeUnset: 'sin definir',
+    pixelSizeHint:
+      'Las imágenes de entre 0,64 y 2,56 µm/px se remuestrean a los 1,28 µm/px con los que se validó el modelo de desintegración de esferoides; las demás se segmentan tal como se subieron, y las imágenes de 2048 × 2048 a 1,28 µm/px no necesitan nada. Se aplica a las segmentaciones nuevas.',
+    pixelSizeInvalid:
+      'Introduzca un tamaño de píxel entre {{min}} y {{max}} µm/px, o deje el campo vacío.',
+    pixelSizeUpdated:
+      'Tamaño de píxel guardado; se aplica a las segmentaciones nuevas',
+    pixelSizeUpdateFailed: 'No se pudo guardar el tamaño de píxel',
     typeChangeSegmentationsWarning:
       '{{count}} segmentaciones existentes pueden no coincidir con el formato de exportación "{{type}}". Vuelva a segmentar para actualizar las métricas.',
     verified: 'Verificado',
@@ -1926,7 +1935,7 @@ export default {
             'Unos 0,70 s por imagen · sin umbral: la decisión es un argmax',
           bestFor: 'La usan: los proyectos de esferoides en disgregación.',
           description:
-            'UNet++ con codificador EfficientNet-B5 que predice tres clases: fondo, corona y núcleo denso. El núcleo se predice directamente en lugar de inferirse, y eso es lo que hace fiables la fracción fuera del núcleo y el índice de disgregación.',
+            'UNet++ con codificador EfficientNet-B5 que predice tres clases: fondo, corona y núcleo denso. El núcleo se predice directamente en lugar de inferirse, y eso es lo que hace fiables la fracción fuera del núcleo y el índice de disgregación. Si se conoce el tamaño de píxel de la imagen —por su archivo o la cabecera del proyecto— y está entre 0,64 y 2,56 µm/px, la imagen se remuestrea a los 1,28 µm/px con los que se validó el modelo y los contornos se trasladan de vuelta a su imagen.',
         },
         wound: {
           name: 'Cicatrización de heridas',

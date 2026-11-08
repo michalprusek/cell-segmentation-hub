@@ -36,19 +36,35 @@ describe('ProjectHeader', () => {
     expect(screen.getByText('My Test Project')).toBeInTheDocument();
   });
 
-  it('does not offer a project-level pixel scale', () => {
-    // The scale belongs to the EXPORT, not to the project. It arrived here with
-    // the neurite work (#501) but was rendered for every project type, so a
-    // spheroid or wound project showed a µm/px box that nothing on its path
-    // reads. The export dialog has its own field and prefills it from the
-    // IMAGE's own calibration first, so nothing is lost by not having one here.
+  it.each([
+    undefined,
+    'spheroid',
+    'wound',
+    'sperm',
+    'microtubules',
+    'microcapsule',
+    'neurite',
+  ] as const)('offers no pixel size on a project of type %s', projectType => {
+    // Only a type whose model READS the value gets the box. It arrived with
+    // the neurite work (#501) rendered for every project type, so a spheroid
+    // or wound project showed a µm/px box that nothing on its path read, and
+    // it was removed on 2026-09-13 for exactly that. The export dialog has
+    // its own scale field for everything else. The handler is passed, so
+    // the type alone is what keeps the box away.
     render(
-      <ProjectHeader projectTitle="Project" imagesCount={3} loading={false} />
+      <ProjectHeader
+        projectTitle="Project"
+        imagesCount={3}
+        loading={false}
+        projectType={projectType}
+        pixelSizeUm={1.6}
+        onPixelSizeChange={vi.fn()}
+      />
     );
-    // A number box is the only thing this header ever rendered one for, so its
-    // absence is the assertion. The props are gone from the interface too, so
-    // re-adding the control means re-adding them — which is the visible step.
-    expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('textbox', { name: /pixel size/i })
+    ).not.toBeInTheDocument();
+    expect(screen.queryByTestId('project-pixel-size')).not.toBeInTheDocument();
   });
 
   it('renders image count when not loading', () => {
@@ -365,5 +381,157 @@ describe('ProjectHeader → ProjectModelSelector wiring', () => {
     await user.click(screen.getByTestId('project-model-detect-holes'));
 
     expect(onDetectHolesChange).toHaveBeenCalledWith(false);
+  });
+});
+
+// The spheroid-disintegration model resamples each frame to the 1.28 µm/px it
+// was validated at when the image's pixel size is known; this is where a
+// `spheroid_invasive` project's value is set.
+describe('ProjectHeader — pixel size (spheroid_invasive)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  const renderScale = (
+    props: Partial<React.ComponentProps<typeof ProjectHeader>> = {}
+  ) => {
+    const onPixelSizeChange = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <ProjectHeader
+        projectTitle="P"
+        imagesCount={0}
+        loading={false}
+        projectType="spheroid_invasive"
+        onPixelSizeChange={onPixelSizeChange}
+        {...props}
+      />
+    );
+    return {
+      user,
+      onPixelSizeChange,
+      input: () => screen.getByRole('textbox', { name: /pixel size/i }),
+    };
+  };
+
+  it('shows the stored value, labelled, with the resampling hint and its range', () => {
+    const { input } = renderScale({ pixelSizeUm: 1.6 });
+    expect(input()).toHaveValue('1.6');
+    // The hint states the range the module resamples (factors 0.5-2x of
+    // 1.28 µm/px); outside it a frame is segmented as uploaded.
+    const hint = screen.getByText(/between 0\.64 and 2\.56 µm\/px/i);
+    expect(hint).toHaveTextContent(/resampled to the 1\.28 µm\/px/i);
+    expect(hint).toHaveTextContent(/others are segmented as uploaded/i);
+    expect(hint).toHaveTextContent(/applies to new segmentations/i);
+    expect(input()).toHaveAttribute('aria-describedby', hint.id);
+  });
+
+  it('shows an unset value as an empty box, not as zero', () => {
+    const { input } = renderScale({ pixelSizeUm: null });
+    expect(input()).toHaveValue('');
+    expect(input()).toHaveAttribute('placeholder', 'not set');
+  });
+
+  it.each(['1e', '1.6.6', 'abc', '--1', '0x10', 'Infinity', '1,6,6'])(
+    'keeps the stored value when %s is typed and the box is left',
+    async text => {
+      // A number input reported '' for such text, so leaving the box cleared
+      // the stored pixel size and the toast said it was saved.
+      const { user, input, onPixelSizeChange } = renderScale({
+        pixelSizeUm: 1.6,
+      });
+      await user.clear(input());
+      await user.type(input(), text);
+      await user.tab();
+      expect(onPixelSizeChange).not.toHaveBeenCalled();
+      // the typo stays visible, marked, with the reason
+      expect(input()).toHaveValue(text);
+      expect(input()).toHaveAttribute('aria-invalid', 'true');
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        /between 0\.001 and 1000/
+      );
+    }
+  );
+
+  it('reads a decimal comma, which is all a comma-locale keypad offers', async () => {
+    const { user, input, onPixelSizeChange } = renderScale({
+      pixelSizeUm: null,
+    });
+    await user.type(input(), '1,6');
+    await user.tab();
+    expect(onPixelSizeChange).toHaveBeenCalledWith(1.6);
+  });
+
+  it('commits a new value on Enter and on blur', async () => {
+    const { user, input, onPixelSizeChange } = renderScale({
+      pixelSizeUm: null,
+    });
+    await user.type(input(), '2.56{Enter}');
+    expect(onPixelSizeChange).toHaveBeenLastCalledWith(2.56);
+    await user.clear(input());
+    await user.type(input(), '0.9');
+    await user.tab();
+    expect(onPixelSizeChange).toHaveBeenLastCalledWith(0.9);
+  });
+
+  it('keeps six decimals, as the export dialog does', async () => {
+    const { user, input, onPixelSizeChange } = renderScale({
+      pixelSizeUm: null,
+    });
+    await user.type(input(), '0.07222224{Enter}');
+    expect(onPixelSizeChange).toHaveBeenCalledWith(0.072222);
+  });
+
+  it('clears the value when the box is emptied', async () => {
+    const { user, input, onPixelSizeChange } = renderScale({
+      pixelSizeUm: 1.6,
+    });
+    await user.clear(input());
+    await user.tab();
+    expect(onPixelSizeChange).toHaveBeenCalledWith(null);
+  });
+
+  it('does not save the value it already has', async () => {
+    const { user, input, onPixelSizeChange } = renderScale({
+      pixelSizeUm: 1.6,
+    });
+    await user.clear(input());
+    await user.type(input(), '1.60{Enter}');
+    expect(onPixelSizeChange).not.toHaveBeenCalled();
+  });
+
+  it.each(['0', '-1', '1000.5'])(
+    'refuses %s, says why, and Escape restores the stored value',
+    async text => {
+      const { user, input, onPixelSizeChange } = renderScale({
+        pixelSizeUm: 1.6,
+      });
+      await user.clear(input());
+      await user.type(input(), `${text}{Enter}`);
+      expect(onPixelSizeChange).not.toHaveBeenCalled();
+      expect(input()).toHaveAttribute('aria-invalid', 'true');
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        /between 0\.001 and 1000/
+      );
+      await user.type(input(), '{Escape}');
+      expect(input()).toHaveValue('1.6');
+      expect(input()).not.toHaveAttribute('aria-invalid');
+      expect(onPixelSizeChange).not.toHaveBeenCalled();
+    }
+  );
+
+  it('is a static pill for a viewer who may not change it', () => {
+    renderScale({ pixelSizeUm: 1.6, onPixelSizeChange: undefined });
+    expect(
+      screen.queryByRole('textbox', { name: /pixel size/i })
+    ).not.toBeInTheDocument();
+    expect(screen.getByTestId('project-pixel-size-readonly')).toHaveTextContent(
+      '1.6 µm/px'
+    );
+  });
+
+  it('is absent for such a viewer when no value is set', () => {
+    renderScale({ pixelSizeUm: null, onPixelSizeChange: undefined });
+    expect(screen.queryByTestId('project-pixel-size')).not.toBeInTheDocument();
   });
 });

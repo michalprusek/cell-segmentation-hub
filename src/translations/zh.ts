@@ -260,6 +260,14 @@ export default {
     projectTypeUpdated: '项目类型已更新',
     failedToUpdateProject: '无法更新项目',
     changeProjectType: '更改项目类型',
+    pixelSize: '像素尺寸 (µm/px)',
+    pixelSizeUnset: '未设置',
+    pixelSizeHint:
+      '像素尺寸在 0.64 至 2.56 µm/px 之间的图像会重采样到球体解体模型验证时使用的 1.28 µm/px；其他图像按上传时的尺度分割，1.28 µm/px 的 2048 × 2048 图像无需任何处理。仅适用于新的分割。',
+    pixelSizeInvalid:
+      '请输入 {{min}} 到 {{max}} µm/px 之间的像素尺寸，或留空。',
+    pixelSizeUpdated: '像素尺寸已保存；适用于新的分割',
+    pixelSizeUpdateFailed: '无法保存像素尺寸',
     typeChangeSegmentationsWarning:
       '{{count}} 个现有分割可能不再符合 "{{type}}" 导出格式。重新分割以更新指标。',
     verified: '已验证',
@@ -1793,7 +1801,7 @@ export default {
           inferenceTime: '每幅约 0.70 秒 · 没有阈值——判定由 argmax 决定',
           bestFor: '用于：解体球体项目。',
           description:
-            '采用 EfficientNet-B5 编码器的 UNet++，预测三个类别 — 背景、外围晕圈与致密核心。核心是直接预测而非推断得出，这正是核心外占比与解体指数得以可信的原因。',
+            '采用 EfficientNet-B5 编码器的 UNet++，预测三个类别 — 背景、外围晕圈与致密核心。核心是直接预测而非推断得出，这正是核心外占比与解体指数得以可信的原因。若已知图像的像素尺寸（来自文件或项目标题栏）且在 0.64 至 2.56 µm/px 之间，图像会先重采样到模型验证时使用的 1.28 µm/px，轮廓再映射回您的图像。',
         },
         wound: {
           name: '划痕愈合',

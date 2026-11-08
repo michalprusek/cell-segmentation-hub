@@ -133,6 +133,8 @@ function makeProjectData(
     // null = never chosen, so the resolver answers with the type's default.
     projectSegmentationModel: null as string | null,
     setProjectSegmentationModel: vi.fn(),
+    projectPixelSizeUm: null as number | null,
+    setProjectPixelSizeUm: vi.fn(),
     get images() {
       return state.images;
     },
@@ -333,6 +335,8 @@ vi.mock('@/components/project/ProjectHeader', () => ({
     onTypeChange,
     segmentationModel,
     onModelChange,
+    pixelSizeUm,
+    onPixelSizeChange,
   }: {
     projectTitle: string;
     loading?: boolean;
@@ -342,6 +346,8 @@ vi.mock('@/components/project/ProjectHeader', () => ({
     onTypeChange?: (t: string) => void;
     segmentationModel?: string | null;
     onModelChange?: (m: string) => void | Promise<void>;
+    pixelSizeUm?: number | null;
+    onPixelSizeChange?: (v: number | null) => void | Promise<void>;
   }) => (
     <header data-testid="project-header">
       <h1>{projectTitle}</h1>
@@ -364,6 +370,15 @@ vi.mock('@/components/project/ProjectHeader', () => ({
           onClick={() => void onModelChange('cbam_resunet')}
         >
           Change Model
+        </button>
+      )}
+      <span data-testid="header-pixel-size">{String(pixelSizeUm)}</span>
+      {onPixelSizeChange && (
+        <button
+          data-testid="change-pixel-size-btn"
+          onClick={() => void onPixelSizeChange(1.6)}
+        >
+          Change Pixel Size
         </button>
       )}
     </header>
@@ -1259,6 +1274,10 @@ describe('ProjectDetail page', () => {
       expect(screen.queryByTestId('header-can-rename')).not.toBeInTheDocument();
       expect(screen.queryByTestId('change-type-btn')).not.toBeInTheDocument();
       expect(screen.queryByTestId('change-model-btn')).not.toBeInTheDocument();
+      // the pixel size is written through the same owner-only update
+      expect(
+        screen.queryByTestId('change-pixel-size-btn')
+      ).not.toBeInTheDocument();
     });
 
     it('assumes owner while ownership is still loading', () => {
@@ -1270,6 +1289,48 @@ describe('ProjectDetail page', () => {
 
       expect(screen.getByTestId('change-type-btn')).toBeInTheDocument();
       expect(screen.getByTestId('change-model-btn')).toBeInTheDocument();
+    });
+  });
+
+  // =========================================================================
+  // Pixel size (read by the spheroid-disintegration model at segmentation)
+  // =========================================================================
+
+  describe('Project pixel size change', () => {
+    it('hands the stored pixel size to the header', () => {
+      wireHooks([], { projectPixelSizeUm: 2.56 });
+      renderPage();
+
+      expect(screen.getByTestId('header-pixel-size')).toHaveTextContent('2.56');
+    });
+
+    it('persists the value, paints it at once and confirms', async () => {
+      const projectData = wireHooks([], { projectPixelSizeUm: null });
+      renderPage();
+
+      await userEvent.click(screen.getByTestId('change-pixel-size-btn'));
+
+      await waitFor(() => {
+        expect(mockUpdateProject).toHaveBeenCalledWith('proj-1', {
+          pixelSizeUm: 1.6,
+        });
+      });
+      expect(projectData.setProjectPixelSizeUm).toHaveBeenCalledWith(1.6);
+      expect(vi.mocked(toast.success)).toHaveBeenCalledWith(
+        'projects.pixelSizeUpdated'
+      );
+    });
+
+    it('puts the old value back when the server refuses', async () => {
+      mockUpdateProject.mockRejectedValue(new Error('Server error'));
+      const projectData = wireHooks([], { projectPixelSizeUm: 1.28 });
+      renderPage();
+
+      await userEvent.click(screen.getByTestId('change-pixel-size-btn'));
+
+      await waitFor(() => expect(vi.mocked(toast.error)).toHaveBeenCalled());
+      expect(projectData.setProjectPixelSizeUm).toHaveBeenLastCalledWith(1.28);
+      expect(vi.mocked(toast.success)).not.toHaveBeenCalled();
     });
   });
 

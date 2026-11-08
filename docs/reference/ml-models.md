@@ -218,6 +218,34 @@ matrix, where the quantity of interest is how much has left the dense core.
   `api/disintegration_metrics.py`, a verbatim port of the paper's
   `compute_di.py`, and returned as `image_metrics`; `warnings` carries the
   input-scale check (validated: 2048 × 2048 px at ~1.28 µm/px).
+- **Resampled to 1.28 µm/px when the pixel size is known** (`pixel_size_um` on
+  `/segment`, sent by the queue from the image, its video container or the
+  project, in that order; `api/disintegration_scale.py`). With
+  `s = µm/px / 1.28`, a frame with `|s − 1| > 0.02` and `0.5 ≤ s ≤ 2` is
+  resized to `round(w·s) × round(h·s)` before the three-channel stack, so CLAHE
+  runs on it as in training (INTER_AREA when shrinking, INTER_LINEAR when
+  enlarging). The read-out is computed on that grid, because `MIN_CORE_PX`,
+  distances and fragment counts are 1.28 µm/px quantities, and the input-scale
+  check runs there too. The mask returns to the uploaded grid by centred
+  nearest neighbour (`INTER_NEAREST_EXACT`: plain `INTER_NEAREST` moved a
+  back-mapped disk by 0.37–0.42 px at factors 0.8–1.6, this one by < 0.05 px);
+  the polygons and `area_*_px` come from it. `image_metrics.resample` records
+  `{input_um_per_px, model_um_per_px, factor, model_w, model_h}`. Outside
+  0.5–2×, or past 4096 × 4096 px when growing, the frame is used as uploaded,
+  with one warning, and `image_metrics.resample_skipped` records the pixel
+  size. On the model grid the frame-size check allows 10 % (the band the pixel
+  size had before resampling), so a 2048² upload at 1.20–1.40 µm/px is not
+  warned about, and an undefined DI's note says it counts the core at
+  1.28 µm/px. The CPU suite runs this path minus the network
+  (`segment_frame`, polygons included). Without a pixel size, or within 2 %, the path is unchanged
+  and nothing is resized. Evidence: on the paper's held-out batch (B5, 37
+  images at 48 h, `prod_s42`), frames simulated at 1.10 and 1.50 µm/px moved
+  the outside-core fraction by up to 0.028 (median 0.0069 / 0.0067) fed as
+  acquired, and by at most 0.0051 (median 0.0016 / 0.0015) resampled first
+  (`spheroid_rozpad/analysis/review_fixes/final/scale2026/scale_summary.json`).
+  Nothing outside 1.10–1.50 µm/px was measured; the 0.5–2× bounds are a guard
+  rail. Memory grows with the resampled frame: 2.39 GB peak at 2048² (bf16,
+  L40S, same file); 4096² is roughly four times that, estimated.
 - The core is **predicted directly**, not derived by thresholding intensity
   inside the outer boundary. That matters: the previous binary model inferred
   the core heuristically and mis-scaled it at 0 h, which biased every

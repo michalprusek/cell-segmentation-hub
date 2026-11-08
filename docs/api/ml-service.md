@@ -45,6 +45,7 @@ documents it for people debugging the pipeline or extending it.
 | `page`           | int    | `0`     | Zero-based page of a multi-page image. Past the end is a 400                                                |
 | `max_pixels`     | int    | none    | Refuse (413) an image with more pixels, judged from the header before anything decodes                      |
 | `extra_channels` | files  | none    | Further channels of the same image, merged with `file` before segmentation. The two merging models **only** |
+| `pixel_size_um`  | float  | none    | Pixel size of the image in µm/px, > 0 and finite (422 otherwise). `spheroid_disintegration` **only**        |
 
 **`extra_channels`** exists for the two models that merge channels,
 `neurite_soma_merged` and `neurite_soma_classical`: `file` is the first channel and each `extra_channels`
@@ -55,6 +56,28 @@ ignored — a caller who sent three channels and got the segmentation of the
 first one could not tell. At most 7 extra channels (8 merged in all); every
 channel must have the same size as `file`. `neurite_soma_classical` also
 answers 413 for an image over 64 megapixels.
+
+**`pixel_size_um`** exists for `spheroid_disintegration`, which was validated
+on 2048 × 2048 frames at 1.28 µm/px. With `s = pixel_size_um / 1.28`, a frame
+with `|s − 1| > 0.02` and `0.5 ≤ s ≤ 2` is resized to `round(w·s) × round(h·s)`
+(INTER_AREA when shrinking, INTER_LINEAR when enlarging) **before** the
+three-channel stack and CLAHE; the model and the read-out run on that grid,
+and the mask comes back to `w × h` by nearest neighbour for the polygons and
+the pixel areas. `image_metrics.resample` = `{input_um_per_px, model_um_per_px,
+factor, model_w, model_h}` is present exactly when that happened. Outside
+`0.5–2×`, or when growing would pass 4096 × 4096 px (or `max_pixels`, if sent),
+the frame is segmented as uploaded, `warnings` says why in one message (in
+place of the generic pixel-size warning) and `image_metrics.resample_skipped` =
+`{input_um_per_px, model_um_per_px, factor}` records it: an input accepted
+without a pixel size is never refused because one was given. After a resample
+the frame-size warning is evaluated on the model grid with a 10 % band, and an
+undefined DI's `note` is prefixed `after resampling …`, since it quotes the core
+counted at 1.28 µm/px. Within 2 % of
+1.28, or without the field, nothing is resized. For any other model the field
+is **refused with a 400**, like `extra_channels`. The app's queue sends it for
+this model when the image, its video container or its project has a pixel
+size; the public API does not send it. See
+[ML models](../reference/ml-models.md#spheroid_disintegration--spheroid-disintegration).
 
 Returns the polygons (and/or polylines), the model used, `image_size`, `page`,
 `page_count` and timing. The app's queue sends neither `page` nor
@@ -291,7 +314,14 @@ Mounted at `/api` (no `v1`):
 `disintegration-index` returns `reference: "no_core"` with `di: 0.0` as an **N/A
 sentinel** when no usable core is supplied. Callers must render that as N/A,
 never as a computed zero. There is deliberately no equivalent-disk fallback.
-See [Metrics](../reference/metrics.md#disintegration-index-di).
+Its optional `pixel_size_um` follows the `/segment` rule above: the mask
+rasterised from the polygons is resampled (nearest neighbour) to 1.28 µm/px and
+scored there, and the response carries `resample`; outside 0.5–2× it is not
+resampled and `warnings` holds one message saying so. The export sends it only
+for an image whose segmentation was itself resampled, with the pixel size that
+segmentation used, so the edited image is scored on the grid its fresh one
+was; otherwise it sends none and adds the pixel-size warning itself.
+`n_pixels` is counted on the image's own grid. See [Metrics](../reference/metrics.md#disintegration-index-di).
 
 ---
 

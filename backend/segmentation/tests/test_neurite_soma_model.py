@@ -273,6 +273,7 @@ async def test_segment_route_dispatches_neurite_soma_to_its_own_predictor():
         page=0,
         max_pixels=None,
         extra_channels=None,
+        pixel_size_um=None,
         loader=_Loader(),
     )
 
