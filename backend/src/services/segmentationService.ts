@@ -46,6 +46,11 @@ import {
 import { projectStaticChannelResult } from './staticChannelProjectionService';
 import { resolveSegmentationSource } from './video/types';
 import { serialiseImageMetricsForStorage } from './metrics/rasterImageMetrics';
+import {
+  modelReadsPixelSize,
+  pixelSizeFormValue,
+  resolveSegmentationPixelSizeUm,
+} from './segmentationPixelSize';
 import { toDbPolygon, toStoredPolygon } from '../utils/storedPolygon';
 
 export interface SegmentationPoint {
@@ -927,7 +932,7 @@ export class SegmentationService {
       // allow e.g. running the sperm model on a wound project.
       const projectRecord = await this.prisma.project.findUnique({
         where: { id: image.projectId },
-        select: { type: true },
+        select: { type: true, pixelSizeUm: true },
       });
       const projectType = (projectRecord?.type ||
         'spheroid') as import('../types/validation').ProjectType;
@@ -1000,6 +1005,29 @@ export class SegmentationService {
       formData.append('model', model);
       formData.append('threshold', threshold.toString());
       formData.append('detect_holes', (detectHoles ?? true).toString());
+      // The image's pixel size, for the one model that reads it: the spheroid
+      // disintegration model resamples the frame to the 1.28 µm/px it was
+      // validated at. Every other model's /segment answers 400 to the field,
+      // so it is appended only here, and only with a usable value. The
+      // container lookup runs only for a frame of this model.
+      let pixelSizeUm: number | null = null;
+      if (modelReadsPixelSize(model)) {
+        const container = image.parentVideoId
+          ? await this.prisma.image.findUnique({
+              where: { id: image.parentVideoId },
+              select: { pixelSizeUm: true },
+            })
+          : null;
+        pixelSizeUm = resolveSegmentationPixelSizeUm({
+          container: container?.pixelSizeUm,
+          image: image.pixelSizeUm,
+          project: projectRecord?.pixelSizeUm,
+        });
+      }
+      const pixelSizeField = pixelSizeFormValue(model, pixelSizeUm);
+      if (pixelSizeField !== null) {
+        formData.append('pixel_size_um', pixelSizeField);
+      }
       extraChannelBuffers.forEach((buffer, i) => {
         formData.append('extra_channels', buffer, {
           filename: `channel_${i + 1}.png`,
@@ -1017,6 +1045,7 @@ export class SegmentationService {
           model,
           threshold,
           detectHoles,
+          pixelSizeUm: pixelSizeField,
           mlServiceUrl: this.pythonServiceUrl,
           requestId,
         }

@@ -3,6 +3,7 @@ import { createHash } from 'crypto';
 import {
   pixelSizeWarning,
   readStoredImageMetrics,
+  resampleNote,
   serialiseImageMetricsForStorage,
   sha256OfPolygons,
 } from '../rasterImageMetrics';
@@ -56,5 +57,21 @@ describe('rasterImageMetrics', () => {
     expect(pixelSizeWarning(1.28 * 0.91)).toBeNull();
     expect(pixelSizeWarning(0.65)).toContain('pixel size is 0.65 um/px');
     expect(pixelSizeWarning(2.56)).toContain('~1.28 um/px');
+  });
+
+  it('notes a resample only when the read-out carries one', () => {
+    expect(resampleNote(undefined)).toBe('');
+    expect(resampleNote(null)).toBe('');
+    expect(
+      resampleNote({
+        input_um_per_px: 0.9,
+        model_um_per_px: 1.28,
+        factor: 0.703125,
+        model_w: 1440,
+        model_h: 1440,
+      })
+    ).toBe(
+      'scored at 1.28 um/px: resampled from 0.9 um/px (x0.7031, 1440x1440 px)'
+    );
   });
 });

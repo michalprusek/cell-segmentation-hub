@@ -18,6 +18,21 @@
  */
 import { createHash } from 'crypto';
 
+/**
+ * Present on a read-out the ML service computed after resampling the frame to
+ * the model's 1.28 µm/px (`backend/segmentation/api/disintegration_scale.py`):
+ * the image's pixel size was known at segmentation and more than 2 % off. The
+ * panel (DI, Index B, flags, ...) is from the `model_w` x `model_h` grid; the
+ * three `area_*_px` and `image_width`/`image_height` are the uploaded grid's.
+ */
+export interface RasterResample {
+  input_um_per_px: number;
+  model_um_per_px: number;
+  factor: number;
+  model_w: number;
+  model_h: number;
+}
+
 /** Field names exactly as compute_di.py / the ML service write them. */
 export interface RasterImageMetrics {
   algorithm: string;
@@ -44,6 +59,8 @@ export interface RasterImageMetrics {
   core_fragmented: number | null;
   unvalidated_regime: number | null;
   below_validated_regime: number | null;
+  /** Absent when the frame was scored at its uploaded scale. */
+  resample?: RasterResample | null;
 }
 
 export interface StoredRasterImageMetrics extends RasterImageMetrics {
@@ -115,8 +132,11 @@ export const UM_PER_PX_REL_TOL = 0.1;
 
 /**
  * The pixel-size half of the input-scale check, for the scale a user enters
- * at export (the raster read-out was computed before any scale was known).
- * Same wording as the ML service's `input_scale_warnings`.
+ * at export. Same wording as the ML service's `input_scale_warnings`.
+ *
+ * Not applied to a read-out that carries `resample`: that one was computed at
+ * 1.28 µm/px after resampling, so the mismatch this warns about was corrected
+ * at segmentation (see `resampleNote`).
  */
 export function pixelSizeWarning(umPerPx?: number | null): string | null {
   if (
@@ -135,5 +155,29 @@ export function pixelSizeWarning(umPerPx?: number | null): string | null {
     `Disintegration Index were validated only at ~${VALIDATED_UM_PER_PX} um/px ` +
     `(2048x2048 px frames, 5x objective). The read-out is returned but was ` +
     `never tested at this scale.`
+  );
+}
+
+/**
+ * The `Note` text for a read-out computed after resampling, or '' for one
+ * that was not. Without it nothing in the export would say that the numbers
+ * were taken at 1.28 µm/px rather than at the image's own scale.
+ */
+export function resampleNote(
+  resample: RasterResample | null | undefined
+): string {
+  if (
+    !resample ||
+    typeof resample.input_um_per_px !== 'number' ||
+    typeof resample.factor !== 'number'
+  ) {
+    return '';
+  }
+  const from = Number(resample.input_um_per_px.toPrecision(4));
+  const factor = Number(resample.factor.toPrecision(4));
+  return (
+    `scored at ${resample.model_um_per_px ?? VALIDATED_UM_PER_PX} um/px: ` +
+    `resampled from ${from} um/px (x${factor}, ` +
+    `${resample.model_w}x${resample.model_h} px)`
   );
 }
