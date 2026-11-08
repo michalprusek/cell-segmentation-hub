@@ -241,3 +241,23 @@ def test_an_out_of_range_pixel_size_is_not_resampled_and_warns():
     assert "resample" not in out["image_metrics"]
     assert any("resamples only factors" in w for w in out["warnings"])
     assert out["warnings"] == out["image_metrics"]["warnings"]
+
+
+def test_the_callers_pixel_ceiling_bounds_the_resample():
+    # 2.0 um/px would grow the 300 x 260 frame to ~469 x 406; with the
+    # caller's ceiling at the frame's own size the loader must not resample,
+    # and must say why. Without the ceiling the same call resamples.
+    mask = _concentric_mask(260, 300, r_out=80, r_core=40)
+    model = _ScaleFreeModel()
+    loader = ModelLoader(base_path=".")
+    loader.loaded_models["spheroid_disintegration"] = model
+    out = loader.predict_disintegration(_frame_of(mask), um_per_px=2.0,
+                                        max_pixels=300 * 260)
+    assert model.shapes == [(260, 300, 3)]
+    assert "resample" not in out["image_metrics"]
+    assert out["image_metrics"]["resample_skipped"]["input_um_per_px"] == 2.0
+    assert any("would grow" in w for w in out["warnings"])
+
+    out = loader.predict_disintegration(_frame_of(mask), um_per_px=2.0)
+    assert model.shapes[-1] == (406, 469, 3)
+    assert out["image_metrics"]["resample"]["factor"] == pytest.approx(2.0 / 1.28)

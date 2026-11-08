@@ -1538,10 +1538,7 @@ class ModelLoader:
         past it the frame is segmented as uploaded, with a warning.
         """
         import time as _time
-        from services.postprocessing import PostprocessingService
-        from api.disintegration_scale import (
-            plan_resample, predict_on_model_grid, read_out,
-        )
+        from api.disintegration_scale import segment_frame
 
         self.get_model('spheroid_disintegration')
         if 'spheroid_disintegration' not in self.loaded_models:
@@ -1564,23 +1561,20 @@ class ModelLoader:
             # pipeline does, instead of feeding the colour channels.
             gray = np.asarray(image.convert('L'))
             # Resampled to 1.28 um/px first when the pixel size is known and
-            # off; `plan` is None (and nothing is resized) otherwise.
-            plan, scale_warnings = plan_resample(
-                original_size[0], original_size[1], um_per_px, max_pixels
+            # off (nothing is resized otherwise), the read-out computed on that
+            # grid, and the polygons built from the mask mapped back to the
+            # uploaded grid -- all in `api.disintegration_scale.segment_frame`,
+            # which is torch-free so the CPU suite runs it in CI. Without a
+            # plan the read-out is exactly raster_metrics(mask3, W, H): no
+            # pixel size reaches its warning, because the export adds the
+            # pixel-size warning for a read-out that was not resampled.
+            frame = segment_frame(
+                gray, model.predict, um_per_px, max_pixels, detect_holes
             )
-            # mask3: (H, W) uint8 0 bg / 1 corona / 2 core on the UPLOADED
-            # grid; mask_model: the same on the model grid (the same array
-            # when there is no plan).
-            mask3, mask_model = predict_on_model_grid(gray, plan, model.predict)
-
-            # The paper's read-out, from the raster (not from the polygons),
-            # on the model grid. Without a plan this is exactly
-            # raster_metrics(mask3, W, H): no pixel size reaches the warning,
-            # because the export adds the pixel-size warning for a read-out
-            # that was not resampled, and it would otherwise appear twice.
-            image_metrics = read_out(
-                mask3, mask_model, plan, extra_warnings=scale_warnings
-            )
+            # (H, W) uint8 0 bg / 1 corona / 2 core on the UPLOADED grid.
+            mask3 = frame.mask
+            plan = frame.plan
+            image_metrics = frame.image_metrics
             if plan is not None:
                 logger.info(
                     "Disintegration: resampled %dx%d px at %.4g um/px by %.4f "
@@ -1605,15 +1599,7 @@ class ModelLoader:
                     image_metrics["core_centroid_shift"],
                 )
 
-            pp = PostprocessingService()
-            foreground = (mask3 >= 1).astype(np.float32)
-            core = (mask3 == 2).astype(np.float32)
-            fg_polys = pp.mask_to_polygons(
-                foreground, threshold=0.5, detect_holes=detect_holes
-            )
-            core_polys = pp.mask_to_polygons(
-                core, threshold=0.5, detect_holes=False
-            )
+            polygons = frame.polygons
 
             # The model predicted core pixels but none survived polygonisation
             # (dropped by the min-area filter, or an error swallowed inside
@@ -1622,7 +1608,7 @@ class ModelLoader:
             # report N/A for it. Logged (not raised) so a single lost core on
             # one frame of a batch doesn't fail the whole segmentation.
             core_px = int((mask3 == 2).sum())
-            if core_px > 0 and not core_polys:
+            if core_px > 0 and not frame.n_core_polygons:
                 logger.warning(
                     "Disintegration: %d core pixel(s) predicted but 0 core "
                     "polygon(s) emitted (min-area filter or postprocessing "
@@ -1631,28 +1617,11 @@ class ModelLoader:
                     core_px,
                 )
 
-            polygons: List[Dict[str, Any]] = []
-            polygon_id_counter = 1
-            for poly in fg_polys:
-                poly['id'] = f"polygon_{polygon_id_counter}"
-                poly.setdefault('class', 'spheroid')
-                polygons.append(poly)
-                polygon_id_counter += 1
-            for poly in core_polys:
-                poly['id'] = f"polygon_{polygon_id_counter}"
-                poly.setdefault('class', 'spheroid')
-                # Core polygons stay external-typed (so area metrics see them) but
-                # carry partClass='core' so the DI split treats them as the core.
-                poly['type'] = 'external'
-                poly['partClass'] = 'core'
-                polygons.append(poly)
-                polygon_id_counter += 1
-
             processing_time = _time.time() - start_time
             logger.info(
                 "Disintegration: %d foreground + %d core polygon(s) "
                 "(corona=%.1f%% core=%.1f%%) in %.2fs",
-                len(fg_polys), len(core_polys),
+                frame.n_foreground_polygons, frame.n_core_polygons,
                 float((mask3 == 1).mean()) * 100.0,
                 float((mask3 == 2).mean()) * 100.0,
                 processing_time,
@@ -1670,7 +1639,7 @@ class ModelLoader:
                 "processing_info": {
                     "device": str(self.device),
                     "num_polygons": len(polygons),
-                    "num_core": len(core_polys),
+                    "num_core": frame.n_core_polygons,
                     "confidence_scores": [p.get("confidence", 1.0) for p in polygons],
                     "processing_time_s": processing_time,
                     "batch_size": 1,

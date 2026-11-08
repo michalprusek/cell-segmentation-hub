@@ -186,16 +186,32 @@ METRIC_FIELDS = (
 
 
 def input_scale_warnings(
-    width: Optional[int], height: Optional[int], um_per_px: Optional[float] = None
+    width: Optional[int],
+    height: Optional[int],
+    um_per_px: Optional[float] = None,
+    frame_rel_tol: Optional[float] = None,
 ) -> List[str]:
     """Warnings for an input outside the validated 2048 x 2048 / ~1.28 um/px regime.
 
     ``um_per_px`` is optional: an image without calibration metadata (a plain
     BMP) has none, and then only the frame size can be checked.
+
+    ``frame_rel_tol`` (default None) is the exact-size check every uploaded
+    frame gets. ``api.disintegration_scale`` passes ``UM_PER_PX_REL_TOL`` for
+    a frame it RESAMPLED to 1.28 um/px: that frame's size off 2048 px is the
+    uploaded pixel size's distance from 1.28 carried over, so it is checked
+    with the band the pixel size itself was checked with before resampling.
     """
     warnings: List[str] = []
     vw, vh = VALIDATED_FRAME_PX
-    if width is not None and height is not None and (int(width), int(height)) != (vw, vh):
+    if width is None or height is None:
+        off_size = False
+    elif frame_rel_tol is None:
+        off_size = (int(width), int(height)) != (vw, vh)
+    else:
+        off_size = (abs(int(width) / vw - 1.0) > frame_rel_tol
+                    or abs(int(height) / vh - 1.0) > frame_rel_tol)
+    if off_size:
         warnings.append(
             f"frame is {int(width)}x{int(height)} px; the model and the Disintegration Index were "
             f"validated only on {vw}x{vh} px brightfield frames at ~{VALIDATED_UM_PER_PX} um/px "

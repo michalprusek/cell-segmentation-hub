@@ -42,7 +42,12 @@ class DisintegrationRequest(BaseModel):
     the image grid is resampled (nearest neighbour) to 1.28 um/px and scored
     there, exactly as `/segment` scores a fresh segmentation of that image
     (`api.disintegration_scale`); the response then carries `resample`.
-    Otherwise it only feeds the input-scale warning, as it always did.
+    Outside 0.5-2x it is not resampled and the response carries one warning
+    saying so. Otherwise it only feeds the input-scale warning, as it always
+    did. The backend sends it only for an image whose segmentation was itself
+    resampled (its stored read-out, now stale, carries `resample`), with the
+    pixel size that segmentation used, so the edited image is scored on the
+    grid its fresh segmentation was.
     """
     mask_polygon: Optional[List[List[float]]] = None
     mask_polygons: Optional[List[List[List[float]]]] = None
@@ -293,12 +298,15 @@ def disintegration_index(request: DisintegrationRequest):
         # At the model's pixel size, as `/segment` scored the fresh
         # segmentation, when the pixel size is known and off (same rule, same
         # helper). Without a plan this is raster_metrics(mask3, W, H,
-        # pixel_size_um), exactly what this endpoint always computed.
+        # pixel_size_um), exactly what this endpoint always computed -- except
+        # for a pixel size the module declines (outside 0.5-2x), whose one
+        # warning is plan_resample's rather than that plus the generic one.
         plan, scale_warnings = dsc.plan_resample(W, H, request.pixel_size_um)
         mask_model = mask3 if plan is None else dsc.mask_to_model_grid(mask3, plan)
         r = dsc.read_out(
             mask3, mask_model, plan,
             um_per_px=request.pixel_size_um, extra_warnings=scale_warnings,
+            skipped_um_per_px=request.pixel_size_um if scale_warnings else None,
         )
         resample = r.get("resample")
         n_fg = int(r["area_total_px"] or 0)

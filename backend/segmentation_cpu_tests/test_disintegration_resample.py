@@ -347,6 +347,160 @@ def test_extra_warnings_reach_the_read_out():
     assert r["warnings"][-1] == warnings[0]
 
 
+@pytest.mark.parametrize("um, model_px, old_count", [
+    (1.20, 1920, 0), (1.31, 2096, 0), (1.35, 2160, 0), (1.40, 2240, 0),
+    (1.10, 1760, 1), (1.50, 2400, 1),
+])
+def test_a_resampled_2048_frame_warns_exactly_when_the_old_path_did(um, model_px, old_count):
+    # The old path: the loader's frame check on the 2048^2 upload, plus the
+    # export's pixel-size check at the uploaded scale.
+    old = (dm.raster_metrics(np.zeros((2048, 2048), np.uint8), 2048, 2048)["warnings"]
+           + dm.input_scale_warnings(None, None, um))
+    assert len(old) == old_count
+    plan, _ = dsc.plan_resample(2048, 2048, um)
+    assert (plan.model_width, plan.model_height) == (model_px, model_px)
+    r = dsc.read_out(np.zeros((2048, 2048), np.uint8),
+                     np.zeros((model_px, model_px), np.uint8), plan)
+    # The model grid is off 2048 by the pixel size's own distance from 1.28,
+    # so the frame-size check uses the 10 % band the pixel size had.
+    assert len(r["warnings"]) == old_count
+    assert all(f"{model_px}x{model_px}" in w and "after resampling" in w
+               for w in r["warnings"])
+
+
+def test_an_uploaded_frame_still_gets_the_exact_size_check():
+    # The band is for a RESAMPLED frame only: 2100 x 2100 as uploaded warns.
+    r = dsc.read_out(np.zeros((2100, 2100), np.uint8),
+                     np.zeros((2100, 2100), np.uint8), None)
+    assert len(r["warnings"]) == 1 and "2100x2100" in r["warnings"][0]
+    assert dm.input_scale_warnings(2100, 2100) == r["warnings"]
+    assert dm.input_scale_warnings(2100, 2100, frame_rel_tol=0.10) == []
+
+
+def test_an_undefined_di_note_says_it_counts_the_resampled_core():
+    # 0.64 um/px: the note quotes the ~7 500 px core at 1.28 um/px, while
+    # area_core_px (the Core Area column) is the uploaded grid's ~30 000 px.
+    fine = _scene(700, 740, 98, 180)
+    plan, _ = dsc.plan_resample(740, 700, 0.64)
+    r = dsc.read_out(*dsc.predict_on_model_grid(_frame(fine), plan, _IntensityModel()), plan)
+    assert r["reference"] == "core_too_small"
+    assert r["note"].startswith(
+        "after resampling the 740x700 px frame from 0.64 to 1.28 um/px: core of "
+    )
+    assert "below the minimum core size" in r["note"]
+    # a defined DI keeps its empty note
+    coarse = _scene(500, 520, 40, 80)
+    plan, _ = dsc.plan_resample(520, 500, 2.56)
+    r = dsc.read_out(*dsc.predict_on_model_grid(_frame(coarse), plan, _IntensityModel()), plan)
+    assert r["reference"] == "core" and r["note"] == ""
+
+
+@pytest.mark.parametrize("um", [3.0, 0.2])
+def test_a_declined_pixel_size_gets_one_warning_and_is_recorded(um):
+    m = _scene(600, 640, 90, 160)
+    plan, warnings = dsc.plan_resample(640, 600, um)
+    assert plan is None and len(warnings) == 1
+    r = dsc.read_out(m, m, None, um_per_px=um, extra_warnings=warnings,
+                     skipped_um_per_px=um)
+    pixel_msgs = [w for w in r["warnings"] if "pixel size is" in w]
+    assert pixel_msgs == warnings
+    assert "scored at its uploaded scale" in warnings[0]
+    assert "segmented" not in warnings[0]
+    assert r["resample_skipped"] == {
+        "input_um_per_px": um, "model_um_per_px": 1.28,
+        "factor": pytest.approx(um / 1.28),
+    }
+    assert "resample" not in r
+    # the metrics are the uploaded grid's, as before
+    ref = dm.raster_metrics(m, 640, 600)
+    assert r["index_B"] == ref["index_B"] and r["DI"] == ref["DI"]
+
+
+def test_the_fallback_with_a_declined_pixel_size_warns_once():
+    mask = _scene(600, 640, 90, 160)
+    req = mep.DisintegrationRequest(
+        mask_polygons=_polygons(mask, lambda m: m > 0),
+        core_polygons=_polygons(mask, lambda m: m == 2),
+        image_width=640, image_height=600, pixel_size_um=3.0,
+    )
+    resp = mep.disintegration_index(req)
+    assert resp.resample is None
+    pixel_msgs = [w for w in resp.warnings if "pixel size is 3" in w]
+    assert len(pixel_msgs) == 1 and "resamples only factors" in pixel_msgs[0]
+    # the frame-size warning (640 x 600) is a different fact and stays
+    assert sum("frame is 640x600" in w for w in resp.warnings) == 1
+
+
+# --------------------------------------------------------------------------
+# segment_frame: the loader's whole path but the network, run in CI
+# --------------------------------------------------------------------------
+
+
+def test_segment_frame_without_a_pixel_size_is_the_old_composition(monkeypatch):
+    mask = _scene(412, 388, 90, 150)
+    gray = _frame(mask)
+    # The polygons, built the way predict_disintegration built them before
+    # the move, from the mask the model returned.
+    pp_mod = importlib.import_module("services.postprocessing")
+    pp = pp_mod.PostprocessingService()
+    fg = pp.mask_to_polygons((mask >= 1).astype(np.float32), threshold=0.5, detect_holes=True)
+    core = pp.mask_to_polygons((mask == 2).astype(np.float32), threshold=0.5, detect_holes=False)
+
+    def _no_resize(*a, **k):
+        raise AssertionError("cv2.resize called without a plan")
+
+    monkeypatch.setattr(dsc.cv2, "resize", _no_resize)
+    for um in (None, 1.28, 1.29):
+        frame = dsc.segment_frame(gray, _IntensityModel(), um)
+        assert frame.plan is None and frame.mask is frame.mask_model
+        assert np.array_equal(frame.mask, mask)
+        assert frame.image_metrics == dm.raster_metrics(mask, 388, 412)
+        assert [p["points"] for p in frame.polygons] == [p["points"] for p in fg + core]
+        assert (frame.n_foreground_polygons, frame.n_core_polygons) == (len(fg), len(core))
+        cores = [p for p in frame.polygons if p.get("partClass") == "core"]
+        assert len(cores) == len(core) and all(p["type"] == "external" for p in cores)
+
+
+def test_segment_frame_draws_the_polygons_on_the_uploaded_grid():
+    # 2.56 um/px: the model runs on a frame twice the size; the polygons must
+    # come from the back-mapped mask, inside the uploaded 300 x 260 frame and
+    # at the uploaded scale (a core of ~40 px radius, not ~80).
+    mask = _scene(260, 300, 40, 80, specks=0)
+    model = _IntensityModel()
+    frame = dsc.segment_frame(_frame(mask), model, 2.56)
+    assert model.calls[0].shape == (520, 600, 3)
+    assert frame.plan is not None and frame.mask.shape == (260, 300)
+    xs = [pt["x"] for p in frame.polygons for pt in p["points"]]
+    ys = [pt["y"] for p in frame.polygons for pt in p["points"]]
+    assert 0 <= min(xs) and max(xs) < 300 and 0 <= min(ys) and max(ys) < 260
+    (core,) = [p for p in frame.polygons if p.get("partClass") == "core"]
+    cx = [pt["x"] for pt in core["points"]]
+    assert 70 < max(cx) - min(cx) < 90  # ~2 * 40 px on the uploaded grid
+    assert frame.image_metrics["resample"]["factor"] == 2.0
+    assert frame.image_metrics["reference"] == "core"  # ~20 000 px at 1.28
+
+
+def test_segment_frame_honours_the_callers_ceiling_and_keeps_its_warning():
+    # 2.0 um/px would grow 400 x 300 to 625 x 469; a ceiling of 400 * 300
+    # px refuses that, and the frame is scored as uploaded, saying so.
+    mask = _scene(300, 400, 40, 90)
+    frame = dsc.segment_frame(_frame(mask), _IntensityModel(), 2.0, max_pixels=400 * 300)
+    assert frame.plan is None
+    assert "resample" not in frame.image_metrics
+    assert any("would grow" in w for w in frame.image_metrics["warnings"])
+    assert frame.image_metrics["resample_skipped"]["input_um_per_px"] == 2.0
+    # without the ceiling the same frame is resampled
+    assert dsc.segment_frame(_frame(mask), _IntensityModel(), 2.0).plan is not None
+
+
+def test_segment_frame_carries_an_out_of_range_warning():
+    mask = _scene(300, 400, 40, 90)
+    frame = dsc.segment_frame(_frame(mask), _IntensityModel(), 0.1)
+    msgs = frame.image_metrics["warnings"]
+    assert sum("resamples only factors" in w for w in msgs) == 1
+    assert not any(w.startswith("pixel size is 0.1 um/px;") for w in msgs)
+
+
 # --------------------------------------------------------------------------
 # the polygon fallback: an edited image is scored where a fresh one was
 # --------------------------------------------------------------------------
