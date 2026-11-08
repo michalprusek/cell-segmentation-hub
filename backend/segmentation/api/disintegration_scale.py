@@ -265,9 +265,9 @@ def read_out(
                 "factor": um / MODEL_UM_PER_PX,
             }
     else:
-        out = dm.raster_metrics(
-            mask_model, plan.model_width, plan.model_height, MODEL_UM_PER_PX
-        )
+        # No pixel size: raster_metrics reads it only for its warnings, which
+        # the banded check below replaces.
+        out = dm.raster_metrics(mask_model, plan.model_width, plan.model_height)
         prefix = _after_resampling(plan)
         out["warnings"] = [
             prefix + msg
