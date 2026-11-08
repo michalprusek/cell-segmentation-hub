@@ -87,8 +87,10 @@ const SCALE_MAX_UM_PER_PX = 1000;
 /** The project types whose segmentation reads the project's pixel size.
  *
  *  Only `spheroid_invasive`: its model (`spheroid_disintegration`, the only one
- *  compatible with it) resamples each frame to the 1.28 µm/px it was validated
- *  at when the pixel size is known. Until 2026-09-13 this header showed a
+ *  compatible with it) resamples a frame to the 1.28 µm/px it was validated
+ *  at when the pixel size is known and within 0.64-2.56 µm/px (factors
+ *  0.5-2x; outside them the frame is used as uploaded, with a warning). Until
+ *  2026-09-13 this header showed a
  *  µm/px box on EVERY project, which nothing on their path read, and it was
  *  removed for that reason; it is back only where something reads it. Another
  *  type joins this list together with a model that reads the value. */

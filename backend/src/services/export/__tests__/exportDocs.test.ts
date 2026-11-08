@@ -70,6 +70,12 @@ describe('generateMetricsGuide — type-specific dispatch', () => {
       expect(guide).toContain('scored at 1.28 um/px: resampled from');
       expect(guide).toContain('factors 0.5–2× only');
       expect(guide).toContain('counted on the uploaded frame');
+      // the area-ratio gap is the measured one, on real masks
+      expect(guide).toContain('1.1 × 10⁻³');
+      expect(guide).not.toContain('2.4 × 10⁻⁴');
+      // an edited image keeps its segmentation's grid
+      expect(guide).toContain('on the grid their own');
+      expect(guide).not.toContain('else the one entered here');
     });
 
     it('documents the paper definitions, not the retired speckle-guarded panel', () => {

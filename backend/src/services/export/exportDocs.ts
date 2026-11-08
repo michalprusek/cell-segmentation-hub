@@ -785,25 +785,46 @@ they keyed on \`[0.15, 0.30)\` and on DI < 0.6).
 The model and the index were validated only on **2048 × 2048 px brightfield
 frames at ~1.28 μm/px** (5× objective).
 
-**Resampling.** When an image's pixel size was known at segmentation (its own
-calibration, its video's, else the project's) and differed from 1.28 μm/px by
-more than 2 %, the frame was resampled to 1.28 μm/px before the model ran
-(factors 0.5–2× only, and never grown past 4096 × 4096 px). Every read-out
-column — DI, the outside-core fraction, reach, fragments, the core diagnostics,
-the flags and the 16 048 px core minimum — is then computed at 1.28 μm/px,
-while the three areas are counted on the uploaded frame's own pixels, so
-\`(total − core) / total\` from them can differ slightly from the outside-core
-fraction (by up to 2.4 × 10⁻⁴ on synthetic masks; not measured on real ones).
-The **Note** of such a row reads \`scored at 1.28 um/px: resampled from
-<pixel size> um/px (x<factor>, <W>x<H> px)\`. A scale entered here afterwards
-changes only the area units, not those read-outs; re-segment for a new pixel
-size to take effect. An edited segmentation is scored from its polygons with
-the image's own pixel size, else the one entered here, resampled the same way.
+**Resampling.** When an image's pixel size was known at segmentation (its
+video's, else its own calibration, else the project's) and differed from
+1.28 μm/px by more than 2 %, the frame was resampled to 1.28 μm/px before the
+model ran (factors 0.5–2× only, and never grown past 4096 × 4096 px). Every
+read-out column — DI, the outside-core fraction, reach, fragments, the core
+diagnostics, the flags and the 16 048 px core minimum — is then computed at
+1.28 μm/px, while the three areas are counted on the uploaded frame's own
+pixels and converted with the scale entered here (one value for the whole
+export, not each image's own). Counted on the two grids, \`(total − core) /
+total\` from the areas can differ slightly from the outside-core fraction: up
+to 1.1 × 10⁻³ (median ~1 × 10⁻⁴), measured on 44 of the paper's 48 h expert
+masks used as model-grid masks and mapped back from 0.8–2.56 μm/px. The
+outside-core fraction, not that ratio, is the read-out. The **Note** of such a
+row reads \`scored at 1.28 um/px: resampled from <pixel size> um/px
+(x<factor>, <W>x<H> px)\`; an undefined DI's note then starts \`after
+resampling …\`, because its core size is counted at 1.28 μm/px. A scale
+entered here afterwards changes only the area units, not those read-outs;
+re-segment for a new pixel size to take effect.
 
-**Warning.** A frame of another size (after any resampling), or a μm/px scale
-entered at export that differs from 1.28 by more than 10 % on a row that was
-not resampled, adds a warning to the row. The numbers are still returned; they
-were never tested there.
+**Edited segmentations** are scored from their polygons on the grid their own
+segmentation used: resampled from the same pixel size when that segmentation
+was resampled, at the uploaded scale otherwise (which includes every
+segmentation made before the pixel size was read, and one with no stored
+read-out). Neither the image's current calibration nor the scale entered here
+picks that grid, so an edited row is never scored on a grid its unedited
+neighbours were not.
+
+**Warning.** A row adds a warning when:
+- the frame was scored at its uploaded scale and is not 2048 × 2048 px;
+- it was resampled and is still more than 10 % off 2048 px on a side at
+  1.28 μm/px (2048 × 2048 at 1.35 μm/px becomes 2160 × 2160 and is not
+  warned; at 1.10 μm/px it becomes 1760 × 1760 and is);
+- it was not resampled and the μm/px scale entered here differs from 1.28 by
+  more than 10 % (said once: a pixel size the model would not resample, outside
+  0.64–2.56 μm/px, carries its own message instead);
+- it was resampled and the scale entered here differs by more than 10 % from
+  the pixel size it was resampled from (both are named, with the scale the
+  read-out was effectively taken at).
+
+The numbers are still returned; they were never tested there.
 
 ## The model
 

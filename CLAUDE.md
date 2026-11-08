@@ -656,7 +656,17 @@ only a bare ML-status dot.
   to the field for any other model. Without a pixel size, or within 2 %,
   nothing is resized. The header shows the box for `spheroid_invasive` only:
   an ungated one was removed on 2026-09-13 because nothing read it. Changing
-  the value re-runs nothing; it applies to new segmentations.
+  the value re-runs nothing; it applies to new segmentations. **Values typed
+  into that ungated box (2026-09-07 to 09-13, #501 → #541) may still be
+  stored, and are now read at segmentation**: query `projects` and `images`
+  of `spheroid_invasive` projects for non-null `pixelSizeUm` before deploying.
+  The export's polygon fallback (an edited image) resamples ONLY with the
+  pixel size its stale read-out was resampled from
+  (`readStoredImageMetrics().staleResample`), else scores the uploaded grid —
+  never with the image row's or the export's scale, which would put one
+  edited row on a grid its unedited siblings never used. The box is
+  `type="text"`: as `type="number"` a typo read as `''` and cleared the
+  stored value on blur.
 - **Rename / type / model are owner-only**; `verified` is not. `getProjectById`
   reports `isOwned`, and `mapProjectFields` must list it — the enumerative
   mapper stripped it on the first attempt, as it does every new field.

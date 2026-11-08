@@ -106,15 +106,23 @@ the stored external polygons with the cores drawn on top (`DI Source` =
 **16 048 px** (the smallest expert core of the paper's dataset) leaves DI
 undefined, like a missing one.
 
-**Pixel size.** When the image's pixel size is known at segmentation (its own
-calibration, else the project's) and is more than 2 % from 1.28 µm/px, the
-frame is resampled to 1.28 µm/px first, and every number of the panel above —
-the 16 048 px minimum included — is computed on that grid; only factors 0.5–2×
-are resampled. The three areas stay counted on the uploaded frame, so they
-convert to µm² with the image's own scale, and `(total − core) / total` from them can differ slightly from the outside-core fraction (by up to 2.4 × 10⁻⁴ on synthetic masks; not measured on real ones). Such a row's
-`Note` reads `scored at 1.28 um/px: resampled from … um/px`. The polygon path
-resamples the same way with the image's pixel size (else the export's), so an
-edited image is scored on the grid a fresh one was. See
+**Pixel size.** When the image's pixel size is known at segmentation (its
+video's, else its own calibration, else the project's) and is more than 2 % from
+1.28 µm/px, the frame is resampled to 1.28 µm/px first, and every number of the
+panel above — the 16 048 px minimum included — is computed on that grid; only
+factors 0.5–2× are resampled. Such a row's `Note` reads `scored at 1.28 um/px:
+resampled from … um/px`. The three areas stay counted on the uploaded frame and
+are converted to µm² with the export's scale — the one in the export dialog,
+pre-filled from the images' calibration when they all agree, else from the
+project — not with each image's own. It should be the pixel size the frame was
+resampled from, and the row is warned when the two differ by more than 10 %. Counted on the two grids, `(total − core) / total` from the areas can
+differ slightly from the outside-core fraction: up to 1.1 × 10⁻³ (median
+~1 × 10⁻⁴), measured on 44 of the paper's 48 h expert masks used as model-grid
+masks and mapped back from 0.8–2.56 µm/px. The outside-core fraction, not that
+ratio, is the read-out. The polygon path re-scores an edited image on the grid
+its own segmentation used — resampled from the same pixel size when the stale
+read-out says it was, the uploaded grid otherwise — so it never puts an edited
+row on a grid its unedited neighbours were not scored on. See
 [Disintegrated spheroid projects → Pixel size](../guides/project-types/spheroid-invasive.md#pixel-size).
 
 > **A core is required. There is deliberately no fallback.** Without a usable

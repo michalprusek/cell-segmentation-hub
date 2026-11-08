@@ -59,8 +59,10 @@ value and covers just the images that carry none (see
 [Sperm → Metrics and export](project-types/sperm.md#metrics-and-export)).
 **Disintegrated-spheroid projects** take their pixel size at SEGMENTATION, from
 the image or the project header, and the model resamples the frame to
-1.28 µm/px with it; here the field converts the areas, and scores edited
-polygons of images that carry no calibration of their own (see
+1.28 µm/px with it; here the field only converts the areas. It does not decide
+how an edited image is re-scored (on the grid its own segmentation used), and a
+row is warned when it differs by more than 10 % from the pixel size the frame
+was resampled from (see
 [Disintegrated spheroid projects → Pixel size](project-types/spheroid-invasive.md#pixel-size)).
 Accepted range **0.001 – 1000**, and
 it accepts any number of decimals — a real calibration like `0.072222` is not

@@ -66,8 +66,13 @@ and the mask comes back to `w × h` by nearest neighbour for the polygons and
 the pixel areas. `image_metrics.resample` = `{input_um_per_px, model_um_per_px,
 factor, model_w, model_h}` is present exactly when that happened. Outside
 `0.5–2×`, or when growing would pass 4096 × 4096 px (or `max_pixels`, if sent),
-the frame is segmented as uploaded and `warnings` says why: an input accepted
-without a pixel size is never refused because one was given. Within 2 % of
+the frame is segmented as uploaded, `warnings` says why in one message (in
+place of the generic pixel-size warning) and `image_metrics.resample_skipped` =
+`{input_um_per_px, model_um_per_px, factor}` records it: an input accepted
+without a pixel size is never refused because one was given. After a resample
+the frame-size warning is evaluated on the model grid with a 10 % band, and an
+undefined DI's `note` is prefixed `after resampling …`, since it quotes the core
+counted at 1.28 µm/px. Within 2 % of
 1.28, or without the field, nothing is resized. For any other model the field
 is **refused with a 400**, like `extra_channels`. The app's queue sends it for
 this model when the image, its video container or its project has a pixel
@@ -311,9 +316,12 @@ sentinel** when no usable core is supplied. Callers must render that as N/A,
 never as a computed zero. There is deliberately no equivalent-disk fallback.
 Its optional `pixel_size_um` follows the `/segment` rule above: the mask
 rasterised from the polygons is resampled (nearest neighbour) to 1.28 µm/px and
-scored there, and the response carries `resample`, so an edited segmentation is
-scored on the grid a fresh one was. `n_pixels` is counted on the image's own
-grid. See [Metrics](../reference/metrics.md#disintegration-index-di).
+scored there, and the response carries `resample`; outside 0.5–2× it is not
+resampled and `warnings` holds one message saying so. The export sends it only
+for an image whose segmentation was itself resampled, with the pixel size that
+segmentation used, so the edited image is scored on the grid its fresh one
+was; otherwise it sends none and adds the pixel-size warning itself.
+`n_pixels` is counted on the image's own grid. See [Metrics](../reference/metrics.md#disintegration-index-di).
 
 ---
 

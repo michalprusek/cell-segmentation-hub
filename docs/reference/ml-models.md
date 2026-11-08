@@ -232,7 +232,12 @@ matrix, where the quantity of interest is how much has left the dense core.
   the polygons and `area_*_px` come from it. `image_metrics.resample` records
   `{input_um_per_px, model_um_per_px, factor, model_w, model_h}`. Outside
   0.5–2×, or past 4096 × 4096 px when growing, the frame is used as uploaded,
-  with a warning. Without a pixel size, or within 2 %, the path is unchanged
+  with one warning, and `image_metrics.resample_skipped` records the pixel
+  size. On the model grid the frame-size check allows 10 % (the band the pixel
+  size had before resampling), so a 2048² upload at 1.20–1.40 µm/px is not
+  warned about, and an undefined DI's note says it counts the core at
+  1.28 µm/px. The CPU suite runs this path minus the network
+  (`segment_frame`, polygons included). Without a pixel size, or within 2 %, the path is unchanged
   and nothing is resized. Evidence: on the paper's held-out batch (B5, 37
   images at 48 h, `prod_s42`), frames simulated at 1.10 and 1.50 µm/px moved
   the outside-core fraction by up to 0.028 (median 0.0069 / 0.0067) fed as

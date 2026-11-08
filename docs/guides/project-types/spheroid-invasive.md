@@ -44,9 +44,10 @@ dispersing corona need to be visible.
 
 > **Validated regime: 2048 × 2048 px frames at ~1.28 µm/px (5× objective).**
 > Nothing else was tested. A frame whose pixel size is known is brought to
-> 1.28 µm/px before the model sees it (next section). A frame of another size,
-> or one of unknown pixel size scored at export with a µm/px scale that differs
-> from 1.28 by more than 10 %, is still scored, but the row carries an
+> 1.28 µm/px before the model sees it (next section). A frame of another size
+> (after that resampling: more than 10 % off 2048 px), or one scored at its
+> uploaded scale with a µm/px scale entered at export that differs from 1.28 by
+> more than 10 %, is still scored, but the row carries an
 > `Input-Scale Warning`. Cores smaller than 16 048 px at 1.28 µm/px — the
 > smallest expert core in the paper's dataset — leave DI undefined, so a
 > down-sampled frame of unknown pixel size will often read `N/A`.
@@ -70,18 +71,32 @@ outside-core fraction by up to 0.028 when fed as acquired, and by at most
 - **Which value is used**: the image's own calibration (a video frame's
   container, or an Olympus cellSens JPEG/TIFF that carries one), else the
   project's value.
+- **Check a value set before.** From 7 to 13 September 2026 the header showed
+  a µm/px box on every project, as a default for the export dialog, so a
+  value typed there may still be stored. It is now read at segmentation and
+  changes what the model sees: check the box of each disintegrated-spheroid
+  project before re-segmenting.
 - **What is computed where**: DI, the outside-core fraction, reach, fragment
   counts, the core-size minimum and the regime flags at 1.28 µm/px; the three
-  areas on your frame's own pixels, so the export's µm² are real. The `Note`
-  column says `scored at 1.28 um/px: resampled from … um/px`, and such a row
-  gets no pixel-size warning: that mismatch was corrected.
+  areas on your frame's own pixels, converted with the export dialog's scale,
+  so the export's µm² are real when that scale is the frame's pixel size. The
+  `Note` column says `scored at 1.28 um/px: resampled from … um/px`. Such a
+  row gets no pixel-size warning, because that mismatch was corrected, unless
+  the scale entered at export differs from the one it was resampled from by
+  more than 10 %; the warning then names both. Its frame size is checked at
+  1.28 µm/px with the same 10 % band: a 2048 × 2048 frame at 1.35 µm/px
+  becomes 2160 × 2160 px and is not warned about, one at 1.10 µm/px becomes
+  1760 × 1760 px and is (as it was before, for its pixel size).
 - **Limits**: only factors 0.5–2× (0.64–2.56 µm/px) are resampled, and a frame
   is never grown past 4096 × 4096 px. Outside that, the frame is scored at its
-  uploaded scale and the row says why.
+  uploaded scale and the row says why, once.
 - **It applies to new segmentations.** Changing the value does not re-run the
   stored ones; re-segment the images for it to take effect. An edited
-  segmentation is re-scored at export with the image's pixel size, the same
-  way.
+  segmentation is re-scored at export on the grid its own segmentation used:
+  resampled from the same pixel size if that segmentation was resampled, at
+  the uploaded scale otherwise (every segmentation made before the pixel size
+  was read included). Neither a changed calibration nor the export's scale
+  moves it to another grid; re-segment for that.
 
 ---
 
