@@ -79,10 +79,10 @@
 # instanceId excluded); neurite_soma_classical failed the same way in both
 # (it needs the backend's channel fields), so it is unverified by this check.
 # numpy stayed 1.26.4 and /metrics still labels the handler "/api/v1/segment".
-fastapi==0.143.2
+fastapi==0.162.0
 starlette==1.7.0
 uvicorn==0.54.0
-pydantic==2.14.1
+pydantic==2.14.3
 # requests 2.33.0 fixes CVE-2024-47081 (.netrc credential leak),
 # CVE-2026-25645 (insecure temp file reuse in extract_zipped_paths), and the
 # later session-redirect advisory.
@@ -139,7 +139,7 @@ networkx>=3.4.2
 # encoder — smp pulls in the matching timm). Pinned 0.5.0 (uses timm>=1.0): it
 # loads wound_mitb5.ckpt with a strict state-dict match (verified — the MiT-B5
 # encoder is architecturally unchanged) and builds the microcapsule U-Net.
-segmentation-models-pytorch==0.5.0
+segmentation-models-pytorch==0.6.0
 
 # transformers backs exactly TWO MODELS in this repo, and neither is
 # microtubule any more:
