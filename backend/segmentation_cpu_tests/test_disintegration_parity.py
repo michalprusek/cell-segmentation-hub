@@ -118,7 +118,7 @@ def test_undefined_reference_names():
 # every quantile lies above the disk's and the absolute value never acts; on an
 # intact spheroid the mask is the core and d~ straddles sqrt(u) at pixel scale.
 _W1_MEAN_FORM_TOL = {"dispersed": 1e-6, "fragmented_core": 1e-6, "compact_corona": 1e-6,
-                     "narrow_rim": 1e-6, "intact": 1e-3}
+                     "narrow_rim": 1e-6, "half_dispersed": 1e-6, "intact": 1e-3}
 
 
 def test_w1_reading_is_checked_on_every_defined_fixture():

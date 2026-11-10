@@ -38,7 +38,7 @@ from scipy import ndimage
 
 # SHA-256 of the compute_di.py the functions below were copied from.
 ALGORITHM_SOURCE = "spheroid_seg/compute_di.py"
-ALGORITHM_SOURCE_SHA256 = "e579601881e09f2e3c0bf68d2d1b0e50a89bc3cd7ea0fed6da72bf7ecc664516"
+ALGORITHM_SOURCE_SHA256 = "13d7b950179bba726a851c78fcecf4bcd6926ec57088aa3ca6877ce3a21fd487"
 
 # ---------------------------------------------------------------------------
 # VERBATIM from compute_di.py (constants and the four functions).
