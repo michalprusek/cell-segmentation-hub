@@ -38,7 +38,7 @@ from scipy import ndimage
 
 # SHA-256 of the compute_di.py the functions below were copied from.
 ALGORITHM_SOURCE = "spheroid_seg/compute_di.py"
-ALGORITHM_SOURCE_SHA256 = "e579601881e09f2e3c0bf68d2d1b0e50a89bc3cd7ea0fed6da72bf7ecc664516"
+ALGORITHM_SOURCE_SHA256 = "13d7b950179bba726a851c78fcecf4bcd6926ec57088aa3ca6877ce3a21fd487"
 
 # ---------------------------------------------------------------------------
 # VERBATIM from compute_di.py (constants and the four functions).
@@ -63,11 +63,13 @@ _S8 = np.ones((3, 3), dtype=int)
 # were keyed on [0.15, 0.30) and on DI < 0.6 before, and on new data the DI criterion flagged far more read-outs
 # than the range in which the model was actually checked against expert masks).
 #
-# No expert mask of the release has an outside-core fraction between these bounds: the largest value of an
-# intact (0 h) image is 0.0763 and the smallest value of a dispersed (48 h) one is 0.4755. A read-out landing in
-# the gap comes from a regime in which the pipeline was never compared with an expert, and is flagged rather
-# than returned as though it were as well supported as the rest.
-UNVALIDATED_LO, UNVALIDATED_HI = 0.08, 0.47
+# The unvalidated range runs from just above the largest expert fraction of an intact (0 h) image, 0.0763, up to
+# the detection floor below. Between 0.08 and 0.4755 the release holds no expert mask at all, and between 0.4755
+# and the floor only the three half-dispersed spheroids (0.4755 to 0.5476), all of which the model under-reads.
+# A read-out landing anywhere in this range comes from a regime in which the pipeline has not been shown to follow
+# an expert, and is flagged rather than returned as though it were as well supported as the rest. (The upper bound
+# was 0.47 until 2026-11-08, matching spheroid_seg/compute_di.py of the paper's code record.)
+UNVALIDATED_LO, UNVALIDATED_HI = 0.08, 0.61
 # The detection floor. At and above this fraction the model reproduces the expert read-out (0.6137 is the
 # smallest expert value among the 247 treated images on which it does). Below it the only expert-masked
 # spheroids are compact ones and three half-dispersed ones (0.4755 to 0.5476), all three of which the model read

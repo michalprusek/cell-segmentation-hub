@@ -849,13 +849,14 @@ describe('MetricsCalculator — calculateAllImageMetrics (DI / panel)', () => {
       expect(regimeFlags(null)).toEqual({ unvalidatedRegime: null, belowValidatedRegime: null });
       // intact: at the floor, not in the gap
       expect(regimeFlags(0)).toEqual({ unvalidatedRegime: 0, belowValidatedRegime: 1 });
-      // the gap [0.08, 0.47) that holds no expert mask of the paper's release
+      // the unvalidated range [0.08, 0.61): no expert mask of the paper's release
+      // up to 0.4755, then only three half-dispersed spheroids the model under-reads
       expect(regimeFlags(0.0799)).toEqual({ unvalidatedRegime: 0, belowValidatedRegime: 1 });
       expect(regimeFlags(0.08)).toEqual({ unvalidatedRegime: 1, belowValidatedRegime: 1 });
       expect(regimeFlags(0.4699)).toEqual({ unvalidatedRegime: 1, belowValidatedRegime: 1 });
-      expect(regimeFlags(0.47)).toEqual({ unvalidatedRegime: 0, belowValidatedRegime: 1 });
-      // the detection floor
-      expect(regimeFlags(0.6099)).toEqual({ unvalidatedRegime: 0, belowValidatedRegime: 1 });
+      expect(regimeFlags(0.47)).toEqual({ unvalidatedRegime: 1, belowValidatedRegime: 1 });
+      // the detection floor, which is also the top of the unvalidated range
+      expect(regimeFlags(0.6099)).toEqual({ unvalidatedRegime: 1, belowValidatedRegime: 1 });
       expect(regimeFlags(0.61)).toEqual({ unvalidatedRegime: 0, belowValidatedRegime: 0 });
       expect(regimeFlags(0.95)).toEqual({ unvalidatedRegime: 0, belowValidatedRegime: 0 });
     });
@@ -1304,7 +1305,7 @@ describe('MetricsCalculator — exportToExcel (spheroid_invasive)', () => {
     const headers = primaryColumns.map(c => c.header ?? '');
     expect(headers.some(h => h.includes('um^2'))).toBe(true);
     expect(headers).toContain('Outside-core Fraction (Index B)');
-    expect(headers).toContain('Unvalidated Regime: Outside-core Fraction 0.08-0.47 (0/1)');
+    expect(headers).toContain('Unvalidated Regime: Outside-core Fraction 0.08-0.61 (0/1)');
     expect(headers).toContain('Below Validated Floor: Outside-core Fraction < 0.61 (0/1)');
     expect(headers.some(h => /DI < 0\.6|0\.15-0\.30/.test(h))).toBe(false);
     expect(headers).toContain('Reach p90 (R_core)');
