@@ -101,8 +101,9 @@ class TestDisintegrationIndex:
         assert out["area_core_px"] < dm.MIN_CORE_PX
         assert "below the minimum core size" in out["note"]
         for k in ("index_b", "reach_p90", "n_fragments", "solidity", "core_fragmented",
-                  "unvalidated_regime", "below_validated_regime"):
+                  "unvalidated_regime"):
             assert out[k] is None, k
+        assert "below_validated_regime" not in out
 
     def test_disk_with_matching_core_returns_low_di(self, client):
         pts = _circle(CX, CY, 100)
@@ -111,8 +112,9 @@ class TestDisintegrationIndex:
         assert out["reference"] == "core"
         assert out["di"] < 0.05
         assert out["index_b"] == 0.0
-        # an intact spheroid is below the detection floor (outside-core fraction < 0.61), and says so
-        assert out["below_validated_regime"] == 1
+        # an intact spheroid is below the 0.61 floor, so its read-out is flagged unvalidated
+        assert out["unvalidated_regime"] == 1
+        assert "below_validated_regime" not in out
 
     def test_smaller_core_increases_di(self, client):
         mask_pts = _circle(CX, CY, 200)
@@ -220,8 +222,7 @@ class TestDisintegrationPanel:
                  "n_core_components": "n_core_components",
                  "largest_core_component_frac": "largest_core_component_frac",
                  "core_centroid_shift": "core_centroid_shift", "core_fragmented": "core_fragmented",
-                 "unvalidated_regime": "unvalidated_regime",
-                 "below_validated_regime": "below_validated_regime"}
+                 "unvalidated_regime": "unvalidated_regime"}
         for api_key, ref_key in pairs.items():
             assert out[api_key] == pytest.approx(ref[ref_key], abs=1e-12), api_key
         assert out["algorithm_sha256"] == dm.ALGORITHM_SOURCE_SHA256
@@ -280,13 +281,19 @@ class TestDisintegrationPanel:
         assert wide["index_b"] > tight["index_b"]
 
     def test_unvalidated_regime_flag(self, client):
-        # core radius 100, foreground radius 115 -> outside-core fraction
-        # 1 - (100/115)^2 ~ 0.24, inside the unvalidated range [0.08, 0.61)
-        out = _post(client, {"mask_polygon": _circle(CX, CY, 115),
+        # One flag for every outside-core fraction below the 0.61 floor.
+        # core radius 100, foreground radius 115 -> 1 - (100/115)^2 ~ 0.24: flagged
+        low = _post(client, {"mask_polygon": _circle(CX, CY, 115),
                              "core_polygon": _circle(CX, CY, 100),
                              "image_width": W, "image_height": H})
-        assert dm.UNVALIDATED_LO <= out["index_b"] < dm.UNVALIDATED_HI
-        assert out["unvalidated_regime"] == 1
+        assert low["index_b"] < dm.VALIDATED_FRACTION_FLOOR
+        assert low["unvalidated_regime"] == 1
+        # foreground radius 200 -> 1 - (100/200)^2 = 0.75, above the floor: not flagged
+        high = _post(client, {"mask_polygon": _circle(CX, CY, 200),
+                              "core_polygon": _circle(CX, CY, 100),
+                              "image_width": W, "image_height": H})
+        assert high["index_b"] >= dm.VALIDATED_FRACTION_FLOOR
+        assert high["unvalidated_regime"] == 0
 
 
 @pytest.mark.unit

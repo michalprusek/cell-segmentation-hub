@@ -64,6 +64,17 @@ describe('generateMetricsGuide — type-specific dispatch', () => {
       );
     });
 
+    it('documents one unvalidated flag below 0.61, a screen and not a ranking', () => {
+      expect(guide).toContain('**Unvalidated** — outside-core fraction below 0.61');
+      expect(guide).toContain(
+        'screens for gross disintegration and is not a ranking'
+      );
+      // the two flags it replaced are gone
+      expect(guide).not.toContain('**Below Validated Floor**');
+      expect(guide).not.toContain('**Unvalidated Regime**');
+      expect(guide).not.toContain('[0.08, 0.61)');
+    });
+
     it('documents the resample to 1.28 um/px and the Note it leaves', () => {
       // The Note text the export writes (resampleNote) is what a reader looks
       // for, so the guide quotes its opening words.

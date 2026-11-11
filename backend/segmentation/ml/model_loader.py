@@ -1538,7 +1538,7 @@ class ModelLoader:
         methods.
 
         The paper's read-out — DI, Index B, reach_p90, fragments, solidity, areas,
-        core diagnostics and regime flags — is computed HERE, from the raster
+        core diagnostics and the regime flag — is computed HERE, from the raster
         argmax mask, by ``api.disintegration_metrics`` (a verbatim port of the
         paper's ``compute_di.py``), and returned as ``image_metrics``. The
         polygons are for display and editing; re-rasterising them loses the

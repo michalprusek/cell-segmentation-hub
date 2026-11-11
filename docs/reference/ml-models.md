@@ -233,7 +233,7 @@ matrix, where the quantity of interest is how much has left the dense core.
   intact spheroid `251201_0 (20)`, flagged `core_fragmented`) now splits every
   time.
 - The per-image read-out (outside-core fraction, DI, reach, fragments, core diagnostics,
-  regime flags) is computed from the **raster** argmax mask at inference time by
+  regime flag) is computed from the **raster** argmax mask at inference time by
   `api/disintegration_metrics.py`, a verbatim port of the paper's
   `compute_di.py`, and returned as `image_metrics`; `warnings` carries the
   input-scale check (validated: 2048 × 2048 px at ~1.28 µm/px).

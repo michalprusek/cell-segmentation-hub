@@ -7,8 +7,8 @@ paper repository (GigaScience submission, released code DOI
 constants above them are copied VERBATIM from that file (the CLI ``main`` is
 not). ``ALGORITHM_SOURCE_SHA256`` is the SHA-256 of the exact file they were
 copied from; ``backend/segmentation_cpu_tests/test_disintegration_parity.py``
-checks this port against values that file computed on seven synthetic masks
-(five with a defined DI), to 1e-9. When the paper's file changes, re-copy the
+checks this port against values that file computed on eight synthetic masks
+(six with a defined DI), to 1e-9. When the paper's file changes, re-copy the
 four functions, update the hash and regenerate the fixtures
 (``backend/segmentation_cpu_tests/fixtures/di_parity/README.md`` says how) —
 never edit the copied bodies here on their own, or the web app and the paper
@@ -38,7 +38,7 @@ from scipy import ndimage
 
 # SHA-256 of the compute_di.py the functions below were copied from.
 ALGORITHM_SOURCE = "spheroid_seg/compute_di.py"
-ALGORITHM_SOURCE_SHA256 = "13d7b950179bba726a851c78fcecf4bcd6926ec57088aa3ca6877ce3a21fd487"
+ALGORITHM_SOURCE_SHA256 = "b84d9e7ff63b62fd2485fbb6d537086e75f1180645f01cbbac217cd747e48db3"
 
 # ---------------------------------------------------------------------------
 # VERBATIM from compute_di.py (constants and the four functions).
@@ -59,22 +59,16 @@ MIN_CORE_PX = 16048
 CORE_LARGEST_MIN = 0.99
 CORE_SHIFT_MAX = 0.1
 _S8 = np.ones((3, 3), dtype=int)
-# Both regime flags key on the outside-core fraction (Index B), the read-out of the paper (2026-10-07; they
-# were keyed on [0.15, 0.30) and on DI < 0.6 before, and on new data the DI criterion flagged far more read-outs
-# than the range in which the model was actually checked against expert masks).
+# One regime flag, keyed on the outside-core fraction (Index B), the read-out of the paper. A predicted fraction
+# below VALIDATED_FRACTION_FLOOR is flagged `unvalidated_regime`; at and above it the read-out is returned unflagged.
 #
-# The unvalidated range runs from just above the largest expert fraction of an intact (0 h) image, 0.0763, up to
-# the detection floor below. Between 0.08 and 0.4755 the release holds no expert mask at all, and between 0.4755
-# and the floor only the three half-dispersed spheroids (0.4755 to 0.5476), all of which the model under-reads.
-# A read-out landing anywhere in this range comes from a regime in which the pipeline has not been shown to follow
-# an expert, and is flagged rather than returned as though it were as well supported as the rest. (The upper bound
-# was 0.47 until 2026-11-08, matching spheroid_seg/compute_di.py of the paper's code record.)
-UNVALIDATED_LO, UNVALIDATED_HI = 0.08, 0.61
-# The detection floor. At and above this fraction the model reproduces the expert read-out (0.6137 is the
-# smallest expert value among the 247 treated images on which it does). Below it the only expert-masked
-# spheroids are compact ones and three half-dispersed ones (0.4755 to 0.5476), all three of which the model read
-# as compact: a low read-out means intact, held compact, or not yet grossly disintegrated, and the prediction
-# cannot say which. Below the floor the read-out is a screen, not a graded measurement.
+# 0.61 is the lowest expert fraction of a dispersed released image (0.6137; 247 of the 263 expert 48 h masks lie at
+# or above it, and on those the model's fraction follows the expert's). Below it the release holds expert masks of
+# intact and compact spheroids and of three spheroids of intermediate expert fraction (0.48 to 0.55), and the
+# model reads all three at 0.0 to 0.08 (held-out model of run v7, analysis/di_core/di_core_heldout_lobo2026_v7.csv),
+# two of them within the values of the intact spheroids (at most 0.05 on the 265 held-out 0 h images). An
+# intermediate spheroid can therefore read anywhere below 0.61, and a value below it is a screen for gross
+# disintegration, not a ranking. The flag marks the read-out; it does not change it.
 VALIDATED_FRACTION_FLOOR = 0.61
 
 
@@ -149,8 +143,7 @@ def disintegration_index(mask: np.ndarray) -> dict | None:
         "largest_core_component_frac": largest_cc,
         "core_centroid_shift": shift,
         "core_fragmented": int(largest_cc < CORE_LARGEST_MIN or shift > CORE_SHIFT_MAX),
-        "unvalidated_regime": int(UNVALIDATED_LO <= index_b < UNVALIDATED_HI),
-        "below_validated_regime": int(index_b < VALIDATED_FRACTION_FLOOR),
+        "unvalidated_regime": int(index_b < VALIDATED_FRACTION_FLOOR),
         "note": "",
     }
 
@@ -183,7 +176,7 @@ METRIC_FIELDS = (
     "DI", "W1", "index_B", "reach_p90", "n_fragments", "largest_fragment_frac",
     "solidity", "area_core_px", "area_corona_px", "area_total_px",
     "n_core_components", "largest_core_component_frac", "core_centroid_shift",
-    "core_fragmented", "unvalidated_regime", "below_validated_regime",
+    "core_fragmented", "unvalidated_regime",
 )
 
 

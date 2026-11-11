@@ -1,7 +1,7 @@
 {
  "generator": "spheroid_rozpad/analysis/review_fixes/hub_parity_fixtures.py",
  "source": "spheroid_seg/compute_di.py",
- "source_sha256": "13d7b950179bba726a851c78fcecf4bcd6926ec57088aa3ca6877ce3a21fd487",
+ "source_sha256": "b84d9e7ff63b62fd2485fbb6d537086e75f1180645f01cbbac217cd747e48db3",
  "masks_sha256": "e1e7e993ae00946e3b9479b62e389cba30fb511bcf0f5c3fa1f870c4b7558e3e",
  "tolerance": 1e-09,
  "expected": {
@@ -22,8 +22,7 @@
     "largest_core_component_frac": 1.0,
     "core_centroid_shift": 0.0,
     "core_fragmented": 0,
-    "unvalidated_regime": 0,
-    "below_validated_regime": 1
+    "unvalidated_regime": 1
    },
    "core_components": [
     1,
@@ -50,8 +49,7 @@
     "largest_core_component_frac": 1.0,
     "core_centroid_shift": 0.0,
     "core_fragmented": 0,
-    "unvalidated_regime": 0,
-    "below_validated_regime": 0
+    "unvalidated_regime": 0
    },
    "core_components": [
     1,
@@ -78,8 +76,7 @@
     "largest_core_component_frac": 0.9583416186120501,
     "core_centroid_shift": 0.08721715840278743,
     "core_fragmented": 1,
-    "unvalidated_regime": 1,
-    "below_validated_regime": 1
+    "unvalidated_regime": 1
    },
    "core_components": [
     2,
@@ -106,8 +103,7 @@
     "largest_core_component_frac": 1.0,
     "core_centroid_shift": 0.0,
     "core_fragmented": 0,
-    "unvalidated_regime": 0,
-    "below_validated_regime": 0
+    "unvalidated_regime": 0
    },
    "core_components": [
     1,
@@ -134,8 +130,7 @@
     "largest_core_component_frac": 1.0,
     "core_centroid_shift": 0.0,
     "core_fragmented": 0,
-    "unvalidated_regime": 1,
-    "below_validated_regime": 1
+    "unvalidated_regime": 1
    },
    "core_components": [
     1,
@@ -162,8 +157,7 @@
     "largest_core_component_frac": 1.0,
     "core_centroid_shift": 0.0,
     "core_fragmented": 0,
-    "unvalidated_regime": 1,
-    "below_validated_regime": 1
+    "unvalidated_regime": 1
    },
    "core_components": [
     1,
