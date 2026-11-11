@@ -20,10 +20,23 @@ metadata); no network, no HuggingFace token. The file served is the paper's
 deposited production replicate ``prod_s42`` (SHA-256 d47d28ad…ea15, Zenodo
 10.5281/zenodo.22295117) under the unchanged filename — ONE replicate, whereas
 the paper reports five-replicate means; see ``scripts/download_weights.py``.
+
+Ensemble serving (optional). ``SPHEROID_DISINTEGRATION_CHECKPOINTS`` may name
+several checkpoints of this architecture (comma-separated file names inside
+``weights/``). With more than one, each network sees the same preprocessed
+tensor, its logits are turned into class probabilities (softmax over the three
+classes, float32), the probabilities are averaged per pixel in the listed
+order, and the mask is the argmax of that mean. Unset, empty, or naming a
+single file, the model is one network and ``predict`` is exactly the
+single-network argmax it always was (no softmax on that path). See
+``resolve_checkpoints``.
 """
 
 import contextlib
 import logging
+import os
+from pathlib import Path
+from typing import List, Optional, Sequence, Union
 
 import cv2
 import numpy as np
@@ -60,6 +73,47 @@ CLAHE_TILE_GRID = (8, 8)
 # multiple of 32; images are replicate-padded up to the next multiple and the
 # prediction is cropped back to the native size.
 _STRIDE = 32
+# Environment variable that lists the checkpoints to serve (see the module
+# docstring). Read once, when the model is loaded.
+CHECKPOINTS_ENV = "SPHEROID_DISINTEGRATION_CHECKPOINTS"
+
+
+def resolve_checkpoints(
+    spec: Optional[str], weights_dir: Union[str, Path], default: Union[str, Path]
+) -> List[Path]:
+    """The checkpoint files to serve, in order.
+
+    ``spec`` is the raw value of ``CHECKPOINTS_ENV``: comma-separated file
+    names relative to ``weights_dir``. ``None``, an empty string or only
+    separators and blanks mean "not configured" and return ``[default]``
+    unchanged, so the default deployment loads exactly the file it always
+    loaded. Every listed file must exist and must lie inside ``weights_dir``
+    (an absolute path or a ``..`` that escapes it is refused), and no file may
+    be listed twice: a duplicate would silently weight one network twice.
+    Raises ``ValueError`` / ``FileNotFoundError`` rather than falling back,
+    because serving a different model than the one configured is worse than
+    not serving.
+    """
+    names = [n.strip() for n in (spec or "").split(",")]
+    names = [n for n in names if n]
+    if not names:
+        return [Path(default)]
+    root = Path(weights_dir).resolve()
+    out: List[Path] = []
+    for name in names:
+        if os.path.isabs(name):
+            raise ValueError(
+                f"{CHECKPOINTS_ENV}: {name!r} is absolute; list file names inside {root}"
+            )
+        path = (root / name).resolve()
+        if root not in path.parents:
+            raise ValueError(f"{CHECKPOINTS_ENV}: {name!r} lies outside {root}")
+        if not path.is_file():
+            raise FileNotFoundError(f"{CHECKPOINTS_ENV}: checkpoint not found: {path}")
+        if path in out:
+            raise ValueError(f"{CHECKPOINTS_ENV}: {name!r} is listed twice")
+        out.append(path)
+    return out
 
 
 def preprocess_array(rgb: np.ndarray) -> np.ndarray:
@@ -92,21 +146,32 @@ def preprocess_array(rgb: np.ndarray) -> np.ndarray:
 class DisintegrationModel:
     """UNet++/EfficientNet-B5 3-class spheroid-disintegration segmenter.
 
-    Loaded once via ``load_weights()``; call ``predict()`` per image.
+    Loaded once via ``load_weights()``; call ``predict()`` per image. Holds one
+    network, or several of the same architecture served as an ensemble (see the
+    module docstring).
     """
 
     def __init__(self):
         """Initialize without loading — the architecture is built in load_weights()."""
-        self._model = None
+        self._nets = []
         self._device = "cpu"
+        # Base names of the loaded checkpoints, in load order (provenance only).
+        self.checkpoints: List[str] = []
         logger.info("DisintegrationModel (UNet++/EffB5 3-class) wrapper initialized")
 
-    def load_weights(self, weights_path, device):
-        """Build the UNet++/EffB5 network and load the local 3-class checkpoint."""
+    # The single-network view: the first network, or None before loading.
+    # Assigning it replaces the whole ensemble with that one network.
+    @property
+    def _model(self):
+        return self._nets[0] if self._nets else None
+
+    @_model.setter
+    def _model(self, net):
+        self._nets = [] if net is None else [net]
+
+    def _load_one(self, weights_path):
         import segmentation_models_pytorch as smp
 
-        dev_type = getattr(device, "type", str(device))
-        self._device = "cuda" if dev_type == "cuda" else "cpu"
         ck = torch.load(weights_path, map_location=self._device, weights_only=False)
         state = ck["model"] if isinstance(ck, dict) and "model" in ck else ck
         model = smp.UnetPlusPlus(
@@ -118,12 +183,36 @@ class DisintegrationModel:
         # strict=True: the checkpoint matches this architecture exactly; a silent
         # key mismatch would degrade the masks, so fail loudly instead.
         model.load_state_dict(state)
-        self._model = model.to(self._device).eval()
         logger.info(
-            "Disintegration UNet++/EffB5 loaded (device=%s%s)",
+            "Disintegration UNet++/EffB5 loaded from %s (device=%s%s)",
+            Path(weights_path).name,
             self._device,
             f", val={ck['val']}" if isinstance(ck, dict) and "val" in ck else "",
         )
+        return model.to(self._device).eval()
+
+    def load_weights(self, weights_path: Union[str, Path, Sequence[Union[str, Path]]], device):
+        """Build the UNet++/EffB5 network(s) and load the local 3-class checkpoint(s).
+
+        ``weights_path`` is one path, or a non-empty sequence of paths for an
+        ensemble. Nothing is kept unless every checkpoint loads.
+        """
+        dev_type = getattr(device, "type", str(device))
+        self._device = "cuda" if dev_type == "cuda" else "cpu"
+        if isinstance(weights_path, (str, Path)):
+            paths = [weights_path]
+        else:
+            paths = list(weights_path)
+        if not paths:
+            raise ValueError("load_weights: no checkpoint given")
+        nets = [self._load_one(p) for p in paths]
+        self._nets = nets
+        self.checkpoints = [Path(p).name for p in paths]
+        if len(nets) > 1:
+            logger.info(
+                "Disintegration ensemble of %d networks: mean of softmax, then argmax (%s)",
+                len(nets), ", ".join(self.checkpoints),
+            )
 
     def _preprocess(self, rgb: np.ndarray) -> torch.Tensor:
         """``preprocess_array`` wrapped as a 1x3xHxW float32 tensor."""
@@ -133,9 +222,11 @@ class DisintegrationModel:
         """Segment one image at its native resolution.
 
         ``rgb`` is a uint8 H×W×3 array. Returns a uint8 H×W mask with values
-        0 = background, 1 = corona, 2 = core (argmax over the 3 class logits).
+        0 = background, 1 = corona, 2 = core: the argmax over the 3 class logits
+        of the one network, or, for an ensemble, the argmax over the per-pixel
+        mean of the networks' softmax probabilities.
         """
-        if self._model is None:
+        if not self._nets:
             raise RuntimeError("Model not loaded. Call load_weights() first.")
         h, w = rgb.shape[:2]
         x = self._preprocess(rgb)
@@ -157,31 +248,56 @@ class DisintegrationModel:
             and torch.cuda.is_available()
             and torch.cuda.is_bf16_supported()
         )
-        amp = (
-            torch.autocast("cuda", dtype=torch.bfloat16)
-            if use_bf16
-            else contextlib.nullcontext()
-        )
-        with torch.no_grad(), amp:
-            logits = self._model(x).float()
-        mask = logits.argmax(dim=1)[0].to("cpu").numpy().astype(np.uint8)
+        # A fresh context per forward pass (the ensemble enters one per network).
+        def amp():
+            return (
+                torch.autocast("cuda", dtype=torch.bfloat16)
+                if use_bf16
+                else contextlib.nullcontext()
+            )
+
+        if len(self._nets) == 1:
+            # One network: the argmax of its logits, exactly as before the
+            # ensemble existed. Not routed through softmax, which can turn two
+            # distinct logits into equal probabilities and so change which
+            # class an argmax tie picks.
+            with torch.no_grad(), amp():
+                scores = self._nets[0](x).float()
+        else:
+            # Ensemble, as the paper's predict.py serves one (ENSEMBLE_RULE
+            # there): each network's float32 logits leave the autocast region,
+            # a softmax over the three classes turns them into probabilities,
+            # these are summed in the listed order and divided by the count,
+            # and the argmax picks the class (a tie goes to the lower index).
+            # The forward passes run one after another, so the activation
+            # peak is one network's.
+            scores = None
+            with torch.no_grad():
+                for net in self._nets:
+                    with amp():
+                        logits = net(x).float()
+                    prob = torch.softmax(logits, dim=1)
+                    scores = prob if scores is None else scores + prob
+                scores = scores / len(self._nets)
+        mask = scores.argmax(dim=1)[0].to("cpu").numpy().astype(np.uint8)
         return mask[:h, :w]
 
     # ---- PyTorch-compatible stubs (for ModelLoader uniformity) ---------------
     def eval(self):
-        """Put the underlying model in eval mode (already set during load)."""
-        if self._model is not None:
-            self._model.eval()
+        """Put the underlying network(s) in eval mode (already set during load)."""
+        for net in self._nets:
+            net.eval()
         return self
 
     def to(self, device):
-        """Move the underlying model; device is normally pinned in load_weights()."""
-        if self._model is not None:
+        """Move the underlying network(s); device is normally pinned in load_weights()."""
+        if self._nets:
             dev_type = getattr(device, "type", str(device))
             self._device = "cuda" if dev_type == "cuda" else "cpu"
-            self._model.to(self._device)
+            for net in self._nets:
+                net.to(self._device)
         return self
 
     def parameters(self):
-        """Expose the network's parameters (used only for device introspection)."""
-        return self._model.parameters() if self._model is not None else iter([])
+        """Expose the networks' parameters (used only for device introspection)."""
+        return (p for net in self._nets for p in net.parameters())
