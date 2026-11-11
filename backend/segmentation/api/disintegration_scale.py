@@ -234,7 +234,7 @@ def read_out(
     about that pixel size, not two. With a plan:
 
     * every metric -- DI, the outside-core fraction (index_B), reach, fragments,
-      the core diagnostics and the regime flags -- is computed on the MODEL-grid
+      the core diagnostics and the regime flag -- is computed on the MODEL-grid
       mask, because the paper defines them there: ``MIN_CORE_PX`` (16 048 px) is
       the smallest expert core AT 1.28 um/px, and fragment counts depend on the
       pixel size. The ``note`` of an undefined DI quotes the model-grid core,

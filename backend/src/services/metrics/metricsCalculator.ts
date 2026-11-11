@@ -124,8 +124,7 @@ export interface ImageMetrics {
   largestCoreComponentFrac: number | null;
   coreCentroidShift: number | null; // centroid shift by the minor pieces, in R_core
   coreFragmented: number | null; // 0/1: the core anchor is broken (inspect)
-  unvalidatedRegime: number | null; // 0/1: Index B in [0.08, 0.47), where the paper's release holds no expert mask
-  belowValidatedRegime: number | null; // 0/1: Index B < 0.61 (the detection floor), a screen not a grade
+  unvalidatedRegime: number | null; // 0/1: Index B < 0.61, where the value screens for gross disintegration and is not a ranking
   // Where the numbers came from: the model's raster mask at inference time,
   // or the stored polygons re-rasterised (no raster read-out, or edited).
   diSource: 'model_raster' | 'polygons' | null;
@@ -167,7 +166,6 @@ function naDiFields(
     coreCentroidShift: null,
     coreFragmented: null,
     unvalidatedRegime: null,
-    belowValidatedRegime: null,
     diSource,
     note,
     warnings,
@@ -191,36 +189,36 @@ interface PaperPanel {
   largest_core_component_frac?: number | null;
   core_centroid_shift?: number | null;
   core_fragmented?: number | null;
+  // Read-outs stored before 2026-11-11 also carry below_validated_regime and an
+  // unvalidated_regime under an older rule; neither is read (see regimeFlags).
   unvalidated_regime?: number | null;
-  below_validated_regime?: number | null;
 }
 
-// The two regime flags are functions of the outside-core fraction (Index B)
-// alone. Mirrors UNVALIDATED_LO / UNVALIDATED_HI / VALIDATED_FRACTION_FLOOR in
+// The one regime flag is a function of the outside-core fraction (Index B)
+// alone. Mirrors VALIDATED_FRACTION_FLOOR in
 // backend/segmentation/api/disintegration_metrics.py (a verbatim port of the
 // paper's compute_di.py); a unit test reads that file and fails if they drift.
-export const UNVALIDATED_FRACTION_LO = 0.08;
-export const UNVALIDATED_FRACTION_HI = 0.47;
 export const VALIDATED_FRACTION_FLOOR = 0.61;
 
+// The export column of the flag. Says what a flagged value is good for: below
+// 0.61 it screens for gross disintegration and does not rank spheroids.
+export const UNVALIDATED_COLUMN_HEADER =
+  'Unvalidated: Outside-core Fraction < 0.61, a Screen Not a Ranking (0/1)';
+
 // Derived here from Index B instead of being read from the panel, so that a
-// read-out stored before the flags were re-keyed (until 2026-10 they keyed on
-// Index B in [0.15, 0.30) and on DI < 0.6) is exported under the current rule
-// without recomputing anything.
+// read-out stored under an older rule is exported under the current one
+// without recomputing anything. Until 2026-10 the flags keyed on Index B in
+// [0.15, 0.30) and on DI < 0.6; until 2026-11-11 an unvalidated range
+// ([0.08, 0.47), then [0.08, 0.61)) stood beside a separate below-floor flag.
+// Now one flag: every Index B below the floor is unvalidated, because below it
+// the value screens for gross disintegration and is not a ranking.
 export function regimeFlags(indexB: number | null): {
   unvalidatedRegime: number | null;
-  belowValidatedRegime: number | null;
 } {
   if (indexB === null) {
-    return { unvalidatedRegime: null, belowValidatedRegime: null };
+    return { unvalidatedRegime: null };
   }
-  return {
-    unvalidatedRegime:
-      indexB >= UNVALIDATED_FRACTION_LO && indexB < UNVALIDATED_FRACTION_HI
-        ? 1
-        : 0,
-    belowValidatedRegime: indexB < VALIDATED_FRACTION_FLOOR ? 1 : 0,
-  };
+  return { unvalidatedRegime: indexB < VALIDATED_FRACTION_FLOOR ? 1 : 0 };
 }
 
 function panelToDiFields(
@@ -887,7 +885,6 @@ export class MetricsCalculator {
       core_centroid_shift: number | null;
       core_fragmented: number | null;
       unvalidated_regime: number | null;
-      below_validated_regime: number | null;
       resample?: RasterResample | null;
     }>('/api/disintegration-index', {
       mask_polygons,
@@ -924,7 +921,6 @@ export class MetricsCalculator {
         core_centroid_shift: d.core_centroid_shift,
         core_fragmented: d.core_fragmented,
         unvalidated_regime: d.unvalidated_regime,
-        below_validated_regime: d.below_validated_regime,
       },
       'polygons',
       exportWarning ? [exportWarning] : [],
@@ -1547,14 +1543,9 @@ export class MetricsCalculator {
       },
       { header: 'Core Fragmented (0/1)', key: 'coreFragmented', width: 22 },
       {
-        header: 'Unvalidated Regime: Outside-core Fraction 0.08-0.47 (0/1)',
+        header: UNVALIDATED_COLUMN_HEADER,
         key: 'unvalidatedRegime',
-        width: 52,
-      },
-      {
-        header: 'Below Validated Floor: Outside-core Fraction < 0.61 (0/1)',
-        key: 'belowValidatedRegime',
-        width: 52,
+        width: 66,
       },
       { header: 'DI Source', key: 'diSource', width: 14 },
       { header: 'Note', key: 'note', width: 48 },
@@ -1592,7 +1583,6 @@ export class MetricsCalculator {
           coreCentroidShift: naNum(m.coreCentroidShift, 4),
           coreFragmented: naNum(m.coreFragmented, 0),
           unvalidatedRegime: naNum(m.unvalidatedRegime, 0),
-          belowValidatedRegime: naNum(m.belowValidatedRegime, 0),
           diSource:
             m.diSource === 'model_raster'
               ? 'raster'

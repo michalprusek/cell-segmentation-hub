@@ -196,8 +196,8 @@ property:
 `Reach p90 (R_core)`, `Corona Fragments`, `Largest-Fragment Fraction`,
 `Solidity`, `Core Components`, `Largest Core Component Fraction`,
 `Core Centroid Shift (R_core)`, `Core Fragmented (0/1)`,
-`Unvalidated Regime: Outside-core Fraction 0.08-0.47 (0/1)`,
-`Below Validated Floor: Outside-core Fraction < 0.61 (0/1)`, `DI Source`, `Note`,
+`Unvalidated: Outside-core Fraction < 0.61, a Screen Not a Ranking (0/1)`,
+`DI Source`, `Note`,
 `Input-Scale Warning`.
 
 Every DI-derived column reads the literal string **`N/A`** when no valid core

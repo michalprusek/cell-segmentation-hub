@@ -70,7 +70,8 @@ export interface RasterImageMetrics {
   core_centroid_shift: number | null;
   core_fragmented: number | null;
   unvalidated_regime: number | null;
-  below_validated_regime: number | null;
+  /** Only on read-outs stored before 2026-11-11 (the second flag); never read. */
+  below_validated_regime?: number | null;
   /** Absent when the frame was scored at its uploaded scale. */
   resample?: RasterResample | null;
   /** Present only when a known pixel size was declined (see the type). */

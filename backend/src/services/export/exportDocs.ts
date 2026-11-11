@@ -771,14 +771,15 @@ corona does.
 - **Core Fragmented** — the largest core piece holds < 99 % of the core, or the
 minor pieces move the centroid by > 0.1 \`R_C\`. DI then rests on a broken
 anchor; inspect the image. The flag does not change DI.
-- **Unvalidated Regime** — outside-core fraction in \`[0.08, 0.47)\`, a range in
-which the paper's dataset holds no expert mask; the value is computed the same
-way but was never checked against an expert.
-- **Below Validated Floor** — outside-core fraction < 0.61, the detection floor.
-Below it the pipeline does not separate an intact spheroid from a partly
-dispersed one: read it as "not grossly disintegrated", a screen rather than a
-graded value. Both flags key on the outside-core fraction (until October 2026
-they keyed on \`[0.15, 0.30)\` and on DI < 0.6).
+- **Unvalidated** — outside-core fraction below 0.61. Below 0.61 the value
+screens for gross disintegration and is not a ranking: an intact spheroid, one
+held compact and one that has begun to disperse can all read low, and the
+model has not been shown to order them the way an expert would. At and above
+0.61 the model's fraction follows the expert's on the paper's dataset; the flag
+is then 0. The value itself is computed the same way either way. (Until
+November 2026 the export had two flags here, an unvalidated range and a
+below-floor flag; they are now this one. Until October 2026 the flags keyed on
+\`[0.15, 0.30)\` and on DI < 0.6.)
 
 ## Pixel size, resampling and the input-scale warning
 

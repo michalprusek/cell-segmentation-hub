@@ -253,6 +253,13 @@ services:
       - PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512,garbage_collection_threshold:0.6
       - CUDA_LAUNCH_BLOCKING=0
       - ML_GPU_PRIORITY=high
+      # Spheroid-disintegration ensemble, OFF unless set: comma-separated
+      # checkpoint file names inside ./backend/segmentation/weights (mounted
+      # at /app/weights), e.g. prod_s42.pth,prod_s7.pth,prod_s1337.pth. Their
+      # softmax probabilities are averaged per pixel, then argmax. Empty or
+      # unset = the single default checkpoint, the path served until now. A
+      # listed file that is missing fails the model load (no fall-back).
+      - SPHEROID_DISINTEGRATION_CHECKPOINTS=${SPHEROID_DISINTEGRATION_CHECKPOINTS:-}
       # No HF_TOKEN and no HuggingFace cache mount: NOTHING here fetches from
       # the Hub. Verified 2026-09-20 by loading all 11 models in this image with
       # no cache, no token and `--network none`, so a fetch could not silently

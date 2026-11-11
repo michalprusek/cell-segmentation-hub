@@ -91,9 +91,10 @@ class DisintegrationResponse(BaseModel):
     largest_core_component_frac: Optional[float] = None
     core_centroid_shift: Optional[float] = None
     core_fragmented: Optional[int] = None
-    # Regime flags, as compute_di.py writes them (0/1).
+    # The regime flag, as compute_di.py writes it (0/1): 1 for an outside-core
+    # fraction below the 0.61 detection floor, where the read-out screens for
+    # gross disintegration and is not a ranking.
     unvalidated_regime: Optional[int] = None
-    below_validated_regime: Optional[int] = None
     warnings: List[str] = []
     # Present only when the mask was scored at 1.28 um/px after resampling:
     # {input_um_per_px, model_um_per_px, factor, model_w, model_h}. The panel
@@ -254,7 +255,7 @@ def disintegration_index(request: DisintegrationRequest):
         DI  = tanh(W1)  in [0, 1)
 
     with Index B, reach_p90, raw corona fragments, solidity, the core-anchor
-    diagnostics and both regime flags defined exactly as the paper defines them.
+    diagnostics and the regime flag defined exactly as the paper defines them.
 
     DI is undefined without a usable core: no core polygon (or one that
     rasterises to nothing) gives ``reference='no_core'``; a core below
@@ -345,7 +346,6 @@ def disintegration_index(request: DisintegrationRequest):
             core_centroid_shift=r["core_centroid_shift"],
             core_fragmented=r["core_fragmented"],
             unvalidated_regime=r["unvalidated_regime"],
-            below_validated_regime=r["below_validated_regime"],
             resample=resample,
         )
     except HTTPException:

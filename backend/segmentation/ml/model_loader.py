@@ -97,7 +97,11 @@ except ImportError as e:
 # needs segmentation-models-pytorch + timm). Backs the `spheroid_disintegration` key.
 _disintegration_import_error = None
 try:
-    from models.disintegration import DisintegrationModel
+    from models.disintegration import (
+        CHECKPOINTS_ENV as _DISINTEGRATION_CHECKPOINTS_ENV,
+        DisintegrationModel,
+        resolve_checkpoints as _resolve_disintegration_checkpoints,
+    )
 except ImportError as e:
     logger.warning(
         f"Could not import DisintegrationModel: {e}. "
@@ -499,10 +503,27 @@ class ModelLoader:
                         f"Disintegration model architecture not available: "
                         f"{_disintegration_import_error}"
                     )
+                # SPHEROID_DISINTEGRATION_CHECKPOINTS, when set, lists the
+                # checkpoints of an ensemble (file names inside weights/,
+                # averaged softmax then argmax). Unset or empty, the list is
+                # [weights_full_path] and the model is the one network it
+                # always was. A listed file that is missing fails the load:
+                # no silent fall-back to a different model.
+                checkpoints = _resolve_disintegration_checkpoints(
+                    os.environ.get(_DISINTEGRATION_CHECKPOINTS_ENV),
+                    self.base_path / 'weights',
+                    weights_full_path,
+                )
                 model = DisintegrationModel()
-                model.load_weights(str(weights_full_path), self.device)
+                if len(checkpoints) == 1:
+                    model.load_weights(str(checkpoints[0]), self.device)
+                else:
+                    model.load_weights([str(c) for c in checkpoints], self.device)
                 self.loaded_models[model_name] = model
-                logger.info(f"Successfully loaded disintegration model from: {weights_full_path}")
+                logger.info(
+                    "Successfully loaded disintegration model from: %s",
+                    ", ".join(str(c) for c in checkpoints),
+                )
                 return model
             elif model_name == 'segformer':
                 # SegFormer-B0 wraps a HuggingFace model, so it can't use the
@@ -1517,7 +1538,7 @@ class ModelLoader:
         methods.
 
         The paper's read-out — DI, Index B, reach_p90, fragments, solidity, areas,
-        core diagnostics and regime flags — is computed HERE, from the raster
+        core diagnostics and the regime flag — is computed HERE, from the raster
         argmax mask, by ``api.disintegration_metrics`` (a verbatim port of the
         paper's ``compute_di.py``), and returned as ``image_metrics``. The
         polygons are for display and editing; re-rasterising them loses the
@@ -1643,6 +1664,9 @@ class ModelLoader:
                     "confidence_scores": [p.get("confidence", 1.0) for p in polygons],
                     "processing_time_s": processing_time,
                     "batch_size": 1,
+                    # The checkpoint file(s) that produced this mask, in the
+                    # order their probabilities were averaged (one = no ensemble).
+                    "checkpoints": list(getattr(model, "checkpoints", [])),
                 },
             }
 

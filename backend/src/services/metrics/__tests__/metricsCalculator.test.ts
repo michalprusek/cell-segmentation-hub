@@ -22,8 +22,7 @@ import {
   ImageMetrics,
   ImageWithSegmentation,
   regimeFlags,
-  UNVALIDATED_FRACTION_LO,
-  UNVALIDATED_FRACTION_HI,
+  UNVALIDATED_COLUMN_HEADER,
   VALIDATED_FRACTION_FLOOR,
 } from '../metricsCalculator';
 import {
@@ -775,8 +774,8 @@ describe('MetricsCalculator — calculateAllImageMetrics (DI / panel)', () => {
     largest_core_component_frac: 1.0,
     core_centroid_shift: 0.0,
     core_fragmented: 0,
-    unvalidated_regime: 0,
-    below_validated_regime: 1,
+    // As the endpoint stored it under an older rule; the export re-derives it.
+    unvalidated_regime: 1,
   };
 
   it('propagates DI + the paper panel from a successful polygon-path response', async () => {
@@ -797,10 +796,10 @@ describe('MetricsCalculator — calculateAllImageMetrics (DI / panel)', () => {
     expect(row.solidity).toBeCloseTo(0.6, 5);
     expect(row.nCoreComponents).toBe(1);
     expect(row.coreFragmented).toBe(0);
+    // The panel carries unvalidated_regime = 1. The flag is derived from
+    // Index B (0.7 >= 0.61), so 0, and there is no second flag.
     expect(row.unvalidatedRegime).toBe(0);
-    // The panel carries below_validated_regime = 1, as the old DI < 0.6 rule
-    // gave for DI 0.42. The flag is derived from Index B (0.7 >= 0.61), so 0.
-    expect(row.belowValidatedRegime).toBe(0);
+    expect('belowValidatedRegime' in row).toBe(false);
     expect(row.diSource).toBe('polygons');
     // polygon path keeps the Shoelace areas
     expect(row.totalSpheroidArea).toBeCloseTo(100, 3);
@@ -831,7 +830,7 @@ describe('MetricsCalculator — calculateAllImageMetrics (DI / panel)', () => {
         largest_fragment_frac: null, solidity: null,
         n_core_components: 1, largest_core_component_frac: 1,
         core_centroid_shift: 0, core_fragmented: null,
-        unvalidated_regime: null, below_validated_regime: null,
+        unvalidated_regime: null,
       },
     });
     const image = buildImage('a8c', [
@@ -844,34 +843,31 @@ describe('MetricsCalculator — calculateAllImageMetrics (DI / panel)', () => {
     expect(row.note).toContain('minimum core size');
   });
 
-  describe('regime flags', () => {
-    it('are functions of the outside-core fraction alone', () => {
-      expect(regimeFlags(null)).toEqual({ unvalidatedRegime: null, belowValidatedRegime: null });
-      // intact: at the floor, not in the gap
-      expect(regimeFlags(0)).toEqual({ unvalidatedRegime: 0, belowValidatedRegime: 1 });
-      // the gap [0.08, 0.47) that holds no expert mask of the paper's release
-      expect(regimeFlags(0.0799)).toEqual({ unvalidatedRegime: 0, belowValidatedRegime: 1 });
-      expect(regimeFlags(0.08)).toEqual({ unvalidatedRegime: 1, belowValidatedRegime: 1 });
-      expect(regimeFlags(0.4699)).toEqual({ unvalidatedRegime: 1, belowValidatedRegime: 1 });
-      expect(regimeFlags(0.47)).toEqual({ unvalidatedRegime: 0, belowValidatedRegime: 1 });
-      // the detection floor
-      expect(regimeFlags(0.6099)).toEqual({ unvalidatedRegime: 0, belowValidatedRegime: 1 });
-      expect(regimeFlags(0.61)).toEqual({ unvalidatedRegime: 0, belowValidatedRegime: 0 });
-      expect(regimeFlags(0.95)).toEqual({ unvalidatedRegime: 0, belowValidatedRegime: 0 });
+  describe('regime flag', () => {
+    it('flags every outside-core fraction below 0.61, and nothing else', () => {
+      expect(regimeFlags(null)).toEqual({ unvalidatedRegime: null });
+      // intact, the old lower gap, the old 0.47 bound and just under the floor:
+      // all below 0.61, where the value screens and does not rank
+      for (const b of [0, 0.0799, 0.08, 0.4699, 0.47, 0.6099]) {
+        expect(regimeFlags(b)).toEqual({ unvalidatedRegime: 1 });
+      }
+      expect(regimeFlags(0.61)).toEqual({ unvalidatedRegime: 0 });
+      expect(regimeFlags(0.95)).toEqual({ unvalidatedRegime: 0 });
     });
 
-    it('use the bounds of the ported compute_di.py', () => {
+    it('uses the floor of the ported compute_di.py, and only that one flag', () => {
       const py = readFileSync(
         join(__dirname, '../../../../segmentation/api/disintegration_metrics.py'),
         'utf8'
       );
-      const gap = /^UNVALIDATED_LO, UNVALIDATED_HI = ([0-9.]+), ([0-9.]+)$/m.exec(py);
       const floor = /^VALIDATED_FRACTION_FLOOR = ([0-9.]+)$/m.exec(py);
-      expect(gap).not.toBeNull();
       expect(floor).not.toBeNull();
-      expect(Number(gap![1])).toBe(UNVALIDATED_FRACTION_LO);
-      expect(Number(gap![2])).toBe(UNVALIDATED_FRACTION_HI);
       expect(Number(floor![1])).toBe(VALIDATED_FRACTION_FLOOR);
+      expect(py).toMatch(
+        /"unvalidated_regime": int\(index_b < VALIDATED_FRACTION_FLOOR\)/
+      );
+      // the range bounds and the second flag are gone from the port
+      expect(py).not.toMatch(/UNVALIDATED_LO|UNVALIDATED_HI|below_validated_regime/);
       // the floor is no longer keyed on the distance-weighted index
       expect(py).not.toMatch(/VALIDATED_DI_FLOOR/);
     });
@@ -904,7 +900,6 @@ describe('MetricsCalculator — calculateAllImageMetrics (DI / panel)', () => {
       core_centroid_shift: 0,
       core_fragmented: 0,
       unvalidated_regime: 0,
-      below_validated_regime: 0,
     };
     const withStored = (id: string, polygons: string, stored: string | null) => ({
       id,
@@ -1061,23 +1056,26 @@ describe('MetricsCalculator — calculateAllImageMetrics (DI / panel)', () => {
       expect(row2.warnings).toEqual([pixelSizeWarning(1.6)]);
     });
 
-    it('re-derives both regime flags from the stored Index B, whatever flags were stored', async () => {
-      // A read-out stored while the flags keyed on DI < 0.6 and on [0.15, 0.30):
-      // DI 0.5 with Index B 0.64 was stored as below the floor, and Index B 0.10
-      // as outside the unvalidated range.
+    it('re-derives the one regime flag from the stored Index B, whatever flags were stored', async () => {
+      // Read-outs stored under older rules carry two flags. DI 0.5 with Index B
+      // 0.64 was stored as below the floor (the DI < 0.6 rule); Index B 0.03
+      // (intact) sat below the old unvalidated range [0.08, 0.61) and was
+      // stored with unvalidated_regime 0; Index B 0.56 sat outside the earlier
+      // [0.08, 0.47). Only Index B decides now.
       const stale = (indexB: number, di: number, below: number, unval: number) =>
         serialiseImageMetricsForStorage(
           { ...raster, DI: di, index_B: indexB, below_validated_regime: below, unvalidated_regime: unval },
           polygonsJson
         );
-      const hug = (await calc.calculateAllImageMetrics([withStored('rf1', polygonsJson, stale(0.64, 0.5, 1, 0))]))[0]!;
+      const hug = (await calc.calculateAllImageMetrics([withStored('rf1', polygonsJson, stale(0.64, 0.5, 1, 1))]))[0]!;
       expect(postMock).not.toHaveBeenCalled();
       expect(hug.diSource).toBe('model_raster');
-      expect(hug.belowValidatedRegime).toBe(0);
       expect(hug.unvalidatedRegime).toBe(0);
-      const rim = (await calc.calculateAllImageMetrics([withStored('rf2', polygonsJson, stale(0.1, 0.03, 1, 0))]))[0]!;
-      expect(rim.belowValidatedRegime).toBe(1);
-      expect(rim.unvalidatedRegime).toBe(1);
+      expect('belowValidatedRegime' in hug).toBe(false);
+      const intact = (await calc.calculateAllImageMetrics([withStored('rf2', polygonsJson, stale(0.03, 0.01, 1, 0))]))[0]!;
+      expect(intact.unvalidatedRegime).toBe(1);
+      const half = (await calc.calculateAllImageMetrics([withStored('rf3', polygonsJson, stale(0.56, 0.3, 1, 0))]))[0]!;
+      expect(half.unvalidatedRegime).toBe(1);
     });
 
     it('is ignored once the polygons were edited (hash mismatch) and says so', async () => {
@@ -1204,8 +1202,9 @@ describe('MetricsCalculator — exportToExcel (spheroid_invasive)', () => {
       largestCoreComponentFrac: 0.985,
       coreCentroidShift: 0.12,
       coreFragmented: 1,
-      unvalidatedRegime: 0,
-      belowValidatedRegime: 1,
+      // deliberately not what Index B 0.75 gives: the sheet writes the row's
+      // flag as it is (the flag is derived earlier, in panelToDiFields)
+      unvalidatedRegime: 1,
       diSource: 'model_raster',
       note: '',
       warnings: ['frame is 1024x1024 px; …', 'pixel size is 2 um/px; …'],
@@ -1231,7 +1230,6 @@ describe('MetricsCalculator — exportToExcel (spheroid_invasive)', () => {
       coreCentroidShift: null,
       coreFragmented: null,
       unvalidatedRegime: null,
-      belowValidatedRegime: null,
       diSource: 'polygons',
       note: 'no core: DI undefined',
       warnings: [],
@@ -1279,7 +1277,8 @@ describe('MetricsCalculator — exportToExcel (spheroid_invasive)', () => {
     expect(coreRow.solidity).toBeCloseTo(0.55, 4);
     expect(coreRow.nCoreComponents).toBe(2);
     expect(coreRow.coreFragmented).toBe(1);
-    expect(coreRow.belowValidatedRegime).toBe(1);
+    expect(coreRow.unvalidatedRegime).toBe(1);
+    expect('belowValidatedRegime' in coreRow).toBe(false);
     expect(coreRow.diSource).toBe('raster');
     expect(coreRow.warnings).toBe('frame is 1024x1024 px; … | pixel size is 2 um/px; …');
     for (const key of [
@@ -1291,7 +1290,6 @@ describe('MetricsCalculator — exportToExcel (spheroid_invasive)', () => {
       'solidity',
       'coreFragmented',
       'unvalidatedRegime',
-      'belowValidatedRegime',
     ]) {
       expect(noCoreRow[key]).toBe('N/A');
     }
@@ -1304,8 +1302,14 @@ describe('MetricsCalculator — exportToExcel (spheroid_invasive)', () => {
     const headers = primaryColumns.map(c => c.header ?? '');
     expect(headers.some(h => h.includes('um^2'))).toBe(true);
     expect(headers).toContain('Outside-core Fraction (Index B)');
-    expect(headers).toContain('Unvalidated Regime: Outside-core Fraction 0.08-0.47 (0/1)');
-    expect(headers).toContain('Below Validated Floor: Outside-core Fraction < 0.61 (0/1)');
+    // one flag column, saying what a flagged value is good for
+    expect(headers).toContain(
+      'Unvalidated: Outside-core Fraction < 0.61, a Screen Not a Ranking (0/1)'
+    );
+    expect(UNVALIDATED_COLUMN_HEADER).toBe(
+      'Unvalidated: Outside-core Fraction < 0.61, a Screen Not a Ranking (0/1)'
+    );
+    expect(headers.filter(h => /Unvalidated|Validated Floor/.test(h))).toHaveLength(1);
     expect(headers.some(h => /DI < 0\.6|0\.15-0\.30/.test(h))).toBe(false);
     expect(headers).toContain('Reach p90 (R_core)');
     expect(headers.some(h => /q95|Hole Count|Equiv\. Diameter/.test(h))).toBe(false);

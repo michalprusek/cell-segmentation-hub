@@ -145,8 +145,7 @@ row on a grid its unedited neighbours were not scored on. See
 | `Largest Core Component Fraction` | largest core component / core                                                                                  |
 | `Core Centroid Shift (R_core)`    | shift of the core centroid caused by the minor core pieces                                                     |
 | `Core Fragmented (0/1)`           | largest core piece < 99 % of the core, or centroid shift > 0.1 `R_C` — inspect                                 |
-| `Unvalidated Regime (0/1)`        | outside-core fraction in `[0.08, 0.47)`, where the paper's release holds no expert mask                        |
-| `Below Validated Floor (0/1)`     | outside-core fraction < 0.61 (the detection floor): a screen ("not grossly disintegrated"), not a graded value |
+| `Unvalidated (0/1)`               | outside-core fraction < 0.61: there the value screens for gross disintegration and is not a ranking |
 | `Input-Scale Warning`             | frame ≠ 2048 × 2048 px (after any resample), or a scale ≠ 1.28 µm/px by more than 10 % that was not resampled  |
 
 If the index calculation fails outright the areas are still computed locally and

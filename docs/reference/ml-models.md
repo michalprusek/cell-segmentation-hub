@@ -189,6 +189,25 @@ matrix, where the quantity of interest is how much has left the dense core.
   refuses any other file — the checkpoint served before 2026-09-24 has the same
   size and a different hash). It is ONE of the paper's five replicates; the
   paper's numbers are five-replicate means unless a replicate is named.
+- **Ensemble, off by default.** `SPHEROID_DISINTEGRATION_CHECKPOINTS` (ml
+  service environment, passed through `docker-compose.production.yml`) may list
+  several checkpoints of this architecture as comma-separated file names inside
+  `weights/`, e.g. `prod_s42.pth,prod_s7.pth,prod_s1337.pth`. Each network gets
+  the same preprocessed tensor and runs under the same autocast; its logits
+  become float32 softmax probabilities, these are summed in the listed order
+  and divided by their count, and the class is the argmax of that per-pixel
+  mean. The forward passes run one after another, so the activation peak is
+  one network's; each extra checkpoint adds its weights (~118 MB) and the
+  running sum is one 3 × H × W float32 tensor (estimated, not measured). Unset,
+  empty or naming one file, the model is a single network and `predict` is the
+  argmax of its logits, exactly the path served before the option existed (no
+  softmax on it). A listed file that is missing, outside `weights/` or listed
+  twice fails the model load instead of falling back
+  (`models/disintegration.py`, `resolve_checkpoints`;
+  `segmentation_cpu_tests/test_disintegration_ensemble.py`). The response's
+  `processing_info.checkpoints` names the file(s) a mask came from. The
+  inference time in the table above is for one network; an ensemble's has not
+  been measured in the app.
 - **No threshold.** The decision is an argmax; the registry carries a neutral
   `0.5`, the API echoes whatever is sent and reports `threshold_applies: false`.
   (The 0.2 this page used to list was never a tuned value.)
@@ -214,7 +233,7 @@ matrix, where the quantity of interest is how much has left the dense core.
   intact spheroid `251201_0 (20)`, flagged `core_fragmented`) now splits every
   time.
 - The per-image read-out (outside-core fraction, DI, reach, fragments, core diagnostics,
-  regime flags) is computed from the **raster** argmax mask at inference time by
+  regime flag) is computed from the **raster** argmax mask at inference time by
   `api/disintegration_metrics.py`, a verbatim port of the paper's
   `compute_di.py`, and returned as `image_metrics`; `warnings` carries the
   input-scale check (validated: 2048 × 2048 px at ~1.28 µm/px).

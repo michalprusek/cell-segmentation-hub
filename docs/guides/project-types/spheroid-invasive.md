@@ -77,7 +77,7 @@ outside-core fraction by up to 0.028 when fed as acquired, and by at most
   changes what the model sees: check the box of each disintegrated-spheroid
   project before re-segmenting.
 - **What is computed where**: DI, the outside-core fraction, reach, fragment
-  counts, the core-size minimum and the regime flags at 1.28 µm/px; the three
+  counts, the core-size minimum and the regime flag at 1.28 µm/px; the three
   areas on your frame's own pixels, converted with the export dialog's scale,
   so the export's µm² are real when that scale is the frame's pixel size. The
   `Note` column says `scored at 1.28 um/px: resampled from … um/px`. Such a
@@ -161,8 +161,8 @@ image** — not per polygon, because the index is a whole-image property:
 `Reach p90 (R_core)`, `Corona Fragments`, `Largest-Fragment Fraction`,
 `Solidity`, `Core Components`, `Largest Core Component Fraction`,
 `Core Centroid Shift (R_core)`, `Core Fragmented (0/1)`,
-`Unvalidated Regime: Outside-core Fraction 0.08-0.47 (0/1)`,
-`Below Validated Floor: Outside-core Fraction < 0.61 (0/1)`, `DI Source`, `Note`,
+`Unvalidated: Outside-core Fraction < 0.61, a Screen Not a Ranking (0/1)`,
+`DI Source`, `Note`,
 `Input-Scale Warning`.
 
 The outside-core fraction (Lim's Index B: corona pixels over all foreground
