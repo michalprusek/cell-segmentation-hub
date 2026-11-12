@@ -221,3 +221,6 @@ docker/nginx/snippets/frap-key.conf
 .venv*/
 venv/
 **/.venv*/
+
+# Maintenance switch: present = all three sites answer 503 (docker/nginx/snippets/maintenance.conf)
+docker/nginx/snippets/maintenance.on
