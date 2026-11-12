@@ -53,7 +53,7 @@ export interface EmailServiceOptions {
 }
 
 /* EmailService functions */
-let _transporter: Transporter | null = null;
+let _transporter: Transporter<SMTPTransport.SentMessageInfo> | null = null;
 let _config: EmailConfig | null = null;
 
 // Export config for health checks
