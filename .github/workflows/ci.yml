@@ -55,8 +55,14 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@v7
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
+      # canvas@2.11.2 has no prebuilt binary for Node 22 (ABI 127), so npm
+      # compiles it from source; without these headers the backend install
+      # fails and the frontend silently drops it (TS2307 in test fixtures).
+      # The production images already install the alpine equivalents.
+      - name: System libraries for canvas
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev
       - name: Install deps
         run: npm ci
       - name: TypeScript (baseline gate)
@@ -352,9 +358,15 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@v7
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
           cache-dependency-path: backend/package-lock.json
+      # canvas@2.11.2 has no prebuilt binary for Node 22 (ABI 127), so npm
+      # compiles it from source; without these headers the backend install
+      # fails and the frontend silently drops it (TS2307 in test fixtures).
+      # The production images already install the alpine equivalents.
+      - name: System libraries for canvas
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev
       - name: Install deps
         run: npm ci
       - name: Prisma generate

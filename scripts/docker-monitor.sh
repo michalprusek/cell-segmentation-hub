@@ -136,7 +136,7 @@ generate_optimization_report() {
         echo "   ⚠ Using full Python image. Consider python:3.10-slim"
     fi
     if docker images | grep -q "node:.*[^alpine]$"; then
-        echo "   ⚠ Using full Node image. Consider node:20-alpine"
+        echo "   ⚠ Using full Node image. Consider node:22-alpine"
     fi
     
     # Suggest cleanup based on age
