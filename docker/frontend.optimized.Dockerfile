@@ -1,6 +1,6 @@
 # Optimized multi-stage build for frontend with advanced caching
 # Stage 1: Base dependencies
-FROM node:22.23.5-alpine AS base
+FROM node:24.22.3-alpine AS base
 RUN apk add --no-cache dumb-init
 
 # Stage 2: Dependencies installer with cache mount
