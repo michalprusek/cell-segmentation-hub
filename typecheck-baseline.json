@@ -5,10 +5,10 @@
   "_doNotEditByHand": true,
   "typescriptVersion": "5.9.3",
   "totals": {
-    "tsconfig.app.json": 348,
+    "tsconfig.app.json": 346,
     "tsconfig.node.json": 21,
-    "tsconfig.test.json": 835,
-    "all": 1204
+    "tsconfig.test.json": 832,
+    "all": 1199
   },
   "projects": {
     "tsconfig.app.json": {
@@ -563,8 +563,7 @@
         "TS2345: Argument of type '{ t: Mock<(key: string, params?: Record<string, any>) => string>; }' is not assignable to parameter of type 'LanguageContextType'.": 1
       },
       "src/components/project/__tests__/ProjectDialogForm.test.tsx": {
-        "TS2322: Type 'Mock<(e: FormEvent<Element>) => void>' is not assignable to type '(e: React.FormEvent) => Promise<void>'.": 1,
-        "TS2345: Argument of type '{ projectName: string; setProjectName: Mock<Procedure>; projectDescription: string; setProjectDescription: Mock<Procedure>; isCreating: true; handleCreateProject: Mock<...>; }' is not assignable to parameter of type '<type elided by tsc>'.": 1
+        "TS2322: Type 'Mock<(e: FormEvent<Element>) => void>' is not assignable to type '(e: React.FormEvent) => Promise<void>'.": 1
       },
       "src/components/project/__tests__/QueueStatsPanel.parallel.test.tsx": {
         "TS2345: Argument of type '{ t: Mock<(key: string, params?: Record<string, any>) => string>; }' is not assignable to parameter of type 'LanguageContextType'.": 1,
