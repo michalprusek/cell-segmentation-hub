@@ -1742,7 +1742,7 @@ export default {
         step1: 'Depuis le tableau de bord, cliquez sur « Nouveau projet »',
         step2: 'Saisissez un nom et, si vous le souhaitez, une description',
         step3:
-          'Choisissez le type de projet correspondant à votre échantillon (voir Types de projet ci-dessous)',
+          'Choisissez le type de projet correspondant à votre échantillon : il est obligatoire et aucun n’est présélectionné (voir Types de projet ci-dessous)',
         step4: 'Cliquez sur « Créer le projet », puis importez vos données',
       },
     },

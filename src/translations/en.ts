@@ -1735,7 +1735,7 @@ export default {
         step1: 'From your dashboard, click "New Project"',
         step2: 'Enter a name and an optional description',
         step3:
-          'Pick the project type that matches your specimen (see Project types below)',
+          'Pick the project type that matches your specimen — it is required and nothing is preselected (see Project types below)',
         step4: 'Click "Create Project", then upload your data',
       },
     },

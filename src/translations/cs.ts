@@ -1707,7 +1707,7 @@ export default {
         step1: 'Na nástěnce klikněte na „Nový projekt“',
         step2: 'Zadejte název a volitelně popis',
         step3:
-          'Zvolte typ projektu odpovídající vašemu vzorku (viz Typy projektů níže)',
+          'Zvolte typ projektu odpovídající vašemu vzorku — volba je povinná a nic není předvybrané (viz Typy projektů níže)',
         step4: 'Klikněte na „Vytvořit projekt“ a nahrajte data',
       },
     },

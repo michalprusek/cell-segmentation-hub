@@ -1736,7 +1736,7 @@ export default {
         step1: 'En el panel principal, pulse «Nuevo proyecto»',
         step2: 'Introduzca un nombre y, si quiere, una descripción',
         step3:
-          'Elija el tipo de proyecto que corresponda a su muestra (véase Tipos de proyecto más abajo)',
+          'Elija el tipo de proyecto que corresponda a su muestra: es obligatorio y no hay ninguno preseleccionado (véase Tipos de proyecto más abajo)',
         step4: 'Pulse «Crear proyecto» y suba sus datos',
       },
     },

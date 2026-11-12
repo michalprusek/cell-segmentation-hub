@@ -1750,7 +1750,7 @@ export default {
         step1: 'Klicken Sie im Dashboard auf „Neues Projekt“',
         step2: 'Geben Sie einen Namen und optional eine Beschreibung ein',
         step3:
-          'Wählen Sie den zu Ihrer Probe passenden Projekttyp (siehe Projekttypen unten)',
+          'Wählen Sie den zu Ihrer Probe passenden Projekttyp – die Auswahl ist Pflicht, nichts ist vorausgewählt (siehe Projekttypen unten)',
         step4:
           'Klicken Sie auf „Projekt erstellen“ und laden Sie Ihre Daten hoch',
       },
