@@ -25,6 +25,7 @@ import type { ReactNode } from 'react';
 
 import apiClient from '@/lib/api';
 import ProjectsTab from '@/components/dashboard/ProjectsTab';
+import { chooseProjectType } from '@/components/project/__tests__/chooseProjectType';
 
 vi.mock('@/lib/api', () => ({
   default: {
@@ -99,7 +100,8 @@ const renderTab = (props: {
   );
 
 /**
- * Open the create dialog, name the project, submit. Both view modes reach the
+ * Open the create dialog, name the project, choose a type (there is no
+ * default any more — see `ProjectDialogForm.typeRequired.test.tsx`), submit. Both view modes reach the
  * same dialog: the grid card opens its own, the list item opens the sibling
  * dialog-only NewProjectCard.
  */
@@ -112,6 +114,7 @@ const createProjectNamed = async (name: string) => {
 
   const nameInput = await screen.findByLabelText('Project Name');
   await user.type(nameInput, name);
+  await chooseProjectType(user, 'Spheroids (standard)');
   await user.click(screen.getByRole('button', { name: 'Create New Project' }));
 };
 

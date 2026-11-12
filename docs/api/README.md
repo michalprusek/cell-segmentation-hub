@@ -164,7 +164,7 @@ Three things about it differ from every other route on this page:
 
 | Method | Path                         | Purpose                                                                                                                                                                                             |
 | ------ | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| POST   | `/api/projects`              | Create a project (`title`, `description?`, `type`)                                                                                                                                                  |
+| POST   | `/api/projects`              | Create a project (`title`, `description?`, `type`). `type` is required — no default; 400 without it                                                                                                 |
 | GET    | `/api/projects`              | List the caller's projects; cached per user                                                                                                                                                         |
 | GET    | `/api/projects/:id`          | One project; accessible to the owner **and** accepted collaborators                                                                                                                                 |
 | PUT    | `/api/projects/:id`          | Update title / description / `type` / `segmentationModel` — **owner only**. A `type` change clears `segmentationModel` to NULL; an incompatible model is refused with 400 `MODEL_TYPE_INCOMPATIBLE` |

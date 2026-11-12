@@ -269,6 +269,7 @@ export default {
     createProjectDesc:
       'Add a new project to organize your microscopy images and analyses.',
     projectType: 'Project Type',
+    selectProjectType: 'Select a project type…',
     renameProject: 'Rename project',
     projectRenamed: 'Project renamed',
     projectRenameFailed: 'Could not rename the project',
@@ -375,6 +376,7 @@ export default {
       'This email is already registered. Try signing in or use a different email.',
     validationErrors: {
       projectNameRequired: 'Please enter a project name',
+      projectTypeRequired: 'Choose a project type',
       loginRequired: 'You must be logged in to create a project',
       emailRequired: 'Email is required',
       passwordRequired: 'Password is required',

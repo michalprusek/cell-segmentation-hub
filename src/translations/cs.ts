@@ -260,6 +260,7 @@ export default {
     createProjectDesc:
       'Přidat nový projekt pro organizaci vašich mikroskopických snímků a analýz.',
     projectType: 'Typ projektu',
+    selectProjectType: 'Vyberte typ projektu…',
     renameProject: 'Přejmenovat projekt',
     projectRenamed: 'Projekt přejmenován',
     projectRenameFailed: 'Projekt se nepodařilo přejmenovat',
@@ -369,6 +370,7 @@ export default {
       'Tento email je již zaregistrován. Zkuste se přihlásit nebo použijte jiný email.',
     validationErrors: {
       projectNameRequired: 'Zadejte prosím název projektu',
+      projectTypeRequired: 'Zvolte typ projektu',
       loginRequired: 'Pro vytvoření projektu se musíte přihlásit',
       emailRequired: 'E-mail je povinný',
       passwordRequired: 'Heslo je povinné',

@@ -269,7 +269,14 @@ export const createProjectSchema = z.object({
     .trim()
     .optional()
     .nullable(),
-  type: projectTypeSchema.optional(),
+  // REQUIRED, deliberately. It was optional, and the column's
+  // `@default("spheroid")` then filled in whatever the client left out, so a
+  // project the user never typed came out as a spheroid project — and the
+  // type decides the model, the editor mode and the export format. The create
+  // dialog now starts with nothing selected; this is the same rule for any
+  // other client. The DB default stays (no migration) but is unreachable
+  // through the API.
+  type: z.enum(PROJECT_TYPES, { required_error: 'Typ projektu je povinný' }),
 });
 
 /**
