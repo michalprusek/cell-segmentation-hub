@@ -55,9 +55,9 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@v7
         with:
-          node-version: '24'
+          node-version: '22'
           cache: 'npm'
-      # canvas@2.11.2 has no prebuilt binary for Node 22+ (ABI 127/137), so npm
+      # canvas@2.11.2 has no prebuilt binary for Node 22 (ABI 127), so npm
       # compiles it from source; without these headers the backend install
       # fails and the frontend silently drops it (TS2307 in test fixtures).
       # The production images already install the alpine equivalents.
@@ -358,10 +358,10 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@v7
         with:
-          node-version: '24'
+          node-version: '22'
           cache: 'npm'
           cache-dependency-path: backend/package-lock.json
-      # canvas@2.11.2 has no prebuilt binary for Node 22+ (ABI 127/137), so npm
+      # canvas@2.11.2 has no prebuilt binary for Node 22 (ABI 127), so npm
       # compiles it from source; without these headers the backend install
       # fails and the frontend silently drops it (TS2307 in test fixtures).
       # The production images already install the alpine equivalents.

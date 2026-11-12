@@ -1,6 +1,6 @@
 # Optimized multi-stage build for backend with advanced caching
 # Stage 1: Base runtime dependencies
-FROM node:24.22.3-alpine AS base
+FROM node:22.23.5-alpine AS base
 RUN apk add --no-cache dumb-init curl openssl
 
 # Stage 2: Build dependencies
