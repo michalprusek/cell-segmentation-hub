@@ -111,6 +111,10 @@ ExportStateManager.initialize();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
+    {/* The one toast outlet, above every provider: ThemeProvider renders
+        nothing until the profile loads, and a toast fired while the outlet
+        is not mounted is lost. See components/ui/sonner.tsx. */}
+    <Sonner />
     <TooltipProvider>
       <BrowserRouter
         future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
@@ -123,7 +127,6 @@ const App = () => (
                   <LanguageProvider>
                     <ToastEventProvider>
                       <ModelProvider>
-                        <Sonner />
                         <ErrorBoundary fallback={null}>
                           <FloatingUploadProgress />
                         </ErrorBoundary>

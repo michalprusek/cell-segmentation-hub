@@ -281,25 +281,37 @@ const isValid = confirmationText === requiredValue;
 ## Toast Notifications
 
 The application uses Sonner for toast notifications. There is exactly **one**
-outlet: `src/components/ui/sonner.tsx`, mounted once in `App.tsx` inside
-`ThemeProvider`. Fire toasts with `toast` from `sonner` anywhere; do not mount
+outlet, `src/components/ui/sonner.tsx`, mounted once in `App.tsx`, **above every
+provider**. Fire toasts with `toast` from `sonner` anywhere, and do not mount
 another `<Toaster>`.
 
 ```tsx
-// App.tsx — the only mount
+// App.tsx: the only mount, the first child of QueryClientProvider
 import { Toaster as Sonner } from '@/components/ui/sonner';
 
 <Sonner />;
 ```
 
-The wrapper fixes the configuration: bottom-right, a close button on each
-toast, `richColors`, and the theme from the app's own setting (`useTheme` from
-`@/contexts/exports`, so it follows Settings → Appearance rather than the OS).
+The wrapper fixes the configuration:
 
-**Why one:** Sonner keeps its toasts in module state, so every mounted
-`<Toaster>` draws every toast. Until 2026-11-13 a second one in `main.tsx`
-showed each message twice. `components/ui/__tests__/sonner.test.tsx` scans
-`src/` and fails on a second mount.
+- bottom-right
+- a close button on each toast
+- `richColors`
+- the `animate-slide-in-right` entry animation (`src/styles/tailwind.css`)
+- the app's theme
+
+Three rules, each guarded by `components/ui/__tests__/sonner.test.tsx`:
+
+- **One outlet.** Sonner keeps its toasts in module state, so every mounted
+  `<Toaster>` draws every toast. Until 2026-11-13 a second one in `main.tsx`
+  showed each message twice. The test scans `src/` for any other mount.
+- **Above the providers, reading no context.** `ThemeProvider` renders nothing
+  until the profile loads, and a toast fired while no outlet is mounted is
+  lost.
+- **The resolved theme from `<html>`.** The theme is read from the `light` /
+  `dark` class that `ThemeContext.applyTheme` sets, never from the raw
+  `'system'` setting. Given `'system'`, Sonner 1.7.4 adds an OS listener it
+  never removes, so toasts would follow the OS even after the user picked Dark.
 
 **Best Practices**:
 
