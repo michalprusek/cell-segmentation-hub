@@ -88,7 +88,7 @@ export default defineConfig({
           'image-vendor': ['react-easy-crop'],
 
           // Other utilities (cmdk/vaul/input-otp removed with their dead UI wrappers)
-          'misc-vendor': ['sonner', 'next-themes'],
+          'misc-vendor': ['sonner'],
         },
       },
     },

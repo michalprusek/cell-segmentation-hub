@@ -123,13 +123,7 @@ const App = () => (
                   <LanguageProvider>
                     <ToastEventProvider>
                       <ModelProvider>
-                        <Sonner
-                          position="bottom-right"
-                          closeButton
-                          toastOptions={{
-                            className: 'animate-slide-in-right',
-                          }}
-                        />
+                        <Sonner />
                         <ErrorBoundary fallback={null}>
                           <FloatingUploadProgress />
                         </ErrorBoundary>

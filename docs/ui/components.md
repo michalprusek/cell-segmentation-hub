@@ -280,26 +280,31 @@ const isValid = confirmationText === requiredValue;
 
 ## Toast Notifications
 
-The application uses Sonner for toast notifications with specific positioning:
+The application uses Sonner for toast notifications. There is exactly **one**
+outlet: `src/components/ui/sonner.tsx`, mounted once in `App.tsx` inside
+`ThemeProvider`. Fire toasts with `toast` from `sonner` anywhere; do not mount
+another `<Toaster>`.
 
 ```tsx
+// App.tsx — the only mount
 import { Toaster as Sonner } from '@/components/ui/sonner';
 
-<Sonner
-  position="bottom-right"
-  closeButton
-  toastOptions={{
-    className: 'animate-slide-in-right',
-  }}
-/>;
+<Sonner />;
 ```
+
+The wrapper fixes the configuration: bottom-right, a close button on each
+toast, `richColors`, and the theme from the app's own setting (`useTheme` from
+`@/contexts/exports`, so it follows Settings → Appearance rather than the OS).
+
+**Why one:** Sonner keeps its toasts in module state, so every mounted
+`<Toaster>` draws every toast. Until 2026-11-13 a second one in `main.tsx`
+showed each message twice. `components/ui/__tests__/sonner.test.tsx` scans
+`src/` and fails on a second mount.
 
 **Best Practices**:
 
-- Only bottom-right positioning (duplicate toasters removed)
 - Success messages for auto-save operations
 - Error messages for failed validations
-- Close button enabled for user control
 
 ## Responsive Design
 
