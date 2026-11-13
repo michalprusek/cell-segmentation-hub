@@ -27,13 +27,22 @@ vi.mock('../../../utils/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 // Spy on the real renderer: the suite counts renders, the pixels are real.
-const renderSpy = vi.hoisted(() => ({ calls: 0, fail: false }));
+// `entered` / `gate` let a test hold a render open, so a second request can be
+// made while the first is provably in flight rather than probably.
+const renderSpy = vi.hoisted(() => ({
+  calls: 0,
+  fail: false,
+  entered: null as (() => void) | null,
+  gate: null as Promise<void> | null,
+}));
 vi.mock('../previewRenderer', async importOriginal => {
   const real = await importOriginal<typeof import('../previewRenderer')>();
   return {
     ...real,
     renderPreview: async (...args: Parameters<typeof real.renderPreview>) => {
       renderSpy.calls++;
+      renderSpy.entered?.();
+      if (renderSpy.gate) await renderSpy.gate;
       if (renderSpy.fail) throw new Error('corrupt source');
       return real.renderPreview(...args);
     },
@@ -88,6 +97,8 @@ beforeEach(async () => {
   h.prisma.image.findUnique.mockImplementation(async () => row);
   renderSpy.calls = 0;
   renderSpy.fail = false;
+  renderSpy.entered = null;
+  renderSpy.gate = null;
   h.emitToProject.mockReset();
 });
 afterEach(async () => {
@@ -242,11 +253,27 @@ describe('RenderQueue', () => {
       'promote'
     );
 
+    // Hold the warm's render open. Firing both requests back to back was a
+    // coin flip: each awaits a real fs.access before looking at `inFlight`,
+    // libuv completes those in either order, and when the high one answered
+    // first IT became the render and the warm joined it — no promote, test red
+    // (CI run 43297972229).
+    let open!: () => void;
+    renderSpy.gate = new Promise<void>(r => (open = r));
+    const entered = new Promise<void>(r => (renderSpy.entered = r));
+
     const warm = svc.ensurePreview(IMAGE, 'low');
+    await entered; // the warm is registered in `inFlight` and rendering
     const visible = svc.ensurePreview(IMAGE, 'high');
-    await Promise.all([warm, visible]);
+    // Released only once the visible request has joined; until then the warm
+    // cannot finish, so the join cannot find a file on disk instead.
+    const key = `${IMAGE}:${previewVersion({ originalPath: ORIGINAL, segmentation: row.segmentation })}`;
+    await vi.waitFor(() => expect(promote).toHaveBeenCalledWith(key));
+    open();
+    const [a, b] = await Promise.all([warm, visible]);
 
     expect(promote).toHaveBeenCalledTimes(1);
     expect(renderSpy.calls).toBe(1);
+    expect(b).toEqual(a);
   });
 });
