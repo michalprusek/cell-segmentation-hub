@@ -27,13 +27,26 @@ vi.mock('../../../utils/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 // Spy on the real renderer: the suite counts renders, the pixels are real.
-const renderSpy = vi.hoisted(() => ({ calls: 0, fail: false }));
+// `entered` / `gate` let a test hold a render open, so a second request can be
+// made while the first is provably in flight rather than probably. `entered`
+// is one-shot — it reports the FIRST render only, so a second render can never
+// be mistaken for the one the test is holding.
+const renderSpy = vi.hoisted(() => ({
+  calls: 0,
+  fail: false,
+  entered: null as (() => void) | null,
+  gate: null as Promise<void> | null,
+}));
 vi.mock('../previewRenderer', async importOriginal => {
   const real = await importOriginal<typeof import('../previewRenderer')>();
   return {
     ...real,
     renderPreview: async (...args: Parameters<typeof real.renderPreview>) => {
       renderSpy.calls++;
+      const entered = renderSpy.entered;
+      renderSpy.entered = null;
+      entered?.();
+      if (renderSpy.gate) await renderSpy.gate;
       if (renderSpy.fail) throw new Error('corrupt source');
       return real.renderPreview(...args);
     },
@@ -88,6 +101,8 @@ beforeEach(async () => {
   h.prisma.image.findUnique.mockImplementation(async () => row);
   renderSpy.calls = 0;
   renderSpy.fail = false;
+  renderSpy.entered = null;
+  renderSpy.gate = null;
   h.emitToProject.mockReset();
 });
 afterEach(async () => {
@@ -235,18 +250,94 @@ describe('RenderQueue', () => {
     expect(order).toEqual(['l3', 'l1', 'l2']);
   });
 
-  it('a high-priority ensurePreview that joins an in-flight warm promotes it', async () => {
-    const svc = new PreviewService();
-    const promote = vi.spyOn(
-      (svc as unknown as { queue: RenderQueue }).queue,
-      'promote'
-    );
+  const queueOf = (svc: PreviewService) =>
+    (svc as unknown as { queue: RenderQueue }).queue;
+
+  /**
+   * Start a warm of IMAGE and hold its render open. Returns once the warm is
+   * inside the render — so it is in `inFlight` — together with the key the
+   * queue runs it under and the function that lets it finish.
+   *
+   * Firing the requests back to back instead was a coin flip: each awaits a
+   * real fs.access before looking at `inFlight`, libuv completes those in
+   * either order, and when the later request answered first IT became the
+   * render (CI run 43297972229: "promote called 0 times").
+   */
+  async function holdWarm(svc: PreviewService) {
+    const run = vi.spyOn(queueOf(svc), 'run');
+    const release = gate();
+    const entered = gate();
+    renderSpy.gate = release.p;
+    renderSpy.entered = entered.open;
 
     const warm = svc.ensurePreview(IMAGE, 'low');
+    await Promise.race([
+      entered.p,
+      warm.then(() => {
+        throw new Error('the warm finished without rendering');
+      }),
+    ]);
+    return { warm, key: run.mock.calls[0][0], open: release.open };
+  }
+
+  // Only the WIRING is asserted here: with two free render slots the warm is
+  // never queued, so `promote` has nothing to move. What it does to a queued
+  // task is the RenderQueue test above; together they cover the path.
+  it('a high-priority ensurePreview that joins an in-flight warm promotes it', async () => {
+    const svc = new PreviewService();
+    const promote = vi.spyOn(queueOf(svc), 'promote');
+
+    const { warm, key, open } = await holdWarm(svc);
     const visible = svc.ensurePreview(IMAGE, 'high');
-    await Promise.all([warm, visible]);
+    try {
+      // The key is the one the warm was QUEUED under, read off the queue call,
+      // so this pins "promote names that render", not how keys are spelled.
+      await vi.waitFor(() => expect(promote).toHaveBeenCalledWith(key));
+    } finally {
+      // Even when the wait fails: a render left hanging would outlive the
+      // test and race afterEach's removal of its directory.
+      open();
+      await Promise.allSettled([warm, visible]);
+    }
 
     expect(promote).toHaveBeenCalledTimes(1);
     expect(renderSpy.calls).toBe(1);
+    // The SAME object — it joined the warm's render rather than drawing an
+    // identical file of its own.
+    expect(await visible).toBe(await warm);
+  });
+
+  it('a low-priority request that joins an in-flight render does not promote it', async () => {
+    const svc = new PreviewService();
+    const promote = vi.spyOn(queueOf(svc), 'promote');
+    // The negative assertion needs a positive sync point. A request joins
+    // synchronously once its existence check settles, so count SETTLED
+    // fs.access calls rather than hoping the join has happened.
+    const realAccess = fs.access.bind(fs);
+    let settled = 0;
+    const access = vi
+      .spyOn(fs, 'access')
+      .mockImplementation(async (...args: Parameters<typeof fs.access>) => {
+        try {
+          return await realAccess(...args);
+        } finally {
+          settled++;
+        }
+      });
+
+    const { warm, open } = await holdWarm(svc);
+    const checksSoFar = settled;
+    const second = svc.ensurePreview(IMAGE, 'low');
+    try {
+      await vi.waitFor(() => expect(settled).toBe(checksSoFar + 1));
+    } finally {
+      open();
+      await Promise.allSettled([warm, second]);
+      access.mockRestore();
+    }
+
+    expect(promote).not.toHaveBeenCalled();
+    expect(renderSpy.calls).toBe(1);
+    expect(await second).toBe(await warm);
   });
 });
