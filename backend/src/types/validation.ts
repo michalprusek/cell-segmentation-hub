@@ -177,7 +177,20 @@ export const PROJECT_TYPES = [
 ] as const;
 export type ProjectType = (typeof PROJECT_TYPES)[number];
 
-const projectTypeSchema = z.enum(PROJECT_TYPES);
+/**
+ * The one project-type validator; every schema that takes a type uses it. The
+ * error map keeps the messages Czech like the rest of this file (zod's own are
+ * English: "Expected 'spheroid' | …, received null") and tells a MISSING type
+ * apart from a wrong one.
+ */
+const projectTypeSchema = z.enum(PROJECT_TYPES, {
+  errorMap: issue => ({
+    message:
+      issue.code === 'invalid_type' && issue.received === 'undefined'
+        ? 'Typ projektu je povinný'
+        : `Neplatný typ projektu. Povolené hodnoty: ${PROJECT_TYPES.join(', ')}`,
+  }),
+});
 
 /**
  * Narrow an arbitrary string (e.g. `Project.type` from Prisma, where the
@@ -258,29 +271,40 @@ export const isModelCompatibleWithType = (
  * Schema for creating a new project
  */
 export const createProjectSchema = z.object({
+  // `.trim()` FIRST: zod runs string checks in order, so `.min(1).trim()`
+  // measured '   ' as three characters and then stored an empty title.
   title: z
     .string()
+    .trim()
     .min(1, 'Název projektu je povinný')
-    .max(255, 'Název projektu může mít maximálně 255 znaků')
-    .trim(),
+    .max(255, 'Název projektu může mít maximálně 255 znaků'),
   description: z
     .string()
     .max(1000, 'Popis může mít maximálně 1000 znaků')
     .trim()
     .optional()
     .nullable(),
-  type: projectTypeSchema.optional(),
+  // REQUIRED, deliberately. It was optional, and the column's
+  // `@default("spheroid")` then filled in whatever the client left out, so a
+  // project the user never typed came out as a spheroid project — and the
+  // type decides the model, the editor mode and the export format. The create
+  // dialog now starts with nothing selected; this is the same rule for any
+  // other client. The DB default stays (no migration) but is unreachable
+  // through the API.
+  type: projectTypeSchema,
 });
 
 /**
  * Schema for updating a project
  */
 export const updateProjectSchema = z.object({
+  // Trimmed before measuring, as in `createProjectSchema`: a rename to '   '
+  // must be refused, not stored as ''.
   title: z
     .string()
+    .trim()
     .min(1, 'Název projektu je povinný')
     .max(255, 'Název projektu může mít maximálně 255 znaků')
-    .trim()
     .optional(),
   description: z
     .string()

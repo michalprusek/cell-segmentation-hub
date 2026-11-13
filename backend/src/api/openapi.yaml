@@ -551,21 +551,38 @@ components:
           type: string
           format: date-time
 
+    # Mirrors `createProjectSchema` (backend/src/types/validation.ts).
     CreateProjectRequest:
       type: object
       required:
         - title
-        - description
+        - type
       properties:
         title:
           type: string
-          minLength: 3
-          maxLength: 100
+          minLength: 1
+          maxLength: 255
           example: 'Segmentace buněk v tkáních'
         description:
           type: string
-          maxLength: 500
+          nullable: true
+          maxLength: 1000
           example: 'Projekt pro segmentaci buněčných struktur v histologických preparátech'
+        type:
+          type: string
+          description: >-
+            Required, with no default: a request without it is refused with
+            400. It decides the segmentation model, the editor mode and the
+            export format.
+          enum:
+            - spheroid
+            - spheroid_invasive
+            - wound
+            - sperm
+            - microtubules
+            - microcapsule
+            - neurite
+          example: spheroid
 
     UpdateProjectRequest:
       type: object

@@ -104,6 +104,18 @@ describe('useProjectForm', () => {
       expect(result.current.projectDescription).toBe('');
       expect(result.current.isCreating).toBe(false);
     });
+
+    // It started at 'spheroid', so a user who never opened the picker got a
+    // spheroid project without choosing one.
+    it('starts with NO project type selected and no type error', () => {
+      const { result } = renderHook(
+        () => useProjectForm({ onSuccess, onClose }),
+        { wrapper }
+      );
+
+      expect(result.current.projectType).toBeNull();
+      expect(result.current.projectTypeError).toBe(false);
+    });
   });
 
   describe('state setters', () => {
@@ -169,6 +181,82 @@ describe('useProjectForm', () => {
     });
   });
 
+  describe('handleCreateProject — project type is required', () => {
+    const signedIn = () =>
+      vi.mocked(apiClient.getUserProfile).mockResolvedValue({
+        id: 'user-1',
+        email: 'test@test.com',
+        preferred_theme: 'system',
+        preferredLang: 'en',
+      } as any);
+
+    it('refuses to create without a type, flags the field, calls nothing', async () => {
+      signedIn();
+      const { result } = renderHook(
+        () => useProjectForm({ onSuccess, onClose }),
+        { wrapper }
+      );
+      // Signed in, so the ONLY thing missing is the type — otherwise the
+      // login check could be what stops the request.
+      await waitFor(() => expect(apiClient.getUserProfile).toHaveBeenCalled());
+
+      act(() => result.current.setProjectName('Untyped'));
+      await act(async () => {
+        await result.current.handleCreateProject(makeFormEvent());
+      });
+
+      expect(result.current.projectTypeError).toBe(true);
+      expect(apiClient.createProject).not.toHaveBeenCalled();
+      expect(onClose).not.toHaveBeenCalled();
+      expect(onSuccess).not.toHaveBeenCalled();
+    });
+
+    it('clears the type error as soon as a type is chosen', async () => {
+      const { result } = renderHook(
+        () => useProjectForm({ onSuccess, onClose }),
+        { wrapper }
+      );
+
+      act(() => result.current.setProjectName('Untyped'));
+      await act(async () => {
+        await result.current.handleCreateProject(makeFormEvent());
+      });
+      expect(result.current.projectTypeError).toBe(true);
+
+      act(() => result.current.setProjectType('wound'));
+
+      expect(result.current.projectTypeError).toBe(false);
+      expect(result.current.projectType).toBe('wound');
+    });
+
+    it('sends exactly the type the user chose', async () => {
+      signedIn();
+      vi.mocked(apiClient.createProject).mockResolvedValue({
+        id: 'proj-typed',
+        name: 'Typed',
+      } as any);
+      const { result } = renderHook(
+        () => useProjectForm({ onSuccess, onClose }),
+        { wrapper }
+      );
+      await waitFor(() => expect(apiClient.getUserProfile).toHaveBeenCalled());
+
+      act(() => {
+        result.current.setProjectName('Typed');
+        result.current.setProjectType('microtubules');
+      });
+      await act(async () => {
+        await result.current.handleCreateProject(makeFormEvent());
+      });
+
+      await waitFor(() =>
+        expect(apiClient.createProject).toHaveBeenCalledWith(
+          expect.objectContaining({ name: 'Typed', type: 'microtubules' })
+        )
+      );
+    });
+  });
+
   describe('handleCreateProject — no authenticated user', () => {
     it('shows a login-required error when there is no user in AuthContext', async () => {
       // AuthProvider starts unauthenticated, so this tests the no-user branch.
@@ -179,6 +267,7 @@ describe('useProjectForm', () => {
 
       act(() => {
         result.current.setProjectName('Valid Name');
+        result.current.setProjectType('spheroid');
       });
 
       await act(async () => {
@@ -217,6 +306,7 @@ describe('useProjectForm', () => {
 
       act(() => {
         result.current.setProjectName('New Project');
+        result.current.setProjectType('spheroid');
       });
 
       await act(async () => {
@@ -262,7 +352,10 @@ describe('useProjectForm', () => {
       // Let AuthProvider's getUserProfile settle — the hook bails out with a
       // login error while `user` is still null.
       await waitFor(() => expect(apiClient.getUserProfile).toHaveBeenCalled());
-      act(() => result.current.setProjectName('New Project'));
+      act(() => {
+        result.current.setProjectName('New Project');
+        result.current.setProjectType('spheroid');
+      });
       await act(async () => {
         await result.current.handleCreateProject(makeFormEvent());
       });
@@ -295,7 +388,10 @@ describe('useProjectForm', () => {
       // Let AuthProvider's getUserProfile settle — the hook bails out with a
       // login error while `user` is still null.
       await waitFor(() => expect(apiClient.getUserProfile).toHaveBeenCalled());
-      act(() => result.current.setProjectName('New Project'));
+      act(() => {
+        result.current.setProjectName('New Project');
+        result.current.setProjectType('spheroid');
+      });
       await act(async () => {
         await result.current.handleCreateProject(makeFormEvent());
       });
@@ -328,7 +424,10 @@ describe('useProjectForm', () => {
       // Let AuthProvider's getUserProfile settle — the hook bails out with a
       // login error while `user` is still null.
       await waitFor(() => expect(apiClient.getUserProfile).toHaveBeenCalled());
-      act(() => result.current.setProjectName('New Project'));
+      act(() => {
+        result.current.setProjectName('New Project');
+        result.current.setProjectType('spheroid');
+      });
       await act(async () => {
         await result.current.handleCreateProject(makeFormEvent());
       });
@@ -363,6 +462,7 @@ describe('useProjectForm', () => {
       act(() => {
         result.current.setProjectName('Reset Project');
         result.current.setProjectDescription('Some desc');
+        result.current.setProjectType('neurite');
       });
 
       await act(async () => {
@@ -372,6 +472,9 @@ describe('useProjectForm', () => {
       await waitFor(() => {
         expect(result.current.projectName).toBe('');
         expect(result.current.projectDescription).toBe('');
+        // Back to "nothing chosen", not to a default type: the next project
+        // created in this dialog must be a fresh choice too.
+        expect(result.current.projectType).toBeNull();
       });
     });
 
@@ -396,6 +499,7 @@ describe('useProjectForm', () => {
 
       act(() => {
         result.current.setProjectName('Check Project');
+        result.current.setProjectType('spheroid');
       });
 
       await act(async () => {
@@ -429,6 +533,7 @@ describe('useProjectForm', () => {
 
       act(() => {
         result.current.setProjectName('Failing Project');
+        result.current.setProjectType('spheroid');
       });
 
       await act(async () => {

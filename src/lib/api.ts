@@ -998,17 +998,19 @@ class ApiClient {
 
   /**
    * Creates a new project
-   * @param {string} name - Project name
-   * @param {string} [description] - Optional project description
+   * @param {string} data.name - Project name
+   * @param {string} [data.description] - Optional project description
+   * @param {ProjectType} data.type - Required: the server answers 400 without
+   *   it rather than defaulting to `spheroid` (see `createProjectSchema`)
    * @returns {Promise<Project>} The created project object
    * @throws {Error} If project creation fails or user is not authenticated
    * @example
-   * const project = await apiClient.createProject('Cell Analysis', 'Research project for cell segmentation');
+   * const project = await apiClient.createProject({ name: 'Cell Analysis', type: 'spheroid' });
    */
   async createProject(data: {
     name: string;
     description?: string;
-    type?: import('@/types').ProjectType;
+    type: import('@/types').ProjectType;
   }): Promise<Project> {
     // Convert 'name' to 'title' to match backend validation schema
     const requestData = {

@@ -19,6 +19,7 @@ import SpecimenHoverCard from '@/components/specimens/SpecimenHoverCard';
 import { useProjectForm } from '@/hooks/useProjectForm';
 import { useLanguage } from '@/contexts/useLanguage';
 import { PROJECT_TYPES, type ProjectType } from '@/types';
+import { cn } from '@/lib/utils';
 
 interface ProjectDialogFormProps {
   onSuccess?: (projectId: string) => void;
@@ -41,6 +42,8 @@ const ProjectDialogForm = ({
     setProjectDescription,
     projectType,
     setProjectType,
+    projectTypeError,
+    projectTypeRef,
     isCreating,
     handleCreateProject,
   } = useProjectForm({ onSuccess, onClose, folderId });
@@ -80,12 +83,35 @@ const ProjectDialogForm = ({
             <Label htmlFor="projectType" className="text-right">
               {t('projects.projectType')}
             </Label>
+            {/* Nothing is preselected: the type decides the model, the editor
+                and the export, so it must be a choice the user made. `''`
+                (never `undefined`) is what keeps Radix CONTROLLED while it
+                shows the placeholder — `undefined` would switch it to
+                uncontrolled and the reset after a create would not clear it.
+                No native `required`: Radix would put it on a hidden <select>
+                and the browser's bubble would point at nothing visible. */}
             <Select
-              value={projectType}
+              value={projectType ?? ''}
               onValueChange={(v: ProjectType) => setProjectType(v)}
             >
-              <SelectTrigger id="projectType">
-                <SelectValue />
+              <SelectTrigger
+                id="projectType"
+                ref={projectTypeRef}
+                aria-required="true"
+                aria-invalid={projectTypeError || undefined}
+                aria-describedby={
+                  projectTypeError ? 'projectType-error' : undefined
+                }
+                className={cn(
+                  'data-[placeholder]:text-muted-foreground',
+                  // hover: too — the trigger's base `hover:border-ring/60`
+                  // would otherwise drop the red exactly as the pointer
+                  // arrives to fix it.
+                  projectTypeError &&
+                    'border-destructive hover:border-destructive focus:border-destructive focus:ring-destructive'
+                )}
+              >
+                <SelectValue placeholder={t('projects.selectProjectType')} />
               </SelectTrigger>
               <SelectContent>
                 {/* Each option previews real frames of that project type on
@@ -106,6 +132,15 @@ const ProjectDialogForm = ({
                 ))}
               </SelectContent>
             </Select>
+            {projectTypeError && (
+              <p
+                id="projectType-error"
+                role="alert"
+                className="text-sm text-destructive"
+              >
+                {t('errors.validationErrors.projectTypeRequired')}
+              </p>
+            )}
           </div>
         </div>
         <DialogFooter>

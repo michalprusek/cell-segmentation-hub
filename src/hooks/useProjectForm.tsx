@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { toast } from 'sonner';
 import apiClient from '@/lib/api';
 import { useAuth } from '@/contexts/useAuth';
@@ -27,15 +27,39 @@ export const useProjectForm = ({
   const { t } = useLanguage();
   const [projectName, setProjectName] = useState('');
   const [projectDescription, setProjectDescription] = useState('');
-  const [projectType, setProjectType] = useState<ProjectType>('spheroid');
+  // No type until the user picks one. It used to start (and reset) at
+  // 'spheroid', so a user who never opened the picker got a spheroid project —
+  // and the type decides the model, the editor mode and the export format. The
+  // API refuses a missing type too (`createProjectSchema`).
+  const [projectType, setProjectTypeState] = useState<ProjectType | null>(null);
+  const [projectTypeError, setProjectTypeError] = useState(false);
+  /** The type picker's trigger, focused when a submit is refused for want of
+   *  a type, so keyboard and screen-reader users land on the field at fault. */
+  const projectTypeRef = useRef<HTMLButtonElement>(null);
   const [isCreating, setIsCreating] = useState(false);
   const { user } = useAuth();
+
+  const setProjectType = (type: ProjectType) => {
+    setProjectTypeState(type);
+    setProjectTypeError(false);
+  };
 
   const handleCreateProject = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    // Flag a missing type BEFORE the name check can return, so one submit
+    // reports both problems instead of revealing the second on the next try.
+    if (!projectType) {
+      setProjectTypeError(true);
+    }
+
     if (!projectName.trim()) {
       toast.error(t('errors.validationErrors.projectNameRequired'));
+      return;
+    }
+
+    if (!projectType) {
+      projectTypeRef.current?.focus();
       return;
     }
 
@@ -86,7 +110,8 @@ export const useProjectForm = ({
       onClose();
       setProjectName('');
       setProjectDescription('');
-      setProjectType('spheroid');
+      setProjectTypeState(null);
+      setProjectTypeError(false);
 
       // Trigger refresh or callback
       if (onSuccess && projectData.id) {
@@ -118,6 +143,8 @@ export const useProjectForm = ({
     setProjectDescription,
     projectType,
     setProjectType,
+    projectTypeError,
+    projectTypeRef,
     isCreating,
     handleCreateProject,
   };

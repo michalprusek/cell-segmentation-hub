@@ -196,8 +196,8 @@
                                  │
                                  ▼
 ┌────────────────────────────────────────────────────────────────────┐
-│  NewProject.tsx: handleCreateProject()                             │
-│  - await apiClient.createProject({ name, description })            │
+│  useProjectForm.tsx: handleCreateProject()                         │
+│  - await apiClient.createProject({ name, description, type })      │
 │  - Receive: projectData { id, name, ... }                          │
 │  - Emit CustomEvent: 'project-created'                             │
 │    detail: { projectId }  ← Only ID! Not full project              │
@@ -265,8 +265,8 @@
                                  │
                                  ▼
 ┌────────────────────────────────────────────────────────────────────┐
-│  NewProject.tsx: handleCreateProject()                             │
-│  - await apiClient.createProject({ name, description })            │
+│  useProjectForm.tsx: handleCreateProject()                         │
+│  - await apiClient.createProject({ name, description, type })      │
 │  - Receive: projectData { id, name, description, ... }             │
 │  - Emit CustomEvent: 'project-created'                             │
 │    detail: { project: projectData }  ← Full project object!        │

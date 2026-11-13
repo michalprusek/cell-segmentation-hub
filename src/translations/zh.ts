@@ -254,6 +254,7 @@ export default {
     createProject: '创建新项目',
     createProjectDesc: '添加新项目来组织您的显微图像和分析。',
     projectType: '项目类型',
+    selectProjectType: '选择项目类型…',
     renameProject: '重命名项目',
     projectRenamed: '项目已重命名',
     projectRenameFailed: '无法重命名项目',
@@ -347,6 +348,7 @@ export default {
     emailAlreadyExists: '此邮箱已被注册。请尝试登录或使用其他邮箱。',
     validationErrors: {
       projectNameRequired: '请输入项目名称',
+      projectTypeRequired: '请选择项目类型',
       loginRequired: '您必须登录才能创建项目',
       emailRequired: '邮箱是必需的',
       passwordRequired: '密码是必需的',
@@ -1612,7 +1614,8 @@ export default {
       projectSteps: {
         step1: '在仪表板中点击「新建项目」',
         step2: '填写名称，并可选填描述',
-        step3: '选择与样本相符的项目类型（参见下方「项目类型」）',
+        step3:
+          '选择与样本相符的项目类型——此项必选，且没有预设值（参见下方「项目类型」）',
         step4: '点击「创建项目」，然后上传数据',
       },
     },

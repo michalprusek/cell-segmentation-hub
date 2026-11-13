@@ -262,6 +262,7 @@ export default {
     createProjectDesc:
       'Ajoutez un nouveau projet pour organiser vos images de microscopie et vos analyses.',
     projectType: 'Type de projet',
+    selectProjectType: 'Sélectionnez un type de projet…',
     renameProject: 'Renommer le projet',
     projectRenamed: 'Projet renommé',
     projectRenameFailed: 'Impossible de renommer le projet',
@@ -369,6 +370,7 @@ export default {
       'Cet email est déjà enregistré. Essayez de vous connecter ou utilisez un autre email.',
     validationErrors: {
       projectNameRequired: 'Veuillez saisir un nom de projet',
+      projectTypeRequired: 'Choisissez un type de projet',
       loginRequired: 'Vous devez être connecté pour créer un projet',
       emailRequired: "L'e-mail est requis",
       passwordRequired: 'Le mot de passe est requis',
@@ -1740,7 +1742,7 @@ export default {
         step1: 'Depuis le tableau de bord, cliquez sur « Nouveau projet »',
         step2: 'Saisissez un nom et, si vous le souhaitez, une description',
         step3:
-          'Choisissez le type de projet correspondant à votre échantillon (voir Types de projet ci-dessous)',
+          'Choisissez le type de projet correspondant à votre échantillon : il est obligatoire et aucun n’est présélectionné (voir Types de projet ci-dessous)',
         step4: 'Cliquez sur « Créer le projet », puis importez vos données',
       },
     },
