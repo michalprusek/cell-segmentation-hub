@@ -145,19 +145,25 @@ describe('projects', () => {
     expect(mockAxiosInstance.get).toHaveBeenCalledWith('/projects/proj-1');
   });
 
-  it('createProject — converts name→title', async () => {
+  it('createProject — converts name→title and sends the chosen type', async () => {
     mockAxiosInstance.post.mockResolvedValue(
       ok({ ...baseProjectRaw, id: '3', title: 'New Project' })
     );
 
-    const result = await c().createProject({
+    // Typed call, not `c()`: the type is a required argument now, and an
+    // `any` would let a caller without one compile.
+    const result = await apiClient.createProject({
       name: 'New Project',
       description: 'A new test project',
+      type: 'wound',
     });
 
+    // The server refuses a create without `type` (400). Every test above this
+    // layer mocks `createProject`, so this is the one that sees the body.
     expect(mockAxiosInstance.post).toHaveBeenCalledWith('/projects', {
       title: 'New Project',
       description: 'A new test project',
+      type: 'wound',
     });
     expect(result).toMatchObject({ id: '3', name: 'New Project' });
   });

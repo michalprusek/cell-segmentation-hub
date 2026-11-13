@@ -63,6 +63,9 @@ const makeApp = () => {
   return app;
 };
 
+const INVALID_TYPE =
+  'Neplatný typ projektu. Povolené hodnoty: spheroid, spheroid_invasive, wound, sperm, microtubules, microcapsule, neurite';
+
 describe('POST /api/projects — project type is required', () => {
   beforeEach(() => {
     vi.mocked(ProjectService.createProject).mockClear();
@@ -87,7 +90,9 @@ describe('POST /api/projects — project type is required', () => {
       .send({ title: 'Null type', type: null });
 
     expect(res.status).toBe(400);
-    expect(res.body.details).toHaveProperty('type');
+    // In Czech like every other message of this schema, and naming the
+    // accepted values — zod's own text here is English.
+    expect(res.body.details.type).toEqual([INVALID_TYPE]);
     expect(ProjectService.createProject).not.toHaveBeenCalled();
   });
 
@@ -97,8 +102,31 @@ describe('POST /api/projects — project type is required', () => {
       .send({ title: 'Bad type', type: 'spheroids' });
 
     expect(res.status).toBe(400);
-    expect(res.body.details).toHaveProperty('type');
+    expect(res.body.details.type).toEqual([INVALID_TYPE]);
     expect(ProjectService.createProject).not.toHaveBeenCalled();
+  });
+
+  // zod runs string checks in order; with `.min(1)` before `.trim()` a title
+  // of spaces passed the length check and was stored as ''.
+  it('refuses a title of only spaces', async () => {
+    const res = await request(makeApp())
+      .post('/api/projects')
+      .send({ title: '   ', type: 'spheroid' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.details.title).toEqual(['Název projektu je povinný']);
+    expect(ProjectService.createProject).not.toHaveBeenCalled();
+  });
+
+  it('stores the title trimmed', async () => {
+    await request(makeApp())
+      .post('/api/projects')
+      .send({ title: '  Padded  ', type: 'wound' });
+
+    expect(ProjectService.createProject).toHaveBeenCalledWith(
+      'user-1',
+      expect.objectContaining({ title: 'Padded' })
+    );
   });
 
   // The type that would have been the silent default must still be choosable,

@@ -18,6 +18,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import type { ReactNode } from 'react';
 
+import { toast } from 'sonner';
 import apiClient from '@/lib/api';
 import ProjectDialogForm from '../ProjectDialogForm';
 import { chooseProjectType } from './chooseProjectType';
@@ -133,7 +134,26 @@ describe('ProjectDialogForm — the project type is a required choice', () => {
     expect(picker).toHaveAttribute('aria-invalid', 'true');
     expect(picker).toHaveAttribute('aria-describedby', alert.id);
     expect(picker).toHaveFocus();
+    // The red must survive the pointer: the trigger's base class carries
+    // `hover:border-ring/60`, and tailwind-merge keeps only one hover border.
+    expect(picker.className).toContain('hover:border-destructive');
+    expect(picker.className).not.toContain('hover:border-ring/60');
 
+    expect(apiClient.createProject).not.toHaveBeenCalled();
+  });
+
+  it('reports a blank name and a missing type on the SAME submit', async () => {
+    const user = userEvent.setup();
+    await renderForm();
+
+    // Spaces pass the input's native `required`; the hook trims.
+    await user.type(screen.getByLabelText('Project Name'), '   ');
+    await user.click(
+      screen.getByRole('button', { name: 'Create New Project' })
+    );
+
+    expect(toast.error).toHaveBeenCalledWith('Please enter a project name');
+    expect(await screen.findByRole('alert')).toHaveTextContent(typeError);
     expect(apiClient.createProject).not.toHaveBeenCalled();
   });
 
@@ -148,6 +168,14 @@ describe('ProjectDialogForm — the project type is a required choice', () => {
     await screen.findByRole('alert');
 
     await chooseProjectType(user, 'Neurites & somas');
+    // The helper fills jsdom's gaps only for its own clicks.
+    for (const api of [
+      'hasPointerCapture',
+      'releasePointerCapture',
+      'scrollIntoView',
+    ]) {
+      expect(api in Element.prototype, api).toBe(false);
+    }
 
     expect(screen.queryByText(typeError)).not.toBeInTheDocument();
     expect(

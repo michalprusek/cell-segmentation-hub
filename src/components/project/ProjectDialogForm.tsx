@@ -104,8 +104,11 @@ const ProjectDialogForm = ({
                 }
                 className={cn(
                   'data-[placeholder]:text-muted-foreground',
+                  // hover: too — the trigger's base `hover:border-ring/60`
+                  // would otherwise drop the red exactly as the pointer
+                  // arrives to fix it.
                   projectTypeError &&
-                    'border-destructive focus:border-destructive focus:ring-destructive'
+                    'border-destructive hover:border-destructive focus:border-destructive focus:ring-destructive'
                 )}
               >
                 <SelectValue placeholder={t('projects.selectProjectType')} />

@@ -47,13 +47,18 @@ export const useProjectForm = ({
   const handleCreateProject = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    // Flag a missing type BEFORE the name check can return, so one submit
+    // reports both problems instead of revealing the second on the next try.
+    if (!projectType) {
+      setProjectTypeError(true);
+    }
+
     if (!projectName.trim()) {
       toast.error(t('errors.validationErrors.projectNameRequired'));
       return;
     }
 
     if (!projectType) {
-      setProjectTypeError(true);
       projectTypeRef.current?.focus();
       return;
     }
