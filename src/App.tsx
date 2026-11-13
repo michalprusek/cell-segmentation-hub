@@ -111,6 +111,11 @@ ExportStateManager.initialize();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
+    {/* The one toast outlet, above every provider: a provider that renders
+        nothing for a while (ThemeProvider does, until it has a theme) would
+        leave a toast fired meanwhile with no outlet. See
+        components/ui/sonner.tsx. */}
+    <Sonner />
     <TooltipProvider>
       <BrowserRouter
         future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
@@ -123,13 +128,6 @@ const App = () => (
                   <LanguageProvider>
                     <ToastEventProvider>
                       <ModelProvider>
-                        <Sonner
-                          position="bottom-right"
-                          closeButton
-                          toastOptions={{
-                            className: 'animate-slide-in-right',
-                          }}
-                        />
                         <ErrorBoundary fallback={null}>
                           <FloatingUploadProgress />
                         </ErrorBoundary>

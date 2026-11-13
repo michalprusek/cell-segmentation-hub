@@ -280,26 +280,45 @@ const isValid = confirmationText === requiredValue;
 
 ## Toast Notifications
 
-The application uses Sonner for toast notifications with specific positioning:
+The application uses Sonner for toast notifications. There is exactly **one**
+outlet, `src/components/ui/sonner.tsx`, mounted once in `App.tsx`, **above every
+provider**. Fire toasts with `toast` from `sonner` anywhere, and do not mount
+another `<Toaster>`.
 
 ```tsx
+// App.tsx: the only mount, the first child of QueryClientProvider
 import { Toaster as Sonner } from '@/components/ui/sonner';
 
-<Sonner
-  position="bottom-right"
-  closeButton
-  toastOptions={{
-    className: 'animate-slide-in-right',
-  }}
-/>;
+<Sonner />;
 ```
+
+The wrapper fixes the configuration:
+
+- bottom-right
+- a close button on each toast
+- `richColors`
+- the `animate-slide-in-right` entry animation (`src/styles/tailwind.css`)
+- the app's theme
+
+Three rules, each guarded by `components/ui/__tests__/sonner.test.tsx`:
+
+- **One outlet.** Sonner keeps its toasts in module state, so every mounted
+  `<Toaster>` draws every toast. Until 2026-11-13 a second one in `main.tsx`
+  showed each message twice. The test scans `src/` for any other mount.
+- **Above the providers, reading no context.** `ThemeProvider` renders nothing
+  until it has a theme. That is always true on its first render, and for a
+  user already known when it mounts it lasts until their profile loads. A
+  toast fired while no outlet is mounted is lost; a parent provider's mount
+  effect runs in that same first commit, for instance.
+- **The resolved theme from `<html>`.** The theme is read from the `light` /
+  `dark` class that `ThemeContext.applyTheme` sets, never from the raw
+  `'system'` setting. Given `'system'`, Sonner 1.7.4 adds an OS listener it
+  never removes, so toasts would follow the OS even after the user picked Dark.
 
 **Best Practices**:
 
-- Only bottom-right positioning (duplicate toasters removed)
 - Success messages for auto-save operations
 - Error messages for failed validations
-- Close button enabled for user control
 
 ## Responsive Design
 
