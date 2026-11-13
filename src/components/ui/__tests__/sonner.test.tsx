@@ -13,8 +13,9 @@
  *   events on: an invisible click target over the bottom-right corner of
  *   every page.
  * - It must be mounted above every provider. `ThemeProvider` renders nothing
- *   until the profile loads, and a toast fired while no outlet is mounted is
- *   lost.
+ *   until it has a theme: always on its first render, and until the profile
+ *   loads for a user already known when it mounts. A toast fired while no
+ *   outlet is mounted is lost.
  */
 import { readFileSync, readdirSync } from 'fs';
 import { fileURLToPath } from 'url';

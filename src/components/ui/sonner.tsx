@@ -20,9 +20,12 @@ const resolvedTheme = (): ResolvedTheme =>
  *
  * - One: Sonner keeps its toasts in module state, so every mounted `<Toaster>`
  *   draws every toast. A second one in `main.tsx` showed each message twice.
- * - Above the providers: `ThemeProvider` renders nothing until the profile has
- *   loaded, and an outlet that is not mounted drops whatever toast fires then.
- *   So this reads no React context at all.
+ * - Above the providers: `ThemeProvider` renders nothing until it has a
+ *   theme. That is always true on its first render, and for a user already
+ *   known when it mounts it lasts until their profile loads. A toast fired
+ *   meanwhile reaches no outlet and is lost; a parent provider's mount effect
+ *   runs in that same first commit, for instance. So this reads no React
+ *   context at all.
  * - The theme is the class `ThemeContext.applyTheme` puts on `<html>`, which
  *   is already resolved: 'system' has become light or dark there, and is kept
  *   current by a listener that cleans up after itself. Passing Sonner the raw

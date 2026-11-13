@@ -306,8 +306,10 @@ Three rules, each guarded by `components/ui/__tests__/sonner.test.tsx`:
   `<Toaster>` draws every toast. Until 2026-11-13 a second one in `main.tsx`
   showed each message twice. The test scans `src/` for any other mount.
 - **Above the providers, reading no context.** `ThemeProvider` renders nothing
-  until the profile loads, and a toast fired while no outlet is mounted is
-  lost.
+  until it has a theme. That is always true on its first render, and for a
+  user already known when it mounts it lasts until their profile loads. A
+  toast fired while no outlet is mounted is lost; a parent provider's mount
+  effect runs in that same first commit, for instance.
 - **The resolved theme from `<html>`.** The theme is read from the `light` /
   `dark` class that `ThemeContext.applyTheme` sets, never from the raw
   `'system'` setting. Given `'system'`, Sonner 1.7.4 adds an OS listener it

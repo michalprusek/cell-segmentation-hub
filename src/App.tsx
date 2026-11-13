@@ -111,9 +111,10 @@ ExportStateManager.initialize();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    {/* The one toast outlet, above every provider: ThemeProvider renders
-        nothing until the profile loads, and a toast fired while the outlet
-        is not mounted is lost. See components/ui/sonner.tsx. */}
+    {/* The one toast outlet, above every provider: a provider that renders
+        nothing for a while (ThemeProvider does, until it has a theme) would
+        leave a toast fired meanwhile with no outlet. See
+        components/ui/sonner.tsx. */}
     <Sonner />
     <TooltipProvider>
       <BrowserRouter
