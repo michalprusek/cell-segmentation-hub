@@ -584,18 +584,69 @@ components:
             - neurite
           example: spheroid
 
+    # Mirrors `updateProjectSchema` (backend/src/types/validation.ts).
     UpdateProjectRequest:
       type: object
+      description: >-
+        Owner only: a project you do not own answers 404, shared or not. Every
+        field is optional, and an omitted field keeps its stored value.
       properties:
         title:
           type: string
-          minLength: 3
-          maxLength: 100
+          minLength: 1
+          maxLength: 255
+          description: Trimmed before it is measured, so a title of only spaces is refused.
           example: 'Aktualizovaný název projektu'
         description:
           type: string
-          maxLength: 500
+          nullable: true
+          maxLength: 1000
           example: 'Aktualizovaný popis projektu'
+        type:
+          type: string
+          description: >-
+            Changing the type clears `segmentationModel` back to the new type's
+            default, unless this same request names a model.
+          enum:
+            - spheroid
+            - spheroid_invasive
+            - wound
+            - sperm
+            - microtubules
+            - microcapsule
+            - neurite
+        pixelSizeUm:
+          type: number
+          nullable: true
+          minimum: 0.001
+          maximum: 1000
+          description: >-
+            Image scale in micrometres per pixel; `null` clears it ("not
+            calibrated"). Read at segmentation time by
+            `spheroid_disintegration` only, and changing it re-runs nothing.
+          example: 1.28
+        segmentationModel:
+          type: string
+          nullable: true
+          description: >-
+            Must be compatible with the type the project has once this request
+            is applied, or the request is refused with 400
+            `MODEL_TYPE_INCOMPATIBLE`. `null` means "follow the type's default".
+          enum:
+            - hrnet
+            - cbam_resunet
+            - unet_spherohq
+            - spheroid_disintegration
+            - segformer
+            - mamba_unet
+            - sperm
+            - sperm_2part
+            - wound
+            - microtubule
+            - microcapsule
+            - neurite_soma
+            - neurite_soma_merged
+            - neurite_soma_classical
 
     Project:
       type: object
