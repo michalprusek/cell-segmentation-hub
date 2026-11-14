@@ -93,47 +93,14 @@ const showToast = async (text: string) => {
  * coverage collection that surfaced as React's `ReferenceError: window is not
  * defined`, which fails the run's unhandled-error gate with every test green
  * (PR #627's CI, 2026-11-14). Locally the worker exits first, so it never
- * showed. Each test therefore waits until its toasts are gone, and the guard
- * below fails the file if any such timer is left — or if it saw none, so it
- * cannot pass by measuring nothing.
+ * showed. Each test therefore waits until its toasts are gone, and a guard in
+ * the toast suite below fails it if any such timer is left — or if it saw
+ * none, so it cannot pass by measuring nothing.
  */
 const SONNER_REMOVE_DELAY_MS = 200;
 const pendingRemovals = new Set<number>();
 let removalsSeen = 0;
 const realSetTimeout = globalThis.setTimeout;
-
-beforeAll(() => {
-  let next = 0;
-  globalThis.setTimeout = ((
-    fn: (...args: unknown[]) => void,
-    ms?: number,
-    ...args: unknown[]
-  ) => {
-    if (ms !== SONNER_REMOVE_DELAY_MS) return realSetTimeout(fn, ms, ...args);
-    const id = ++next;
-    pendingRemovals.add(id);
-    removalsSeen++;
-    return realSetTimeout(
-      (...a: unknown[]) => {
-        pendingRemovals.delete(id);
-        fn(...a);
-      },
-      ms,
-      ...args
-    );
-  }) as unknown as typeof setTimeout;
-});
-
-afterAll(() => {
-  globalThis.setTimeout = realSetTimeout;
-  expect(removalsSeen, 'the guard saw no sonner removal timer').toBeGreaterThan(
-    0
-  );
-  expect(
-    pendingRemovals.size,
-    'sonner removal timers still pending when the file ends'
-  ).toBe(0);
-});
 
 afterEach(async () => {
   act(() => {
@@ -162,6 +129,42 @@ afterEach(async () => {
 // Every render below has NO provider around it: the outlet must work without
 // any context, which is what lets App.tsx mount it above all of them.
 describe('Toaster — the toast outlet', () => {
+  // Scoped to the suite that shows toasts, so a filtered run of the source
+  // scans below (no toast at all) is not failed by the non-vacuity check.
+  beforeAll(() => {
+    let next = 0;
+    globalThis.setTimeout = ((
+      fn: (...args: unknown[]) => void,
+      ms?: number,
+      ...args: unknown[]
+    ) => {
+      if (ms !== SONNER_REMOVE_DELAY_MS) return realSetTimeout(fn, ms, ...args);
+      const id = ++next;
+      pendingRemovals.add(id);
+      removalsSeen++;
+      return realSetTimeout(
+        (...a: unknown[]) => {
+          pendingRemovals.delete(id);
+          fn(...a);
+        },
+        ms,
+        ...args
+      );
+    }) as unknown as typeof setTimeout;
+  });
+
+  afterAll(() => {
+    globalThis.setTimeout = realSetTimeout;
+    expect(
+      removalsSeen,
+      'the guard saw no sonner removal timer'
+    ).toBeGreaterThan(0);
+    expect(
+      pendingRemovals.size,
+      'sonner removal timers still pending when the suite ends'
+    ).toBe(0);
+  });
+
   it("draws toasts in the app's theme even when the OS prefers the other", async () => {
     osPrefersDark();
     setAppTheme('light');
