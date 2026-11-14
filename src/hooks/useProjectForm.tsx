@@ -44,11 +44,25 @@ export const useProjectForm = ({
     setProjectTypeError(false);
   };
 
+  /** For the name input's `onInvalid`. An EMPTY name never reaches
+   *  `handleCreateProject`: the input's native `required` makes the browser
+   *  refuse the submit first, and `invalid` on that input is all it fires. So
+   *  a missing type is flagged here as well, or the first click showed only
+   *  the browser's bubble on the name. Focus is left alone — the bubble is on
+   *  the name. */
+  const handleNameInvalid = () => {
+    if (!projectType) {
+      setProjectTypeError(true);
+    }
+  };
+
   const handleCreateProject = async (e: React.FormEvent) => {
     e.preventDefault();
 
     // Flag a missing type BEFORE the name check can return, so one submit
     // reports both problems instead of revealing the second on the next try.
+    // That check is reached by a name of only spaces; an empty one is stopped
+    // by the browser first (see `handleNameInvalid`).
     if (!projectType) {
       setProjectTypeError(true);
     }
@@ -147,5 +161,6 @@ export const useProjectForm = ({
     projectTypeRef,
     isCreating,
     handleCreateProject,
+    handleNameInvalid,
   };
 };

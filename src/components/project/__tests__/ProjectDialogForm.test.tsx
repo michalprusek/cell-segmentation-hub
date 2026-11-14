@@ -29,6 +29,7 @@ vi.mock('@/hooks/useProjectForm', () => ({
     projectTypeRef: { current: null },
     isCreating: false,
     handleCreateProject: mockHandleCreateProject,
+    handleNameInvalid: vi.fn(),
   })),
 }));
 
@@ -92,6 +93,7 @@ describe('ProjectDialogForm', () => {
       projectTypeRef: { current: null },
       isCreating: false,
       handleCreateProject: handleCreate,
+      handleNameInvalid: vi.fn(),
     });
 
     render(<ProjectDialogForm onClose={vi.fn()} />);
@@ -115,6 +117,7 @@ describe('ProjectDialogForm', () => {
       projectTypeRef: { current: null },
       isCreating: true,
       handleCreateProject: vi.fn(),
+      handleNameInvalid: vi.fn(),
     });
 
     render(<ProjectDialogForm onClose={vi.fn()} />);

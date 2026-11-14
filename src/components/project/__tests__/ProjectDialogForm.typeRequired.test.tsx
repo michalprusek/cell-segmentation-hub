@@ -157,6 +157,33 @@ describe('ProjectDialogForm — the project type is a required choice', () => {
     expect(apiClient.createProject).not.toHaveBeenCalled();
   });
 
+  it('an untouched form: the browser flags the name AND the type is flagged too', async () => {
+    // An EMPTY name never reaches `handleCreateProject`: the name input's
+    // native `required` makes the browser refuse the submit first, and all it
+    // fires is `invalid` on that input. jsdom runs the same check on a click,
+    // so this is the path a real user takes (measured on production: only
+    // "Please fill out this field." appeared and the type picker stayed
+    // unmarked). The whitespace test above cannot see it — spaces pass
+    // `required`.
+    const user = userEvent.setup();
+    await renderForm();
+
+    const name = screen.getByLabelText('Project Name') as HTMLInputElement;
+    await user.click(
+      screen.getByRole('button', { name: 'Create New Project' })
+    );
+
+    expect(name.validity.valueMissing).toBe(true);
+    expect(await screen.findByRole('alert')).toHaveTextContent(typeError);
+    const picker = screen.getByRole('combobox', { name: 'Project Type' });
+    expect(picker).toHaveAttribute('aria-invalid', 'true');
+    // The browser's bubble sits on the name, so focus must stay there.
+    expect(picker).not.toHaveFocus();
+    // The hook never ran: no toast duplicating the browser's own message.
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(apiClient.createProject).not.toHaveBeenCalled();
+  });
+
   it('choosing a type clears the error, and the chosen type is what is sent', async () => {
     const user = userEvent.setup();
     const { onSuccess } = await renderForm();
