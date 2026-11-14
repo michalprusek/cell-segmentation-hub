@@ -6,7 +6,10 @@ import {
   createProjectSchema,
   updateProjectSchema,
 } from '../validation';
-import { SEGMENTATION_MODELS } from '../../constants/modelRegistry';
+import {
+  MODEL_REGISTRY,
+  SEGMENTATION_MODELS,
+} from '../../constants/modelRegistry';
 
 /**
  * `/api-docs` serves `api/openapi.yaml`, whose project request bodies are
@@ -52,6 +55,10 @@ const propertyBlock = (block: string, name: string): string => {
   expect(body, `properties.${name} not found`).toBeDefined();
   return body;
 };
+
+/** One property's own body: up to the next 8-space key, not past it. */
+const ownPropertyBlock = (block: string, name: string): string =>
+  propertyBlock(block, name).split(/\n {8}\w+:\n/)[0];
 
 /** `- item` lines directly under `key:` at the given indent. */
 const listUnder = (block: string, key: string, indent: number): string[] => {
@@ -115,5 +122,42 @@ describe('openapi.yaml UpdateProjectRequest matches updateProjectSchema', () => 
     expect(
       listUnder(propertyBlock(block, 'segmentationModel'), 'enum', 10)
     ).toEqual([...SEGMENTATION_MODELS]);
+  });
+
+  it('names exactly the retired models as always refused', () => {
+    // A model compatible with NO type passes zod (it is a known id) and is
+    // then refused by ProjectService for every project. The enum must still
+    // list it, so the description has to say so — and must not name a live
+    // model as retired.
+    const retired = SEGMENTATION_MODELS.filter(
+      m => MODEL_REGISTRY[m].compatibleProjectTypes.length === 0
+    );
+    expect(retired.length).toBeGreaterThan(0);
+    const named = [
+      ...ownPropertyBlock(block, 'segmentationModel').matchAll(/`(\w+)`/g),
+    ]
+      .map(m => m[1])
+      .filter(id => (SEGMENTATION_MODELS as readonly string[]).includes(id));
+    expect([...new Set(named)].sort()).toEqual([...retired].sort());
+  });
+});
+
+describe('openapi.yaml Project shows what an update can set', () => {
+  // `Project` is the `data` of the PUT's 200 (and of create and detail). A
+  // field a client can set but not see in the answer is a field it cannot
+  // confirm was stored.
+  const block = schemaBlock('Project');
+
+  it('documents every field UpdateProjectRequest accepts', () => {
+    const returned = propertyNames(block);
+    for (const name of Object.keys(updateProjectSchema.shape)) {
+      expect(returned, `Project lacks ${name}`).toContain(name);
+    }
+  });
+
+  it('enumerates exactly the project types the server stores', () => {
+    expect(listUnder(ownPropertyBlock(block, 'type'), 'enum', 10)).toEqual([
+      ...PROJECT_TYPES,
+    ]);
   });
 });

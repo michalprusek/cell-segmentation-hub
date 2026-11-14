@@ -302,8 +302,30 @@ paths:
             type: string
             format: uuid
       responses:
-        '204':
+        '200':
           description: Projekt úspěšně smazán
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      title:
+                        type: string
+                      deletedImagesCount:
+                        type: integer
+                        example: 15
+                  message:
+                    type: string
+                    example: 'Projekt byl úspěšně smazán'
         '401':
           description: Neautorizovaný přístup
           content:
@@ -632,6 +654,9 @@ components:
             Must be compatible with the type the project has once this request
             is applied, or the request is refused with 400
             `MODEL_TYPE_INCOMPATIBLE`. `null` means "follow the type's default".
+            `neurite_soma_classical` is retired: it is compatible with no
+            type, so it is always refused. It stays in this list because stored
+            results still name it.
           enum:
             - hrnet
             - cbam_resunet
@@ -660,7 +685,31 @@ components:
           example: 'Segmentace buněk v tkáních'
         description:
           type: string
+          nullable: true
           example: 'Projekt pro segmentaci buněčných struktur v histologických preparátech'
+        type:
+          type: string
+          enum:
+            - spheroid
+            - spheroid_invasive
+            - wound
+            - sperm
+            - microtubules
+            - microcapsule
+            - neurite
+          example: spheroid
+        pixelSizeUm:
+          type: number
+          nullable: true
+          description: Micrometres per pixel; `null` means not calibrated.
+          example: 1.28
+        segmentationModel:
+          type: string
+          nullable: true
+          description: >-
+            The stored choice; `null` means the project follows its type's
+            default model.
+          example: null
         userId:
           type: string
           format: uuid
@@ -672,6 +721,9 @@ components:
           format: date-time
         imageCount:
           type: integer
+          description: >-
+            In the project list only. A single project (create, detail, update)
+            carries the count as `_count.images` instead.
           example: 15
 
     ProjectResponse:
