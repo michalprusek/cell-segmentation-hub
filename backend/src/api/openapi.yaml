@@ -672,6 +672,9 @@ components:
             - neurite_soma
             - neurite_soma_merged
             - neurite_soma_classical
+            # OpenAPI 3.0: `nullable` does not admit null past an `enum`, so
+            # the reset value must be listed (unquoted, i.e. the null value).
+            - null
 
     Project:
       type: object

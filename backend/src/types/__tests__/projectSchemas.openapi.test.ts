@@ -68,6 +68,7 @@ const listUnder = (block: string, key: string, indent: number): string[] => {
   expect(at, `${key}: not found`).toBeGreaterThan(-1);
   const items: string[] = [];
   for (const line of lines.slice(at + 1)) {
+    if (/^\s*#/.test(line)) continue; // a YAML comment inside the list
     const m = line.match(new RegExp(`^${pad}  - (\\S+)$`));
     if (!m) break;
     items.push(m[1]);
@@ -120,9 +121,24 @@ describe('openapi.yaml UpdateProjectRequest matches updateProjectSchema', () => 
 
   it('enumerates exactly the segmentation models the server accepts', () => {
     expect(
-      listUnder(propertyBlock(block, 'segmentationModel'), 'enum', 10)
+      listUnder(propertyBlock(block, 'segmentationModel'), 'enum', 10).filter(
+        item => item !== 'null'
+      )
     ).toEqual([...SEGMENTATION_MODELS]);
   });
+
+  it.each(['type', 'segmentationModel'] as const)(
+    'lists null in the %s enum exactly when the server accepts null',
+    name => {
+      // OpenAPI 3.0: `nullable: true` does not admit null past an `enum`; a
+      // client validating against the schema refuses any value not listed. So
+      // `segmentationModel: null` (the documented reset) must be IN the enum,
+      // and `type`, which the server refuses as null, must not be.
+      const accepts = updateProjectSchema.shape[name].safeParse(null).success;
+      const items = listUnder(ownPropertyBlock(block, name), 'enum', 10);
+      expect(items.includes('null'), `${name}: null listed`).toBe(accepts);
+    }
+  );
 
   it('names exactly the retired models as always refused', () => {
     // A model compatible with NO type passes zod (it is a known id) and is
