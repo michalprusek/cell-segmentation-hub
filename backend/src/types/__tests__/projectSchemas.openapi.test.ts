@@ -134,9 +134,15 @@ describe('openapi.yaml UpdateProjectRequest matches updateProjectSchema', () => 
       // client validating against the schema refuses any value not listed. So
       // `segmentationModel: null` (the documented reset) must be IN the enum,
       // and `type`, which the server refuses as null, must not be.
+      // Both declarations are needed: `nullable` admits null for the type,
+      // the enum entry admits it past the enum. Either alone refuses it.
       const accepts = updateProjectSchema.shape[name].safeParse(null).success;
-      const items = listUnder(ownPropertyBlock(block, name), 'enum', 10);
+      const own = ownPropertyBlock(block, name);
+      const items = listUnder(own, 'enum', 10);
       expect(items.includes('null'), `${name}: null listed`).toBe(accepts);
+      expect(/^ {10}nullable: true$/m.test(own), `${name}: nullable`).toBe(
+        accepts
+      );
     }
   );
 
