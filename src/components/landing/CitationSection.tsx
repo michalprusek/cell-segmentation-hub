@@ -72,7 +72,7 @@ const CitationSection = () => {
                   {t('landing.citation.copyBibtex')}
                 </button>
               </div>
-              <pre className="mt-2 overflow-x-auto rounded-md bg-gray-100 p-4 font-mono text-xs leading-relaxed text-gray-800 dark:bg-gray-900 dark:text-gray-200">
+              <pre className="mt-2 overflow-x-auto rounded-md bg-gray-100 p-4 font-mono text-xs leading-relaxed text-gray-800 ring-1 ring-inset ring-gray-200 dark:bg-white/5 dark:text-gray-200 dark:ring-white/10">
                 <code>{SPHEROSEG_BIBTEX}</code>
               </pre>
             </div>
