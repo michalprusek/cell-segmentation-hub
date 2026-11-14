@@ -53,7 +53,7 @@ const CitationSection = () => {
                 href={SPHEROSEG_PAPER_URL}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="break-all font-medium text-blue-600 underline-offset-4 hover:underline dark:text-blue-400"
+                className="break-words font-medium text-blue-600 underline-offset-4 hover:underline dark:text-blue-400"
               >
                 doi:{paper.doi}
               </a>
