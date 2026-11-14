@@ -20,7 +20,15 @@
 import { readFileSync, readdirSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-import { describe, it, expect, afterEach, beforeAll, vi } from 'vitest';
+import {
+  describe,
+  it,
+  expect,
+  afterAll,
+  afterEach,
+  beforeAll,
+  vi,
+} from 'vitest';
 import { act, render, screen, waitFor } from '@testing-library/react';
 import { toast } from 'sonner';
 import { Toaster } from '../sonner';
@@ -78,10 +86,30 @@ const showToast = async (text: string) => {
   return list as HTMLElement;
 };
 
-afterEach(() => {
+/**
+ * Sonner removes a dismissed toast TIME_BEFORE_UNMOUNT (200 ms) later, from a
+ * bare `setTimeout` that nothing cancels. This file runs in ~40 ms, so a timer
+ * still pending when it ends fires after jsdom is torn down: under CI's
+ * coverage collection that surfaced as React's `ReferenceError: window is not
+ * defined`, which fails the run's unhandled-error gate with every test green
+ * (PR #627's CI, 2026-11-14). Locally the worker exits first, so it never
+ * showed. Each test therefore waits until its toasts are gone, and a guard in
+ * the toast suite below fails it if any such timer is left — or if it saw
+ * none, so it cannot pass by measuring nothing.
+ */
+const SONNER_REMOVE_DELAY_MS = 200;
+const pendingRemovals = new Set<number>();
+let removalsSeen = 0;
+const realSetTimeout = globalThis.setTimeout;
+
+afterEach(async () => {
   act(() => {
     toast.dismiss();
   });
+  // The dismissed toast leaves the DOM only when its 200 ms timer fires.
+  await waitFor(() =>
+    expect(document.querySelector('[data-sonner-toast]')).toBeNull()
+  );
   document.documentElement.classList.remove('light', 'dark');
   vi.mocked(window.matchMedia).mockImplementation(
     query =>
@@ -101,6 +129,42 @@ afterEach(() => {
 // Every render below has NO provider around it: the outlet must work without
 // any context, which is what lets App.tsx mount it above all of them.
 describe('Toaster — the toast outlet', () => {
+  // Scoped to the suite that shows toasts, so a filtered run of the source
+  // scans below (no toast at all) is not failed by the non-vacuity check.
+  beforeAll(() => {
+    let next = 0;
+    globalThis.setTimeout = ((
+      fn: (...args: unknown[]) => void,
+      ms?: number,
+      ...args: unknown[]
+    ) => {
+      if (ms !== SONNER_REMOVE_DELAY_MS) return realSetTimeout(fn, ms, ...args);
+      const id = ++next;
+      pendingRemovals.add(id);
+      removalsSeen++;
+      return realSetTimeout(
+        (...a: unknown[]) => {
+          pendingRemovals.delete(id);
+          fn(...a);
+        },
+        ms,
+        ...args
+      );
+    }) as unknown as typeof setTimeout;
+  });
+
+  afterAll(() => {
+    globalThis.setTimeout = realSetTimeout;
+    expect(
+      removalsSeen,
+      'the guard saw no sonner removal timer'
+    ).toBeGreaterThan(0);
+    expect(
+      pendingRemovals.size,
+      'sonner removal timers still pending when the suite ends'
+    ).toBe(0);
+  });
+
   it("draws toasts in the app's theme even when the OS prefers the other", async () => {
     osPrefersDark();
     setAppTheme('light');
