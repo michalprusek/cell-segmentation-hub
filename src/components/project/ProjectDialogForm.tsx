@@ -46,6 +46,7 @@ const ProjectDialogForm = ({
     projectTypeRef,
     isCreating,
     handleCreateProject,
+    handleNameInvalid,
   } = useProjectForm({ onSuccess, onClose, folderId });
 
   return (
@@ -66,6 +67,7 @@ const ProjectDialogForm = ({
               value={projectName}
               onChange={e => setProjectName(e.target.value)}
               required
+              onInvalid={handleNameInvalid}
             />
           </div>
           <div className="space-y-2">
