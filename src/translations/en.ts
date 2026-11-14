@@ -166,6 +166,16 @@ export default {
       supportText:
         'If you would like to support the project financially, please write to me at',
     },
+    citation: {
+      badge: 'Citation',
+      title: 'How to cite SpheroSeg',
+      intro:
+        'If SpheroSeg contributed to your research, please cite our paper:',
+      copyBibtex: 'Copy BibTeX',
+      copied: 'BibTeX copied to the clipboard',
+      copyFailed: 'Could not copy. Select the text and copy it by hand.',
+      readPaper: 'Read the paper',
+    },
     acknowledgments: {
       badge: 'Acknowledgments',
       title: 'Special Thanks',

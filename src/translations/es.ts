@@ -159,6 +159,17 @@ export default {
       contactText: 'Para consultas, contáctenos en',
       supportText: 'Si desea apoyar el proyecto económicamente, escríbame a',
     },
+    citation: {
+      badge: 'Cita',
+      title: 'Cómo citar SpheroSeg',
+      intro:
+        'Si SpheroSeg ha contribuido a su investigación, cite nuestro artículo:',
+      copyBibtex: 'Copiar BibTeX',
+      copied: 'BibTeX copiado al portapapeles',
+      copyFailed:
+        'No se pudo copiar. Seleccione el texto y cópielo manualmente.',
+      readPaper: 'Leer el artículo',
+    },
     acknowledgments: {
       badge: 'Agradecimientos',
       title: 'Agradecimientos especiales',

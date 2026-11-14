@@ -158,6 +158,15 @@ export default {
       contactText: '如有疑问，请联系我们',
       supportText: '如果您愿意为本项目提供资金支持，请写信至',
     },
+    citation: {
+      badge: '引用',
+      title: '如何引用 SpheroSeg',
+      intro: '如果 SpheroSeg 对您的研究有所帮助，请引用我们的论文：',
+      copyBibtex: '复制 BibTeX',
+      copied: 'BibTeX 已复制到剪贴板',
+      copyFailed: '复制失败。请手动选择并复制文本。',
+      readPaper: '阅读论文',
+    },
     acknowledgments: {
       badge: '致谢',
       title: '特别感谢',

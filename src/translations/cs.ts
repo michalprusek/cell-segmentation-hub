@@ -159,6 +159,17 @@ export default {
       supportText:
         'Pokud byste chtěli projekt podpořit finančně, ozvěte se mi prosím na',
     },
+    citation: {
+      badge: 'Citace',
+      title: 'Jak citovat SpheroSeg',
+      intro:
+        'Pokud vám SpheroSeg pomohl ve výzkumu, citujte prosím náš článek:',
+      copyBibtex: 'Kopírovat BibTeX',
+      copied: 'BibTeX zkopírován do schránky',
+      copyFailed:
+        'Kopírování se nezdařilo. Označte text a zkopírujte ho ručně.',
+      readPaper: 'Přečíst článek',
+    },
     acknowledgments: {
       badge: 'Poděkování',
       title: 'Zvláštní poděkování',

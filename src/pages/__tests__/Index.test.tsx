@@ -49,6 +49,13 @@ vi.mock('@/contexts/useLanguage', () => ({
         'landing.about.contactText': 'For inquiries, please contact us at',
         'landing.about.supportText':
           'If you would like to support the project financially, please write to me at',
+        'landing.citation.badge': 'Citation',
+        'landing.citation.title': 'How to cite SpheroSeg',
+        'landing.citation.intro': 'Please cite our paper:',
+        'landing.citation.copyBibtex': 'Copy BibTeX',
+        'landing.citation.copied': 'Copied',
+        'landing.citation.copyFailed': 'Copy failed',
+        'landing.citation.readPaper': 'Read the paper',
         'landing.acknowledgments.badge': 'Acknowledgments',
         'landing.acknowledgments.title': 'Special Thanks',
         'landing.acknowledgments.lukasIntro': 'We thank',
@@ -94,6 +101,25 @@ describe('Index (landing) page', () => {
     it('resolves every translation key it renders', () => {
       const { container } = renderPage();
       expect(container.textContent).not.toMatch(/landing\./);
+    });
+  });
+
+  describe('How to cite', () => {
+    it('sits between About and Acknowledgments', () => {
+      renderPage();
+      const about = document.getElementById('about');
+      const cite = document.getElementById('cite');
+      const ack = document.getElementById('acknowledgments');
+      expect(about && cite && ack).toBeTruthy();
+      expect(
+        about!.compareDocumentPosition(cite!) & Node.DOCUMENT_POSITION_FOLLOWING
+      ).toBeTruthy();
+      expect(
+        cite!.compareDocumentPosition(ack!) & Node.DOCUMENT_POSITION_FOLLOWING
+      ).toBeTruthy();
+      expect(
+        screen.getByRole('heading', { level: 2, name: 'How to cite SpheroSeg' })
+      ).toBeInTheDocument();
     });
   });
 

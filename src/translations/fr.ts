@@ -160,6 +160,17 @@ export default {
       supportText:
         'Si vous souhaitez soutenir le projet financièrement, écrivez-moi à',
     },
+    citation: {
+      badge: 'Citation',
+      title: 'Comment citer SpheroSeg',
+      intro:
+        'Si SpheroSeg a contribué à vos recherches, merci de citer notre article :',
+      copyBibtex: 'Copier le BibTeX',
+      copied: 'BibTeX copié dans le presse-papiers',
+      copyFailed:
+        'Échec de la copie. Sélectionnez le texte et copiez-le manuellement.',
+      readPaper: 'Lire l’article',
+    },
     acknowledgments: {
       badge: 'Remerciements',
       title: 'Remerciements particuliers',

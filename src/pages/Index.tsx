@@ -3,6 +3,7 @@ import Navbar from '@/components/Navbar';
 import Hero from '@/components/Hero';
 import Features from '@/components/Features';
 import Footer from '@/components/Footer';
+import CitationSection from '@/components/landing/CitationSection';
 import { useLanguage } from '@/contexts/useLanguage';
 
 function Index() {
@@ -63,6 +64,8 @@ function Index() {
             </div>
           </div>
         </section>
+
+        <CitationSection />
 
         {/* Acknowledgments */}
         <section
