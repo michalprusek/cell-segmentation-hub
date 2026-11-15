@@ -149,8 +149,10 @@ export default {
     about: {
       badge: '由谁开发',
       title: '这个平台从何而来',
-      description1:
-        '我们的平台由捷克技术大学布拉格核科学与物理工程学院（FJFI）的学生Bc. Michal Průšek开发，在Ing. Adam Novozámský博士的指导下完成。',
+      developedByIntro:
+        '我们的平台由捷克技术大学布拉格核科学与物理工程学院（FJFI）的学生Bc.',
+      developerName: 'Michal Průšek',
+      developedByRest: '开发，在Ing. Adam Novozámský博士的指导下完成。',
       description2:
         '该项目是与布拉格化工大学生物化学和微生物学研究所 Ing. Silvie Rimpelová 博士团队合作的项目（VŠCHT Praha）。',
       description3:

@@ -149,8 +149,10 @@ export default {
     about: {
       badge: 'Kdo za tím stojí',
       title: 'Odkud platforma pochází',
-      description1:
-        'Naše platforma byla vyvinuta Bc. Michalem Průškem, studentem Fakulty jaderné a fyzikálně inženýrské ČVUT v Praze, pod vedením Ing. Adama Novozámského, Ph.D.',
+      developedByIntro: 'Naše platforma byla vyvinuta Bc.',
+      developerName: 'Michalem Průškem',
+      developedByRest:
+        ', studentem Fakulty jaderné a fyzikálně inženýrské ČVUT v Praze, pod vedením Ing. Adama Novozámského, Ph.D.',
       description2:
         'Tento projekt je ve spolupráci se skupinou Ing. Silvie Rimpelové, Ph.D. z Ústavu biochemie a mikrobiologie VŠCHT Praha.',
       description3:

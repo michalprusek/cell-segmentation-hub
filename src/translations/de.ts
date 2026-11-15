@@ -150,8 +150,10 @@ export default {
     about: {
       badge: 'Wer dahintersteht',
       title: 'Woher die Plattform kommt',
-      description1:
-        'Unsere Plattform wurde von Bc. Michal Průšek, Student an der Fakultät für Kernwissenschaften und Physikalisches Ingenieurwesen (FJFI) an der Tschechischen Technischen Universität Prag, unter der Leitung von Ing. Adam Novozámský, Ph.D. entwickelt.',
+      developedByIntro: 'Unsere Plattform wurde von Bc.',
+      developerName: 'Michal Průšek',
+      developedByRest:
+        ', Student an der Fakultät für Kernwissenschaften und Physikalisches Ingenieurwesen (FJFI) an der Tschechischen Technischen Universität Prag, unter der Leitung von Ing. Adam Novozámský, Ph.D. entwickelt.',
       description2:
         'Dieses Projekt ist eine Zusammenarbeit mit der Gruppe von Ing. Silvie Rimpelová, Ph.D. vom Institut für Biochemie und Mikrobiologie der UCT Prag (VŠCHT Praha).',
       description3:

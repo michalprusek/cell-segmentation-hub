@@ -150,8 +150,10 @@ export default {
     about: {
       badge: 'Qui la développe',
       title: "D'où vient la plateforme",
-      description1:
-        "Notre plateforme a été développée par Bc. Michal Průšek, étudiant à la Faculté des Sciences Nucléaires et d'Ingénierie Physique (FJFI) de l'Université Technique Tchèque de Prague, sous la supervision d'Ing. Adam Novozámský, Ph.D.",
+      developedByIntro: 'Notre plateforme a été développée par Bc.',
+      developerName: 'Michal Průšek',
+      developedByRest:
+        ", étudiant à la Faculté des Sciences Nucléaires et d'Ingénierie Physique (FJFI) de l'Université Technique Tchèque de Prague, sous la supervision d'Ing. Adam Novozámský, Ph.D.",
       description2:
         "Ce projet est une collaboration avec le groupe d'Ing. Silvie Rimpelová, Ph.D. de l'Institut de Biochimie et de Microbiologie de l'UCT Prague (VŠCHT Praha).",
       description3:

@@ -6,6 +6,10 @@ import Footer from '@/components/Footer';
 import CitationSection from '@/components/landing/CitationSection';
 import { useLanguage } from '@/contexts/useLanguage';
 
+/** The developer's page. The trailing slash is the canonical form: the server
+ *  answers `/prusek` with a 301 to `/prusek/`. */
+const AUTHOR_PAGE_URL = 'https://staff.utia.cas.cz/prusek/';
+
 function Index() {
   const { t } = useLanguage();
 
@@ -33,8 +37,20 @@ function Index() {
               </div>
 
               <div className="max-w-2xl space-y-5 text-gray-600 dark:text-gray-300">
+                {/* The space before the name is here, not in the strings: every
+                    locale has one there (zh too: "学生Bc. Michal"), and none
+                    after it, where a comma or 开发 follows directly. */}
                 <p className="leading-relaxed">
-                  {t('landing.about.description1')}
+                  {t('landing.about.developedByIntro')}{' '}
+                  <a
+                    href={AUTHOR_PAGE_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-semibold text-blue-600 underline-offset-4 hover:underline dark:text-blue-400"
+                  >
+                    {t('landing.about.developerName')}
+                  </a>
+                  {t('landing.about.developedByRest')}
                 </p>
                 <p className="leading-relaxed">
                   {t('landing.about.description2')}
