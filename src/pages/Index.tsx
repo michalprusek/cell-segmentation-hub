@@ -38,7 +38,7 @@ function Index() {
 
               <div className="max-w-2xl space-y-5 text-gray-600 dark:text-gray-300">
                 {/* The space before the name is here, not in the strings: every
-                    locale has one there (zh too: "学生Bc. Michal"), and none
+                    locale has one there (zh too: "研究员Ing. Michal"), and none
                     after it, where a comma or 开发 follows directly. */}
                 <p className="leading-relaxed">
                   {t('landing.about.developedByIntro')}{' '}

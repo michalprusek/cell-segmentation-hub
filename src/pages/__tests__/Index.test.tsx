@@ -6,6 +6,8 @@
  *  - About section renders its badge, heading, the developer's name linked
  *    to their staff page inside an unbroken sentence, the contact email link
  *    and the financial-support line, each pointing at the same mailto: address.
+ *  - In every locale the bio here and the one in the in-app Documentation are
+ *    both current (title, supervisors, institute).
  *  - Acknowledgments render the contributor's name and both links to their
  *    page — these are a real attribution, so the test pins them.
  *  - The sign-up band renders its heading and the link into /sign-in.
@@ -52,10 +54,10 @@ vi.mock('@/contexts/useLanguage', () => ({
         'landing.about.title': 'Where the platform comes from',
         // The real English strings: the test checks the sentence they join
         // into, so a stray or missing space at either seam fails it.
-        'landing.about.developedByIntro': 'Our platform was developed by Bc.',
+        'landing.about.developedByIntro': 'Our platform was developed by Ing.',
         'landing.about.developerName': 'Michal Průšek',
         'landing.about.developedByRest':
-          ', a student at the Faculty of Nuclear Sciences and Physical Engineering (FJFI) at Czech Technical University in Prague, under the supervision of Ing. Adam Novozámský, Ph.D.',
+          ', a PhD student at the Faculty of Nuclear Sciences and Physical Engineering (FJFI) at Czech Technical University in Prague and a researcher at the Institute of Information Theory and Automation of the Czech Academy of Sciences (ÚTIA), under the supervision of Ing. Adam Novozámský, Ph.D., and Prof. Ing. Filip Šroubek, Ph.D., DSc.',
         'landing.about.description2': 'Description 2.',
         'landing.about.description3': 'Description 3.',
         'landing.about.contactText': 'For inquiries, please contact us at',
@@ -153,14 +155,16 @@ describe('Index (landing) page', () => {
       expect(link).toHaveAttribute('href', 'https://staff.utia.cas.cz/prusek/');
       expect(link).toHaveAttribute('target', '_blank');
       expect(link).toHaveAttribute('rel', 'noopener noreferrer');
-      // In the About section, and the sentence reads exactly as before the
-      // name became a link.
+      // In the About section, and the sentence reads as one, the name joined
+      // to its title and its comma with exactly one space and none.
       expect(document.getElementById('about')!.contains(link)).toBe(true);
       expect(link.closest('p')!.textContent).toBe(
-        'Our platform was developed by Bc. Michal Průšek, a student at the ' +
-          'Faculty of Nuclear Sciences and Physical Engineering (FJFI) at Czech ' +
-          'Technical University in Prague, under the supervision of Ing. Adam ' +
-          'Novozámský, Ph.D.'
+        'Our platform was developed by Ing. Michal Průšek, a PhD student at ' +
+          'the Faculty of Nuclear Sciences and Physical Engineering (FJFI) at ' +
+          'Czech Technical University in Prague and a researcher at the ' +
+          'Institute of Information Theory and Automation of the Czech Academy ' +
+          'of Sciences (ÚTIA), under the supervision of Ing. Adam Novozámský, ' +
+          'Ph.D., and Prof. Ing. Filip Šroubek, Ph.D., DSc.'
       );
     });
 
@@ -175,6 +179,33 @@ describe('Index (landing) page', () => {
         expect(developedByIntro).toMatch(/\S$/);
         expect(developerName).toMatch(/^\S.*\S$/);
         expect(developedByRest).toMatch(/^\S/);
+      }
+    );
+
+    // The bio is written twice: here, and in the in-app Documentation's
+    // introduction (`docs.introduction.developedBy`, one string because that
+    // page renders and searches plain text). Both still said "Bc. … student"
+    // after it had stopped being true, so per locale both must carry the
+    // current title, both PhD supervisors and the institute. `Šroub` is a stem
+    // on purpose: Czech declines the name ("pod vedením … Filipa Šroubka").
+    it.each(Object.entries({ en, cs, es, de, fr, zh }))(
+      '%s: the welcome page and the documentation give the current bio',
+      (_lang, tr) => {
+        const { developedByIntro, developedByRest } = tr.landing.about;
+        // The title is the word the page sets right before the linked name;
+        // the docs string carries both itself.
+        expect(developedByIntro).toMatch(/Ing\.$/);
+        expect(tr.docs.introduction.developedBy).toMatch(/Ing\. Michal Průšek/);
+        const bios = {
+          landing: `${developedByIntro} ${developedByRest}`,
+          docs: tr.docs.introduction.developedBy,
+        };
+        for (const [where, bio] of Object.entries(bios)) {
+          expect(bio, where).not.toMatch(/Bc\.|学士/);
+          expect(bio, where).toMatch(/Novozámsk/);
+          expect(bio, where).toMatch(/Šroub/);
+          expect(bio, where).toMatch(/ÚTIA/);
+        }
       }
     );
 

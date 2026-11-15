@@ -150,10 +150,10 @@ export default {
     about: {
       badge: 'Wer dahintersteht',
       title: 'Woher die Plattform kommt',
-      developedByIntro: 'Unsere Plattform wurde von Bc.',
+      developedByIntro: 'Unsere Plattform wurde von Ing.',
       developerName: 'Michal Průšek',
       developedByRest:
-        ', Student an der Fakultät für Kernwissenschaften und Physikalisches Ingenieurwesen (FJFI) an der Tschechischen Technischen Universität Prag, unter der Leitung von Ing. Adam Novozámský, Ph.D. entwickelt.',
+        ', Doktorand an der Fakultät für Kernwissenschaften und Physikalisches Ingenieurwesen (FJFI) an der Tschechischen Technischen Universität Prag und wissenschaftlicher Mitarbeiter am Institut für Informationstheorie und Automatisierung der Tschechischen Akademie der Wissenschaften (ÚTIA), unter der Leitung von Ing. Adam Novozámský, Ph.D., und Prof. Ing. Filip Šroubek, Ph.D., DSc. entwickelt.',
       description2:
         'Dieses Projekt ist eine Zusammenarbeit mit der Gruppe von Ing. Silvie Rimpelová, Ph.D. vom Institut für Biochemie und Mikrobiologie der UCT Prag (VŠCHT Praha).',
       description3:
@@ -1738,7 +1738,7 @@ export default {
       description:
         'SpheroSeg ist eine Plattform für KI-gestützte Segmentierung und Vermessung mikroskopischer Bilder und Zeitrafferaufnahmen. Sie bietet sieben Projekttypen auf Basis von dreizehn Segmentierungsmodellen, einen Editor für Polygone und Polylinien, bildübergreifendes Mikrotubuli-Tracking und einen Stapel-Export.',
       developedBy:
-        'Die Plattform wurde von Bc. Michal Průšek an der Fakultät für Nuklearwissenschaften und Physikalische Ingenieurwissenschaften der Tschechischen Technischen Universität Prag unter der Betreuung von Ing. Adam Novozámský, Ph.D. entwickelt, in Zusammenarbeit mit dem Institut für Biochemie und Mikrobiologie der UCT Prag.',
+        'Die Plattform wurde von Ing. Michal Průšek, Doktorand an der Fakultät für Nuklearwissenschaften und Physikalische Ingenieurwissenschaften der Tschechischen Technischen Universität Prag und wissenschaftlicher Mitarbeiter am Institut für Informationstheorie und Automatisierung der Tschechischen Akademie der Wissenschaften (ÚTIA), unter der Betreuung von Ing. Adam Novozámský, Ph.D., und Prof. Ing. Filip Šroubek, Ph.D., DSc. entwickelt, in Zusammenarbeit mit dem Institut für Biochemie und Mikrobiologie der UCT Prag.',
       addresses:
         'Ausgangspunkt war die schwierige Aufgabe, Sphäroidgrenzen in der Mikroskopie zu bestimmen. Heute deckt die Plattform auch zerfallende Sphäroide, Wundheilungsassays, Spermienmorphologie, Mikrotubuli-Zeitraffer, Mikrokapseln und kultivierte Neuronen ab — jeweils mit eigenem Modell, eigenen Messgrößen und eigenem Exportformat.',
     },
