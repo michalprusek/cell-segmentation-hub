@@ -156,8 +156,10 @@ export default {
     about: {
       badge: 'Who builds it',
       title: 'Where the platform comes from',
-      description1:
-        'Our platform was developed by Bc. Michal Průšek, a student at the Faculty of Nuclear Sciences and Physical Engineering (FJFI) at Czech Technical University in Prague, under the supervision of Ing. Adam Novozámský, Ph.D.',
+      developedByIntro: 'Our platform was developed by Bc.',
+      developerName: 'Michal Průšek',
+      developedByRest:
+        ', a student at the Faculty of Nuclear Sciences and Physical Engineering (FJFI) at Czech Technical University in Prague, under the supervision of Ing. Adam Novozámský, Ph.D.',
       description2:
         'This project is a collaboration with the group of Ing. Silvie Rimpelová, Ph.D. from the Institute of Biochemistry and Microbiology at UCT Prague (VŠCHT Praha).',
       description3:
@@ -165,6 +167,16 @@ export default {
       contactText: 'For inquiries, please contact us at',
       supportText:
         'If you would like to support the project financially, please write to me at',
+    },
+    citation: {
+      badge: 'Citation',
+      title: 'How to cite SpheroSeg',
+      intro:
+        'If SpheroSeg contributed to your research, please cite our paper:',
+      copyBibtex: 'Copy BibTeX',
+      copied: 'BibTeX copied to the clipboard',
+      copyFailed: 'Could not copy. Select the text and copy it by hand.',
+      readPaper: 'Read the paper',
     },
     acknowledgments: {
       badge: 'Acknowledgments',

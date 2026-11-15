@@ -149,14 +149,25 @@ export default {
     about: {
       badge: '由谁开发',
       title: '这个平台从何而来',
-      description1:
-        '我们的平台由捷克技术大学布拉格核科学与物理工程学院（FJFI）的学生Bc. Michal Průšek开发，在Ing. Adam Novozámský博士的指导下完成。',
+      developedByIntro:
+        '我们的平台由捷克技术大学布拉格核科学与物理工程学院（FJFI）的学生Bc.',
+      developerName: 'Michal Průšek',
+      developedByRest: '开发，在Ing. Adam Novozámský博士的指导下完成。',
       description2:
         '该项目是与布拉格化工大学生物化学和微生物学研究所 Ing. Silvie Rimpelová 博士团队合作的项目（VŠCHT Praha）。',
       description3:
         '它从肿瘤球状体起步，随着合作者带来的实验不断扩展：解体实验、划痕实验伤口、精子形态、微管时间序列、微胶囊和培养神经元。每一种样本类型都有自己训练的模型、自己的指标和自己的导出格式——而它们背后是同一个编辑器。',
       contactText: '如有疑问，请联系我们',
       supportText: '如果您愿意为本项目提供资金支持，请写信至',
+    },
+    citation: {
+      badge: '引用',
+      title: '如何引用 SpheroSeg',
+      intro: '如果 SpheroSeg 对您的研究有所帮助，请引用我们的论文：',
+      copyBibtex: '复制 BibTeX',
+      copied: 'BibTeX 已复制到剪贴板',
+      copyFailed: '复制失败。请手动选择并复制文本。',
+      readPaper: '阅读论文',
     },
     acknowledgments: {
       badge: '致谢',

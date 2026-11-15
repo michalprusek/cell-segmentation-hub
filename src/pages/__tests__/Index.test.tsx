@@ -3,8 +3,9 @@
  *
  * Behaviors tested:
  *  - Navbar / Hero / Features / Footer are composed onto the page.
- *  - About section renders its badge, heading, the contact email link and
- *    the financial-support line, each pointing at the same mailto: address.
+ *  - About section renders its badge, heading, the developer's name linked
+ *    to their staff page inside an unbroken sentence, the contact email link
+ *    and the financial-support line, each pointing at the same mailto: address.
  *  - Acknowledgments render the contributor's name and both links to their
  *    page — these are a real attribution, so the test pins them.
  *  - The sign-up band renders its heading and the link into /sign-in.
@@ -18,6 +19,12 @@ import { render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import React from 'react';
 import Index from '../Index';
+import en from '@/translations/en';
+import cs from '@/translations/cs';
+import es from '@/translations/es';
+import de from '@/translations/de';
+import fr from '@/translations/fr';
+import zh from '@/translations/zh';
 
 // ---------------------------------------------------------------------------
 // Stub heavy child components and context
@@ -43,12 +50,24 @@ vi.mock('@/contexts/useLanguage', () => ({
       const map: Record<string, string> = {
         'landing.about.badge': 'Who builds it',
         'landing.about.title': 'Where the platform comes from',
-        'landing.about.description1': 'Description 1.',
+        // The real English strings: the test checks the sentence they join
+        // into, so a stray or missing space at either seam fails it.
+        'landing.about.developedByIntro': 'Our platform was developed by Bc.',
+        'landing.about.developerName': 'Michal Průšek',
+        'landing.about.developedByRest':
+          ', a student at the Faculty of Nuclear Sciences and Physical Engineering (FJFI) at Czech Technical University in Prague, under the supervision of Ing. Adam Novozámský, Ph.D.',
         'landing.about.description2': 'Description 2.',
         'landing.about.description3': 'Description 3.',
         'landing.about.contactText': 'For inquiries, please contact us at',
         'landing.about.supportText':
           'If you would like to support the project financially, please write to me at',
+        'landing.citation.badge': 'Citation',
+        'landing.citation.title': 'How to cite SpheroSeg',
+        'landing.citation.intro': 'Please cite our paper:',
+        'landing.citation.copyBibtex': 'Copy BibTeX',
+        'landing.citation.copied': 'Copied',
+        'landing.citation.copyFailed': 'Copy failed',
+        'landing.citation.readPaper': 'Read the paper',
         'landing.acknowledgments.badge': 'Acknowledgments',
         'landing.acknowledgments.title': 'Special Thanks',
         'landing.acknowledgments.lukasIntro': 'We thank',
@@ -97,6 +116,25 @@ describe('Index (landing) page', () => {
     });
   });
 
+  describe('How to cite', () => {
+    it('sits between About and Acknowledgments', () => {
+      renderPage();
+      const about = document.getElementById('about');
+      const cite = document.getElementById('cite');
+      const ack = document.getElementById('acknowledgments');
+      expect(about && cite && ack).toBeTruthy();
+      expect(
+        about!.compareDocumentPosition(cite!) & Node.DOCUMENT_POSITION_FOLLOWING
+      ).toBeTruthy();
+      expect(
+        cite!.compareDocumentPosition(ack!) & Node.DOCUMENT_POSITION_FOLLOWING
+      ).toBeTruthy();
+      expect(
+        screen.getByRole('heading', { level: 2, name: 'How to cite SpheroSeg' })
+      ).toBeInTheDocument();
+    });
+  });
+
   describe('About section', () => {
     it('renders the badge and heading', () => {
       renderPage();
@@ -108,6 +146,37 @@ describe('Index (landing) page', () => {
         })
       ).toBeInTheDocument();
     });
+
+    it("links the developer's name to their page, inside one sentence", () => {
+      renderPage();
+      const link = screen.getByRole('link', { name: 'Michal Průšek' });
+      expect(link).toHaveAttribute('href', 'https://staff.utia.cas.cz/prusek/');
+      expect(link).toHaveAttribute('target', '_blank');
+      expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+      // In the About section, and the sentence reads exactly as before the
+      // name became a link.
+      expect(document.getElementById('about')!.contains(link)).toBe(true);
+      expect(link.closest('p')!.textContent).toBe(
+        'Our platform was developed by Bc. Michal Průšek, a student at the ' +
+          'Faculty of Nuclear Sciences and Physical Engineering (FJFI) at Czech ' +
+          'Technical University in Prague, under the supervision of Ing. Adam ' +
+          'Novozámský, Ph.D.'
+      );
+    });
+
+    // Index puts the one space between intro and name itself, and none
+    // between name and rest. A locale whose strings carry their own space
+    // would render a double space or " ," in that language only.
+    it.each(Object.entries({ en, cs, es, de, fr, zh }))(
+      '%s: the developer sentence leaves its seams to the page',
+      (_lang, tr) => {
+        const { developedByIntro, developerName, developedByRest } =
+          tr.landing.about;
+        expect(developedByIntro).toMatch(/\S$/);
+        expect(developerName).toMatch(/^\S.*\S$/);
+        expect(developedByRest).toMatch(/^\S/);
+      }
+    );
 
     // Two paragraphs now end in the same address, so each assertion is scoped
     // to its own <p>: an unscoped getByRole would match both and throw.

@@ -150,14 +150,27 @@ export default {
     about: {
       badge: 'Quién lo construye',
       title: 'De dónde viene la plataforma',
-      description1:
-        'Nuestra plataforma fue desarrollada por Bc. Michal Průšek, estudiante de la Facultad de Ciencias Nucleares e Ingeniería Física (FJFI) en la Universidad Técnica Checa de Praga, bajo la supervisión de Ing. Adam Novozámský, Ph.D.',
+      developedByIntro: 'Nuestra plataforma fue desarrollada por Bc.',
+      developerName: 'Michal Průšek',
+      developedByRest:
+        ', estudiante de la Facultad de Ciencias Nucleares e Ingeniería Física (FJFI) en la Universidad Técnica Checa de Praga, bajo la supervisión de Ing. Adam Novozámský, Ph.D.',
       description2:
         'Este proyecto es una colaboración con el grupo de Ing. Silvie Rimpelová, Ph.D. del Instituto de Bioquímica y Microbiología de la UCT Praga (VŠCHT Praha).',
       description3:
         'Empezó con esferoides tumorales y creció con los experimentos que trajeron nuestros colaboradores: ensayos de desintegración, heridas de ensayo de rayado, morfología espermática, series temporales de microtúbulos, microcápsulas y neuronas en cultivo. Cada tipo de muestra tiene su propio modelo entrenado, sus propias métricas y su propia exportación, y detrás de todos ellos, un único editor.',
       contactText: 'Para consultas, contáctenos en',
       supportText: 'Si desea apoyar el proyecto económicamente, escríbame a',
+    },
+    citation: {
+      badge: 'Cita',
+      title: 'Cómo citar SpheroSeg',
+      intro:
+        'Si SpheroSeg ha contribuido a su investigación, cite nuestro artículo:',
+      copyBibtex: 'Copiar BibTeX',
+      copied: 'BibTeX copiado al portapapeles',
+      copyFailed:
+        'No se pudo copiar. Seleccione el texto y cópielo manualmente.',
+      readPaper: 'Leer el artículo',
     },
     acknowledgments: {
       badge: 'Agradecimientos',
