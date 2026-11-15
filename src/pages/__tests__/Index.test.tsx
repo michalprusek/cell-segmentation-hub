@@ -192,8 +192,10 @@ describe('Index (landing) page', () => {
       '%s: the welcome page and the documentation give the current bio',
       (_lang, tr) => {
         const { developedByIntro, developedByRest } = tr.landing.about;
-        // The title is the word the page sets right before the linked name.
+        // The title is the word the page sets right before the linked name;
+        // the docs string carries both itself.
         expect(developedByIntro).toMatch(/Ing\.$/);
+        expect(tr.docs.introduction.developedBy).toMatch(/Ing\. Michal Průšek/);
         const bios = {
           landing: `${developedByIntro} ${developedByRest}`,
           docs: tr.docs.introduction.developedBy,
