@@ -156,10 +156,10 @@ export default {
     about: {
       badge: 'Who builds it',
       title: 'Where the platform comes from',
-      developedByIntro: 'Our platform was developed by Bc.',
+      developedByIntro: 'Our platform was developed by Ing.',
       developerName: 'Michal Průšek',
       developedByRest:
-        ', a student at the Faculty of Nuclear Sciences and Physical Engineering (FJFI) at Czech Technical University in Prague, under the supervision of Ing. Adam Novozámský, Ph.D.',
+        ', a PhD student at the Faculty of Nuclear Sciences and Physical Engineering (FJFI) at Czech Technical University in Prague and a researcher at the Institute of Information Theory and Automation of the Czech Academy of Sciences (ÚTIA), under the supervision of Ing. Adam Novozámský, Ph.D., and Prof. Ing. Filip Šroubek, Ph.D., DSc.',
       description2:
         'This project is a collaboration with the group of Ing. Silvie Rimpelová, Ph.D. from the Institute of Biochemistry and Microbiology at UCT Prague (VŠCHT Praha).',
       description3:
@@ -1722,7 +1722,7 @@ export default {
       description:
         'SpheroSeg is a platform for AI-assisted segmentation and measurement of microscopy images and time-lapse videos. It ships seven project types backed by thirteen segmentation models, a polygon and polyline editor, cross-frame microtubule tracking, and a batch export pipeline.',
       developedBy:
-        'The platform was developed by Bc. Michal Průšek at the Faculty of Nuclear Sciences and Physical Engineering, Czech Technical University in Prague, under the supervision of Ing. Adam Novozámský, Ph.D., in collaboration with researchers from the Institute of Biochemistry and Microbiology at UCT Prague.',
+        'The platform was developed by Ing. Michal Průšek, a PhD student at the Faculty of Nuclear Sciences and Physical Engineering, Czech Technical University in Prague, and a researcher at the Institute of Information Theory and Automation of the Czech Academy of Sciences (ÚTIA), under the supervision of Ing. Adam Novozámský, Ph.D., and Prof. Ing. Filip Šroubek, Ph.D., DSc., in collaboration with researchers from the Institute of Biochemistry and Microbiology at UCT Prague.',
       addresses:
         'It began with the hard problem of delineating spheroid boundaries in microscopy, and now covers disintegrating spheroids, wound-healing assays, sperm morphology, microtubule time-lapses, microcapsules and cultured neurons — each with its own model, measurements and export format.',
     },

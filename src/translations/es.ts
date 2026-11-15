@@ -150,10 +150,10 @@ export default {
     about: {
       badge: 'Quién lo construye',
       title: 'De dónde viene la plataforma',
-      developedByIntro: 'Nuestra plataforma fue desarrollada por Bc.',
+      developedByIntro: 'Nuestra plataforma fue desarrollada por Ing.',
       developerName: 'Michal Průšek',
       developedByRest:
-        ', estudiante de la Facultad de Ciencias Nucleares e Ingeniería Física (FJFI) en la Universidad Técnica Checa de Praga, bajo la supervisión de Ing. Adam Novozámský, Ph.D.',
+        ', estudiante de doctorado de la Facultad de Ciencias Nucleares e Ingeniería Física (FJFI) en la Universidad Técnica Checa de Praga e investigador del Instituto de Teoría de la Información y Automatización de la Academia Checa de Ciencias (ÚTIA), bajo la supervisión de Ing. Adam Novozámský, Ph.D., y Prof. Ing. Filip Šroubek, Ph.D., DSc.',
       description2:
         'Este proyecto es una colaboración con el grupo de Ing. Silvie Rimpelová, Ph.D. del Instituto de Bioquímica y Microbiología de la UCT Praga (VŠCHT Praha).',
       description3:
@@ -1724,7 +1724,7 @@ export default {
       description:
         'SpheroSeg es una plataforma para la segmentación y medición asistidas por IA de imágenes de microscopía y vídeos de lapso de tiempo. Ofrece siete tipos de proyecto respaldados por trece modelos de segmentación, un editor de polígonos y polilíneas, seguimiento de microtúbulos entre fotogramas y una canalización de exportación por lotes.',
       developedBy:
-        'La plataforma fue desarrollada por Bc. Michal Průšek en la Facultad de Ciencias Nucleares e Ingeniería Física de la Universidad Técnica Checa de Praga, bajo la supervisión del Ing. Adam Novozámský, Ph.D., en colaboración con investigadores del Instituto de Bioquímica y Microbiología de la UCT de Praga.',
+        'La plataforma fue desarrollada por Ing. Michal Průšek, estudiante de doctorado de la Facultad de Ciencias Nucleares e Ingeniería Física de la Universidad Técnica Checa de Praga e investigador del Instituto de Teoría de la Información y Automatización de la Academia Checa de Ciencias (ÚTIA), bajo la supervisión del Ing. Adam Novozámský, Ph.D., y del Prof. Ing. Filip Šroubek, Ph.D., DSc., en colaboración con investigadores del Instituto de Bioquímica y Microbiología de la UCT de Praga.',
       addresses:
         'Empezó con el difícil problema de delimitar los bordes de los esferoides en microscopía y hoy abarca también esferoides en disgregación, ensayos de cicatrización, morfología de espermatozoides, lapsos de tiempo de microtúbulos, microcápsulas y neuronas en cultivo, cada uno con su modelo, sus medidas y su formato de exportación.',
     },

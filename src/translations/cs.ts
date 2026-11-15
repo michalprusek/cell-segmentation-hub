@@ -149,10 +149,10 @@ export default {
     about: {
       badge: 'Kdo za tím stojí',
       title: 'Odkud platforma pochází',
-      developedByIntro: 'Naše platforma byla vyvinuta Bc.',
+      developedByIntro: 'Naše platforma byla vyvinuta Ing.',
       developerName: 'Michalem Průškem',
       developedByRest:
-        ', studentem Fakulty jaderné a fyzikálně inženýrské ČVUT v Praze, pod vedením Ing. Adama Novozámského, Ph.D.',
+        ', doktorandem Fakulty jaderné a fyzikálně inženýrské ČVUT v Praze a výzkumným pracovníkem Ústavu teorie informace a automatizace AV ČR (ÚTIA), pod vedením Ing. Adama Novozámského, Ph.D., a prof. Ing. Filipa Šroubka, Ph.D., DSc.',
       description2:
         'Tento projekt je ve spolupráci se skupinou Ing. Silvie Rimpelové, Ph.D. z Ústavu biochemie a mikrobiologie VŠCHT Praha.',
       description3:
@@ -1695,7 +1695,7 @@ export default {
       description:
         'SpheroSeg je platforma pro segmentaci a měření mikroskopických snímků a časosběrných videí s pomocí umělé inteligence. Nabízí sedm typů projektů opřených o třináct segmentačních modelů, editor polygonů a polyline, sledování mikrotubulů napříč snímky a dávkový export.',
       developedBy:
-        'Platformu vyvinul Bc. Michal Průšek z Fakulty jaderné a fyzikálně inženýrské ČVUT v Praze pod vedením Ing. Adama Novozámského, Ph.D., ve spolupráci s výzkumníky z Ústavu biochemie a mikrobiologie VŠCHT Praha.',
+        'Platformu vyvinul Ing. Michal Průšek, doktorand Fakulty jaderné a fyzikálně inženýrské ČVUT v Praze a výzkumný pracovník Ústavu teorie informace a automatizace AV ČR (ÚTIA), pod vedením Ing. Adama Novozámského, Ph.D., a prof. Ing. Filipa Šroubka, Ph.D., DSc., ve spolupráci s výzkumníky z Ústavu biochemie a mikrobiologie VŠCHT Praha.',
       addresses:
         'Začalo to obtížnou úlohou vymezit hranice sferoidů v mikroskopii. Dnes platforma pokrývá i rozpadající se sferoidy, testy hojení ran, morfologii spermií, časosběrná videa mikrotubulů, mikrokapsle a kultivované neurony — každý typ s vlastním modelem, měřeními i formátem exportu.',
     },

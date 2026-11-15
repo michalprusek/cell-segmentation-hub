@@ -150,9 +150,10 @@ export default {
       badge: '由谁开发',
       title: '这个平台从何而来',
       developedByIntro:
-        '我们的平台由捷克技术大学布拉格核科学与物理工程学院（FJFI）的学生Bc.',
+        '我们的平台由捷克技术大学布拉格核科学与物理工程学院（FJFI）博士研究生、捷克科学院信息理论与自动化研究所（ÚTIA）研究员Ing.',
       developerName: 'Michal Průšek',
-      developedByRest: '开发，在Ing. Adam Novozámský博士的指导下完成。',
+      developedByRest:
+        '开发，在Ing. Adam Novozámský博士和Ing. Filip Šroubek教授的指导下完成。',
       description2:
         '该项目是与布拉格化工大学生物化学和微生物学研究所 Ing. Silvie Rimpelová 博士团队合作的项目（VŠCHT Praha）。',
       description3:
@@ -1601,7 +1602,7 @@ export default {
       description:
         'SpheroSeg 是一个借助人工智能对显微图像与延时视频进行分割与测量的平台。它提供七种项目类型，背后是十三个分割模型，并配有多边形与折线编辑器、跨帧微管追踪以及批量导出流程。',
       developedBy:
-        '该平台由捷克布拉格捷克理工大学核科学与物理工程学院的 Michal Průšek 学士开发，指导教师为 Adam Novozámský 博士，并与布拉格化工大学生物化学与微生物学研究所的研究人员合作完成。',
+        '该平台由捷克布拉格捷克理工大学核科学与物理工程学院博士研究生、捷克科学院信息理论与自动化研究所（ÚTIA）研究员 Michal Průšek 开发，指导教师为 Adam Novozámský 博士和 Filip Šroubek 教授，并与布拉格化工大学生物化学与微生物学研究所的研究人员合作完成。',
       addresses:
         '项目起源于显微图像中球体边界难以准确勾勒这一难题，如今已扩展到解体球体、划痕愈合实验、精子形态、微管延时序列、微胶囊与培养神经元 — 每一类都有各自的模型、测量指标与导出格式。',
     },
