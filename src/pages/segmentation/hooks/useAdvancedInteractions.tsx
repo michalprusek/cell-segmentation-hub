@@ -145,6 +145,11 @@ export const useAdvancedInteractions = ({
   // arrive after a newer one has been drawn. See `handleMouseMove`.
   const lastDragMoveAt = useRef(0);
 
+  // `timeStamp` of the newest move already added to the held scribble — the
+  // same two-schedule hazard as `lastDragMoveAt`, see the scribble branch of
+  // `handleMouseMove`. Reset when a stroke starts.
+  const lastScribbleMoveAt = useRef(0);
+
   // Set by a right press that cancelled a scribble; consumed by the
   // `contextmenu` it raises (see `handleContextMenuCapture`).
   const suppressContextMenuRef = useRef(false);
@@ -975,6 +980,8 @@ export const useAdvancedInteractions = ({
             // click is a one-point stroke and deletes whatever is under it.
             // The CLICK that follows a press on a shape must not act a
             // second time — `CanvasPolygon.handleClick` ignores delete mode.
+            lastScribbleMoveAt.current =
+              typeof e.timeStamp === 'number' ? e.timeStamp : 0;
             scribbleStart?.(imagePoint);
             break;
           case EditMode.AssignNeurite:
@@ -1069,7 +1076,18 @@ export const useAdvancedInteractions = ({
 
       // A held scribble owns the pointer: extend it, and do none of the
       // hover work below (vertex/join highlights mean nothing mid-stroke).
+      //
+      // Drop a move OLDER than one already added, for the reason the vertex
+      // drag below does: crossing the canvas edge, the canvas's rAF-deferred
+      // move can arrive after the window listener's newer one. For a vertex
+      // that is a one-frame flick; for a stroke it is a chord the pointer
+      // never drew — and it deletes whatever the chord touches.
       if (scribbleIsActive?.()) {
+        const moveAt = e.timeStamp;
+        if (typeof moveAt === 'number') {
+          if (moveAt < lastScribbleMoveAt.current) return;
+          lastScribbleMoveAt.current = moveAt;
+        }
         scribbleExtend?.(imagePoint);
         return;
       }
@@ -1347,6 +1365,13 @@ export const useAdvancedInteractions = ({
       // before its last move was processed.
       if (scribbleIsActive?.()) {
         if (e.type === 'mouseleave') return;
+        // Only the LEFT button's release ends the stroke. A right release is
+        // the cancel gesture, including one pressed off the canvas, where no
+        // mousedown handler saw the press; a middle release ends a pan.
+        if (e.button !== 0) {
+          if (e.button === 2) scribbleCancel?.();
+          return;
+        }
         const end = getCanvasCoordinates(
           e.clientX,
           e.clientY,
@@ -1510,6 +1535,7 @@ export const useAdvancedInteractions = ({
       scribbleIsActive,
       scribbleExtend,
       scribbleCommit,
+      scribbleCancel,
     ]
   );
 

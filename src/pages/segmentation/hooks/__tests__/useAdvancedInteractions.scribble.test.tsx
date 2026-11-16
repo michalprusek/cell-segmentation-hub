@@ -271,6 +271,67 @@ describe('useAdvancedInteractions — scribble delete', () => {
     expect(later.preventDefault).not.toHaveBeenCalled();
   });
 
+  // Two schedules feed the stroke: the canvas's rAF-deferred moves and the
+  // window's synchronous ones. Crossing the canvas edge, an older canvas move
+  // can arrive after a newer window move; extending with it would draw a
+  // chord the pointer never took — and delete what the chord touches.
+  it('a stale queued move is dropped, not drawn as a chord', () => {
+    // 'chord' sits only on the A→C diagonal of the stale order B, A, C.
+    const { result } = setup([square('chord', 70, 80), line('b', 300)]);
+    act(() =>
+      result.current.interactions.handleMouseDown(
+        mouse(0, 0, { timeStamp: 100 })
+      )
+    );
+    act(() =>
+      result.current.interactions.handleMouseMove(
+        mouse(100, 0, { timeStamp: 300 })
+      )
+    );
+    act(() =>
+      result.current.interactions.handleMouseMove(
+        mouse(50, 0, { timeStamp: 200 })
+      )
+    );
+    act(() =>
+      result.current.interactions.handleMouseMove(
+        mouse(100, 100, { timeStamp: 400 })
+      )
+    );
+    expect(result.current.eraser.scribble?.pendingIds.has('chord')).toBe(false);
+  });
+
+  it('a right-button release outside the canvas cancels instead of deleting', () => {
+    const { result } = setup([line('a', 50)]);
+    act(() => result.current.interactions.handleMouseDown(mouse(50, 0)));
+    act(() =>
+      result.current.interactions.handleMouseUp(
+        mouse(50, 100, { type: 'mouseleave' })
+      )
+    );
+    // The right press happened off the canvas, so no mousedown handler saw
+    // it; only its release reaches us, through the window.
+    act(() => {
+      window.dispatchEvent(
+        new MouseEvent('mouseup', { clientX: 50, clientY: 100, button: 2 })
+      );
+    });
+    expect(onCommit).not.toHaveBeenCalled();
+    expect(result.current.eraser.scribble).toBeNull();
+  });
+
+  it('a middle-button release does not end the stroke', () => {
+    const { result } = setup([line('a', 50)]);
+    act(() => result.current.interactions.handleMouseDown(mouse(50, 0)));
+    act(() =>
+      result.current.interactions.handleMouseUp(
+        mouse(50, 100, { type: 'mouseup', button: 1 })
+      )
+    );
+    expect(onCommit).not.toHaveBeenCalled();
+    expect(result.current.eraser.scribble).not.toBeNull();
+  });
+
   it('alt+drag pans instead of scribbling', () => {
     const { result } = setup([line('a', 50)]);
     act(() =>

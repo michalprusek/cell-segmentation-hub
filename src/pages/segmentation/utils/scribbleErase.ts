@@ -152,6 +152,40 @@ export function prepareScribbleCandidates(
   return candidates;
 }
 
+/** Twice the signed area of p, q, r: > 0 left turn, < 0 right, 0 collinear. */
+const orient = (p: Point, q: Point, r: Point): number =>
+  (q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x);
+
+/**
+ * Does the stroke a→b pass THROUGH the edge c→d, from one side to the other?
+ *
+ * Stricter than `lineIntersection`, which also counts contact at an endpoint:
+ * here a and b must lie strictly on opposite sides of the edge's line, so a
+ * stroke that starts or ends ON a hole's outline has not crossed it. The edge
+ * is half-open against the stroke's line — the ray-casting convention — so a
+ * stroke through a VERTEX crosses exactly one of the two edges meeting there.
+ * Excluding both would miss it: a diagonal through the corners of two
+ * pixel-aligned square holes is exactly that.
+ */
+function crossesEdge(a: Point, b: Point, c: Point, d: Point): boolean {
+  const sa = orient(c, d, a);
+  const sb = orient(c, d, b);
+  if (!((sa > 0 && sb < 0) || (sa < 0 && sb > 0))) return false;
+  return orient(a, b, c) > 0 !== orient(a, b, d) > 0;
+}
+
+/** Is p inside the hole outline or ON it? On counts: ray casting alone puts a
+ *  point on a hole's right or top edge OUTSIDE the hole, and so inside the
+ *  shape around it. */
+const inOrOnHole = (p: Point, hole: Point[]): boolean => {
+  if (isPointInPolygon(p, hole)) return true;
+  const m = hole.length;
+  for (let i = 0; i < m; i++) {
+    if (distanceToSegment(p, hole[i], hole[(i + 1) % m]) < 1e-9) return true;
+  }
+  return false;
+};
+
 /** Shortest distance between segments ab and cd (0 when they cross). */
 export function segmentDistance(
   a: Point,
@@ -203,7 +237,7 @@ export function scribbleSegmentHits(
   if (
     hasInterior &&
     isPointInPolygon(b, pts) &&
-    !c.holes.some(h => isPointInPolygon(b, h))
+    !c.holes.some(h => inOrOnHole(b, h))
   ) {
     return true;
   }
@@ -214,12 +248,12 @@ export function scribbleSegmentHits(
   }
 
   // Crossing a hole's outline means one side of the crossing is this shape's
-  // filled area. Strict crossing, not tolerance: touching a hole's outline
-  // from INSIDE the hole is aiming at the hole.
+  // filled area. Strict crossing, not tolerance and not mere contact:
+  // touching a hole's outline is aiming at the hole.
   for (const hole of c.holes) {
     const m = hole.length;
     for (let i = 0; i < m; i++) {
-      if (lineIntersection(a, b, hole[i], hole[(i + 1) % m])) return true;
+      if (crossesEdge(a, b, hole[i], hole[(i + 1) % m])) return true;
     }
   }
 

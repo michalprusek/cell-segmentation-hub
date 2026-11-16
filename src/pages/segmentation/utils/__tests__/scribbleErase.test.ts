@@ -154,6 +154,29 @@ describe('scribbleErase', () => {
     ).toBe(false);
   });
 
+  // Touching a hole's outline is aiming at the hole, from either side and at
+  // either end of the segment. Pixel-aligned contours make this common: at
+  // zoom 1 with an integral pan, every pointer position IS an integer image
+  // coordinate, exactly where the contour vertices and edges lie.
+  it("a stroke that only touches a hole's outline spares the parent", () => {
+    const parent = square('parent', 0, 100);
+    const hole = square('hole', 40, 60, {
+      type: 'internal',
+      parent_id: 'parent',
+    });
+    const c = candidate([parent, hole], 'parent');
+    // Ends ON the left edge (CodeRabbit's case: endpoint contact counted as
+    // a crossing).
+    expect(scribbleSegmentHits(c, p(50, 50), p(40, 50), TOL)).toBe(false);
+    // Ends ON the right edge — ray casting puts that point OUTSIDE the hole,
+    // so it must not count as "inside the parent" either.
+    expect(scribbleSegmentHits(c, p(50, 50), p(60, 50), TOL)).toBe(false);
+    // Starts on the outline and goes in.
+    expect(scribbleSegmentHits(c, p(40, 50), p(50, 50), TOL)).toBe(false);
+    // A click exactly on a corner of the hole.
+    expect(scribbleSegmentHits(c, p(60, 60), p(60, 60), TOL)).toBe(false);
+  });
+
   it('a segment ending outside a polygon but near its outline hits it', () => {
     // Outside, 4 px from the right edge: the tolerance applies to closed
     // shapes too, so "touching the stroke" counts like it does for a line.
