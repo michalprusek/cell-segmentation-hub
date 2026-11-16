@@ -1002,6 +1002,10 @@ export default {
         'Nada que cambiar: los fotogramas siguientes ya tienen estas formas',
       deleteTrackSuccess: 'Traza eliminada de {{count}} fotogramas',
       deleteTrackFailed: 'No se pudo eliminar la traza',
+      deleteManyFrameSuccess:
+        '{{count}} microtúbulos eliminados de este fotograma; el resto de sus trazas no cambia',
+      deleteManyTrackSuccess:
+        '{{count}} microtúbulos eliminados de todos los fotogramas del vídeo',
       deleteFrameSuccess:
         'Microtúbulo eliminado de este fotograma; el resto de su traza no cambia',
       deleteFrameFailed: 'No se pudo eliminar el microtúbulo de este fotograma',
@@ -1257,7 +1261,9 @@ export default {
           'Se mueve toda la forma: los vértices mantienen sus posiciones relativas',
       },
       deletePolygon: {
-        clickToDelete: 'Haz clic en un polígono para eliminarlo',
+        scribbleToDelete:
+          'Haga clic o trace sobre las formas: todo lo que toque el trazo se elimina al soltar el botón',
+        escCancelsScribble: 'Esc cancela el trazo',
       },
       view: {
         selectPolygon: 'Haz clic en un polígono para seleccionarlo',
@@ -1415,6 +1421,7 @@ export default {
       saved: 'Segmentación guardada exitosamente',
       failed: 'La segmentación falló',
       deleted: 'Polígono eliminado',
+      deletedCount: '{{count}} objetos eliminados',
       cannotDeleteVertex:
         'No se puede eliminar vértice - el polígono necesita al menos 3 puntos',
       vertexDeleted: 'Vértice eliminado exitosamente',
@@ -2115,7 +2122,7 @@ export default {
         deletePolygon: {
           title: 'Eliminar polígono (D)',
           description:
-            'Pulse las formas para eliminarlas. El modo permanece activo y no hay confirmación.',
+            'Haga clic o trace sobre las formas: todo lo que toque el trazo se atenúa y se elimina al soltar el botón. Esc cancela el trazo. Deshacer recupera las formas sin traza. Los microtúbulos con traza se eliminan en el servidor y no se pueden recuperar, por eso se le pregunta antes, una sola vez para todos, si eliminarlos de este fotograma o de todo el vídeo. El modo permanece activo.',
         },
       },
       keyFeatures: 'Qué ofrece el editor',

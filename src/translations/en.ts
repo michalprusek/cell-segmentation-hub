@@ -841,6 +841,10 @@ export default {
         'Nothing to change – the following frames already have these shapes',
       deleteTrackSuccess: 'Track removed from {{count}} frame(s)',
       deleteTrackFailed: 'Failed to delete the track',
+      deleteManyFrameSuccess:
+        '{{count}} microtubules removed from this frame; the rest of their tracks is unchanged',
+      deleteManyTrackSuccess:
+        '{{count}} microtubules removed from every frame of the video',
       deleteFrameSuccess:
         'Microtubule removed from this frame; the rest of its track is unchanged',
       deleteFrameFailed: 'Failed to remove the microtubule from this frame',
@@ -1081,7 +1085,9 @@ export default {
           'The whole shape moves — vertices keep their positions relative to each other',
       },
       deletePolygon: {
-        clickToDelete: 'Click on a polygon to delete it',
+        scribbleToDelete:
+          'Click or draw over shapes — everything the stroke touches is deleted when you release',
+        escCancelsScribble: 'Esc cancels the stroke',
       },
       view: {
         selectPolygon: 'Click on a polygon to select it',
@@ -1385,6 +1391,7 @@ export default {
       saved: 'Segmentation saved successfully',
       failed: 'Segmentation failed',
       deleted: 'Polygon deleted',
+      deletedCount: '{{count}} objects deleted',
       cannotDeleteVertex:
         'Cannot delete vertex - polygon needs at least 3 points',
       vertexDeleted: 'Vertex deleted successfully',
@@ -2112,7 +2119,7 @@ export default {
         deletePolygon: {
           title: 'Delete polygon (D)',
           description:
-            'Click shapes to remove them. The mode stays active, and there is no confirmation.',
+            'Click or draw over shapes: everything the stroke touches fades, and is deleted when you release the button. Esc cancels the stroke. Undo brings untracked shapes back. Tracked microtubules are removed on the server and cannot be undone, so you are first asked, once for all of them, whether to remove them from this frame or from the whole video. The mode stays active.',
         },
       },
       keyFeatures: 'What the editor gives you',

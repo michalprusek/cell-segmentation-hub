@@ -1003,6 +1003,10 @@ export default {
         'Rien à modifier : les images suivantes ont déjà ces formes',
       deleteTrackSuccess: 'Trace supprimée de {{count}} images',
       deleteTrackFailed: 'Échec de la suppression de la trace',
+      deleteManyFrameSuccess:
+        '{{count}} microtubules supprimés de cette image ; le reste de leurs traces est conservé',
+      deleteManyTrackSuccess:
+        '{{count}} microtubules supprimés de toutes les images de la vidéo',
       deleteFrameSuccess:
         'Microtubule supprimé de cette image ; le reste de sa trace est conservé',
       deleteFrameFailed:
@@ -1261,7 +1265,9 @@ export default {
           'La forme entière se déplace — les sommets gardent leurs positions relatives',
       },
       deletePolygon: {
-        clickToDelete: 'Cliquez sur un polygone pour le supprimer',
+        scribbleToDelete:
+          'Cliquez ou tracez sur les formes : tout ce que le trait touche est supprimé au relâchement du bouton',
+        escCancelsScribble: 'Esc annule le trait',
       },
       view: {
         selectPolygon: 'Cliquez sur un polygone pour le sélectionner',
@@ -1421,6 +1427,7 @@ export default {
       saved: 'Segmentation sauvegardée avec succès',
       failed: 'Échec de la segmentation',
       deleted: 'Polygone supprimé',
+      deletedCount: '{{count}} objets supprimés',
       cannotDeleteVertex:
         'Impossible de supprimer le sommet - le polygone a besoin d’au moins 3 points',
       vertexDeleted: 'Sommet supprimé avec succès',
@@ -2124,7 +2131,7 @@ export default {
         deletePolygon: {
           title: 'Supprimer un polygone (D)',
           description:
-            'Cliquez sur les formes pour les supprimer. Le mode reste actif et il n’y a aucune confirmation.',
+            'Cliquez ou tracez sur les formes : tout ce que le trait touche s’estompe et est supprimé lorsque vous relâchez le bouton. Esc annule le trait. Annuler restaure les formes sans trace. Les microtubules suivis sont supprimés sur le serveur et ne peuvent pas être restaurés ; l’éditeur demande donc d’abord, une seule fois pour tous, s’il faut les retirer de cette image ou de toute la vidéo. Le mode reste actif.',
         },
       },
       keyFeatures: 'Ce que l’éditeur vous offre',

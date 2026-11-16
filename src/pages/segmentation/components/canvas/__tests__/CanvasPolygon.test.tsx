@@ -573,6 +573,22 @@ describe('CanvasPolygon', () => {
       // A closed polygon never had a hover glow.
       expect(renderOnce({ isHovered: true }).filter).toBeNull();
     });
+
+    // Hover is driven by the 24 px hit band; the delete scribble's hit test
+    // is 6 px. Glowing in delete mode would promise a hit the click does not
+    // make — the press itself fades whatever it will delete.
+    it('shows no hover highlight in delete mode', () => {
+      const hovered = {
+        polygon: polyline(),
+        isHovered: true,
+        editMode: EditMode.DeletePolygon,
+      };
+      const idle = { polygon: polyline(), editMode: EditMode.DeletePolygon };
+      expect(renderOnce(hovered).filter).toBeNull();
+      expect(renderOnce(hovered).strokeWidth).toBe(
+        renderOnce(idle).strokeWidth
+      );
+    });
   });
 
   describe('Interaction', () => {
@@ -587,6 +603,83 @@ describe('CanvasPolygon', () => {
       fireEvent.click(pathElement!);
 
       expect(onSelectPolygon).toHaveBeenCalledWith('test-polygon');
+    });
+
+    // In delete mode the PRESS started a scribble that deletes on release.
+    // The click the browser fires afterwards must not select (or, through
+    // usePolygonSelection, delete a second time — for a tracked microtubule
+    // that would reopen the scope dialog for this one alone, replacing the
+    // question the scribble just asked about all of them).
+    it('fades while pending delete, and comes back when released', () => {
+      // The comparator test: a memoised polygon re-renders only on props it
+      // compares, so a missed `isPendingDelete` line leaves it faded (or
+      // never faded) whatever the scribble says.
+      const { rerender } = renderPolygonInSvg(
+        <CanvasPolygon
+          {...defaultProps}
+          editMode={EditMode.DeletePolygon}
+          isPendingDelete={false}
+        />
+      );
+      const group = () => screen.getByTestId('test-polygon');
+      expect(group().style.opacity).toBe('');
+
+      rerender(
+        <svg width="800" height="600" viewBox="0 0 800 600">
+          <CanvasPolygon
+            {...defaultProps}
+            editMode={EditMode.DeletePolygon}
+            isPendingDelete={true}
+          />
+        </svg>
+      );
+      expect(group().style.opacity).toBe('0.2');
+
+      rerender(
+        <svg width="800" height="600" viewBox="0 0 800 600">
+          <CanvasPolygon
+            {...defaultProps}
+            editMode={EditMode.DeletePolygon}
+            isPendingDelete={false}
+          />
+        </svg>
+      );
+      expect(group().style.opacity).toBe('');
+    });
+
+    it('ignores clicks in delete mode, plain and shift', () => {
+      const onSelectPolygon = vi.fn();
+      renderPolygonInSvg(
+        <CanvasPolygon
+          {...defaultProps}
+          editMode={EditMode.DeletePolygon}
+          onSelectPolygon={onSelectPolygon}
+        />
+      );
+      const pathElement = screen
+        .getByTestId('test-polygon')
+        .querySelector('path');
+      fireEvent.click(pathElement!);
+      fireEvent.click(pathElement!, { shiftKey: true });
+      expect(onSelectPolygon).not.toHaveBeenCalled();
+    });
+
+    // Two clicks at the same spot in delete mode are two strokes, not an
+    // "edit this shape" gesture — leaving the tool for EditVertices there was
+    // the natural follow-up to a click that missed.
+    it('does not leave delete mode on a double-click', () => {
+      const onEditPolygon = vi.fn();
+      renderPolygonInSvg(
+        <CanvasPolygon
+          {...defaultProps}
+          editMode={EditMode.DeletePolygon}
+          onEditPolygon={onEditPolygon}
+        />
+      );
+      fireEvent.doubleClick(
+        screen.getByTestId('test-polygon').querySelector('path')!
+      );
+      expect(onEditPolygon).not.toHaveBeenCalled();
     });
 
     it('handles double-click for polygon editing', () => {
@@ -1390,7 +1483,7 @@ describe('CanvasPolygon', () => {
       }
     );
 
-    it.each([EditMode.View, EditMode.EditVertices, EditMode.DeletePolygon])(
+    it.each([EditMode.View, EditMode.EditVertices])(
       'keeps the plain pointer cursor on the visible path in %s',
       mode => {
         const { container } = renderPolygonInSvg(
@@ -1401,6 +1494,17 @@ describe('CanvasPolygon', () => {
         expect(cls).not.toContain('cursor-move');
       }
     );
+
+    it('shows the drawing cursor on the visible path in delete-polygon', () => {
+      // Delete draws a scribble over shapes since 2026-11-16; a pointer on
+      // each shape would promise a click-to-act the tool no longer is.
+      const { container } = renderPolygonInSvg(
+        <CanvasPolygon {...defaultProps} editMode={EditMode.DeletePolygon} />
+      );
+      const cls = visiblePath(container).getAttribute('class') ?? '';
+      expect(cls).toContain('cursor-crosshair');
+      expect(cls).not.toContain('cursor-pointer');
+    });
 
     it('offers no move cursor when the mode prop is absent', () => {
       // `editMode` is optional on this component, and an undefined mode is not

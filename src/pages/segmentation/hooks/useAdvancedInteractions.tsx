@@ -25,6 +25,7 @@ import {
   type Endpoint,
 } from '../utils/polylineJoin';
 import type { ProjectType } from '@/types';
+import type { ScribbleEraser } from './useScribbleErase';
 
 /**
  * Advanced interaction handler inspired by SpheroSeg
@@ -81,6 +82,13 @@ interface UseAdvancedInteractionsProps {
 
   // Transform operations
   handlePan?: (deltaX: number, deltaY: number) => void;
+
+  /**
+   * The delete tool's scribble (`useScribbleErase`). In DeletePolygon mode a
+   * left press starts a stroke, moves extend it, the release deletes what it
+   * touched. Optional so editors without the tool keep working unchanged.
+   */
+  scribbleEraser?: ScribbleEraser;
 }
 
 export const useAdvancedInteractions = ({
@@ -107,7 +115,18 @@ export const useAdvancedInteractions = ({
   updatePolygons,
   getPolygons,
   handlePan,
+  scribbleEraser,
 }: UseAdvancedInteractionsProps) => {
+  // The eraser's methods are identity-stable; its `scribble` is render state.
+  // Taken apart so the handlers below depend on the methods only, not on an
+  // object that is a fresh literal every render.
+  const scribbleStart = scribbleEraser?.start;
+  const scribbleExtend = scribbleEraser?.extend;
+  const scribbleCommit = scribbleEraser?.commit;
+  const scribbleCancel = scribbleEraser?.cancel;
+  const scribbleIsActive = scribbleEraser?.isActive;
+  const scribbleInProgress = scribbleEraser?.scribble != null;
+
   // Refs for tracking state
   const lastAutoAddedPoint = useRef<Point | null>(null);
   // Last image-space point at which we ran the vertex-hover hit test.
@@ -125,6 +144,25 @@ export const useAdvancedInteractions = ({
   // onMouseMove and the synchronous window listener — so an older event can
   // arrive after a newer one has been drawn. See `handleMouseMove`.
   const lastDragMoveAt = useRef(0);
+
+  // `timeStamp` of the newest move already added to the held scribble — the
+  // same two-schedule hazard as `lastDragMoveAt`, see the scribble branch of
+  // `handleMouseMove`. Reset when a stroke starts.
+  const lastScribbleMoveAt = useRef(0);
+
+  // Set by a right press that cancelled a scribble; consumed by the
+  // `contextmenu` it raises (see `handleContextMenuCapture`).
+  const suppressContextMenuRef = useRef(false);
+
+  /** Bound to the canvas container's CAPTURE phase, ahead of every shape's
+   *  own context-menu trigger. Stops only the one menu a scribble-cancelling
+   *  right press raises. */
+  const handleContextMenuCapture = useCallback((e: React.MouseEvent) => {
+    if (!suppressContextMenuRef.current) return;
+    suppressContextMenuRef.current = false;
+    e.preventDefault();
+    e.stopPropagation();
+  }, []);
 
   useEffect(() => {
     lastHoverCheckPoint.current = null;
@@ -587,14 +625,6 @@ export const useAdvancedInteractions = ({
   ]);
 
   /**
-   * Handle Delete Polygon mode clicks
-   */
-  const handleDeletePolygonClick = useCallback((_imagePoint: Point) => {
-    // Delete mode now relies on polygon-level selection
-    return;
-  }, []);
-
-  /**
    * Check if the event target is a vertex element
    */
   const isVertexTarget = useCallback((target: EventTarget | null): boolean => {
@@ -610,6 +640,10 @@ export const useAdvancedInteractions = ({
    */
   const handleMouseDown = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
+      // Any later press means the user moved on: a suppression no
+      // contextmenu consumed must not swallow a genuine right-click later.
+      suppressContextMenuRef.current = false;
+
       // Middle mouse button - always start panning in any mode
       if (e.button === 1) {
         setInteractionState({
@@ -623,6 +657,21 @@ export const useAdvancedInteractions = ({
 
       // Right-click - handle step-by-step undo OR allow vertex context menu
       if (e.button === 2) {
+        // A right press while a scribble is held cancels the stroke and
+        // nothing else — the same as Esc. Leaving the mode here (the
+        // catch-all below) would throw away the armed tool the user is in
+        // the middle of using.
+        if (scribbleIsActive?.()) {
+          scribbleCancel?.();
+          // The menu this right press raises is a separate `contextmenu`
+          // event — before the mouseup on Linux, after it on Windows — and
+          // over a shape it opens that shape's menu. Swallow exactly one.
+          suppressContextMenuRef.current = true;
+          e.preventDefault();
+          e.stopPropagation();
+          return;
+        }
+
         // CRITICAL FIX: Check if we clicked on a vertex before intercepting the event
         const target = e.target as SVGElement;
 
@@ -927,7 +976,13 @@ export const useAdvancedInteractions = ({
             handleSliceClick(imagePoint);
             break;
           case EditMode.DeletePolygon:
-            handleDeletePolygonClick(imagePoint);
+            // Every press starts a stroke, on a shape or on empty canvas: a
+            // click is a one-point stroke and deletes whatever is under it.
+            // The CLICK that follows a press on a shape must not act a
+            // second time — `CanvasPolygon.handleClick` ignores delete mode.
+            lastScribbleMoveAt.current =
+              typeof e.timeStamp === 'number' ? e.timeStamp : 0;
+            scribbleStart?.(imagePoint);
             break;
           case EditMode.AssignNeurite:
             // Empty canvas is the one thing this mode does NOT act on — the
@@ -971,13 +1026,15 @@ export const useAdvancedInteractions = ({
       handleAddPointsClick,
       handleCreatePolygonClick,
       handleCreatePolylineClick,
-      handleDeletePolygonClick,
       handleEditVerticesClick,
       handleSliceClick,
       handleViewModeClick,
       isSpacePressedCallback,
       isVertexTarget,
       onPolygonSelection,
+      scribbleStart,
+      scribbleCancel,
+      scribbleIsActive,
     ]
   );
 
@@ -1014,6 +1071,24 @@ export const useAdvancedInteractions = ({
             panStart: { x: e.clientX, y: e.clientY },
           });
         }
+        return;
+      }
+
+      // A held scribble owns the pointer: extend it, and do none of the
+      // hover work below (vertex/join highlights mean nothing mid-stroke).
+      //
+      // Drop a move OLDER than one already added, for the reason the vertex
+      // drag below does: crossing the canvas edge, the canvas's rAF-deferred
+      // move can arrive after the window listener's newer one. For a vertex
+      // that is a one-frame flick; for a stroke it is a chord the pointer
+      // never drew — and it deletes whatever the chord touches.
+      if (scribbleIsActive?.()) {
+        const moveAt = e.timeStamp;
+        if (typeof moveAt === 'number') {
+          if (moveAt < lastScribbleMoveAt.current) return;
+          lastScribbleMoveAt.current = moveAt;
+        }
+        scribbleExtend?.(imagePoint);
         return;
       }
 
@@ -1263,6 +1338,8 @@ export const useAdvancedInteractions = ({
       handlePan,
       isShiftPressedCallback,
       projectType,
+      scribbleIsActive,
+      scribbleExtend,
     ]
   );
 
@@ -1278,6 +1355,32 @@ export const useAdvancedInteractions = ({
           isPanning: false,
           panStart: null,
         });
+      }
+
+      // A scribble commits on the RELEASE, wherever it happens. Leaving the
+      // canvas is not a release (`CanvasContainer` routes onMouseLeave here):
+      // the stroke goes on through the window listeners below, exactly like
+      // a vertex drag. The release point is added before committing — the
+      // canvas's moves are rAF-deferred, so a quick flick can be released
+      // before its last move was processed.
+      if (scribbleIsActive?.()) {
+        if (e.type === 'mouseleave') return;
+        // Only the LEFT button's release ends the stroke. A right release is
+        // the cancel gesture, including one pressed off the canvas, where no
+        // mousedown handler saw the press; a middle release ends a pan.
+        if (e.button !== 0) {
+          if (e.button === 2) scribbleCancel?.();
+          return;
+        }
+        const end = getCanvasCoordinates(
+          e.clientX,
+          e.clientY,
+          transform,
+          canvasRef
+        );
+        scribbleExtend?.({ x: end.imageX, y: end.imageY });
+        scribbleCommit?.();
+        return;
       }
 
       // A vertex drag must NOT be ended by the pointer leaving the canvas.
@@ -1429,24 +1532,31 @@ export const useAdvancedInteractions = ({
       updatePolygons,
       transform,
       canvasRef,
+      scribbleIsActive,
+      scribbleExtend,
+      scribbleCommit,
+      scribbleCancel,
     ]
   );
 
   // The canvas only sees a release that happens over it. Since a vertex drag
   // now survives leaving the canvas (see handleMouseUp), the genuine mouseup
   // has to be caught at the window, or the drag would hang until the next
-  // click. Bound only while a vertex is actually being dragged.
+  // click. Bound only while a vertex is being dragged or a scribble is held
+  // (a stroke survives leaving the canvas for the same reason).
+  const pointerCaptured =
+    interactionState.isDraggingVertex || scribbleInProgress;
   const mouseUpRef = useRef(handleMouseUp);
   mouseUpRef.current = handleMouseUp;
   useEffect(() => {
-    if (!interactionState.isDraggingVertex) return;
+    if (!pointerCaptured) return;
     const onWindowMouseUp = (e: MouseEvent) => {
       // handleMouseUp reads only clientX/clientY and type off the event.
       mouseUpRef.current(e as unknown as React.MouseEvent<HTMLDivElement>);
     };
     window.addEventListener('mouseup', onWindowMouseUp);
     return () => window.removeEventListener('mouseup', onWindowMouseUp);
-  }, [interactionState.isDraggingVertex]);
+  }, [pointerCaptured]);
 
   // ...and the PREVIEW has to survive leaving the canvas too. The canvas div
   // is the only element carrying an onMouseMove, so the moment the pointer
@@ -1459,7 +1569,8 @@ export const useAdvancedInteractions = ({
   // is inside the canvas already reaches `handleMouseMove` through the React
   // tree, and running it a second time here would double the renders per
   // frame — a responsiveness regression, not a fix. Bound only while a vertex
-  // is actually being dragged, and removed on teardown.
+  // is being dragged or a scribble is held (whose trail must follow the
+  // pointer off the canvas too), and removed on teardown.
   //
   // Applied SYNCHRONOUSLY rather than through the rAF the in-canvas path
   // uses. That is the lower-latency half of the point, and it costs nothing:
@@ -1475,7 +1586,7 @@ export const useAdvancedInteractions = ({
   const mouseMoveRef = useRef(handleMouseMove);
   mouseMoveRef.current = handleMouseMove;
   useEffect(() => {
-    if (!interactionState.isDraggingVertex) return;
+    if (!pointerCaptured) return;
     const onWindowMouseMove = (e: MouseEvent) => {
       const canvas = canvasRef.current;
       if (canvas && e.target instanceof Node && canvas.contains(e.target)) {
@@ -1486,13 +1597,14 @@ export const useAdvancedInteractions = ({
     };
     window.addEventListener('mousemove', onWindowMouseMove);
     return () => window.removeEventListener('mousemove', onWindowMouseMove);
-  }, [interactionState.isDraggingVertex, canvasRef]);
+  }, [pointerCaptured, canvasRef]);
 
   return {
     handleMouseDown,
     handleMouseMove,
     handleMouseUp,
     handleCreatePolylineDoubleClick,
+    handleContextMenuCapture,
   };
 };
 

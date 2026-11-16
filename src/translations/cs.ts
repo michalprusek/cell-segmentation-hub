@@ -840,6 +840,10 @@ export default {
         'Není co měnit – následující snímky už tyto tvary mají',
       deleteTrackSuccess: 'Track odstraněn z {{count}} snímků',
       deleteTrackFailed: 'Smazání tracku selhalo',
+      deleteManyFrameSuccess:
+        'Z tohoto snímku odstraněno {{count}} mikrotubulů; zbytek jejich tracků zůstává',
+      deleteManyTrackSuccess:
+        'Ze všech snímků videa odstraněno {{count}} mikrotubulů',
       deleteFrameSuccess:
         'Mikrotubulus odstraněn z tohoto snímku; zbytek tracku zůstává',
       deleteFrameFailed: 'Odstranění mikrotubulu z tohoto snímku selhalo',
@@ -1089,7 +1093,9 @@ export default {
         rigid: 'Přesune se celý tvar — vrcholy si zachovají vzájemné rozestupy',
       },
       deletePolygon: {
-        clickToDelete: 'Klikněte na polygon pro jeho smazání',
+        scribbleToDelete:
+          'Klikněte nebo táhněte přes tvary — vše, čeho se tah dotkne, se po puštění tlačítka smaže',
+        escCancelsScribble: 'Esc tah zruší',
       },
       view: {
         selectPolygon: 'Klikněte na polygon pro jeho výběr',
@@ -1386,6 +1392,7 @@ export default {
     },
     segmentation: {
       deleted: 'Polygon byl smazán',
+      deletedCount: 'Smazáno objektů: {{count}}',
       cannotDeleteVertex:
         'Nelze smazat vrchol - polygon potřebuje alespoň 3 body',
       vertexDeleted: 'Vrchol byl úspěšně smazán',
@@ -2084,7 +2091,7 @@ export default {
         deletePolygon: {
           title: 'Mazání (D)',
           description:
-            'Kliknutím tvary odstraníte. Režim zůstává aktivní a nic se nepotvrzuje.',
+            'Klikněte nebo táhněte přes tvary: vše, čeho se tah dotkne, vybledne a po puštění tlačítka se smaže. Esc tah zruší. Zpět vrátí tvary bez tracku. Sledované mikrotubuly se mažou na serveru a vrátit nejdou, proto se editor nejdřív jednou za všechny zeptá, zda je odstranit z tohoto snímku, nebo z celého videa. Režim zůstává aktivní.',
         },
       },
       keyFeatures: 'Co editor nabízí',

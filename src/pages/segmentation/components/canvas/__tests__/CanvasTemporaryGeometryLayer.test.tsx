@@ -45,6 +45,7 @@ interface RenderOptions {
   selectedPolygonId?: string | null;
   polygons?: ReturnType<typeof createMockPolygon>[];
   hoveredJoinTarget?: { polygonId: string; endpoint: 'head' | 'tail' } | null;
+  scribblePoints?: Array<{ x: number; y: number }>;
 }
 
 const renderLayer = (opts: RenderOptions = {}) =>
@@ -58,6 +59,7 @@ const renderLayer = (opts: RenderOptions = {}) =>
         interactionState={opts.interactionState ?? makeInteraction()}
         selectedPolygonId={opts.selectedPolygonId ?? null}
         polygons={opts.polygons ?? []}
+        scribblePoints={opts.scribblePoints}
         hoveredJoinTarget={opts.hoveredJoinTarget ?? null}
       />
     </svg>
@@ -759,5 +761,45 @@ describe('screen-pixel sizes', () => {
       });
       expect(seen).toEqual(expected);
     });
+  });
+});
+
+describe('CanvasTemporaryGeometryLayer — delete-tool scribble trail', () => {
+  it('draws the scribble trail', () => {
+    const { container } = renderLayer({
+      editMode: EditMode.DeletePolygon,
+      scribblePoints: [
+        { x: 1, y: 2 },
+        { x: 3, y: 4 },
+        { x: 5, y: 6 },
+      ],
+    });
+    const trail = container.querySelector('[data-testid="scribble-trail"]');
+    expect(trail).not.toBeNull();
+    expect(trail!.getAttribute('points')).toBe('1,2 3,4 5,6');
+    // The trail must never swallow the pointer: the stroke is still being
+    // drawn underneath it.
+    expect(trail!.getAttribute('pointer-events')).toBe('none');
+  });
+
+  it('draws nothing without a scribble', () => {
+    const { container } = renderLayer({ editMode: EditMode.DeletePolygon });
+    expect(
+      container.querySelector('[data-testid="scribble-trail"]')
+    ).toBeNull();
+  });
+
+  it('draws a one-point scribble (a click) as a dot-length stroke', () => {
+    const { container } = renderLayer({
+      editMode: EditMode.DeletePolygon,
+      scribblePoints: [{ x: 7, y: 8 }],
+    });
+    // A single-point polyline is invisible; repeating the point with round
+    // caps renders the dot the click's hit test used.
+    expect(
+      container
+        .querySelector('[data-testid="scribble-trail"]')!
+        .getAttribute('points')
+    ).toBe('7,8 7,8');
   });
 });

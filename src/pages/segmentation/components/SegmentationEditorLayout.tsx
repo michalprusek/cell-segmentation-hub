@@ -144,7 +144,8 @@ export interface SegmentationEditorLayoutProps {
    *  from the current frame and leaves the rest of the track alone. */
   handleDeletePolygonFromFrame: (polygonId: string) => void;
   /** Shared three-way delete confirmation, driven by every scope-less delete
-   *  gesture (Delete key, delete-mode click, sidebar trash). */
+   *  gesture (Delete key, sidebar trash) and by the delete scribble, which
+   *  asks once for every tracked microtubule it touched. */
   deleteScopeDialog: Omit<DeleteTrackScopeDialogProps, 'frameCount'>;
   /** Canvas right-click: propagate this MT into all following frames. */
   handlePropagateTrack: (polygonId: string) => void;
@@ -435,6 +436,7 @@ const SegmentationEditorLayout: React.FC<SegmentationEditorLayoutProps> = ({
                   onMouseDown={editor.handleMouseDown}
                   onMouseMove={editor.handleMouseMove}
                   onMouseUp={editor.handleMouseUp}
+                  onContextMenuCapture={editor.handleContextMenuCapture}
                   onDoubleClick={editor.handleCanvasDoubleClick}
                   loading={projectLoading}
                   // Legacy compatibility props
@@ -518,6 +520,9 @@ const SegmentationEditorLayout: React.FC<SegmentationEditorLayoutProps> = ({
                           vertexDragState={editor.vertexDragState}
                           isUndoRedoInProgress={editor.isUndoRedoInProgress}
                           isHovered={polygon.id === hoveredPolygonId}
+                          isPendingDelete={
+                            editor.scribble?.pendingIds.has(polygon.id) ?? false
+                          }
                           isSomaHighlighted={polygon.id === highlightedSomaId}
                           editMode={editor.editMode}
                           onSelectPolygon={handleCanvasSelect}
@@ -663,6 +668,7 @@ const SegmentationEditorLayout: React.FC<SegmentationEditorLayoutProps> = ({
                         selectedPolygonId={editor.selectedPolygonId}
                         polygons={editor.polygons}
                         hoveredJoinTarget={editor.hoveredJoinTarget}
+                        scribblePoints={editor.scribble?.points}
                       />
                     </svg>
 
@@ -881,7 +887,8 @@ const SegmentationEditorLayout: React.FC<SegmentationEditorLayoutProps> = ({
 
       {/* "This frame only / all frames / cancel" for a tracked microtubule.
           Driven by the delete gestures that carry no scope of their own —
-          the Delete key, a click in delete mode, the sidebar trash. The canvas
+          the Delete key, the sidebar trash, and the delete-mode scribble
+          (once for every tracked microtubule it touched). The canvas
           context menu asks the same question from its own instance, next to
           the item the user clicked. */}
       <DeleteTrackScopeDialog

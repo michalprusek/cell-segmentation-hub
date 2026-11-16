@@ -202,12 +202,32 @@ describe('CanvasContainer', () => {
     it.each([
       [EditMode.View, 'grab'],
       [EditMode.EditVertices, 'crosshair'],
-      [EditMode.DeletePolygon, 'pointer'],
+      // A drawing tool since the scribble (2026-11-16).
+      [EditMode.DeletePolygon, 'crosshair'],
+      [EditMode.AssignNeurite, 'pointer'],
     ])('leaves %s on its own cursor (%s)', (mode, cursor) => {
       const { container } = render(
         <CanvasContainer {...defaultProps} editMode={mode} />
       );
       expect(container.firstChild as HTMLElement).toHaveStyle({ cursor });
+    });
+  });
+
+  describe('Context menu capture', () => {
+    // Capture phase on the container runs BEFORE the shape's own Radix
+    // trigger, which is the only place a context menu can still be stopped.
+    it('hands a contextmenu on a child to onContextMenuCapture first', () => {
+      const order: string[] = [];
+      const { getByTestId } = render(
+        <CanvasContainer
+          {...defaultProps}
+          onContextMenuCapture={() => order.push('capture')}
+        >
+          <div data-testid="shape" onContextMenu={() => order.push('shape')} />
+        </CanvasContainer>
+      );
+      fireEvent.contextMenu(getByTestId('shape'));
+      expect(order).toEqual(['capture', 'shape']);
     });
   });
 

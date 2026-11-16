@@ -929,6 +929,9 @@ export default {
       propagateSelectedNoChange: '无需更改——后续帧已是这些形状',
       deleteTrackSuccess: '已从 {{count}} 帧中删除轨迹',
       deleteTrackFailed: '删除轨迹失败',
+      deleteManyFrameSuccess:
+        '已从当前帧删除 {{count}} 条微管；其余轨迹保持不变',
+      deleteManyTrackSuccess: '已从视频的所有帧中删除 {{count}} 条微管',
       deleteFrameSuccess: '已从当前帧删除该微管；其余轨迹保持不变',
       deleteFrameFailed: '从当前帧删除该微管失败',
       deleteScopeUnavailable: '视频仍在加载中——请稍后再删除该微管',
@@ -1165,7 +1168,9 @@ export default {
         rigid: '整个形状一起移动 — 顶点之间的相对位置保持不变',
       },
       deletePolygon: {
-        clickToDelete: '点击多边形删除它',
+        scribbleToDelete:
+          '点击或在形状上拖画——松开鼠标时，笔迹触及的所有形状都会被删除',
+        escCancelsScribble: '按 Esc 取消笔迹',
       },
       view: {
         selectPolygon: '点击多边形选择它',
@@ -1313,6 +1318,7 @@ export default {
       saved: '分割保存成功',
       failed: '分割失败',
       deleted: '多边形已删除',
+      deletedCount: '已删除 {{count}} 个对象',
       cannotDeleteVertex: '无法删除顶点 - 多边形至少需要3个点',
       vertexDeleted: '顶点删除成功',
       joinClassMismatch: '这两条折线的标签不同，无法连接',
@@ -1965,7 +1971,8 @@ export default {
         },
         deletePolygon: {
           title: '删除多边形（D）',
-          description: '点击形状即可删除。该模式会保持激活，且没有确认提示。',
+          description:
+            '点击或在形状上拖画：笔迹触及的所有形状会变淡，并在松开鼠标按钮时被删除。按 Esc 取消笔迹。撤销可恢复没有轨迹的形状。有轨迹的微管会在服务器上删除且无法撤销，因此会先统一询问一次是从当前帧删除还是从整个视频删除。该模式会保持激活。',
         },
       },
       keyFeatures: '编辑器提供的功能',

@@ -19,6 +19,7 @@ import {
   NEUTRAL_COLOR,
 } from '@/pages/segmentation/utils/instanceColors';
 import { isMembranePolygon, MEMBRANE_COLOR } from '@/lib/microcapsuleMembrane';
+import { SCRIBBLE_PENDING_OPACITY } from '../../utils/scribbleErase';
 import {
   POLYLINE_HIT_BAND_MULTIPLIER,
   STROKE_MULTIPLIER,
@@ -37,6 +38,9 @@ interface CanvasPolygonProps {
   viewportBounds?: { x: number; y: number; width: number; height: number };
   hideVertices?: boolean;
   isHovered?: boolean;
+  /** Touched by the delete tool's held scribble: drawn faded, deleted on
+   *  release (`useScribbleErase`). */
+  isPendingDelete?: boolean;
   isUndoRedoInProgress?: boolean;
   /** Colour neurites by the SOMA they belong to instead of by class. Neurite
    *  projects only; see `somaAssignmentColor` for why the two colourings
@@ -137,6 +141,7 @@ const CanvasPolygon = React.memo(
     viewportBounds,
     hideVertices = false,
     isHovered = false,
+    isPendingDelete = false,
     isUndoRedoInProgress = false,
     colorBySoma = false,
     somaLabels,
@@ -399,9 +404,14 @@ const CanvasPolygon = React.memo(
       semanticColor,
     ]);
 
+    // Hover comes from the 24 px hit band, the delete scribble's hit test is
+    // 6 px: in delete mode a glow would promise a hit the click does not
+    // make. There the press itself is the feedback — it fades what it takes.
+    const showHover = isHovered && editMode !== EditMode.DeletePolygon;
+
     // Compute hover-dependent stroke width multiplier
     const hoverStrokeMultiplier = isPolyline
-      ? isHovered
+      ? showHover
         ? STROKE_MULTIPLIER.polylineHovered
         : STROKE_MULTIPLIER.polyline
       : isSomaHighlighted
@@ -410,7 +420,7 @@ const CanvasPolygon = React.memo(
           // entry. Bigger than the 2.5 a hovered polyline gets, because a
           // closed shape starts from 1 rather than 1.5.
           STROKE_MULTIPLIER.somaHighlighted
-        : isHovered
+        : showHover
           ? STROKE_MULTIPLIER.polygonHovered
           : STROKE_MULTIPLIER.polygon;
     // A CSS declaration, not the `stroke-width` attribute: `var()` is not
@@ -433,7 +443,7 @@ const CanvasPolygon = React.memo(
     // prop, not through this component — see there for why it is not a CSS
     // class like the selection glow (WebKit paints none on an SVG child).
     const pathFilter =
-      isPolyline && isHovered && !isEffectivelySelected
+      isPolyline && showHover && !isEffectivelySelected
         ? 'url(#blue-glow)'
         : undefined;
 
@@ -513,6 +523,14 @@ const CanvasPolygon = React.memo(
       (e: React.MouseEvent) => {
         e.stopPropagation();
         if (!onSelectPolygon) return;
+        // Delete mode acts on the PRESS: it starts a scribble that deletes
+        // what it touched on release (`useScribbleErase`). The click that
+        // follows must not act a second time — through `usePolygonSelection`
+        // it would delete again, and for a tracked microtubule reopen the
+        // scope dialog for this shape alone, replacing the one question the
+        // scribble asked about all of them. A Shift+click must not start a
+        // multi-selection the tool has no use for either.
+        if (editMode === EditMode.DeletePolygon) return;
         // Only pass the `additive` arg on a Shift+click so a plain click stays a
         // single-argument call (keeps the single-selection call sites + their
         // tests unchanged).
@@ -522,7 +540,7 @@ const CanvasPolygon = React.memo(
           onSelectPolygon(id);
         }
       },
-      [onSelectPolygon, id]
+      [onSelectPolygon, id, editMode]
     );
 
     const handleDelete = useCallback(
@@ -577,11 +595,14 @@ const CanvasPolygon = React.memo(
       (e: React.MouseEvent) => {
         if (canvasOwnsDoubleClick) return; // let it bubble to CanvasContainer
         e.stopPropagation();
+        // Two quick presses in delete mode are two strokes — typically a
+        // second try after a click that missed — not "edit this shape".
+        if (editMode === EditMode.DeletePolygon) return;
         if (onEditPolygon) {
           onEditPolygon(id);
         }
       },
-      [onEditPolygon, id, canvasOwnsDoubleClick]
+      [onEditPolygon, id, canvasOwnsDoubleClick, editMode]
     );
 
     const handleKeyDown = useCallback(
@@ -655,7 +676,11 @@ const CanvasPolygon = React.memo(
           onKeyDown={handleKeyDown}
           onMouseEnter={isPolyline ? handleMouseEnter : undefined}
           onMouseLeave={isPolyline ? handleMouseLeave : undefined}
-          style={{ outline: 'none' }}
+          style={
+            isPendingDelete
+              ? { outline: 'none', opacity: SCRIBBLE_PENDING_OPACITY }
+              : { outline: 'none' }
+          }
         >
           {/* Polyline hit-area: invisible thick stroke layered UNDER the
               visible path. Polylines are 1-D — the visible stroke is only
@@ -707,7 +732,11 @@ const CanvasPolygon = React.memo(
               // i.e. nowhere a user looks.
               editMode === EditMode.MoveShape
                 ? 'cursor-move'
-                : 'cursor-pointer',
+                : // The delete tool draws a stroke over shapes; a pointer
+                  // over each one would read as "click to act".
+                  editMode === EditMode.DeletePolygon
+                  ? 'cursor-crosshair'
+                  : 'cursor-pointer',
               isPolyline
                 ? 'polyline-path'
                 : polygon.partClass === 'core'
@@ -914,6 +943,9 @@ const CanvasPolygon = React.memo(
       prevProps.onCreateMtLabel === nextProps.onCreateMtLabel &&
       prevProps.isSelected === nextProps.isSelected &&
       prevProps.isHovered === nextProps.isHovered &&
+      // The delete scribble's fade. Without it the memo keeps a shape at full
+      // opacity while the stroke says it is about to go (CLAUDE.md #5).
+      prevProps.isPendingDelete === nextProps.isPendingDelete &&
       prevProps.isUndoRedoInProgress === nextProps.isUndoRedoInProgress &&
       // No `zoom` term: the component has no zoom prop. Sizes follow the
       // zoom through CSS (see `utils/overlayScale.ts`), which is what lets a

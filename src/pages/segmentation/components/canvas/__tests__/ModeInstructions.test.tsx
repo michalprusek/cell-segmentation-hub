@@ -376,13 +376,16 @@ describe('ModeInstructions', () => {
   });
 
   describe('DeletePolygon mode', () => {
-    it('shows "Click on a polygon to delete it" instruction', () => {
+    it('explains the scribble and how to cancel it', () => {
       render(
         <ModeInstructions {...defaultProps} editMode={EditMode.DeletePolygon} />
       );
       expect(
-        screen.getByText('Click on a polygon to delete it')
+        screen.getByText(
+          'Click or draw over shapes — everything the stroke touches is deleted when you release'
+        )
       ).toBeInTheDocument();
+      expect(screen.getByText('Esc cancels the stroke')).toBeInTheDocument();
     });
 
     it('title is "Delete Polygon Mode"', () => {

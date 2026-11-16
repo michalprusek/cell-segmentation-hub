@@ -1007,6 +1007,10 @@ export default {
         'Nichts zu ändern – die folgenden Frames haben diese Formen bereits',
       deleteTrackSuccess: 'Track aus {{count}} Frames entfernt',
       deleteTrackFailed: 'Löschen des Tracks fehlgeschlagen',
+      deleteManyFrameSuccess:
+        '{{count}} Mikrotubuli aus diesem Frame entfernt; die restlichen Tracks bleiben erhalten',
+      deleteManyTrackSuccess:
+        '{{count}} Mikrotubuli aus allen Frames des Videos entfernt',
       deleteFrameSuccess:
         'Mikrotubulus aus diesem Frame entfernt; der restliche Track bleibt erhalten',
       deleteFrameFailed:
@@ -1267,7 +1271,9 @@ export default {
           'Die gesamte Form bewegt sich — die Eckpunkte behalten ihre Lage zueinander',
       },
       deletePolygon: {
-        clickToDelete: 'Klicken Sie auf ein Polygon, um es zu löschen',
+        scribbleToDelete:
+          'Klicken oder zeichnen Sie über Formen – alles, was der Strich berührt, wird beim Loslassen gelöscht',
+        escCancelsScribble: 'Esc bricht den Strich ab',
       },
       view: {
         selectPolygon: 'Klicken Sie auf ein Polygon, um es auszuwählen',
@@ -1429,6 +1435,7 @@ export default {
       saved: 'Segmentierung erfolgreich gespeichert',
       failed: 'Segmentierung fehlgeschlagen',
       deleted: 'Polygon gelöscht',
+      deletedCount: '{{count}} Objekte gelöscht',
       cannotDeleteVertex:
         'Kann Scheitelpunkt nicht löschen - Polygon benötigt mindestens 3 Punkte',
       vertexDeleted: 'Scheitelpunkt erfolgreich gelöscht',
@@ -2132,7 +2139,7 @@ export default {
         deletePolygon: {
           title: 'Polygon löschen (D)',
           description:
-            'Klicken Sie Formen an, um sie zu entfernen. Der Modus bleibt aktiv, und es wird nichts bestätigt.',
+            'Klicken oder zeichnen Sie über Formen: Alles, was der Strich berührt, wird blass dargestellt und beim Loslassen der Maustaste gelöscht. Esc bricht den Strich ab. Rückgängig stellt Formen ohne Track wieder her. Getrackte Mikrotubuli werden auf dem Server entfernt und lassen sich nicht wiederherstellen; deshalb wird vorher einmal für alle gefragt, ob sie aus diesem Frame oder aus dem ganzen Video entfernt werden sollen. Der Modus bleibt aktiv.',
         },
       },
       keyFeatures: 'Was der Editor bietet',
