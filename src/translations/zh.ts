@@ -1316,6 +1316,7 @@ export default {
       saved: '分割保存成功',
       failed: '分割失败',
       deleted: '多边形已删除',
+      deletedCount: '已删除 {{count}} 个对象',
       cannotDeleteVertex: '无法删除顶点 - 多边形至少需要3个点',
       vertexDeleted: '顶点删除成功',
       joinClassMismatch: '这两条折线的标签不同，无法连接',

@@ -1425,6 +1425,7 @@ export default {
       saved: 'Segmentation sauvegardée avec succès',
       failed: 'Échec de la segmentation',
       deleted: 'Polygone supprimé',
+      deletedCount: '{{count}} objets supprimés',
       cannotDeleteVertex:
         'Impossible de supprimer le sommet - le polygone a besoin d’au moins 3 points',
       vertexDeleted: 'Sommet supprimé avec succès',

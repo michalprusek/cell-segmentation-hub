@@ -1433,6 +1433,7 @@ export default {
       saved: 'Segmentierung erfolgreich gespeichert',
       failed: 'Segmentierung fehlgeschlagen',
       deleted: 'Polygon gelöscht',
+      deletedCount: '{{count}} Objekte gelöscht',
       cannotDeleteVertex:
         'Kann Scheitelpunkt nicht löschen - Polygon benötigt mindestens 3 Punkte',
       vertexDeleted: 'Scheitelpunkt erfolgreich gelöscht',

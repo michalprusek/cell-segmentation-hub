@@ -24,6 +24,16 @@ export enum EditMode {
   AssignNeurite = 'assign-neurite',
 }
 
+/**
+ * The delete tool's scribble while the button is held: the trail drawn so far
+ * (image coordinates) and the ids of the shapes it has touched, which render
+ * faded and are deleted on release. `null` when no scribble is in progress.
+ */
+export interface ScribbleState {
+  points: Point[];
+  pendingIds: ReadonlySet<string>;
+}
+
 // Enhanced InteractionState for comprehensive polygon editing
 export interface InteractionState {
   isDraggingVertex: boolean;

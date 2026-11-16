@@ -1419,6 +1419,7 @@ export default {
       saved: 'Segmentación guardada exitosamente',
       failed: 'La segmentación falló',
       deleted: 'Polígono eliminado',
+      deletedCount: '{{count}} objetos eliminados',
       cannotDeleteVertex:
         'No se puede eliminar vértice - el polígono necesita al menos 3 puntos',
       vertexDeleted: 'Vértice eliminado exitosamente',

@@ -589,6 +589,28 @@ describe('CanvasPolygon', () => {
       expect(onSelectPolygon).toHaveBeenCalledWith('test-polygon');
     });
 
+    // In delete mode the PRESS started a scribble that deletes on release.
+    // The click the browser fires afterwards must not select (or, through
+    // usePolygonSelection, delete a second time — for a tracked microtubule
+    // that would reopen the scope dialog for this one alone, replacing the
+    // question the scribble just asked about all of them).
+    it('ignores clicks in delete mode, plain and shift', () => {
+      const onSelectPolygon = vi.fn();
+      renderPolygonInSvg(
+        <CanvasPolygon
+          {...defaultProps}
+          editMode={EditMode.DeletePolygon}
+          onSelectPolygon={onSelectPolygon}
+        />
+      );
+      const pathElement = screen
+        .getByTestId('test-polygon')
+        .querySelector('path');
+      fireEvent.click(pathElement!);
+      fireEvent.click(pathElement!, { shiftKey: true });
+      expect(onSelectPolygon).not.toHaveBeenCalled();
+    });
+
     it('handles double-click for polygon editing', () => {
       const onEditPolygon = vi.fn();
       renderPolygonInSvg(

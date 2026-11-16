@@ -1390,6 +1390,7 @@ export default {
     },
     segmentation: {
       deleted: 'Polygon byl smazán',
+      deletedCount: 'Smazáno objektů: {{count}}',
       cannotDeleteVertex:
         'Nelze smazat vrchol - polygon potřebuje alespoň 3 body',
       vertexDeleted: 'Vrchol byl úspěšně smazán',

@@ -18,7 +18,7 @@ import { useSegmentationReload } from './hooks/useSegmentationReload';
 import { useSegmentationQueue } from '@/hooks/useSegmentationQueue';
 import { useCoordinatedAbortController } from '@/hooks/shared/useAbortController';
 import useDebounce from '@/hooks/useDebounce';
-import { polygonKey } from '@/lib/segmentation';
+import { polygonKey, type Polygon } from '@/lib/segmentation';
 import apiClient, { SegmentationPolygon } from '@/lib/api';
 import { toast } from 'sonner';
 import { getErrorMessage } from '@/types';
@@ -404,6 +404,23 @@ const SegmentationEditor = () => {
     (polygonId: string) => requestDeleteScopeRef.current?.(polygonId) ?? false,
     []
   );
+  // The delete tool's scribble needs the same two late bindings: the scope
+  // question for MANY polygons, and the list the canvas actually renders
+  // (`visiblePolygons`, computed far below) — a hidden shape must never be
+  // deleted by a stroke the user drew over where it would have been.
+  const requestDeleteManyRef = useRef<((ids: string[]) => string[]) | null>(
+    null
+  );
+  const handleRequestDeletePolygons = useCallback(
+    (polygonIds: string[]) =>
+      requestDeleteManyRef.current?.(polygonIds) ?? polygonIds,
+    []
+  );
+  const scribbleCandidatesRef = useRef<Polygon[]>([]);
+  const getScribbleCandidates = useCallback(
+    () => scribbleCandidatesRef.current,
+    []
+  );
 
   // Late binding for the static-share follow-up inside `onSave` below.
   //
@@ -449,6 +466,8 @@ const SegmentationEditor = () => {
     // and other types fall back to the legacy paths.
     projectType,
     onRequestDeletePolygon: handleRequestDeletePolygon,
+    onRequestDeletePolygons: handleRequestDeletePolygons,
+    getScribbleCandidates,
     onSave: async (polygons, targetImageId, targetDimensions, signal) => {
       const saveToImageId = targetImageId || imageId;
       if (!projectId || !saveToImageId) {
@@ -962,6 +981,7 @@ const SegmentationEditor = () => {
     activeInstanceId,
     projectType,
   });
+  scribbleCandidatesRef.current = visiblePolygons;
 
   // Development-only debug logger: logs polygon rendering state.
   // Moved here (after usePolygonHandlers) so hiddenPolygonIds is in scope.
@@ -1459,6 +1479,7 @@ const SegmentationEditor = () => {
   // Close the loop opened before the editor hook: scope-less delete gestures
   // (Delete key, delete-mode click) now reach the live implementation.
   requestDeleteScopeRef.current = deleteScope.requestDelete;
+  requestDeleteManyRef.current = deleteScope.requestDeleteMany;
 
   const handleDeletePolygonOrTrack = deleteScope.deleteWholeTrack;
   const handleDeletePolygonFromFrame = deleteScope.deleteFromCurrentFrame;

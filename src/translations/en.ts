@@ -1389,6 +1389,7 @@ export default {
       saved: 'Segmentation saved successfully',
       failed: 'Segmentation failed',
       deleted: 'Polygon deleted',
+      deletedCount: '{{count}} objects deleted',
       cannotDeleteVertex:
         'Cannot delete vertex - polygon needs at least 3 points',
       vertexDeleted: 'Vertex deleted successfully',

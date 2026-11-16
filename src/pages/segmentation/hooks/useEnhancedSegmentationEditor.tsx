@@ -20,6 +20,7 @@ import { usePolygonSlicing } from './usePolygonSlicing';
 import { useKeyboardShortcuts } from './useKeyboardShortcuts';
 import { annotationGeometryForProjectType } from '@/lib/polylineSemantics';
 import { usePolygonSelection } from './usePolygonSelection';
+import { useScribbleErase } from './useScribbleErase';
 import {
   calculateCenteringTransform,
   calculateFixedPointZoom,
@@ -80,6 +81,14 @@ interface UseEnhancedSegmentationEditorProps {
    *  click). Return true to say "handled — I opened a scope dialog"; the editor
    *  then deletes nothing. Omit it and those gestures delete locally as before. */
   onRequestDeletePolygon?: (polygonId: string) => boolean;
+  /** The same for the delete tool's scribble, which deletes MANY at once: the
+   *  parent claims the ids it handles itself (tracked microtubules get one
+   *  scope question) and returns the rest, which the editor deletes locally.
+   *  Omit it and every touched shape is deleted locally. */
+  onRequestDeletePolygons?: (polygonIds: string[]) => string[];
+  /** The shapes a scribble may touch: exactly what the canvas renders (hidden
+   *  shapes excluded). Omit it and every polygon in the editor is a target. */
+  getScribbleCandidates?: () => Polygon[];
   // onPolygonSelection is now handled internally via usePolygonSelection for SSOT
 }
 
@@ -103,6 +112,8 @@ export const useEnhancedSegmentationEditor = ({
   activeInstanceIdRef,
   projectType,
   onRequestDeletePolygon,
+  onRequestDeletePolygons,
+  getScribbleCandidates,
   // onPolygonSelection is now handled internally
 }: UseEnhancedSegmentationEditorProps) => {
   const { t } = useLanguage();
@@ -807,6 +818,52 @@ export const useEnhancedSegmentationEditor = ({
     [selectedPolygonId, onRequestDeletePolygon, handleDeletePolygon]
   );
 
+  /**
+   * The release of a delete-tool scribble. Everything the parent does not
+   * claim goes in ONE `updatePolygons`, so one stroke is one undo step and one
+   * toast — looping `handleDeletePolygon` would push a history entry per shape.
+   */
+  const handleScribbleCommit = useCallback(
+    (polygonIds: string[]) => {
+      const unclaimed = onRequestDeletePolygons
+        ? onRequestDeletePolygons(polygonIds)
+        : polygonIds;
+      if (unclaimed.length === 0) return;
+      const remove = new Set(unclaimed);
+      const remaining = polygons.filter(p => !remove.has(p.id));
+      const removedCount = polygons.length - remaining.length;
+      // A reload can replace the polygons while the button is held; ids that
+      // no longer exist delete nothing, and nothing is not a history entry.
+      if (removedCount === 0) return;
+      updatePolygons(remaining);
+      if (selectedPolygonId && remove.has(selectedPolygonId)) {
+        setSelectedPolygonId(null);
+      }
+      toast.success(
+        removedCount === 1
+          ? t('toast.segmentation.deleted')
+          : t('toast.segmentation.deletedCount', { count: removedCount })
+      );
+    },
+    // setSelectedPolygonId is a stable useCallback([]); omitted like above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [onRequestDeletePolygons, polygons, selectedPolygonId, updatePolygons, t]
+  );
+
+  const scribbleEraser = useScribbleErase({
+    getCandidates: () => getScribbleCandidates?.() ?? polygons,
+    getZoom: () => transformRef.current.zoom,
+    onCommit: handleScribbleCommit,
+  });
+  const cancelScribble = scribbleEraser.cancel;
+
+  // A stroke belongs to the mode and the frame it started in. Switching
+  // either (a shortcut, a frame scrub) while the button is held drops it
+  // rather than deleting on a frame the user is no longer looking at.
+  useEffect(() => {
+    cancelScribble();
+  }, [editMode, imageId, cancelScribble]);
+
   // Now initialize centralized polygon selection system (SSOT) after handleDeletePolygon is defined
   const polygonSelection = usePolygonSelection({
     editMode,
@@ -970,8 +1027,11 @@ export const useEnhancedSegmentationEditor = ({
     setEditMode,
   ]);
 
-  // Escape handler - always return to View mode
+  // Escape handler - return to View mode, except that a held scribble is
+  // cancelled FIRST and alone: the stroke goes, nothing is deleted, and the
+  // delete tool stays armed. The next Escape leaves the mode as usual.
   const handleEscape = useCallback(() => {
+    if (cancelScribble()) return;
     // Reset all temporary state
     setTempPoints([]);
     setInteractionState({
@@ -991,10 +1051,11 @@ export const useEnhancedSegmentationEditor = ({
     // ENHANCED: Return to base state (View mode + No selection)
     setEditMode(EditMode.View);
     setSelectedPolygonIdInternal(null);
-    // setEditMode and setSelectedPolygonIdInternal are stable useState setters;
-    // empty deps prevents recreation cycles in downstream callbacks.
+    // setEditMode and setSelectedPolygonIdInternal are stable useState setters,
+    // cancelScribble a stable useCallback([]); the deps stay effectively empty
+    // to prevent recreation cycles in downstream callbacks.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [cancelScribble]);
 
   const keyboardShortcuts = useKeyboardShortcuts({
     projectType,
@@ -1202,6 +1263,7 @@ export const useEnhancedSegmentationEditor = ({
     updatePolygons,
     getPolygons,
     handlePan,
+    scribbleEraser,
   });
 
   // Set ref so Enter key and double-click can finalize polylines
@@ -1383,5 +1445,9 @@ export const useEnhancedSegmentationEditor = ({
 
     // Utilities
     handleEscape,
+
+    // Delete-tool scribble: render state (trail + faded ids) and its cancel.
+    scribble: scribbleEraser.scribble,
+    cancelScribble,
   };
 };

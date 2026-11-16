@@ -513,6 +513,14 @@ const CanvasPolygon = React.memo(
       (e: React.MouseEvent) => {
         e.stopPropagation();
         if (!onSelectPolygon) return;
+        // Delete mode acts on the PRESS: it starts a scribble that deletes
+        // what it touched on release (`useScribbleErase`). The click that
+        // follows must not act a second time — through `usePolygonSelection`
+        // it would delete again, and for a tracked microtubule reopen the
+        // scope dialog for this shape alone, replacing the one question the
+        // scribble asked about all of them. A Shift+click must not start a
+        // multi-selection the tool has no use for either.
+        if (editMode === EditMode.DeletePolygon) return;
         // Only pass the `additive` arg on a Shift+click so a plain click stays a
         // single-argument call (keeps the single-selection call sites + their
         // tests unchanged).
@@ -522,7 +530,7 @@ const CanvasPolygon = React.memo(
           onSelectPolygon(id);
         }
       },
-      [onSelectPolygon, id]
+      [onSelectPolygon, id, editMode]
     );
 
     const handleDelete = useCallback(
