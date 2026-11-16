@@ -1265,7 +1265,9 @@ export default {
           'La forme entière se déplace — les sommets gardent leurs positions relatives',
       },
       deletePolygon: {
-        clickToDelete: 'Cliquez sur un polygone pour le supprimer',
+        scribbleToDelete:
+          'Cliquez ou tracez sur les formes : tout ce que le trait touche est supprimé au relâchement du bouton',
+        escCancelsScribble: 'Esc annule le trait',
       },
       view: {
         selectPolygon: 'Cliquez sur un polygone pour le sélectionner',
@@ -2129,7 +2131,7 @@ export default {
         deletePolygon: {
           title: 'Supprimer un polygone (D)',
           description:
-            'Cliquez sur les formes pour les supprimer. Le mode reste actif et il n’y a aucune confirmation.',
+            'Cliquez ou tracez sur les formes : tout ce que le trait touche s’estompe et est supprimé lorsque vous relâchez le bouton. Esc annule le trait. Annuler restaure les formes ; pour les microtubules suivis, l’éditeur demande une seule fois, pour tous, s’il faut les retirer de cette image ou de toute la vidéo. Le mode reste actif.',
         },
       },
       keyFeatures: 'Ce que l’éditeur vous offre',

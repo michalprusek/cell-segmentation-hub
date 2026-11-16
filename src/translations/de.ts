@@ -1271,7 +1271,9 @@ export default {
           'Die gesamte Form bewegt sich — die Eckpunkte behalten ihre Lage zueinander',
       },
       deletePolygon: {
-        clickToDelete: 'Klicken Sie auf ein Polygon, um es zu löschen',
+        scribbleToDelete:
+          'Klicken oder zeichnen Sie über Formen – alles, was der Strich berührt, wird beim Loslassen gelöscht',
+        escCancelsScribble: 'Esc bricht den Strich ab',
       },
       view: {
         selectPolygon: 'Klicken Sie auf ein Polygon, um es auszuwählen',
@@ -2137,7 +2139,7 @@ export default {
         deletePolygon: {
           title: 'Polygon löschen (D)',
           description:
-            'Klicken Sie Formen an, um sie zu entfernen. Der Modus bleibt aktiv, und es wird nichts bestätigt.',
+            'Klicken oder zeichnen Sie über Formen: Alles, was der Strich berührt, wird blass dargestellt und beim Loslassen der Maustaste gelöscht. Esc bricht den Strich ab. Rückgängig stellt die Formen wieder her; bei getrackten Mikrotubuli wird einmal für alle gefragt, ob sie aus diesem Frame oder aus dem ganzen Video entfernt werden sollen. Der Modus bleibt aktiv.',
         },
       },
       keyFeatures: 'Was der Editor bietet',

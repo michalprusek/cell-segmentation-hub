@@ -1085,7 +1085,9 @@ export default {
           'The whole shape moves — vertices keep their positions relative to each other',
       },
       deletePolygon: {
-        clickToDelete: 'Click on a polygon to delete it',
+        scribbleToDelete:
+          'Click or draw over shapes — everything the stroke touches is deleted when you release',
+        escCancelsScribble: 'Esc cancels the stroke',
       },
       view: {
         selectPolygon: 'Click on a polygon to select it',
@@ -2117,7 +2119,7 @@ export default {
         deletePolygon: {
           title: 'Delete polygon (D)',
           description:
-            'Click shapes to remove them. The mode stays active, and there is no confirmation.',
+            'Click or draw over shapes: everything the stroke touches fades, and is deleted when you release the button. Esc cancels the stroke. Undo brings the shapes back; for tracked microtubules you are first asked, once for all of them, whether to remove them from this frame or from the whole video. The mode stays active.',
         },
       },
       keyFeatures: 'What the editor gives you',

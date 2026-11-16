@@ -37,7 +37,7 @@ cycle. Clicking the button of the mode you are already in returns you to View.
 | **Create polygon**  | <kbd>N</kbd> | Click out a closed shape                                                         |
 | **Create polyline** | <kbd>P</kbd> | Click out an open path (microtubule, sperm part)                                 |
 | **Slice**           | <kbd>S</kbd> | Cut a shape with a two-click line                                                |
-| **Delete polygon**  | <kbd>D</kbd> | Click shapes to delete them, one after another                                   |
+| **Delete polygon**  | <kbd>D</kbd> | Click or draw over shapes; everything the stroke touches is deleted on release   |
 
 **Edit vertices** and **Add points** need a shape selected first — their buttons
 are disabled and marked with a pulsing dot until you select one. **Slice does
@@ -46,7 +46,8 @@ shortcut dialog claims otherwise; the behaviour described here is what the
 editor actually does.)
 
 <kbd>Esc</kbd> always returns to View, clears whatever you were drawing, and
-clears the selection.
+clears the selection — with one exception: while a delete stroke is held, it
+cancels only the stroke, and the next <kbd>Esc</kbd> leaves Delete polygon.
 
 Where each mode goes when it finishes:
 
@@ -224,8 +225,18 @@ point", "intersects too many edges" — rather than a silent no-op.
 
 Two routes, with different safety:
 
-- **Delete polygon mode** — click and it is gone, **no confirmation**, and the
-  mode stays active.
+- **Delete polygon mode** — press and draw over shapes. Every shape the stroke
+  touches fades while you draw, and is deleted when you release the button; a
+  plain click deletes everything under the pointer. There is **no
+  confirmation** for untracked shapes — one stroke is one undo step, so
+  <kbd>Ctrl</kbd>+<kbd>Z</kbd> brings them all back. Tracked microtubules are
+  the exception: after the release the editor asks **once, for all of them**,
+  whether to remove them from this frame or from the whole video. A stroke
+  touches only what is drawn (a hidden shape is safe), counts a shape as
+  touched within 6 px on screen at any zoom, and inside a hole touches the hole
+  but not the shape around it. <kbd>Esc</kbd> or a right-click while the
+  button is held cancels the stroke; leaving the canvas does not. The mode
+  stays active.
 - **Right-click → Delete** — asks for confirmation. For a tracked microtubule
   the wording changes to make clear it removes the track from every frame.
 

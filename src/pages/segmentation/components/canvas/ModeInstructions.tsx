@@ -208,7 +208,8 @@ const ModeInstructions: React.FC<ModeInstructionsProps> = ({
           title: t('segmentation.instructions.modes.deletePolygon'),
           color: '#ef4444', // red-500 — destructive, matches the delete border
           instructions: [
-            t('segmentation.instructions.deletePolygon.clickToDelete'),
+            t('segmentation.instructions.deletePolygon.scribbleToDelete'),
+            t('segmentation.instructions.deletePolygon.escCancelsScribble'),
           ],
         };
 

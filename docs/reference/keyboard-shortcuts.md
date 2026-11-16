@@ -10,18 +10,18 @@ the dialog is incomplete — this page is the full list, taken from the code.
 
 ## Segmentation editor — modes
 
-| Key                             | Action                                  | Requires                    |
-| ------------------------------- | --------------------------------------- | --------------------------- |
-| <kbd>V</kbd>                    | View mode                               | —                           |
-| <kbd>E</kbd>                    | Edit vertices                           | a selected shape            |
-| <kbd>A</kbd>                    | Add points                              | a selected shape            |
-| <kbd>N</kbd>                    | Create polygon                          | —                           |
-| <kbd>P</kbd>                    | Create polyline                         | —                           |
-| <kbd>S</kbd>                    | Slice                                   | — (**no selection needed**) |
-| <kbd>D</kbd>                    | Delete polygon mode                     | —                           |
-| <kbd>Tab</kbd>                  | Next edit mode                          | —                           |
-| <kbd>Shift</kbd>+<kbd>Tab</kbd> | Previous edit mode                      | —                           |
-| <kbd>Esc</kbd>                  | Cancel, return to View, clear selection | —                           |
+| Key                             | Action                                                                                 | Requires                    |
+| ------------------------------- | -------------------------------------------------------------------------------------- | --------------------------- |
+| <kbd>V</kbd>                    | View mode                                                                              | —                           |
+| <kbd>E</kbd>                    | Edit vertices                                                                          | a selected shape            |
+| <kbd>A</kbd>                    | Add points                                                                             | a selected shape            |
+| <kbd>N</kbd>                    | Create polygon                                                                         | —                           |
+| <kbd>P</kbd>                    | Create polyline                                                                        | —                           |
+| <kbd>S</kbd>                    | Slice                                                                                  | — (**no selection needed**) |
+| <kbd>D</kbd>                    | Delete polygon mode                                                                    | —                           |
+| <kbd>Tab</kbd>                  | Next edit mode                                                                         | —                           |
+| <kbd>Shift</kbd>+<kbd>Tab</kbd> | Previous edit mode                                                                     | —                           |
+| <kbd>Esc</kbd>                  | Cancel, return to View, clear selection (a held delete stroke: cancel only the stroke) | —                           |
 
 The <kbd>Tab</kbd> cycle is View → Create polygon → Create polyline → Slice →
 Delete polygon, and back. When a shape is selected, Edit vertices and Add points

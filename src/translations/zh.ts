@@ -1168,7 +1168,9 @@ export default {
         rigid: '整个形状一起移动 — 顶点之间的相对位置保持不变',
       },
       deletePolygon: {
-        clickToDelete: '点击多边形删除它',
+        scribbleToDelete:
+          '点击或在形状上拖画——松开鼠标时，笔迹触及的所有形状都会被删除',
+        escCancelsScribble: '按 Esc 取消笔迹',
       },
       view: {
         selectPolygon: '点击多边形选择它',
@@ -1969,7 +1971,8 @@ export default {
         },
         deletePolygon: {
           title: '删除多边形（D）',
-          description: '点击形状即可删除。该模式会保持激活，且没有确认提示。',
+          description:
+            '点击或在形状上拖画：笔迹触及的所有形状会变淡，并在松开鼠标按钮时被删除。按 Esc 取消笔迹。撤销可恢复这些形状；对于有轨迹的微管，会先统一询问一次是从当前帧删除还是从整个视频删除。该模式会保持激活。',
         },
       },
       keyFeatures: '编辑器提供的功能',

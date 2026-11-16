@@ -1261,7 +1261,9 @@ export default {
           'Se mueve toda la forma: los vértices mantienen sus posiciones relativas',
       },
       deletePolygon: {
-        clickToDelete: 'Haz clic en un polígono para eliminarlo',
+        scribbleToDelete:
+          'Haga clic o trace sobre las formas: todo lo que toque el trazo se elimina al soltar el botón',
+        escCancelsScribble: 'Esc cancela el trazo',
       },
       view: {
         selectPolygon: 'Haz clic en un polígono para seleccionarlo',
@@ -2120,7 +2122,7 @@ export default {
         deletePolygon: {
           title: 'Eliminar polígono (D)',
           description:
-            'Pulse las formas para eliminarlas. El modo permanece activo y no hay confirmación.',
+            'Haga clic o trace sobre las formas: todo lo que toque el trazo se atenúa y se elimina al soltar el botón. Esc cancela el trazo. Deshacer recupera las formas; con microtúbulos con traza se le pregunta una sola vez, para todos, si eliminarlos de este fotograma o de todo el vídeo. El modo permanece activo.',
         },
       },
       keyFeatures: 'Qué ofrece el editor',

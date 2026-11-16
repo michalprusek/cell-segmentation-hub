@@ -1093,7 +1093,9 @@ export default {
         rigid: 'Přesune se celý tvar — vrcholy si zachovají vzájemné rozestupy',
       },
       deletePolygon: {
-        clickToDelete: 'Klikněte na polygon pro jeho smazání',
+        scribbleToDelete:
+          'Klikněte nebo táhněte přes tvary — vše, čeho se tah dotkne, se po puštění tlačítka smaže',
+        escCancelsScribble: 'Esc tah zruší',
       },
       view: {
         selectPolygon: 'Klikněte na polygon pro jeho výběr',
@@ -2089,7 +2091,7 @@ export default {
         deletePolygon: {
           title: 'Mazání (D)',
           description:
-            'Kliknutím tvary odstraníte. Režim zůstává aktivní a nic se nepotvrzuje.',
+            'Klikněte nebo táhněte přes tvary: vše, čeho se tah dotkne, vybledne a po puštění tlačítka se smaže. Esc tah zruší. Zpět tvary vrátí; u sledovaných mikrotubulů se editor nejdřív jednou za všechny zeptá, zda je odstranit z tohoto snímku, nebo z celého videa. Režim zůstává aktivní.',
         },
       },
       keyFeatures: 'Co editor nabízí',
