@@ -14,7 +14,7 @@ const { apiMock, toastMock } = vi.hoisted(() => ({
     deleteTrack: vi.fn(),
     deleteTrackFromFrame: vi.fn(),
   },
-  toastMock: { error: vi.fn(), success: vi.fn() },
+  toastMock: { error: vi.fn(), success: vi.fn(), warning: vi.fn() },
 }));
 
 vi.mock('@/lib/api', () => ({ default: apiMock }));
@@ -247,6 +247,137 @@ describe('useDeleteTrackScope — a failed request keeps the polygon', () => {
     expect(removeLocally).not.toHaveBeenCalled();
     expect(toastMock.error).toHaveBeenCalledWith(
       'segmentation.trackOps.deleteTrackFailed'
+    );
+  });
+});
+
+// A scribble in delete mode can touch many shapes at once. The tracked
+// microtubules among them get ONE scope question for the lot — the owner's
+// choice, matching the Shift multi-select bulk delete — while everything else
+// is handed back to be deleted locally right away.
+describe('useDeleteTrackScope — one question for many microtubules', () => {
+  const TRACKED_B = { ...TRACKED, id: 'poly-3', trackId: 'mt_d4e5f6' };
+
+  it('requestDeleteMany returns untracked ids and asks once', () => {
+    polygons = [TRACKED, UNTRACKED, TRACKED_B];
+    const { result } = setup();
+
+    let unclaimed: string[] = [];
+    act(() => {
+      unclaimed = result.current.requestDeleteMany([
+        'poly-1',
+        'poly-2',
+        'poly-3',
+      ]);
+    });
+
+    expect(unclaimed).toEqual(['poly-2']);
+    expect(result.current.scopeDialog.open).toBe(true);
+    expect(result.current.scopeDialog.count).toBe(2);
+    expect(removeLocally).not.toHaveBeenCalled();
+  });
+
+  it('onDeleteFrame applies to every pending track with one toast', async () => {
+    polygons = [TRACKED, UNTRACKED, TRACKED_B];
+    const { result } = setup();
+    act(() => {
+      result.current.requestDeleteMany(['poly-1', 'poly-3']);
+    });
+
+    await act(async () => {
+      result.current.scopeDialog.onDeleteFrame();
+    });
+
+    expect(apiMock.deleteTrackFromFrame).toHaveBeenCalledWith(
+      'img-5',
+      'mt_a1b2c3'
+    );
+    expect(apiMock.deleteTrackFromFrame).toHaveBeenCalledWith(
+      'img-5',
+      'mt_d4e5f6'
+    );
+    expect(removeLocally).toHaveBeenCalledWith('poly-1', { silent: true });
+    expect(removeLocally).toHaveBeenCalledWith('poly-3', { silent: true });
+    expect(toastMock.success).toHaveBeenCalledTimes(1);
+    expect(toastMock.success).toHaveBeenCalledWith(
+      'segmentation.trackOps.deleteManyFrameSuccess'
+    );
+    expect(result.current.scopeDialog.open).toBe(false);
+  });
+
+  it('onDeleteTrack applies to every pending track and reports a partial failure', async () => {
+    polygons = [TRACKED, UNTRACKED, TRACKED_B];
+    apiMock.deleteTrack
+      .mockResolvedValueOnce({ framesAffected: 12 })
+      .mockRejectedValueOnce(new Error('boom'));
+    const { result } = setup();
+    act(() => {
+      result.current.requestDeleteMany(['poly-1', 'poly-3']);
+    });
+
+    await act(async () => {
+      result.current.scopeDialog.onDeleteTrack();
+    });
+
+    expect(apiMock.deleteTrack).toHaveBeenCalledTimes(2);
+    // Only the one that reached the server leaves the editor.
+    expect(removeLocally).toHaveBeenCalledTimes(1);
+    expect(removeLocally).toHaveBeenCalledWith('poly-1', { silent: true });
+    expect(toastMock.success).not.toHaveBeenCalled();
+    expect(toastMock.warning).toHaveBeenCalledWith(
+      'segmentation.trackOps.deleteSelectedPartial'
+    );
+  });
+
+  it('cancelling the dialog deletes none of the pending tracks', () => {
+    polygons = [TRACKED, UNTRACKED, TRACKED_B];
+    const { result } = setup();
+    act(() => {
+      result.current.requestDeleteMany(['poly-1', 'poly-3']);
+    });
+    act(() => {
+      result.current.scopeDialog.onOpenChange(false);
+    });
+    expect(result.current.scopeDialog.open).toBe(false);
+    expect(apiMock.deleteTrack).not.toHaveBeenCalled();
+    expect(apiMock.deleteTrackFromFrame).not.toHaveBeenCalled();
+    expect(removeLocally).not.toHaveBeenCalled();
+  });
+
+  it('requestDeleteMany on a non-MT project claims nothing', () => {
+    const { result } = setup({ projectType: 'spheroid' });
+    let unclaimed: string[] = [];
+    act(() => {
+      unclaimed = result.current.requestDeleteMany(['poly-1', 'poly-2']);
+    });
+    expect(unclaimed).toEqual(['poly-1', 'poly-2']);
+    expect(result.current.scopeDialog.open).toBe(false);
+  });
+
+  it('claims tracked ids but deletes nothing while the container is unresolved', () => {
+    const { result } = setup({ videoId: undefined });
+    let unclaimed: string[] = [];
+    act(() => {
+      unclaimed = result.current.requestDeleteMany(['poly-1', 'poly-2']);
+    });
+    expect(unclaimed).toEqual(['poly-2']);
+    expect(result.current.scopeDialog.open).toBe(false);
+    expect(toastMock.error).toHaveBeenCalledWith(
+      'segmentation.trackOps.deleteScopeUnavailable'
+    );
+  });
+
+  it('a single pending track keeps the single-delete count and toast', async () => {
+    const { result } = setup();
+    act(() => {
+      result.current.requestDelete('poly-1');
+    });
+    expect(result.current.scopeDialog.count).toBe(1);
+    await act(async () => {
+      result.current.scopeDialog.onDeleteFrame();
+    });
+    expect(toastMock.success).toHaveBeenCalledWith(
+      'segmentation.trackOps.deleteFrameSuccess'
     );
   });
 });

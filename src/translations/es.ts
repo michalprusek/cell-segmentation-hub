@@ -1002,6 +1002,10 @@ export default {
         'Nada que cambiar: los fotogramas siguientes ya tienen estas formas',
       deleteTrackSuccess: 'Traza eliminada de {{count}} fotogramas',
       deleteTrackFailed: 'No se pudo eliminar la traza',
+      deleteManyFrameSuccess:
+        '{{count}} microtúbulos eliminados de este fotograma; el resto de sus trazas no cambia',
+      deleteManyTrackSuccess:
+        '{{count}} microtúbulos eliminados de todos los fotogramas del vídeo',
       deleteFrameSuccess:
         'Microtúbulo eliminado de este fotograma; el resto de su traza no cambia',
       deleteFrameFailed: 'No se pudo eliminar el microtúbulo de este fotograma',

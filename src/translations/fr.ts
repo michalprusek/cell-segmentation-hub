@@ -1003,6 +1003,10 @@ export default {
         'Rien à modifier : les images suivantes ont déjà ces formes',
       deleteTrackSuccess: 'Trace supprimée de {{count}} images',
       deleteTrackFailed: 'Échec de la suppression de la trace',
+      deleteManyFrameSuccess:
+        '{{count}} microtubules supprimés de cette image ; le reste de leurs traces est conservé',
+      deleteManyTrackSuccess:
+        '{{count}} microtubules supprimés de toutes les images de la vidéo',
       deleteFrameSuccess:
         'Microtubule supprimé de cette image ; le reste de sa trace est conservé',
       deleteFrameFailed:

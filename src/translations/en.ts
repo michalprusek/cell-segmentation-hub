@@ -841,6 +841,10 @@ export default {
         'Nothing to change – the following frames already have these shapes',
       deleteTrackSuccess: 'Track removed from {{count}} frame(s)',
       deleteTrackFailed: 'Failed to delete the track',
+      deleteManyFrameSuccess:
+        '{{count}} microtubules removed from this frame; the rest of their tracks is unchanged',
+      deleteManyTrackSuccess:
+        '{{count}} microtubules removed from every frame of the video',
       deleteFrameSuccess:
         'Microtubule removed from this frame; the rest of its track is unchanged',
       deleteFrameFailed: 'Failed to remove the microtubule from this frame',

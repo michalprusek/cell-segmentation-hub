@@ -840,6 +840,10 @@ export default {
         'Není co měnit – následující snímky už tyto tvary mají',
       deleteTrackSuccess: 'Track odstraněn z {{count}} snímků',
       deleteTrackFailed: 'Smazání tracku selhalo',
+      deleteManyFrameSuccess:
+        'Z tohoto snímku odstraněno {{count}} mikrotubulů; zbytek jejich tracků zůstává',
+      deleteManyTrackSuccess:
+        'Ze všech snímků videa odstraněno {{count}} mikrotubulů',
       deleteFrameSuccess:
         'Mikrotubulus odstraněn z tohoto snímku; zbytek tracku zůstává',
       deleteFrameFailed: 'Odstranění mikrotubulu z tohoto snímku selhalo',

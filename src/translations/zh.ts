@@ -929,6 +929,9 @@ export default {
       propagateSelectedNoChange: '无需更改——后续帧已是这些形状',
       deleteTrackSuccess: '已从 {{count}} 帧中删除轨迹',
       deleteTrackFailed: '删除轨迹失败',
+      deleteManyFrameSuccess:
+        '已从当前帧删除 {{count}} 条微管；其余轨迹保持不变',
+      deleteManyTrackSuccess: '已从视频的所有帧中删除 {{count}} 条微管',
       deleteFrameSuccess: '已从当前帧删除该微管；其余轨迹保持不变',
       deleteFrameFailed: '从当前帧删除该微管失败',
       deleteScopeUnavailable: '视频仍在加载中——请稍后再删除该微管',

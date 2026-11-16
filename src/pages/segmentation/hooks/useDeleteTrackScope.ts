@@ -36,19 +36,33 @@ export interface DeleteTrackScopeHandlers {
   deleteFromCurrentFrame: (polygonId: string) => Promise<void>;
   /**
    * Entry point for delete gestures that carry no scope of their own (the
-   * Delete key, delete-mode clicks, the sidebar trash). Returns `true` when the
-   * polygon is a tracked microtubule and the scope dialog was opened — the
-   * caller must then NOT delete anything itself. Returns `false` for everything
-   * else, meaning "you handle it".
+   * Delete key, the sidebar trash). Returns `true` when the polygon is a
+   * tracked microtubule and the scope dialog was opened — the caller must then
+   * NOT delete anything itself. Returns `false` for everything else, meaning
+   * "you handle it".
    */
   requestDelete: (polygonId: string) => boolean;
+  /**
+   * The same, for a gesture that deletes MANY polygons at once (the delete
+   * tool's scribble). Every tracked microtubule among `polygonIds` is claimed
+   * and asked about in ONE dialog whose answer applies to all of them; the
+   * returned ids are the ones NOT claimed, which the caller deletes itself.
+   */
+  requestDeleteMany: (polygonIds: string[]) => string[];
   /** Props for the editor-level {@link DeleteTrackScopeDialog}. */
   scopeDialog: {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     onDeleteFrame: () => void;
     onDeleteTrack: () => void;
+    /** How many microtubules the open dialog is asking about. */
+    count: number;
   };
+}
+
+interface PendingTarget {
+  polygonId: string;
+  trackId: string;
 }
 
 /**
@@ -84,11 +98,9 @@ export const useDeleteTrackScope = ({
   onServerMutation,
 }: UseDeleteTrackScopeParams): DeleteTrackScopeHandlers => {
   const { t } = useLanguage();
-  /** The microtubule the open dialog is asking about, pinned at request time. */
-  const [pending, setPending] = useState<{
-    polygonId: string;
-    trackId: string;
-  } | null>(null);
+  /** The microtubules the open dialog is asking about, pinned at request
+   *  time. One for the scope-less single gestures, several for a scribble. */
+  const [pending, setPending] = useState<PendingTarget[] | null>(null);
   // The dialog's buttons fire after render, so read the pending target through a
   // ref rather than re-creating the handlers whenever it changes.
   const pendingRef = useRef<typeof pending>(null);
@@ -128,13 +140,16 @@ export const useDeleteTrackScope = ({
     [getPolygons]
   );
 
+  // `quiet` is the bulk path: it reports the whole batch in one toast, so
+  // neither the per-item success nor the per-item failure toast is raised.
+  // Both return whether the delete went through.
   const runWholeTrackDelete = useCallback(
-    async (polygonId: string, trackId: string) => {
+    async (polygonId: string, trackId: string, quiet = false) => {
       if (!videoId) {
         // Container not resolved yet. Refusing costs the user a retry; deleting
         // locally would cost them the track on every other frame.
         toast.error(t('segmentation.trackOps.deleteScopeUnavailable'));
-        return;
+        return false;
       }
       try {
         const result = await apiClient.deleteTrack(videoId, trackId);
@@ -143,24 +158,28 @@ export const useDeleteTrackScope = ({
         // the scope-aware toast below is the one worth reading.
         removeLocally(currentIdForTrack(trackId, polygonId), { silent: true });
         onServerMutation();
-        toast.success(
-          t('segmentation.trackOps.deleteTrackSuccess', {
-            count: result.framesAffected,
-          })
-        );
+        if (!quiet) {
+          toast.success(
+            t('segmentation.trackOps.deleteTrackSuccess', {
+              count: result.framesAffected,
+            })
+          );
+        }
+        return true;
       } catch (error) {
         logger.error('Failed to delete microtubule track', error);
-        toast.error(t('segmentation.trackOps.deleteTrackFailed'));
+        if (!quiet) toast.error(t('segmentation.trackOps.deleteTrackFailed'));
+        return false;
       }
     },
     [videoId, removeLocally, currentIdForTrack, onServerMutation, t]
   );
 
   const runFrameDelete = useCallback(
-    async (polygonId: string, trackId: string) => {
+    async (polygonId: string, trackId: string, quiet = false) => {
       if (!imageId) {
         toast.error(t('segmentation.trackOps.deleteScopeUnavailable'));
-        return;
+        return false;
       }
       try {
         await apiClient.deleteTrackFromFrame(imageId, trackId);
@@ -168,13 +187,16 @@ export const useDeleteTrackScope = ({
         // This frame's stored polygons changed under the cache; a scrub away
         // and back would otherwise repaint the deleted microtubule.
         onServerMutation();
-        toast.success(t('segmentation.trackOps.deleteFrameSuccess'));
+        if (!quiet)
+          toast.success(t('segmentation.trackOps.deleteFrameSuccess'));
+        return true;
       } catch (error) {
         logger.error(
           'Failed to delete microtubule from the current frame',
           error
         );
-        toast.error(t('segmentation.trackOps.deleteFrameFailed'));
+        if (!quiet) toast.error(t('segmentation.trackOps.deleteFrameFailed'));
+        return false;
       }
     },
     [imageId, removeLocally, currentIdForTrack, onServerMutation, t]
@@ -215,10 +237,68 @@ export const useDeleteTrackScope = ({
         toast.error(t('segmentation.trackOps.deleteScopeUnavailable'));
         return true;
       }
-      setPending({ polygonId, trackId });
+      setPending([{ polygonId, trackId }]);
       return true;
     },
     [ambiguousTrackId, videoId, imageId, t]
+  );
+
+  const requestDeleteMany = useCallback(
+    (polygonIds: string[]): string[] => {
+      const tracked: PendingTarget[] = [];
+      const unclaimed: string[] = [];
+      for (const polygonId of polygonIds) {
+        const trackId = ambiguousTrackId(polygonId);
+        if (trackId) tracked.push({ polygonId, trackId });
+        else unclaimed.push(polygonId);
+      }
+      if (tracked.length === 0) return unclaimed;
+      if (!videoId || !imageId) {
+        // Claimed, not deleted — same refusal as the single path.
+        toast.error(t('segmentation.trackOps.deleteScopeUnavailable'));
+        return unclaimed;
+      }
+      setPending(tracked);
+      return unclaimed;
+    },
+    [ambiguousTrackId, videoId, imageId, t]
+  );
+
+  /**
+   * Apply the chosen scope to every pending microtubule, one request at a
+   * time. A single target keeps the single-delete toasts exactly; a batch is
+   * reported once — a success naming the count, or "N of M" when some failed.
+   */
+  const runPending = useCallback(
+    async (
+      targets: PendingTarget[],
+      run: (
+        polygonId: string,
+        trackId: string,
+        quiet: boolean
+      ) => Promise<boolean>,
+      successKey: string
+    ) => {
+      if (targets.length === 1) {
+        await run(targets[0].polygonId, targets[0].trackId, false);
+        return;
+      }
+      let done = 0;
+      for (const target of targets) {
+        if (await run(target.polygonId, target.trackId, true)) done++;
+      }
+      if (done === targets.length) {
+        toast.success(t(successKey, { count: done }));
+      } else {
+        toast.warning(
+          t('segmentation.trackOps.deleteSelectedPartial', {
+            done,
+            total: targets.length,
+          })
+        );
+      }
+    },
+    [t]
   );
 
   const onOpenChange = useCallback((open: boolean) => {
@@ -228,20 +308,28 @@ export const useDeleteTrackScope = ({
   }, []);
 
   const onDeleteFrame = useCallback(() => {
-    const target = pendingRef.current;
+    const targets = pendingRef.current;
     setPending(null);
-    if (target) {
-      void runFrameDelete(target.polygonId, target.trackId);
+    if (targets) {
+      void runPending(
+        targets,
+        runFrameDelete,
+        'segmentation.trackOps.deleteManyFrameSuccess'
+      );
     }
-  }, [runFrameDelete]);
+  }, [runPending, runFrameDelete]);
 
   const onDeleteTrack = useCallback(() => {
-    const target = pendingRef.current;
+    const targets = pendingRef.current;
     setPending(null);
-    if (target) {
-      void runWholeTrackDelete(target.polygonId, target.trackId);
+    if (targets) {
+      void runPending(
+        targets,
+        runWholeTrackDelete,
+        'segmentation.trackOps.deleteManyTrackSuccess'
+      );
     }
-  }, [runWholeTrackDelete]);
+  }, [runPending, runWholeTrackDelete]);
 
   const scopeDialog = useMemo(
     () => ({
@@ -249,6 +337,7 @@ export const useDeleteTrackScope = ({
       onOpenChange,
       onDeleteFrame,
       onDeleteTrack,
+      count: pending?.length ?? 1,
     }),
     [pending, onOpenChange, onDeleteFrame, onDeleteTrack]
   );
@@ -257,6 +346,7 @@ export const useDeleteTrackScope = ({
     deleteWholeTrack,
     deleteFromCurrentFrame,
     requestDelete,
+    requestDeleteMany,
     scopeDialog,
   };
 };

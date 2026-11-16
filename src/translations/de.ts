@@ -1007,6 +1007,10 @@ export default {
         'Nichts zu ändern – die folgenden Frames haben diese Formen bereits',
       deleteTrackSuccess: 'Track aus {{count}} Frames entfernt',
       deleteTrackFailed: 'Löschen des Tracks fehlgeschlagen',
+      deleteManyFrameSuccess:
+        '{{count}} Mikrotubuli aus diesem Frame entfernt; die restlichen Tracks bleiben erhalten',
+      deleteManyTrackSuccess:
+        '{{count}} Mikrotubuli aus allen Frames des Videos entfernt',
       deleteFrameSuccess:
         'Mikrotubulus aus diesem Frame entfernt; der restliche Track bleibt erhalten',
       deleteFrameFailed:
