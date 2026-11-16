@@ -518,6 +518,9 @@ const SegmentationEditorLayout: React.FC<SegmentationEditorLayoutProps> = ({
                           vertexDragState={editor.vertexDragState}
                           isUndoRedoInProgress={editor.isUndoRedoInProgress}
                           isHovered={polygon.id === hoveredPolygonId}
+                          isPendingDelete={
+                            editor.scribble?.pendingIds.has(polygon.id) ?? false
+                          }
                           isSomaHighlighted={polygon.id === highlightedSomaId}
                           editMode={editor.editMode}
                           onSelectPolygon={handleCanvasSelect}
@@ -663,6 +666,7 @@ const SegmentationEditorLayout: React.FC<SegmentationEditorLayoutProps> = ({
                         selectedPolygonId={editor.selectedPolygonId}
                         polygons={editor.polygons}
                         hoveredJoinTarget={editor.hoveredJoinTarget}
+                        scribblePoints={editor.scribble?.points}
                       />
                     </svg>
 

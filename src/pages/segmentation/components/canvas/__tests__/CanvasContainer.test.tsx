@@ -202,7 +202,9 @@ describe('CanvasContainer', () => {
     it.each([
       [EditMode.View, 'grab'],
       [EditMode.EditVertices, 'crosshair'],
-      [EditMode.DeletePolygon, 'pointer'],
+      // A drawing tool since the scribble (2026-11-16).
+      [EditMode.DeletePolygon, 'crosshair'],
+      [EditMode.AssignNeurite, 'pointer'],
     ])('leaves %s on its own cursor (%s)', (mode, cursor) => {
       const { container } = render(
         <CanvasContainer {...defaultProps} editMode={mode} />

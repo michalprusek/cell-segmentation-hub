@@ -12,6 +12,7 @@ import {
   dotRadiusStyle,
   screenPx,
 } from '../../utils/overlayScale';
+import { SCRIBBLE_TRAIL_WIDTH_PX } from '../../utils/scribbleErase';
 
 /** `on off` dash pattern in screen px. A CSS declaration, like every size in
  *  this layer, so it follows the overlay's inverse-zoom property. */
@@ -30,6 +31,8 @@ interface CanvasTemporaryGeometryLayerProps {
   selectedPolygonId: string | null;
   polygons: Polygon[];
   hoveredJoinTarget: { polygonId: string; endpoint: 'head' | 'tail' } | null;
+  /** The delete tool's held scribble, image coordinates. */
+  scribblePoints?: Point[];
 }
 
 /**
@@ -47,6 +50,7 @@ const CanvasTemporaryGeometryLayer: React.FC<
   selectedPolygonId,
   polygons,
   hoveredJoinTarget,
+  scribblePoints,
 }) => {
   // Every size here is in SCREEN pixels, through the same custom property
   // the committed shapes use (`utils/overlayScale.ts`). The preview line used
@@ -455,8 +459,36 @@ const CanvasTemporaryGeometryLayer: React.FC<
     );
   };
 
+  // The delete scribble. Its width is chosen so that it visibly touches a
+  // shape exactly when the hit test says it does (see SCRIBBLE_TRAIL_WIDTH_PX).
+  // A click is a one-point stroke; repeating the point gives the round cap
+  // something to draw, so the click shows the dot it tested.
+  const renderScribbleTrail = () => {
+    if (!scribblePoints || scribblePoints.length === 0) return null;
+    const pts =
+      scribblePoints.length === 1
+        ? [scribblePoints[0], scribblePoints[0]]
+        : scribblePoints;
+    return (
+      <polyline
+        data-testid="scribble-trail"
+        points={pts.map(pt => `${pt.x},${pt.y}`).join(' ')}
+        fill="none"
+        stroke="#ef4444"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        pointerEvents="none"
+        style={{
+          strokeWidth: screenPx(SCRIBBLE_TRAIL_WIDTH_PX),
+          opacity: 0.45,
+        }}
+      />
+    );
+  };
+
   return (
     <g className="temporary-geometry-layer">
+      {renderScribbleTrail()}
       {renderCreatePolygonPreview()}
       {renderCreatePolylinePreview()}
       {renderSlicePreview()}

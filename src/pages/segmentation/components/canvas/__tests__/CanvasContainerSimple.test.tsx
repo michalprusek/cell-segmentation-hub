@@ -245,7 +245,8 @@ describe('CanvasContainer - Core Functionality', () => {
         <CanvasContainer {...defaultProps} editMode={EditMode.DeletePolygon} />
       );
       container = screen.getByTestId('canvas-container');
-      expect(container).toHaveStyle('cursor: pointer');
+      // The delete tool draws a scribble (2026-11-16): a drawing cursor.
+      expect(container).toHaveStyle('cursor: crosshair');
     });
   });
 

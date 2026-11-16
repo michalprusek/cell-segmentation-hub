@@ -120,9 +120,12 @@ const CanvasContainer = React.forwardRef<HTMLDivElement, CanvasContainerProps>(
           return 'crosshair';
         case EditMode.Slice:
           return 'crosshair';
-        // Both are click-to-act tools; the pointer says "this click does
-        // something to what is under it", which is exactly true here.
+        // Delete draws a scribble over what it removes — a drawing tool, so a
+        // drawing cursor, like the other tools that trace geometry.
         case EditMode.DeletePolygon:
+          return 'crosshair';
+        // Click-to-act: the pointer says "this click does something to what
+        // is under it", which is exactly true here.
         case EditMode.AssignNeurite:
           return 'pointer';
         default:

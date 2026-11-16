@@ -19,6 +19,7 @@ import {
   NEUTRAL_COLOR,
 } from '@/pages/segmentation/utils/instanceColors';
 import { isMembranePolygon, MEMBRANE_COLOR } from '@/lib/microcapsuleMembrane';
+import { SCRIBBLE_PENDING_OPACITY } from '../../utils/scribbleErase';
 import {
   POLYLINE_HIT_BAND_MULTIPLIER,
   STROKE_MULTIPLIER,
@@ -37,6 +38,9 @@ interface CanvasPolygonProps {
   viewportBounds?: { x: number; y: number; width: number; height: number };
   hideVertices?: boolean;
   isHovered?: boolean;
+  /** Touched by the delete tool's held scribble: drawn faded, deleted on
+   *  release (`useScribbleErase`). */
+  isPendingDelete?: boolean;
   isUndoRedoInProgress?: boolean;
   /** Colour neurites by the SOMA they belong to instead of by class. Neurite
    *  projects only; see `somaAssignmentColor` for why the two colourings
@@ -137,6 +141,7 @@ const CanvasPolygon = React.memo(
     viewportBounds,
     hideVertices = false,
     isHovered = false,
+    isPendingDelete = false,
     isUndoRedoInProgress = false,
     colorBySoma = false,
     somaLabels,
@@ -663,7 +668,11 @@ const CanvasPolygon = React.memo(
           onKeyDown={handleKeyDown}
           onMouseEnter={isPolyline ? handleMouseEnter : undefined}
           onMouseLeave={isPolyline ? handleMouseLeave : undefined}
-          style={{ outline: 'none' }}
+          style={
+            isPendingDelete
+              ? { outline: 'none', opacity: SCRIBBLE_PENDING_OPACITY }
+              : { outline: 'none' }
+          }
         >
           {/* Polyline hit-area: invisible thick stroke layered UNDER the
               visible path. Polylines are 1-D — the visible stroke is only
@@ -715,7 +724,11 @@ const CanvasPolygon = React.memo(
               // i.e. nowhere a user looks.
               editMode === EditMode.MoveShape
                 ? 'cursor-move'
-                : 'cursor-pointer',
+                : // The delete tool draws a stroke over shapes; a pointer
+                  // over each one would read as "click to act".
+                  editMode === EditMode.DeletePolygon
+                  ? 'cursor-crosshair'
+                  : 'cursor-pointer',
               isPolyline
                 ? 'polyline-path'
                 : polygon.partClass === 'core'
@@ -922,6 +935,9 @@ const CanvasPolygon = React.memo(
       prevProps.onCreateMtLabel === nextProps.onCreateMtLabel &&
       prevProps.isSelected === nextProps.isSelected &&
       prevProps.isHovered === nextProps.isHovered &&
+      // The delete scribble's fade. Without it the memo keeps a shape at full
+      // opacity while the stroke says it is about to go (CLAUDE.md #5).
+      prevProps.isPendingDelete === nextProps.isPendingDelete &&
       prevProps.isUndoRedoInProgress === nextProps.isUndoRedoInProgress &&
       // No `zoom` term: the component has no zoom prop. Sizes follow the
       // zoom through CSS (see `utils/overlayScale.ts`), which is what lets a
