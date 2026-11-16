@@ -404,9 +404,14 @@ const CanvasPolygon = React.memo(
       semanticColor,
     ]);
 
+    // Hover comes from the 24 px hit band, the delete scribble's hit test is
+    // 6 px: in delete mode a glow would promise a hit the click does not
+    // make. There the press itself is the feedback — it fades what it takes.
+    const showHover = isHovered && editMode !== EditMode.DeletePolygon;
+
     // Compute hover-dependent stroke width multiplier
     const hoverStrokeMultiplier = isPolyline
-      ? isHovered
+      ? showHover
         ? STROKE_MULTIPLIER.polylineHovered
         : STROKE_MULTIPLIER.polyline
       : isSomaHighlighted
@@ -415,7 +420,7 @@ const CanvasPolygon = React.memo(
           // entry. Bigger than the 2.5 a hovered polyline gets, because a
           // closed shape starts from 1 rather than 1.5.
           STROKE_MULTIPLIER.somaHighlighted
-        : isHovered
+        : showHover
           ? STROKE_MULTIPLIER.polygonHovered
           : STROKE_MULTIPLIER.polygon;
     // A CSS declaration, not the `stroke-width` attribute: `var()` is not
@@ -438,7 +443,7 @@ const CanvasPolygon = React.memo(
     // prop, not through this component — see there for why it is not a CSS
     // class like the selection glow (WebKit paints none on an SVG child).
     const pathFilter =
-      isPolyline && isHovered && !isEffectivelySelected
+      isPolyline && showHover && !isEffectivelySelected
         ? 'url(#blue-glow)'
         : undefined;
 
@@ -590,11 +595,14 @@ const CanvasPolygon = React.memo(
       (e: React.MouseEvent) => {
         if (canvasOwnsDoubleClick) return; // let it bubble to CanvasContainer
         e.stopPropagation();
+        // Two quick presses in delete mode are two strokes — typically a
+        // second try after a click that missed — not "edit this shape".
+        if (editMode === EditMode.DeletePolygon) return;
         if (onEditPolygon) {
           onEditPolygon(id);
         }
       },
-      [onEditPolygon, id, canvasOwnsDoubleClick]
+      [onEditPolygon, id, canvasOwnsDoubleClick, editMode]
     );
 
     const handleKeyDown = useCallback(

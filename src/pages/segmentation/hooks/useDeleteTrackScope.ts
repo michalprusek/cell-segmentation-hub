@@ -105,6 +105,11 @@ export const useDeleteTrackScope = ({
   // ref rather than re-creating the handlers whenever it changes.
   const pendingRef = useRef<typeof pending>(null);
   pendingRef.current = pending;
+  // The frame open NOW. A frame-scoped delete is addressed to the frame the
+  // dialog was answered on (its closure's `imageId`); this tells it whether
+  // the editor is still showing that frame when the request comes back.
+  const currentImageIdRef = useRef(imageId);
+  currentImageIdRef.current = imageId;
 
   /**
    * The trackId of `polygonId` when deleting it is cross-frame AMBIGUOUS: a
@@ -183,7 +188,17 @@ export const useDeleteTrackScope = ({
       }
       try {
         await apiClient.deleteTrackFromFrame(imageId, trackId);
-        removeLocally(currentIdForTrack(trackId, polygonId), { silent: true });
+        // Only while the editor still shows that frame. A bulk delete is a
+        // run of requests, and a scrub during it puts the NEXT frame's
+        // polygons in the editor — carrying the same track. Removing it there
+        // is a local drop of a tracked microtubule, which the next save turns
+        // into a delete on every frame: the very thing this scope refused.
+        // The server row is right either way; the eviction below repaints it.
+        if (currentImageIdRef.current === imageId) {
+          removeLocally(currentIdForTrack(trackId, polygonId), {
+            silent: true,
+          });
+        }
         // This frame's stored polygons changed under the cache; a scrub away
         // and back would otherwise repaint the deleted microtubule.
         onServerMutation();

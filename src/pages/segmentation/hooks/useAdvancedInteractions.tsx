@@ -145,6 +145,20 @@ export const useAdvancedInteractions = ({
   // arrive after a newer one has been drawn. See `handleMouseMove`.
   const lastDragMoveAt = useRef(0);
 
+  // Set by a right press that cancelled a scribble; consumed by the
+  // `contextmenu` it raises (see `handleContextMenuCapture`).
+  const suppressContextMenuRef = useRef(false);
+
+  /** Bound to the canvas container's CAPTURE phase, ahead of every shape's
+   *  own context-menu trigger. Stops only the one menu a scribble-cancelling
+   *  right press raises. */
+  const handleContextMenuCapture = useCallback((e: React.MouseEvent) => {
+    if (!suppressContextMenuRef.current) return;
+    suppressContextMenuRef.current = false;
+    e.preventDefault();
+    e.stopPropagation();
+  }, []);
+
   useEffect(() => {
     lastHoverCheckPoint.current = null;
   }, [selectedPolygonId, editMode]);
@@ -621,6 +635,10 @@ export const useAdvancedInteractions = ({
    */
   const handleMouseDown = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
+      // Any later press means the user moved on: a suppression no
+      // contextmenu consumed must not swallow a genuine right-click later.
+      suppressContextMenuRef.current = false;
+
       // Middle mouse button - always start panning in any mode
       if (e.button === 1) {
         setInteractionState({
@@ -640,6 +658,10 @@ export const useAdvancedInteractions = ({
         // the middle of using.
         if (scribbleIsActive?.()) {
           scribbleCancel?.();
+          // The menu this right press raises is a separate `contextmenu`
+          // event — before the mouseup on Linux, after it on Windows — and
+          // over a shape it opens that shape's menu. Swallow exactly one.
+          suppressContextMenuRef.current = true;
           e.preventDefault();
           e.stopPropagation();
           return;
@@ -952,7 +974,7 @@ export const useAdvancedInteractions = ({
             // Every press starts a stroke, on a shape or on empty canvas: a
             // click is a one-point stroke and deletes whatever is under it.
             // The CLICK that follows a press on a shape must not act a
-            // second time — `handleCanvasSelect` ignores delete mode.
+            // second time — `CanvasPolygon.handleClick` ignores delete mode.
             scribbleStart?.(imagePoint);
             break;
           case EditMode.AssignNeurite:
@@ -1556,6 +1578,7 @@ export const useAdvancedInteractions = ({
     handleMouseMove,
     handleMouseUp,
     handleCreatePolylineDoubleClick,
+    handleContextMenuCapture,
   };
 };
 

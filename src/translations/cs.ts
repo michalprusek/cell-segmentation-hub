@@ -2091,7 +2091,7 @@ export default {
         deletePolygon: {
           title: 'Mazání (D)',
           description:
-            'Klikněte nebo táhněte přes tvary: vše, čeho se tah dotkne, vybledne a po puštění tlačítka se smaže. Esc tah zruší. Zpět tvary vrátí; u sledovaných mikrotubulů se editor nejdřív jednou za všechny zeptá, zda je odstranit z tohoto snímku, nebo z celého videa. Režim zůstává aktivní.',
+            'Klikněte nebo táhněte přes tvary: vše, čeho se tah dotkne, vybledne a po puštění tlačítka se smaže. Esc tah zruší. Zpět vrátí tvary bez tracku. Sledované mikrotubuly se mažou na serveru a vrátit nejdou, proto se editor nejdřív jednou za všechny zeptá, zda je odstranit z tohoto snímku, nebo z celého videa. Režim zůstává aktivní.',
         },
       },
       keyFeatures: 'Co editor nabízí',

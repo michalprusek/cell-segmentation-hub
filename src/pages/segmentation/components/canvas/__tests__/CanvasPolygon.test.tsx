@@ -573,6 +573,22 @@ describe('CanvasPolygon', () => {
       // A closed polygon never had a hover glow.
       expect(renderOnce({ isHovered: true }).filter).toBeNull();
     });
+
+    // Hover is driven by the 24 px hit band; the delete scribble's hit test
+    // is 6 px. Glowing in delete mode would promise a hit the click does not
+    // make — the press itself fades whatever it will delete.
+    it('shows no hover highlight in delete mode', () => {
+      const hovered = {
+        polygon: polyline(),
+        isHovered: true,
+        editMode: EditMode.DeletePolygon,
+      };
+      const idle = { polygon: polyline(), editMode: EditMode.DeletePolygon };
+      expect(renderOnce(hovered).filter).toBeNull();
+      expect(renderOnce(hovered).strokeWidth).toBe(
+        renderOnce(idle).strokeWidth
+      );
+    });
   });
 
   describe('Interaction', () => {
@@ -646,6 +662,24 @@ describe('CanvasPolygon', () => {
       fireEvent.click(pathElement!);
       fireEvent.click(pathElement!, { shiftKey: true });
       expect(onSelectPolygon).not.toHaveBeenCalled();
+    });
+
+    // Two clicks at the same spot in delete mode are two strokes, not an
+    // "edit this shape" gesture — leaving the tool for EditVertices there was
+    // the natural follow-up to a click that missed.
+    it('does not leave delete mode on a double-click', () => {
+      const onEditPolygon = vi.fn();
+      renderPolygonInSvg(
+        <CanvasPolygon
+          {...defaultProps}
+          editMode={EditMode.DeletePolygon}
+          onEditPolygon={onEditPolygon}
+        />
+      );
+      fireEvent.doubleClick(
+        screen.getByTestId('test-polygon').querySelector('path')!
+      );
+      expect(onEditPolygon).not.toHaveBeenCalled();
     });
 
     it('handles double-click for polygon editing', () => {

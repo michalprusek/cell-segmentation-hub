@@ -37,6 +37,7 @@ vi.mock('../useAdvancedInteractions', () => ({
     handleMouseMove: vi.fn(),
     handleMouseUp: vi.fn(),
     handleCreatePolylineDoubleClick: vi.fn(),
+    handleContextMenuCapture: vi.fn(),
   })),
 }));
 
@@ -1602,6 +1603,7 @@ describe('useEnhancedSegmentationEditor', () => {
       handleMouseMove: vi.fn(),
       handleMouseUp: vi.fn(),
       handleCreatePolylineDoubleClick: finaliser,
+      handleContextMenuCapture: vi.fn(),
     });
 
     beforeEach(() => {

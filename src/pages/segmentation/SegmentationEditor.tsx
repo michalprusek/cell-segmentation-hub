@@ -394,7 +394,7 @@ const SegmentationEditor = () => {
   activePartClassRef.current = activePartClass;
   activeInstanceIdRef.current = activeInstanceId;
 
-  // Scope-less delete gestures (Delete key, delete-mode click) ask this before
+  // Scope-less delete gestures (the Delete key, the sidebar trash) ask this before
   // removing anything. The real implementation needs `video` and the polygon
   // handlers, which are declared far below — routing it through a ref keeps the
   // editor hook's argument TDZ-free (recurring bug #11) while still reaching
@@ -1477,7 +1477,8 @@ const SegmentationEditor = () => {
   });
 
   // Close the loop opened before the editor hook: scope-less delete gestures
-  // (Delete key, delete-mode click) now reach the live implementation.
+  // (Delete key, sidebar trash, the delete scribble) now reach the live
+  // implementation.
   requestDeleteScopeRef.current = deleteScope.requestDelete;
   requestDeleteManyRef.current = deleteScope.requestDeleteMany;
 

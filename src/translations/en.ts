@@ -2119,7 +2119,7 @@ export default {
         deletePolygon: {
           title: 'Delete polygon (D)',
           description:
-            'Click or draw over shapes: everything the stroke touches fades, and is deleted when you release the button. Esc cancels the stroke. Undo brings the shapes back; for tracked microtubules you are first asked, once for all of them, whether to remove them from this frame or from the whole video. The mode stays active.',
+            'Click or draw over shapes: everything the stroke touches fades, and is deleted when you release the button. Esc cancels the stroke. Undo brings untracked shapes back. Tracked microtubules are removed on the server and cannot be undone, so you are first asked, once for all of them, whether to remove them from this frame or from the whole video. The mode stays active.',
         },
       },
       keyFeatures: 'What the editor gives you',

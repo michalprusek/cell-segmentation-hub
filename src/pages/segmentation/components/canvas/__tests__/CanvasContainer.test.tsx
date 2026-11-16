@@ -213,6 +213,24 @@ describe('CanvasContainer', () => {
     });
   });
 
+  describe('Context menu capture', () => {
+    // Capture phase on the container runs BEFORE the shape's own Radix
+    // trigger, which is the only place a context menu can still be stopped.
+    it('hands a contextmenu on a child to onContextMenuCapture first', () => {
+      const order: string[] = [];
+      const { getByTestId } = render(
+        <CanvasContainer
+          {...defaultProps}
+          onContextMenuCapture={() => order.push('capture')}
+        >
+          <div data-testid="shape" onContextMenu={() => order.push('shape')} />
+        </CanvasContainer>
+      );
+      fireEvent.contextMenu(getByTestId('shape'));
+      expect(order).toEqual(['capture', 'shape']);
+    });
+  });
+
   describe('Keyboard Event Handling', () => {
     it('sets up window event listeners on mount', () => {
       const addEventListenerSpy = vi.spyOn(window, 'addEventListener');

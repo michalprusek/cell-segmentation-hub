@@ -344,6 +344,68 @@ describe('useDeleteTrackScope — one question for many microtubules', () => {
     expect(removeLocally).not.toHaveBeenCalled();
   });
 
+  // The loop sends one request at a time. If the user moves to the next frame
+  // while it runs, the editor's live polygons are the NEXT frame's — and
+  // removing "the same track" there locally is a delete the next save turns
+  // into a whole-track delete: exactly what "this frame only" refused.
+  it('a frame change mid-loop removes nothing locally on the new frame', async () => {
+    polygons = [TRACKED, UNTRACKED, TRACKED_B];
+    let release!: () => void;
+    apiMock.deleteTrackFromFrame.mockImplementationOnce(
+      () =>
+        new Promise(resolve => {
+          release = () => resolve({ removed: 1 });
+        })
+    );
+    const { result, rerender } = renderHook(
+      ({ imageId }: { imageId: string }) =>
+        useDeleteTrackScope({
+          projectType: 'microtubules',
+          videoId: 'vid-1',
+          imageId,
+          getPolygons: () => polygons as never,
+          removeLocally,
+          onServerMutation,
+        } as never),
+      { initialProps: { imageId: 'img-5' } }
+    );
+    act(() => {
+      result.current.requestDeleteMany(['poly-1', 'poly-3']);
+    });
+    let done!: Promise<void>;
+    act(() => {
+      done = Promise.resolve(result.current.scopeDialog.onDeleteFrame());
+    });
+
+    // The user scrubs to the next frame; its polygons carry the same tracks.
+    polygons = [
+      { ...TRACKED, id: 'next-1' },
+      { ...TRACKED_B, id: 'next-3' },
+    ];
+    rerender({ imageId: 'img-6' });
+    await act(async () => {
+      release();
+      await done;
+      await new Promise(r => setTimeout(r, 0));
+    });
+
+    // Both deletes went to the frame the dialog was answered on...
+    expect(apiMock.deleteTrackFromFrame).toHaveBeenNthCalledWith(
+      1,
+      'img-5',
+      'mt_a1b2c3'
+    );
+    expect(apiMock.deleteTrackFromFrame).toHaveBeenNthCalledWith(
+      2,
+      'img-5',
+      'mt_d4e5f6'
+    );
+    // ...and nothing was removed from the frame now open.
+    expect(removeLocally).not.toHaveBeenCalled();
+    // The stale cache of the answered frame is still evicted.
+    expect(onServerMutation).toHaveBeenCalled();
+  });
+
   it('requestDeleteMany on a non-MT project claims nothing', () => {
     const { result } = setup({ projectType: 'spheroid' });
     let unclaimed: string[] = [];

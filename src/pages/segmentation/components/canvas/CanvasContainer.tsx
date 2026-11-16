@@ -9,6 +9,10 @@ interface CanvasContainerProps {
   onDoubleClick?: (e: React.MouseEvent) => void;
   onWheel?: (e: React.WheelEvent) => void;
   onContextMenu?: (e: React.MouseEvent) => void;
+  /** Capture phase: runs before a shape's own context-menu trigger, so it is
+   *  the one place a menu can still be stopped (the delete scribble's
+   *  right-click cancel uses it). */
+  onContextMenuCapture?: (e: React.MouseEvent) => void;
   children: React.ReactNode;
   loading: boolean;
   editMode: EditMode;
@@ -30,6 +34,7 @@ const CanvasContainer = React.forwardRef<HTMLDivElement, CanvasContainerProps>(
       onDoubleClick,
       onWheel,
       onContextMenu,
+      onContextMenuCapture,
       children,
       loading: _loading,
       editMode,
@@ -161,6 +166,7 @@ const CanvasContainer = React.forwardRef<HTMLDivElement, CanvasContainerProps>(
         onDoubleClick={onDoubleClick}
         onWheel={onWheel}
         onContextMenu={handleContextMenu}
+        onContextMenuCapture={onContextMenuCapture}
         data-testid="canvas-container"
         data-edit-mode={editMode}
       >

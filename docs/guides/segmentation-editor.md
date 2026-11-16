@@ -230,8 +230,9 @@ Two routes, with different safety:
   plain click deletes everything under the pointer. There is **no
   confirmation** for untracked shapes — one stroke is one undo step, so
   <kbd>Ctrl</kbd>+<kbd>Z</kbd> brings them all back. Tracked microtubules are
-  the exception: after the release the editor asks **once, for all of them**,
-  whether to remove them from this frame or from the whole video. A stroke
+  the exception: their delete runs on the server and **cannot be undone**, so
+  after the release the editor asks **once, for all of them**, whether to
+  remove them from this frame or from the whole video. A stroke
   touches only what is drawn (a hidden shape is safe), counts a shape as
   touched within 6 px on screen at any zoom, and inside a hole touches the hole
   but not the shape around it. <kbd>Esc</kbd> or a right-click while the

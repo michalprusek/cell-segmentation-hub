@@ -798,8 +798,9 @@ export const useEnhancedSegmentationEditor = ({
   );
 
   /**
-   * Delete gestures that carry no scope of their own — the Delete key and a
-   * click in DeletePolygon mode. `onRequestDeletePolygon` gets first refusal:
+   * Delete gestures that carry no scope of their own — the Delete key (and a
+   * sidebar row clicked in DeletePolygon mode; the canvas tool is the
+   * scribble, see `handleScribbleCommit`). `onRequestDeletePolygon` gets first refusal:
    * for a tracked microtubule the parent opens the "this frame or the whole
    * track?" dialog and returns true, and nothing is deleted here. Everything
    * else (and every editor without that prop) deletes locally as before.
@@ -1428,6 +1429,7 @@ export const useEnhancedSegmentationEditor = ({
     handleMouseDown: interactions.handleMouseDown,
     handleMouseMove: enhancedHandleMouseMove,
     handleMouseUp: interactions.handleMouseUp,
+    handleContextMenuCapture: interactions.handleContextMenuCapture,
     // Same function the Enter key runs — see `handleEnterPolyline`. Takes no
     // arguments, so the React SyntheticEvent the canvas passes cannot be
     // mistaken for a parameter.

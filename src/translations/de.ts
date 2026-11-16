@@ -2139,7 +2139,7 @@ export default {
         deletePolygon: {
           title: 'Polygon löschen (D)',
           description:
-            'Klicken oder zeichnen Sie über Formen: Alles, was der Strich berührt, wird blass dargestellt und beim Loslassen der Maustaste gelöscht. Esc bricht den Strich ab. Rückgängig stellt die Formen wieder her; bei getrackten Mikrotubuli wird einmal für alle gefragt, ob sie aus diesem Frame oder aus dem ganzen Video entfernt werden sollen. Der Modus bleibt aktiv.',
+            'Klicken oder zeichnen Sie über Formen: Alles, was der Strich berührt, wird blass dargestellt und beim Loslassen der Maustaste gelöscht. Esc bricht den Strich ab. Rückgängig stellt Formen ohne Track wieder her. Getrackte Mikrotubuli werden auf dem Server entfernt und lassen sich nicht wiederherstellen; deshalb wird vorher einmal für alle gefragt, ob sie aus diesem Frame oder aus dem ganzen Video entfernt werden sollen. Der Modus bleibt aktiv.',
         },
       },
       keyFeatures: 'Was der Editor bietet',

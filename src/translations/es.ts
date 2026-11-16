@@ -2122,7 +2122,7 @@ export default {
         deletePolygon: {
           title: 'Eliminar polígono (D)',
           description:
-            'Haga clic o trace sobre las formas: todo lo que toque el trazo se atenúa y se elimina al soltar el botón. Esc cancela el trazo. Deshacer recupera las formas; con microtúbulos con traza se le pregunta una sola vez, para todos, si eliminarlos de este fotograma o de todo el vídeo. El modo permanece activo.',
+            'Haga clic o trace sobre las formas: todo lo que toque el trazo se atenúa y se elimina al soltar el botón. Esc cancela el trazo. Deshacer recupera las formas sin traza. Los microtúbulos con traza se eliminan en el servidor y no se pueden recuperar, por eso se le pregunta antes, una sola vez para todos, si eliminarlos de este fotograma o de todo el vídeo. El modo permanece activo.',
         },
       },
       keyFeatures: 'Qué ofrece el editor',

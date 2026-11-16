@@ -232,6 +232,45 @@ describe('useAdvancedInteractions — scribble delete', () => {
     expect(onCommit).not.toHaveBeenCalled();
   });
 
+  // The right press cancels on mousedown, but `contextmenu` is a separate
+  // event — before the mouseup on Linux, after it on Windows — and over a
+  // shape it would open that shape's Radix menu.
+  it('right-click cancel swallows the context menu it raises', () => {
+    const { result } = setup([line('a', 50)]);
+    act(() => result.current.interactions.handleMouseDown(mouse(50, 0)));
+    act(() =>
+      result.current.interactions.handleMouseDown(mouse(50, 10, { button: 2 }))
+    );
+    const menu = mouse(50, 10, { type: 'contextmenu', button: 2 });
+    result.current.interactions.handleContextMenuCapture(menu);
+    expect(menu.preventDefault).toHaveBeenCalled();
+    expect(menu.stopPropagation).toHaveBeenCalled();
+
+    // One-shot: the next right-click opens its menu normally.
+    const next = mouse(50, 10, { type: 'contextmenu', button: 2 });
+    result.current.interactions.handleContextMenuCapture(next);
+    expect(next.preventDefault).not.toHaveBeenCalled();
+    expect(next.stopPropagation).not.toHaveBeenCalled();
+  });
+
+  it('a later press clears a suppression no contextmenu consumed', () => {
+    const { result } = setup([line('a', 50)]);
+    act(() => result.current.interactions.handleMouseDown(mouse(50, 0)));
+    act(() =>
+      result.current.interactions.handleMouseDown(mouse(50, 10, { button: 2 }))
+    );
+    // No contextmenu arrived; the user simply goes on with a new stroke.
+    act(() => result.current.interactions.handleMouseDown(mouse(60, 0)));
+    act(() =>
+      result.current.interactions.handleMouseUp(
+        mouse(60, 0, { type: 'mouseup' })
+      )
+    );
+    const later = mouse(50, 10, { type: 'contextmenu', button: 2 });
+    result.current.interactions.handleContextMenuCapture(later);
+    expect(later.preventDefault).not.toHaveBeenCalled();
+  });
+
   it('alt+drag pans instead of scribbling', () => {
     const { result } = setup([line('a', 50)]);
     act(() =>
