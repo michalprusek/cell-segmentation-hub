@@ -171,6 +171,27 @@ function SpecimenHoverCard({
     }
   }, [previews]);
 
+  // CONTROLLED, because Radix's own timers cannot be trusted inside a menu.
+  // `HoverCard.handleOpen` arms an open timer and stores its handle without
+  // clearing the one already pending (`openTimerRef.current = setTimeout(…)`,
+  // still so in @radix-ui/react-hover-card 1.2.1). It runs on pointer-enter
+  // AND on focus, and a Radix menu or select item focuses itself on every
+  // pointer move — so hovering an option arms TWO timers, and leaving it
+  // clears only the second. The first fires `OPEN_DELAY_MS` later and opens
+  // the card of an option the pointer has already left; nothing ever closes
+  // it, since its pointer-leave and blur have both happened. Measured on the
+  // project page: every model the pointer crossed on its way down the list
+  // left its card open, stacked beside the one it rested on.
+  //
+  // So an open is honoured only while the reader is on this option, by
+  // pointer or by keyboard focus. A close is never refused.
+  const [open, setOpen] = useState(false);
+  const engaged = useRef({ pointer: false, focus: false });
+  const handleOpenChange = useCallback((next: boolean) => {
+    if (next && !engaged.current.pointer && !engaged.current.focus) return;
+    setOpen(next);
+  }, []);
+
   if (previews.length === 0) return <>{children}</>;
 
   const heading =
@@ -183,8 +204,29 @@ function SpecimenHoverCard({
       : tx('specimens.preview.byType');
 
   return (
-    <HoverCard openDelay={OPEN_DELAY_MS} closeDelay={CLOSE_DELAY_MS}>
-      <HoverCardTrigger asChild onPointerEnter={prefetch} onFocus={prefetch}>
+    <HoverCard
+      open={open}
+      onOpenChange={handleOpenChange}
+      openDelay={OPEN_DELAY_MS}
+      closeDelay={CLOSE_DELAY_MS}
+    >
+      <HoverCardTrigger
+        asChild
+        onPointerEnter={() => {
+          engaged.current.pointer = true;
+          prefetch();
+        }}
+        onPointerLeave={() => {
+          engaged.current.pointer = false;
+        }}
+        onFocus={() => {
+          engaged.current.focus = true;
+          prefetch();
+        }}
+        onBlur={() => {
+          engaged.current.focus = false;
+        }}
+      >
         {children}
       </HoverCardTrigger>
       <HoverCardPortal>
