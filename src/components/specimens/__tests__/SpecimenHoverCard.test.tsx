@@ -7,9 +7,16 @@
  * layout, so a passing render assertion would prove nothing about it.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { screen, fireEvent, waitFor } from '@testing-library/react';
+import { screen, fireEvent, waitFor, act } from '@testing-library/react';
 
 import { render } from '@/test/utils/test-utils';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import SpecimenHoverCard from '../SpecimenHoverCard';
 import { resetSpecimenGeometryCache } from '@/lib/specimens/previewGeometry';
 import { previewsForModel } from '@/lib/specimens/selectPreviews';
@@ -84,6 +91,139 @@ describe('SpecimenHoverCard', () => {
 
     await Promise.resolve();
     expect(fetchMock).toHaveBeenCalledTimes(firstPass);
+  });
+
+  describe('inside a menu, where an item focuses itself on pointer move', () => {
+    // jsdom has no PointerEvent, and without `pointerType: 'mouse'` a Radix
+    // menu item never focuses itself on hover — which is half of what this
+    // block is about. A MouseEvent that carries the field is all Radix reads.
+    class TestPointerEvent extends MouseEvent {
+      readonly pointerType: string;
+      constructor(type: string, init: PointerEventInit = {}) {
+        super(type, init);
+        this.pointerType = init.pointerType ?? 'mouse';
+      }
+    }
+    const BY_MODEL =
+      'Real frames this model segmented, with the outlines it produced.';
+
+    beforeEach(() => {
+      vi.stubGlobal('PointerEvent', TestPointerEvent);
+      vi.useFakeTimers();
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    /** Same shape as ProjectModelSelector: the hover card's trigger IS the
+     *  radio item. */
+    const renderMenu = () =>
+      render(
+        <DropdownMenu open modal={false}>
+          <DropdownMenuTrigger>models</DropdownMenuTrigger>
+          <DropdownMenuContent>
+            <DropdownMenuRadioGroup value="hrnet">
+              {(['hrnet', 'cbam_resunet', 'unet_spherohq'] as const).map(id => (
+                <SpecimenHoverCard key={id} kind="model" value={id}>
+                  <DropdownMenuRadioItem value={id} data-testid={id}>
+                    {id}
+                  </DropdownMenuRadioItem>
+                </SpecimenHoverCard>
+              ))}
+            </DropdownMenuRadioGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      );
+
+    /** The card headings currently on screen — the one paragraph every open
+     *  card has and no trigger does. */
+    const openCards = () =>
+      screen
+        .queryAllByText(BY_MODEL)
+        .map(
+          detail =>
+            detail.parentElement?.querySelector('p')?.textContent ?? '<none>'
+        );
+
+    const enter = (el: HTMLElement) => {
+      fireEvent.pointerEnter(el, { pointerType: 'mouse' });
+      fireEvent.pointerMove(el, { pointerType: 'mouse' });
+    };
+    const leave = (el: HTMLElement) =>
+      fireEvent.pointerLeave(el, { pointerType: 'mouse' });
+    const wait = (ms: number) =>
+      act(() => {
+        vi.advanceTimersByTime(ms);
+      });
+
+    it('the item takes focus on hover, so both of Radix open paths fire', () => {
+      renderMenu();
+      const hrnet = screen.getByTestId('hrnet');
+
+      enter(hrnet);
+
+      // If this ever stops holding, the regression below no longer
+      // reproduces the real menu and proves nothing.
+      expect(document.activeElement).toBe(hrnet);
+    });
+
+    it('an option crossed faster than the open delay leaves no card behind', () => {
+      renderMenu();
+      const hrnet = screen.getByTestId('hrnet');
+      const cbam = screen.getByTestId('cbam_resunet');
+      const unet = screen.getByTestId('unet_spherohq');
+
+      // Down the list at reading speed: 100 ms on each of the first two rows,
+      // well under the 320 ms open delay, then rest on the third.
+      enter(hrnet);
+      wait(100);
+      leave(hrnet);
+      enter(cbam);
+      wait(100);
+      leave(cbam);
+      enter(unet);
+      wait(1000);
+
+      expect(openCards()).toEqual(['UNet (SpheroHQ)']);
+
+      // And off the menu altogether: nothing may be left open.
+      leave(unet);
+      wait(1000);
+      expect(openCards()).toEqual([]);
+    });
+
+    it('still opens for the option the pointer rests on', () => {
+      renderMenu();
+      enter(screen.getByTestId('cbam_resunet'));
+
+      wait(200);
+      expect(openCards()).toEqual([]);
+      wait(200);
+      expect(openCards()).toEqual(['CBAM-ResUNet']);
+    });
+
+    it('opens on the pointer alone for a trigger that never takes focus', () => {
+      render(
+        <SpecimenHoverCard kind="model" value="cbam_resunet">
+          <span data-testid="plain">CBAM</span>
+        </SpecimenHoverCard>
+      );
+      const plain = screen.getByTestId('plain');
+
+      enter(plain);
+      expect(document.activeElement).not.toBe(plain);
+
+      wait(400);
+      expect(openCards()).toEqual(['CBAM-ResUNet']);
+    });
+
+    it('still opens on keyboard focus with no pointer at all', () => {
+      renderMenu();
+      act(() => screen.getByTestId('cbam_resunet').focus());
+
+      wait(400);
+      expect(openCards()).toEqual(['CBAM-ResUNet']);
+    });
   });
 
   it('leaves the trigger alone for an option with no examples', () => {
