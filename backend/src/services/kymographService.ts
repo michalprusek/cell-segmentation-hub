@@ -144,8 +144,15 @@ const CACHE_NAMESPACE = 'kymograph';
  *  The first two are visible in the descriptor below anyway — the
  *  `targetWidth` field left it and `intensityWidth` changed value — but the
  *  third is not, and a reader should not have to derive any of it from a hash
- *  to know old entries are unreachable. */
-const CACHE_SCHEMA_VERSION = 2;
+ *  to know old entries are unreachable.
+ *
+ *  3 (2026-11-18): the ML side gained BiNet weight variants, chosen by the ml
+ *  environment (`KYMOBUTLER_DEFAULT_WEIGHTS`), which this key cannot see, and
+ *  zero-filled (out-of-image) samples no longer invert a kymograph's polarity —
+ *  so detected tracks of an unchanged request can differ. Switching the default
+ *  back (rollback) needs the `kymograph` namespace flushed, or entries made
+ *  under the other variant are served for up to the TTL. */
+const CACHE_SCHEMA_VERSION = 3;
 
 /** 30 minutes.
  *

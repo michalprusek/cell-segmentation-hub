@@ -130,6 +130,60 @@ ordinary shape-agnostic torch `nn.Module`, which is the only reason arbitrary
 sizes run at all. Its pin, and the `ml_dtypes==0.5.4` pin that stops onnx from
 dragging numpy to 2.x, are explained in `requirements.txt`.
 
+## BiNet weight variants (2026-11-18)
+
+`config.BINET_WEIGHTS` names the BiNet files; the decision module and UniNet
+have no variants. A variant is upstream's `bidirectional_seg.onnx` with **only
+its initializers replaced** — same nodes, opset and I/O names — so it loads
+through the ONNX path above and the no-`.pt` rule still holds. Every one of the
+116 trainable tensors is written, and the re-loaded graph reproduces the
+fine-tuned module exactly (max |diff| 0.0 at 144x320).
+
+| variant | file | sha256 | origin |
+|---|---|---|---|
+| `stock` | `bidirectional_seg.onnx` | `6446b8c2…` | upstream, 2019 |
+| `alica_ft` | `bidirectional_seg_alica_ft.onnx` | `33bfa65f…` (full value in `config.py`) | fine-tuned 2026-11-18 |
+
+**Which one runs.** A request may name one (`kymobutler_weights`); otherwise
+`KYMOBUTLER_DEFAULT_WEIGHTS` in the ml environment decides, and the code default
+is `stock`. The response's `kymobutler_weights` names the variant that produced
+`tracks`. An unknown name raises (reported as `velocity_error`); a variant file
+with another SHA256 refuses to load.
+
+**`alica_ft` — what it is.** BiNet fine-tuned on 50 kymographs (758 traces) of
+kinesin motors on microtubules in vitro, TIRF 488 nm, 5 movies from 2 days,
+**one annotator** who drew a sparse sample of the visible traces as two-click
+straight segments. Inputs built the way `/kymograph` builds them (1 px arc
+steps, widths 1/3/5, mean). The labels are positive-unlabelled: annotated pixels
+are positives, dark pixels away from any annotation are negatives, and on every
+other pixel the loss pulls towards the stock map. BatchNorm frozen; 600 steps,
+Adam 1e-5. Training code and data live in the private trackfit project
+(`src/kymobutler_ft/kb.py`); the weights derive from unpublished lab data and
+are **not downloadable** — stage the file by hand into
+`backend/segmentation/weights/kymobutler/` and check its SHA256.
+
+**Measured** (bidirectional, `min_size`/`min_frames` 10/10 as in production,
+zero-fill fix on for both arms; trace recall = share of annotated traces that
+one detected track covers on >= 50 % of its rows within 3 columns):
+
+| data | stock | alica_ft |
+|---|---|---|
+| the annotator's movies, leave-one-movie-out (5 folds) | 0.40 / 0.46 / 0.54 / 0.52 / 0.47 | 0.59 / 0.54 / 0.56 / 0.52 / 0.59 |
+| another lab's annotations (DNA origami / kinesin, 4 kymograph sets) | 0.46 / 0.53 / 0.32 / 0.54 | 0.50 / 0.61 / 0.41 / 0.63 |
+| in-cell lysosomes, 114 kymographs, no labels: tracks / median length / share of track points on signal | 7091 / 77 frames / 0.79 | 6588 / 61 frames / 0.86 |
+
+Read it with the caveats: one training seed; part of the gain is more tracks
+(at equal track density `alica_ft` is ahead on three of the five movies, level
+on one and slightly behind on one; on the other lab's data level); the
+share of track points on signal drops 0.03-0.06 on the annotator's own movies;
+on in-cell data both variants draw spurious lines in empty regions, `stock`
+mostly vertical, `alica_ft` mostly diagonal at the slope of its training motors.
+Bidirectional tracking takes 0.3-0.7 s per kymograph on CPU with either.
+
+**Rollback.** Set `KYMOBUTLER_DEFAULT_WEIGHTS=stock` in `.env.production`,
+recreate `ml`, and flush the backend's `kymograph` response cache (or wait out
+its 30 min TTL) — its key cannot see the ml environment.
+
 ## Architecture (as exported)
 
 Four customised U-Nets. The segmentation nets are 4-level, base n=64 → 1024

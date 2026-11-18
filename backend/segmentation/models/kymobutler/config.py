@@ -33,6 +33,36 @@ ONNX_FILES = {
     "decnet": "decision_module.onnx",
 }
 
+# --- BiNet weight variants ---------------------------------------------------
+#
+# A variant is the SAME graph as ``bidirectional_seg.onnx`` (same nodes, opset,
+# input/output names) with other initializers, so it loads through the exact
+# ONNX path below and the no-``.pt`` rule of README.md still holds. Only BiNet
+# has variants: the decision module and UniNet are always upstream's.
+#
+# ``alica_ft`` (2026-11-18): BiNet fine-tuned on 50 hand-annotated kymographs
+# of kinesin motors on microtubules in vitro (TIRF, 5 movies, one annotator),
+# built the way /kymograph builds them. Provenance, the leave-one-movie-out
+# numbers against ``stock`` and the regression control are in README.md. It is
+# derived from unpublished lab data and is NOT downloadable: it is staged by
+# hand next to the upstream files, and the SHA256 below makes a wrong or
+# truncated file fail at load instead of segmenting silently.
+BINET_WEIGHTS = {
+    "stock": "bidirectional_seg.onnx",
+    "alica_ft": "bidirectional_seg_alica_ft.onnx",
+}
+BINET_WEIGHTS_SHA256 = {
+    "alica_ft": "33bfa65fe6c8082e0b8d1b8103db2988766139b907fd5f8c5b35c1bbf3878793",
+}
+
+# The variant /kymograph uses when a request does not name one. ``stock`` in
+# code, so tests and a fresh checkout behave as before; production chooses its
+# default in ``.env.production`` (``KYMOBUTLER_DEFAULT_WEIGHTS``), which makes
+# a rollback one line plus an ml recreate, no rebuild. An unknown value is NOT
+# silently replaced by ``stock``: ``resolve_binet_weights`` raises, and the
+# route reports it as ``velocity_error``.
+DEFAULT_BINET_WEIGHTS = os.environ.get("KYMOBUTLER_DEFAULT_WEIGHTS", "stock").strip()
+
 # --- Segmentation thresholds -------------------------------------------------
 #
 # Upstream ships ONE threshold (0.2) for both nets. That is right for the

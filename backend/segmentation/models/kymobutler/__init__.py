@@ -6,6 +6,8 @@ and for exactly what was dropped from upstream and why.
 
 from .config import (
     BIDIRECTIONAL_THRESHOLD,
+    BINET_WEIGHTS,
+    DEFAULT_BINET_WEIGHTS,
     DEFAULT_MIN_FRAMES,
     DEFAULT_MIN_SIZE,
     DEFAULT_VISION_THRESHOLD,
@@ -18,6 +20,8 @@ from .tracking import Track, track_bidirectional, track_unidirectional
 
 __all__ = [
     "BIDIRECTIONAL_THRESHOLD",
+    "BINET_WEIGHTS",
+    "DEFAULT_BINET_WEIGHTS",
     "DEFAULT_MIN_FRAMES",
     "DEFAULT_MIN_SIZE",
     "DEFAULT_VISION_THRESHOLD",

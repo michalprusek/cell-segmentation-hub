@@ -23,6 +23,7 @@ outright; ``onnx2torch`` rebuilds the graph as an ordinary shape-agnostic torch
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import threading
 from pathlib import Path
@@ -30,7 +31,7 @@ from pathlib import Path
 import torch
 import torch.nn as nn
 
-from ..config import DEFAULT_MODEL_DIR, ONNX_FILES
+from ..config import BINET_WEIGHTS, BINET_WEIGHTS_SHA256, DEFAULT_MODEL_DIR, ONNX_FILES
 
 logger = logging.getLogger(__name__)
 
@@ -108,6 +109,7 @@ def load_models(
     keys: tuple[str, ...],
     model_dir: str | Path | None = None,
     device: str = "cpu",
+    binet_weights: str = "stock",
 ) -> dict[str, nn.Module]:
     """Load (and memoise) the requested KymoButler ONNX nets.
 
@@ -118,28 +120,59 @@ def load_models(
         model_dir: directory holding the ``.onnx`` files. Defaults to
             ``backend/segmentation/weights/kymobutler``.
         device: ``"cpu"`` or ``"cuda"``.
+        binet_weights: which ``BINET_WEIGHTS`` file serves ``"binet"``. Each
+            variant is memoised under its own cache slot and returned under the
+            key ``"binet"``, so callers index the result the same way.
 
     Raises:
         FileNotFoundError: naming the missing file and the staging script, so a
             fresh checkout gets an actionable message rather than an ONNX parse
             error.
+        ValueError: an unknown ``binet_weights``, or a variant file whose SHA256
+            is not the recorded one (a wrong or truncated file would otherwise
+            segment silently).
     """
+    if binet_weights not in BINET_WEIGHTS:
+        raise ValueError(
+            f"unknown KymoButler BiNet weights {binet_weights!r}; "
+            f"known: {sorted(BINET_WEIGHTS)}"
+        )
     directory = Path(model_dir) if model_dir else DEFAULT_MODEL_DIR
     cache_key = (str(directory.resolve()), device)
 
+    def slot(key: str) -> str:
+        # The stock BiNet keeps the slot it always had; a variant gets its own,
+        # so switching variants never serves the other one's cached graph.
+        if key == "binet" and binet_weights != "stock":
+            return f"binet@{binet_weights}"
+        return key
+
     with _CACHE_LOCK:
         loaded = _CACHE.setdefault(cache_key, {})
-        missing = [k for k in keys if k not in loaded]
+        missing = [k for k in keys if slot(k) not in loaded]
         for key in missing:
-            path = directory / ONNX_FILES[key]
+            fname = BINET_WEIGHTS[binet_weights] if key == "binet" else ONNX_FILES[key]
+            path = directory / fname
             if not path.exists():
                 raise FileNotFoundError(
                     f"KymoButler weights missing: {path}. "
-                    "Stage them with scripts/download-kymobutler-weights.sh"
+                    + (
+                        "Stage them with scripts/download-kymobutler-weights.sh"
+                        if key != "binet" or binet_weights == "stock"
+                        else "This variant is not downloadable; stage it by hand "
+                        "(models/kymobutler/README.md, 'BiNet weight variants')."
+                    )
                 )
+            if key == "binet" and binet_weights in BINET_WEIGHTS_SHA256:
+                digest = hashlib.sha256(path.read_bytes()).hexdigest()
+                if digest != BINET_WEIGHTS_SHA256[binet_weights]:
+                    raise ValueError(
+                        f"KymoButler BiNet variant {binet_weights!r} at {path} has "
+                        f"sha256 {digest}, expected {BINET_WEIGHTS_SHA256[binet_weights]}"
+                    )
             logger.info("Loading KymoButler %s from %s on %s", key, path, device)
-            loaded[key] = _load_onnx(key, path, device)
-        return {k: loaded[k] for k in keys}
+            loaded[slot(key)] = _load_onnx(key, path, device)
+        return {k: loaded[slot(k)] for k in keys}
 
 
 def _load_onnx(key: str, path: Path, device: str) -> nn.Module:
