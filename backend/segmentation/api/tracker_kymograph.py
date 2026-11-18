@@ -64,6 +64,7 @@ from api.kymograph_velocity import (
     kymograph_polarity,
     net_velocity_threshold,
     render_overlay,
+    resolve_binet_weights,
     tracks_intensity,
 )
 from api.mt_geometry_cost import (
@@ -1081,6 +1082,10 @@ class KymographRequest(BaseModel):
     # KymoButler ships it for genuinely one-way movies, not because it is
     # interchangeable. It is also ~6x faster, which is not a reason to pick it.
     kymobutler_mode: Literal["bidirectional", "unidirectional"] = "bidirectional"
+    # BiNet weight variant for ``bidirectional`` mode (``kymobutler.BINET_WEIGHTS``).
+    # None = the server default, ``KYMOBUTLER_DEFAULT_WEIGHTS`` in the ml
+    # environment (``stock`` when unset). See models/kymobutler/README.md.
+    kymobutler_weights: Optional[Literal["stock", "alica_ft"]] = None
     # When True (with detect_velocity), also composite the detected tracks onto
     # the kymograph and return it as ``overlay_png_base64`` — used by the export
     # pipeline to ship "segmented kymograph" images without a browser.
@@ -1287,6 +1292,10 @@ class KymographResponse(BaseModel):
     # An empty/absent field means detection either succeeded or was not requested.
     # Distinguishes "no motility detected" (tracks=[]) from "detection crashed".
     velocity_error: Optional[str] = None
+    # The BiNet weight variant that produced ``tracks`` (bidirectional mode), so a
+    # result can always be traced to the weights behind it. None when no
+    # detection ran or the mode was unidirectional (UniNet has no variants).
+    kymobutler_weights: Optional[str] = None
     # Populated only when ``render_profiles`` was set: one matplotlib line plot
     # (intensity vs. position) per frame, in frame order. None otherwise, or if
     # the (optional) profile render failed — the base kymograph is never blocked.
@@ -2553,6 +2562,7 @@ def _finish_kymograph(
     raw_tracks: List[Dict[str, Any]] = []
     tracks: Optional[List[KymographTrack]] = None
     velocity_error: Optional[str] = None
+    kymobutler_weights: Optional[str] = None
     filtered_track_count = 0
     filtered_dim_track_count = 0
     unmeasured_track_count = 0
@@ -2572,7 +2582,13 @@ def _finish_kymograph(
             # detection is in flight at a time. An explicit lock here would be
             # redundant — and an `async` one is impossible, because this
             # function is synchronous by construction.
-            raw_tracks = detect_tracks(kymo, mode=req.kymobutler_mode)
+            if req.kymobutler_mode == "bidirectional":
+                # Resolved once here so the response names exactly the weights
+                # detect_tracks ran with (a bad server default raises -> velocity_error).
+                kymobutler_weights = resolve_binet_weights(req.kymobutler_weights)
+            raw_tracks = detect_tracks(
+                kymo, mode=req.kymobutler_mode, weights=kymobutler_weights
+            )
             # Which way "signal" points on THIS kymograph. detect_tracks signs
             # its own SNR the same way; the metrics below are measured beside
             # those tracks and must agree, or an inverted kymograph reports a
@@ -2773,5 +2789,6 @@ def _finish_kymograph(
         tracks=tracks,
         overlay_png_base64=overlay_b64,
         velocity_error=velocity_error,
+        kymobutler_weights=kymobutler_weights,
         profiles=profiles,
     )

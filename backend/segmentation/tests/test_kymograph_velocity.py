@@ -598,6 +598,131 @@ def test_detect_tracks_flat_field_has_no_trajectories(monkeypatch):
     assert detect_tracks(np.full((40, 60), 100.0, dtype=np.float32)) == []
 
 
+# ── out-of-image samples and BiNet weight variants (2026-11-18) ───────────
+
+
+def _border_zeroed(kymo: np.ndarray, cols: int = 1, frac: float = 0.1) -> np.ndarray:
+    """What /kymograph samples for a microtubule touching the frame edge after
+    upload registration: exact zeros in a border column, in the late rows only."""
+    out = kymo.copy()
+    out[len(out) - max(1, int(frac * len(out))):, :cols] = 0.0
+    return out
+
+
+def test_zero_filled_border_does_not_invert_a_bright_kymograph(stub_binet):
+    """Regression, found on real data: one zero-filled border column in 10 % of
+    the rows made ``preprocess_array`` read a bright-on-dark kymograph as
+    inverted (15 of 17 clean kymographs flipped; 4 of 50 real ones with
+    out-of-image columns returned 0 of 63 annotated trajectories). The detector
+    and the metric polarity must both stay +1, and the SNR positive.
+
+    ``is_negated`` counts pixels above vs below 0.5 after a min-max stretch, so a
+    zero becomes the minimum and lifts the background above 0.5 whenever the
+    signal is smaller than the background level itself — the normal case for
+    TIRF on a camera offset (real data: background ~110 counts, streaks +10 to
+    +90). ``amp=200`` on this fixture's ~330 background is that regime."""
+    from api.kymograph_velocity import kymograph_polarity
+    from kymobutler import preprocess_array
+
+    clean = _noisy_kymo(streaks=((6, 1.0),), F=48, X=64, amp=200.0)
+    assert preprocess_array(clean)[2] is False
+    padded = _border_zeroed(clean)
+    assert preprocess_array(padded)[2] is True, "fixture must reproduce the flip"
+
+    assert kymograph_polarity(padded) == 1.0
+    tracks = detect_tracks(padded, device="cpu")
+    assert tracks
+    assert max(tracks, key=lambda t: len(t["points"]))["snr"] > 2.0
+
+
+def test_fill_out_of_image_touches_only_zero_samples():
+    from api.kymograph_velocity import fill_out_of_image
+
+    clean = _noisy_kymo(streaks=((6, 1.0),), F=48, X=64)
+    assert not (clean == 0).any()
+    assert fill_out_of_image(clean) is clean  # nothing to fill: the same array
+
+    padded = _border_zeroed(clean, cols=3, frac=0.5)
+    filled = fill_out_of_image(padded)
+    assert not (filled == 0).any()
+    np.testing.assert_array_equal(filled[padded != 0], padded[padded != 0])
+    assert (padded == 0).any(), "the caller's matrix (read by SNR) is not modified"
+
+
+def test_zero_valued_dark_trajectory_is_kept_on_a_bright_background():
+    """An 8-bit dark-on-bright kymograph whose trajectory reaches exactly 0 must
+    keep it: there a zero may BE the signal, so nothing is filled."""
+    from api.kymograph_velocity import fill_out_of_image, kymograph_polarity
+
+    # Like the production 640 nm channel whose raw median sits at 247 of 255:
+    # background near saturation, a dark streak with a blurred profile whose
+    # core rounds to exactly 0.
+    rng = np.random.default_rng(3)
+    kymo = np.clip(rng.normal(245.0, 6.0, size=(48, 64)), 0, 255)
+    cols = np.arange(64)
+    for f in range(48):
+        kymo[f] *= 1.0 - np.exp(-0.5 * ((cols - (6 + f)) / 1.1) ** 2)
+        kymo[f, 6 + f] = 0.0
+    kymo = np.round(kymo).astype(np.float32)
+    out = fill_out_of_image(kymo)
+    assert out is kymo
+    assert kymograph_polarity(kymo) == -1.0
+
+
+def test_unidirectional_is_not_blocked_by_a_bad_weights_default(monkeypatch):
+    """UniNet has no variants, so a mistyped KYMOBUTLER_DEFAULT_WEIGHTS must not
+    stop the unidirectional path before it reaches its own model load."""
+    kb = pytest.importorskip("kymobutler")
+
+    def _load(*a, **k):
+        raise RuntimeError("reached load_models")
+
+    monkeypatch.setattr(kb, "DEFAULT_BINET_WEIGHTS", "alica_FT")
+    monkeypatch.setattr(kb, "load_models", _load)
+    with pytest.raises(RuntimeError, match="reached load_models"):
+        detect_tracks(_noisy_kymo(F=48, X=64), device="cpu", mode="unidirectional")
+
+
+def test_bidirectional_routes_the_requested_binet_weights(monkeypatch):
+    kb = pytest.importorskip("kymobutler")
+    seen = []
+
+    def _load(keys, model_dir=None, device="cpu", **kw):
+        seen.append(kw.get("binet_weights", "stock"))
+        return {"binet": _StubBiNet(), "decnet": None}
+
+    monkeypatch.setattr(kb, "load_models", _load)
+    monkeypatch.setattr(kb, "DEFAULT_BINET_WEIGHTS", "stock")
+    kymo = _noisy_kymo(streaks=((6, 1.0),), F=48, X=64)
+    detect_tracks(kymo, device="cpu")
+    detect_tracks(kymo, device="cpu", weights="alica_ft")
+    monkeypatch.setattr(kb, "DEFAULT_BINET_WEIGHTS", "alica_ft")
+    detect_tracks(kymo, device="cpu")
+    assert seen == ["stock", "alica_ft", "alica_ft"]
+
+
+def test_unknown_binet_weights_raise_instead_of_falling_back(monkeypatch):
+    kb = pytest.importorskip("kymobutler")
+    from api.kymograph_velocity import resolve_binet_weights
+
+    with pytest.raises(ValueError):
+        resolve_binet_weights("alica-ft")
+    monkeypatch.setattr(kb, "DEFAULT_BINET_WEIGHTS", "alica_FT")  # a typo in .env.production
+    with pytest.raises(ValueError):
+        detect_tracks(_noisy_kymo(F=48, X=64), device="cpu")
+
+
+def test_variant_file_with_wrong_sha256_is_refused(tmp_path):
+    """A wrong or truncated staged file must fail at load, not segment silently."""
+    from kymobutler.models.weights import load_models
+
+    (tmp_path / "bidirectional_seg_alica_ft.onnx").write_bytes(b"not the fine-tuned graph")
+    with pytest.raises(ValueError, match="sha256"):
+        load_models(("binet",), model_dir=tmp_path, binet_weights="alica_ft")
+    with pytest.raises(ValueError, match="unknown"):
+        load_models(("binet",), model_dir=tmp_path, binet_weights="nope")
+
+
 def test_detect_tracks_rejects_a_degenerate_kymograph():
     """Guarded before any model load, so it needs no weights."""
     assert detect_tracks(np.zeros((3, 60), dtype=np.float32)) == []

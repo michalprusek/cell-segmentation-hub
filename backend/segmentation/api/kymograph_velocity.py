@@ -544,7 +544,10 @@ def kymograph_polarity(kymo: np.ndarray) -> float:
     """
     import kymobutler  # noqa: E402  (needs the path set above)
 
-    arr = np.asarray(kymo, dtype=np.float64)
+    # The same zero-filled-sample replacement detect_tracks applies before its
+    # own polarity decision, or the two disagree on every kymograph that touches
+    # the frame border (see ``fill_out_of_image``).
+    arr = np.asarray(fill_out_of_image(np.asarray(kymo)), dtype=np.float64)
     lo, hi = float(arr.min()), float(arr.max())
     if hi <= lo:
         return 1.0
@@ -581,6 +584,64 @@ def _kymobutler_device() -> str:
     return "cuda"
 
 
+def fill_out_of_image(kymo: np.ndarray) -> np.ndarray:
+    """The DETECTOR's copy of the kymograph with zero-filled samples replaced.
+
+    ``_sample_line_profiles`` fills every sample that falls outside the frame
+    with exactly 0, and upload registration zero-fills the border of shifted
+    frames, so a microtubule near the edge carries zeros in some or all of its
+    rows. ``preprocess_array`` rescales from the global minimum and decides the
+    polarity from the result, and those zeros decide it wrongly. Measured
+    2026-11-18 on 50 real kymographs of motors in vitro (TIRF 488, 16-bit):
+    4 had 1-4 out-of-image columns, all 4 were inverted, and KymoButler found 0
+    of their 63 annotated trajectories. Zeroing ONE border column in only the
+    last 10 % of the rows of 17 clean kymographs inverted 15 of them. Replacing
+    the zeros with the median of the other samples inverted none, in either
+    case.
+
+    The sampler reports no validity mask, and registration padding lies INSIDE
+    the frame anyway, so a zero cannot be told from a genuinely black sample by
+    position. It can by polarity: the decision is taken on the NONZERO samples
+    first. Bright-on-dark (the TIRF case, and every measured failure): a zero is
+    darker than the background, so it is padding or empty background, never a
+    trajectory — fill it. Dark-on-bright (e.g. an 8-bit channel saturating
+    near 255): a zero may BE a trajectory — keep every zero, which is the
+    behaviour before this fix. Only the detector input is filled: SNR, polarity
+    of the reported metrics and the intensity measurements keep reading the
+    original matrix.
+    """
+    import kymobutler  # noqa: E402  (needs the path set above)
+
+    zero = kymo == 0
+    if not zero.any() or zero.all():
+        return kymo
+    nonzero = kymo[~zero].astype(np.float64)
+    lo, hi = float(nonzero.min()), float(nonzero.max())
+    if hi > lo and kymobutler.is_negated((nonzero - lo) / (hi - lo)):
+        return kymo
+    filled = kymo.copy()
+    filled[zero] = np.median(nonzero)
+    return filled
+
+
+def resolve_binet_weights(weights: Optional[str] = None) -> str:
+    """The BiNet variant a request runs: its own choice, else the server default.
+
+    Raises ``ValueError`` for an unknown name, including a mistyped
+    ``KYMOBUTLER_DEFAULT_WEIGHTS`` — a typo must surface as ``velocity_error``,
+    not quietly fall back to the stock weights.
+    """
+    import kymobutler  # noqa: E402  (needs the path set above)
+
+    name = weights if weights is not None else kymobutler.DEFAULT_BINET_WEIGHTS
+    if name not in kymobutler.BINET_WEIGHTS:
+        raise ValueError(
+            f"unknown KymoButler BiNet weights {name!r}; "
+            f"known: {sorted(kymobutler.BINET_WEIGHTS)}"
+        )
+    return name
+
+
 def detect_tracks(
     kymo: np.ndarray,
     *,
@@ -589,6 +650,7 @@ def detect_tracks(
     min_size: Optional[int] = None,
     min_frames: Optional[int] = None,
     pause_thresh: float = 0.10,
+    weights: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """Detect moving particles on a kymograph with KymoButler.
 
@@ -597,6 +659,9 @@ def detect_tracks(
             arc-length positions. The raw sampled intensity, NOT normalised.
         mode: ``"bidirectional"`` (BiNet + decision module; resolves crossings)
             or ``"unidirectional"`` (two-headed UniNet + connected components).
+        weights: BiNet variant (``kymobutler.BINET_WEIGHTS``); None = the server
+            default (``KYMOBUTLER_DEFAULT_WEIGHTS``). Bidirectional mode only —
+            UniNet has no variants.
         device: ``"cpu"`` / ``"cuda"``; auto-detected when None.
         min_size: minimum skeleton pixel count per component. Defaults to
             KymoButler's own per-mode value (10 bidirectional, 3 unidirectional).
@@ -636,16 +701,27 @@ def detect_tracks(
     kymo = kymo.astype(np.float32, copy=False)
     X = kymo.shape[1]
     dev = device or _kymobutler_device()
+    # Resolved for bidirectional only: UniNet has no variants, so a bad
+    # KYMOBUTLER_DEFAULT_WEIGHTS must not take the unidirectional path down too.
+    binet_weights = resolve_binet_weights(weights) if mode == "bidirectional" else "stock"
 
     # KymoButler consumes a row-normalised, polarity-corrected copy. The SNR and
     # the sub-pixel refinement below read the RAW matrix instead, because that is
     # what the DoG detector this replaced reported and what the intensity
     # metrics still measure — so the `snr` column stays comparable across the
-    # detector swap.
-    preprocessed, _raw, negated = kymobutler.preprocess_array(kymo)
+    # detector swap. Zero-filled (out-of-image) samples are replaced in the
+    # detector's copy only; see ``fill_out_of_image``.
+    preprocessed, _raw, negated = kymobutler.preprocess_array(fill_out_of_image(kymo))
 
     if mode == "bidirectional":
-        nets = kymobutler.load_models(("binet", "decnet"), device=dev)
+        if binet_weights == "stock":
+            # Exactly the call this module always made, so anything that patches
+            # ``load_models`` with the original signature keeps working.
+            nets = kymobutler.load_models(("binet", "decnet"), device=dev)
+        else:
+            nets = kymobutler.load_models(
+                ("binet", "decnet"), device=dev, binet_weights=binet_weights
+            )
         pred = kymobutler.segment_bidirectional(preprocessed, nets["binet"], dev)
         # ``track_bidirectional`` takes its OWN ``device=`` and it is NOT
         # optional: the nets already sit on ``dev``, and every tensor this

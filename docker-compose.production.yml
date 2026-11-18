@@ -253,6 +253,9 @@ services:
       - PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512,garbage_collection_threshold:0.6
       - CUDA_LAUNCH_BLOCKING=0
       - ML_GPU_PRIORITY=high
+      # BiNet weight variant /kymograph uses when a request names none
+      # (backend/segmentation/models/kymobutler/README.md). Unset = stock.
+      - KYMOBUTLER_DEFAULT_WEIGHTS=${KYMOBUTLER_DEFAULT_WEIGHTS:-stock}
       # No HF_TOKEN and no HuggingFace cache mount: NOTHING here fetches from
       # the Hub. Verified 2026-09-20 by loading all 11 models in this image with
       # no cache, no token and `--network none`, so a fetch could not silently
