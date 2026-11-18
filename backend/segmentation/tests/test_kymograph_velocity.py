@@ -649,6 +649,40 @@ def test_fill_out_of_image_touches_only_zero_samples():
     assert (padded == 0).any(), "the caller's matrix (read by SNR) is not modified"
 
 
+def test_zero_valued_dark_trajectory_is_kept_on_a_bright_background():
+    """An 8-bit dark-on-bright kymograph whose trajectory reaches exactly 0 must
+    keep it: there a zero may BE the signal, so nothing is filled."""
+    from api.kymograph_velocity import fill_out_of_image, kymograph_polarity
+
+    # Like the production 640 nm channel whose raw median sits at 247 of 255:
+    # background near saturation, a dark streak with a blurred profile whose
+    # core rounds to exactly 0.
+    rng = np.random.default_rng(3)
+    kymo = np.clip(rng.normal(245.0, 6.0, size=(48, 64)), 0, 255)
+    cols = np.arange(64)
+    for f in range(48):
+        kymo[f] *= 1.0 - np.exp(-0.5 * ((cols - (6 + f)) / 1.1) ** 2)
+        kymo[f, 6 + f] = 0.0
+    kymo = np.round(kymo).astype(np.float32)
+    out = fill_out_of_image(kymo)
+    assert out is kymo
+    assert kymograph_polarity(kymo) == -1.0
+
+
+def test_unidirectional_is_not_blocked_by_a_bad_weights_default(monkeypatch):
+    """UniNet has no variants, so a mistyped KYMOBUTLER_DEFAULT_WEIGHTS must not
+    stop the unidirectional path before it reaches its own model load."""
+    kb = pytest.importorskip("kymobutler")
+
+    def _load(*a, **k):
+        raise RuntimeError("reached load_models")
+
+    monkeypatch.setattr(kb, "DEFAULT_BINET_WEIGHTS", "alica_FT")
+    monkeypatch.setattr(kb, "load_models", _load)
+    with pytest.raises(RuntimeError, match="reached load_models"):
+        detect_tracks(_noisy_kymo(F=48, X=64), device="cpu", mode="unidirectional")
+
+
 def test_bidirectional_routes_the_requested_binet_weights(monkeypatch):
     kb = pytest.importorskip("kymobutler")
     seen = []

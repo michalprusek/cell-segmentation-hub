@@ -180,9 +180,10 @@ on in-cell data both variants draw spurious lines in empty regions, `stock`
 mostly vertical, `alica_ft` mostly diagonal at the slope of its training motors.
 Bidirectional tracking takes 0.3-0.7 s per kymograph on CPU with either.
 
-**Rollback.** Set `KYMOBUTLER_DEFAULT_WEIGHTS=stock` in `.env.production`,
-recreate `ml`, and flush the backend's `kymograph` response cache (or wait out
-its 30 min TTL) — its key cannot see the ml environment.
+**Changing the default, rollback included.** Set `KYMOBUTLER_DEFAULT_WEIGHTS`
+in `.env.production`, recreate `ml`, and flush the backend's `kymograph`
+response cache (or wait out its 30 min TTL) — its key cannot see the ml
+environment. Rollback is `KYMOBUTLER_DEFAULT_WEIGHTS=stock`.
 
 ## Architecture (as exported)
 

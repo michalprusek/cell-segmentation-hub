@@ -599,18 +599,28 @@ def fill_out_of_image(kymo: np.ndarray) -> np.ndarray:
     the zeros with the median of the other samples inverted none, in either
     case.
 
-    A 16-bit camera count is never exactly 0, so on those data this touches only
-    padding. On an 8-bit source a genuinely black pixel is replaced too; that
-    only lifts the darkest background to its median, which the per-row
-    normalisation downstream would largely do anyway. Only the detector input is
-    filled: SNR, polarity of the reported metrics and the intensity
-    measurements keep reading the original matrix.
+    The sampler reports no validity mask, and registration padding lies INSIDE
+    the frame anyway, so a zero cannot be told from a genuinely black sample by
+    position. It can by polarity: the decision is taken on the NONZERO samples
+    first. Bright-on-dark (the TIRF case, and every measured failure): a zero is
+    darker than the background, so it is padding or empty background, never a
+    trajectory — fill it. Dark-on-bright (e.g. an 8-bit channel saturating
+    near 255): a zero may BE a trajectory — keep every zero, which is the
+    behaviour before this fix. Only the detector input is filled: SNR, polarity
+    of the reported metrics and the intensity measurements keep reading the
+    original matrix.
     """
+    import kymobutler  # noqa: E402  (needs the path set above)
+
     zero = kymo == 0
     if not zero.any() or zero.all():
         return kymo
+    nonzero = kymo[~zero].astype(np.float64)
+    lo, hi = float(nonzero.min()), float(nonzero.max())
+    if hi > lo and kymobutler.is_negated((nonzero - lo) / (hi - lo)):
+        return kymo
     filled = kymo.copy()
-    filled[zero] = np.median(kymo[~zero])
+    filled[zero] = np.median(nonzero)
     return filled
 
 
@@ -691,7 +701,9 @@ def detect_tracks(
     kymo = kymo.astype(np.float32, copy=False)
     X = kymo.shape[1]
     dev = device or _kymobutler_device()
-    binet_weights = resolve_binet_weights(weights)
+    # Resolved for bidirectional only: UniNet has no variants, so a bad
+    # KYMOBUTLER_DEFAULT_WEIGHTS must not take the unidirectional path down too.
+    binet_weights = resolve_binet_weights(weights) if mode == "bidirectional" else "stock"
 
     # KymoButler consumes a row-normalised, polarity-corrected copy. The SNR and
     # the sub-pixel refinement below read the RAW matrix instead, because that is
