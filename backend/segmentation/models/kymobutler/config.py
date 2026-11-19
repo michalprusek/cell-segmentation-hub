@@ -108,6 +108,21 @@ DEFAULT_VISION_THRESHOLD = 0.5
 DEFAULT_MIN_SIZE = 10
 DEFAULT_MIN_FRAMES = 10
 
+# Bidirectional minimum component size / frame span, per BiNet variant. ``stock``
+# keeps upstream's 10/10, against which the thresholds above were calibrated.
+# ``alica_ft`` uses 3/3 (Michal, 2026-11-19: "klidně zkrať filtr"): its training
+# traces are short (median ~8 rows, 77 % under 10), and on the annotator's
+# movies, leave-one-movie-out, 3/3 raised trace recall from 0.52-0.59 to
+# 0.70-0.85 with the share of track points on signal unchanged (0.53-0.62 at
+# both); on another lab's annotations from 0.41-0.63 to 0.70-0.90, on-signal
+# -0.02 to -0.06. The cost is more tracks: +55 to +120 % on those data. That
+# most of them are real short runs 10/10 discarded is an inference from the
+# unchanged on-signal share, not a measurement.
+BIDIRECTIONAL_MIN_SIZE_FRAMES = {
+    "stock": (DEFAULT_MIN_SIZE, DEFAULT_MIN_FRAMES),
+    "alica_ft": (3, 3),
+}
+
 # --- Tracking ----------------------------------------------------------------
 SEARCH_RADIUS = 1.5
 VISION_MODULE_TILE_SIZE = 48

@@ -701,6 +701,28 @@ def test_bidirectional_routes_the_requested_binet_weights(monkeypatch):
     assert seen == ["stock", "alica_ft", "alica_ft"]
 
 
+def test_bidirectional_length_filter_follows_the_weight_variant(monkeypatch):
+    """stock keeps upstream's 10/10; alica_ft defaults to 3/3; an explicit value wins."""
+    kb = pytest.importorskip("kymobutler")
+    seen = []
+    real = kb.track_bidirectional
+
+    def _spy(*a, **k):
+        seen.append((k["min_size"], k["min_frames"]))
+        return real(*a, **k)
+
+    monkeypatch.setattr(
+        kb, "load_models",
+        lambda keys, model_dir=None, device="cpu", **kw: {"binet": _StubBiNet(), "decnet": None},
+    )
+    monkeypatch.setattr(kb, "track_bidirectional", _spy)
+    kymo = _noisy_kymo(streaks=((6, 1.0),), F=48, X=64)
+    detect_tracks(kymo, device="cpu", weights="stock")
+    detect_tracks(kymo, device="cpu", weights="alica_ft")
+    detect_tracks(kymo, device="cpu", weights="alica_ft", min_size=7, min_frames=8)
+    assert seen == [(10, 10), (3, 3), (7, 8)]
+
+
 def test_unknown_binet_weights_raise_instead_of_falling_back(monkeypatch):
     kb = pytest.importorskip("kymobutler")
     from api.kymograph_velocity import resolve_binet_weights
