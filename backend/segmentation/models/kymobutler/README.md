@@ -180,6 +180,18 @@ on in-cell data both variants draw spurious lines in empty regions, `stock`
 mostly vertical, `alica_ft` mostly diagonal at the slope of its training motors.
 Bidirectional tracking takes 0.3-0.7 s per kymograph on CPU with either.
 
+**Length filter per variant (2026-11-19).** The bidirectional `min_size` /
+`min_frames` default is bound to the variant (`BIDIRECTIONAL_MIN_SIZE_FRAMES`):
+`stock` keeps 10/10, `alica_ft` uses 3/3, because 77 % of its training traces
+span fewer than 10 rows. With `alica_ft`, 3/3 instead of 10/10:
+
+| data | trace recall 10/10 -> 3/3 | tracks | share of track points on signal |
+|---|---|---|---|
+| annotator's movies, leave-one-movie-out | 0.52-0.59 -> 0.70-0.85 | +80 to +120 % | unchanged (0.53-0.62) |
+| another lab's annotations | 0.41-0.63 -> 0.70-0.90 | +55 to +100 % | -0.02 to -0.06 |
+
+The table above (the stock comparison) is at 10/10 for both variants.
+
 **Changing the default, rollback included.** Set `KYMOBUTLER_DEFAULT_WEIGHTS`
 in `.env.production`, recreate `ml`, and flush the backend's `kymograph`
 response cache (or wait out its 30 min TTL) — its key cannot see the ml

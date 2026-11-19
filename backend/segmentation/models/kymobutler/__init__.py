@@ -5,6 +5,7 @@ and for exactly what was dropped from upstream and why.
 """
 
 from .config import (
+    BIDIRECTIONAL_MIN_SIZE_FRAMES,
     BIDIRECTIONAL_THRESHOLD,
     BINET_WEIGHTS,
     DEFAULT_BINET_WEIGHTS,
@@ -19,6 +20,7 @@ from .segmentation import segment_bidirectional, segment_unidirectional
 from .tracking import Track, track_bidirectional, track_unidirectional
 
 __all__ = [
+    "BIDIRECTIONAL_MIN_SIZE_FRAMES",
     "BIDIRECTIONAL_THRESHOLD",
     "BINET_WEIGHTS",
     "DEFAULT_BINET_WEIGHTS",

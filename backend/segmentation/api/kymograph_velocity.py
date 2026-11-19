@@ -663,8 +663,10 @@ def detect_tracks(
             default (``KYMOBUTLER_DEFAULT_WEIGHTS``). Bidirectional mode only —
             UniNet has no variants.
         device: ``"cpu"`` / ``"cuda"``; auto-detected when None.
-        min_size: minimum skeleton pixel count per component. Defaults to
-            KymoButler's own per-mode value (10 bidirectional, 3 unidirectional).
+        min_size: minimum skeleton pixel count per component. Defaults to the
+            per-mode value: bidirectional per BiNet variant
+            (``kymobutler.BIDIRECTIONAL_MIN_SIZE_FRAMES``: stock 10, alica_ft 3),
+            unidirectional 3.
         min_frames: minimum frame span per trajectory. Same defaulting.
         pause_thresh: column/frame speed below which a trajectory counts as
             paused, for the run segmentation.
@@ -734,9 +736,16 @@ def detect_tracks(
             threshold=kymobutler.BIDIRECTIONAL_THRESHOLD,
             vision_threshold=kymobutler.DEFAULT_VISION_THRESHOLD,
             vision_net=nets["decnet"],
-            min_size=kymobutler.DEFAULT_MIN_SIZE if min_size is None else min_size,
+            # Defaults are bound to the weight variant (config.py records why).
+            min_size=(
+                kymobutler.BIDIRECTIONAL_MIN_SIZE_FRAMES[binet_weights][0]
+                if min_size is None
+                else min_size
+            ),
             min_frames=(
-                kymobutler.DEFAULT_MIN_FRAMES if min_frames is None else min_frames
+                kymobutler.BIDIRECTIONAL_MIN_SIZE_FRAMES[binet_weights][1]
+                if min_frames is None
+                else min_frames
             ),
             device=dev,
         )
