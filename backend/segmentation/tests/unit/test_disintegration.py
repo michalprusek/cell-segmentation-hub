@@ -281,7 +281,7 @@ class TestDisintegrationPanel:
 
     def test_unvalidated_regime_flag(self, client):
         # core radius 100, foreground radius 115 -> outside-core fraction
-        # 1 - (100/115)^2 ~ 0.24, inside the gap [0.08, 0.47) that holds no expert mask
+        # 1 - (100/115)^2 ~ 0.24, inside the unvalidated range [0.08, 0.61)
         out = _post(client, {"mask_polygon": _circle(CX, CY, 115),
                              "core_polygon": _circle(CX, CY, 100),
                              "image_width": W, "image_height": H})

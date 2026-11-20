@@ -1,8 +1,8 @@
 {
  "generator": "spheroid_rozpad/analysis/review_fixes/hub_parity_fixtures.py",
  "source": "spheroid_seg/compute_di.py",
- "source_sha256": "e579601881e09f2e3c0bf68d2d1b0e50a89bc3cd7ea0fed6da72bf7ecc664516",
- "masks_sha256": "c4a2e67a4923b36f49cff5a8d71920190a2fc782b16d26d27f4d400b065c1627",
+ "source_sha256": "13d7b950179bba726a851c78fcecf4bcd6926ec57088aa3ca6877ce3a21fd487",
+ "masks_sha256": "e1e7e993ae00946e3b9479b62e389cba30fb511bcf0f5c3fa1f870c4b7558e3e",
  "tolerance": 1e-09,
  "expected": {
   "intact": {
@@ -143,6 +143,34 @@
     0.0
    ],
    "area_total_px": 35265,
+   "area_core_px": 31417
+  },
+  "half_dispersed": {
+   "undefined_reason": null,
+   "metrics": {
+    "DI": 0.3214671848297691,
+    "W1": 0.3332825297909347,
+    "index_B": 0.5555099673179497,
+    "reach_p90": 1.4227195214152335,
+    "n_fragments": 1,
+    "largest_fragment_frac": 1.0,
+    "solidity": 0.9950445567553109,
+    "area_core_px": 31417,
+    "area_corona_px": 39264,
+    "area_total_px": 70681,
+    "n_core_components": 1,
+    "largest_core_component_frac": 1.0,
+    "core_centroid_shift": 0.0,
+    "core_fragmented": 0,
+    "unvalidated_regime": 1,
+    "below_validated_regime": 1
+   },
+   "core_components": [
+    1,
+    1.0,
+    0.0
+   ],
+   "area_total_px": 70681,
    "area_core_px": 31417
   },
   "core_too_small": {

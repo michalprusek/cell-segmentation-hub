@@ -124,7 +124,7 @@ export interface ImageMetrics {
   largestCoreComponentFrac: number | null;
   coreCentroidShift: number | null; // centroid shift by the minor pieces, in R_core
   coreFragmented: number | null; // 0/1: the core anchor is broken (inspect)
-  unvalidatedRegime: number | null; // 0/1: Index B in [0.08, 0.47), where the paper's release holds no expert mask
+  unvalidatedRegime: number | null; // 0/1: Index B in [0.08, 0.61), below the floor and above every intact expert mask
   belowValidatedRegime: number | null; // 0/1: Index B < 0.61 (the detection floor), a screen not a grade
   // Where the numbers came from: the model's raster mask at inference time,
   // or the stored polygons re-rasterised (no raster read-out, or edited).
@@ -200,7 +200,7 @@ interface PaperPanel {
 // backend/segmentation/api/disintegration_metrics.py (a verbatim port of the
 // paper's compute_di.py); a unit test reads that file and fails if they drift.
 export const UNVALIDATED_FRACTION_LO = 0.08;
-export const UNVALIDATED_FRACTION_HI = 0.47;
+export const UNVALIDATED_FRACTION_HI = 0.61;
 export const VALIDATED_FRACTION_FLOOR = 0.61;
 
 // Derived here from Index B instead of being read from the panel, so that a
@@ -1547,7 +1547,7 @@ export class MetricsCalculator {
       },
       { header: 'Core Fragmented (0/1)', key: 'coreFragmented', width: 22 },
       {
-        header: 'Unvalidated Regime: Outside-core Fraction 0.08-0.47 (0/1)',
+        header: 'Unvalidated Regime: Outside-core Fraction 0.08-0.61 (0/1)',
         key: 'unvalidatedRegime',
         width: 52,
       },
