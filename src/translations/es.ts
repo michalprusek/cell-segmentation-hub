@@ -165,12 +165,17 @@ export default {
       badge: 'Cita',
       title: 'Cómo citar SpheroSeg',
       intro:
-        'Si SpheroSeg ha contribuido a su investigación, cite nuestro artículo:',
+        'Si SpheroSeg ha contribuido a su investigación, cítelo. La referencia depende del módulo que utilizó, así que selecciónelo a continuación:',
       copyBibtex: 'Copiar BibTeX',
       copied: 'BibTeX copiado al portapapeles',
       copyFailed:
         'No se pudo copiar. Seleccione el texto y cópielo manualmente.',
-      readPaper: 'Leer el artículo',
+      modulesLabel: 'Módulo',
+      otherModule: 'Otro módulo / SpheroSeg en conjunto',
+      notes: {
+        dinov3:
+          'Estos pesos son una obra derivada de DINOv3 y se distribuyen bajo la licencia DINOv3: si publica resultados obtenidos con ellos, indique que ha utilizado DINOv3.',
+      },
     },
     acknowledgments: {
       badge: 'Agradecimientos',

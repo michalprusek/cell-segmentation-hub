@@ -172,11 +172,16 @@ export default {
       badge: 'Citation',
       title: 'How to cite SpheroSeg',
       intro:
-        'If SpheroSeg contributed to your research, please cite our paper:',
+        'If SpheroSeg contributed to your research, please cite it. The reference depends on the module you used, so choose it below:',
       copyBibtex: 'Copy BibTeX',
       copied: 'BibTeX copied to the clipboard',
       copyFailed: 'Could not copy. Select the text and copy it by hand.',
-      readPaper: 'Read the paper',
+      modulesLabel: 'Module',
+      otherModule: 'Other module / SpheroSeg as a whole',
+      notes: {
+        dinov3:
+          'These weights are a derivative of DINOv3 and are distributed under the DINOv3 License: if you publish results obtained with them, acknowledge the use of DINOv3.',
+      },
     },
     acknowledgments: {
       badge: 'Acknowledgments',

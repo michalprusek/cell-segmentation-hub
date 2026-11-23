@@ -164,11 +164,17 @@ export default {
     citation: {
       badge: '引用',
       title: '如何引用 SpheroSeg',
-      intro: '如果 SpheroSeg 对您的研究有所帮助，请引用我们的论文：',
+      intro:
+        '如果 SpheroSeg 对您的研究有所帮助，请引用它。引用内容取决于您使用的模块，请在下方选择：',
       copyBibtex: '复制 BibTeX',
       copied: 'BibTeX 已复制到剪贴板',
       copyFailed: '复制失败。请手动选择并复制文本。',
-      readPaper: '阅读论文',
+      modulesLabel: '模块',
+      otherModule: '其他模块 / SpheroSeg 整体',
+      notes: {
+        dinov3:
+          '这些权重是 DINOv3 的衍生作品，依据 DINOv3 许可证分发：如发表使用这些权重得到的结果，须注明使用了 DINOv3。',
+      },
     },
     acknowledgments: {
       badge: '致谢',
