@@ -1,18 +1,16 @@
-import { useState, type ReactNode } from 'react';
+import { useState } from 'react';
+import * as RadioGroupPrimitive from '@radix-ui/react-radio-group';
 import { Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { useLanguage } from '@/contexts/useLanguage';
 import {
-  MODULE_CITATIONS,
-  SPHEROSEG_PAPER,
-  SPHEROSEG_PAPER_URL,
+  CITATION_CHOICES,
   citationBibtex,
   doiUrl,
   referenceAuthors,
-  selectedModules,
-  type CitedWork,
+  type Citation,
+  type CitationChoiceId,
 } from '@/lib/citation';
-import type { ProjectType } from '@/types';
 
 const DOI_LINK_CLASS =
   'break-words font-medium text-blue-600 underline-offset-4 hover:underline dark:text-blue-400';
@@ -20,31 +18,11 @@ const REFERENCE_CLASS =
   'border-l-2 border-blue-600 pl-4 leading-relaxed text-gray-800 dark:border-blue-400 dark:text-gray-200';
 const CAPTION_CLASS =
   'font-mono text-[11px] uppercase tracking-[0.14em] text-gray-500 dark:text-gray-400';
-
-const ToggleChip = ({
-  on,
-  onClick,
-  children,
-}: {
-  on: boolean;
-  onClick: () => void;
-  children: ReactNode;
-}) => (
-  <button
-    type="button"
-    aria-pressed={on}
-    onClick={onClick}
-    className={
-      'inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ' +
-      (on
-        ? 'border-blue-600 bg-blue-600 text-white hover:bg-blue-700 dark:border-blue-400 dark:bg-blue-400 dark:text-gray-950 dark:hover:bg-blue-300'
-        : 'border-gray-300 text-gray-700 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800')
-    }
-  >
-    {on && <Check className="h-3.5 w-3.5" aria-hidden />}
-    {children}
-  </button>
-);
+const CHOICE_CLASS =
+  'inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ' +
+  'border-gray-300 text-gray-700 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800 ' +
+  'data-[state=checked]:border-blue-600 data-[state=checked]:bg-blue-600 data-[state=checked]:text-white data-[state=checked]:hover:bg-blue-700 ' +
+  'dark:data-[state=checked]:border-blue-400 dark:data-[state=checked]:bg-blue-400 dark:data-[state=checked]:text-gray-950 dark:data-[state=checked]:hover:bg-blue-300';
 
 const DoiLink = ({ doi }: { doi: string }) => (
   <a
@@ -57,48 +35,50 @@ const DoiLink = ({ doi }: { doi: string }) => (
   </a>
 );
 
-/** A work in the paper's reference style; a conference paper has no DOI until published. */
-const WorkReference = ({ work: w }: { work: CitedWork }) => (
+/**
+ * A work in the paper's reference style. "Version" is not translated, like a
+ * journal name: a reference is text a reader copies into a manuscript, in the
+ * language of the citation (DataCite's own rendering of a Zenodo record reads
+ * "(Version 1.0.0)"), not of the UI.
+ */
+const CitationReference = ({ citation: c }: { citation: Citation }) => (
   <>
-    {referenceAuthors(w.creators).join(', ')} {w.title}.{' '}
-    {w.kind === 'article' ? (
+    {referenceAuthors(c.creators).join(', ')} {c.title}.{' '}
+    {c.kind === 'article' && (
       <>
-        <i>{w.journal}</i> {w.volume} ({w.year}) {w.articleNumber}.
-      </>
-    ) : (
-      <>
-        <i>{w.booktitle}</i>, {w.address} ({w.year}).
+        <i>{c.journal}</i> {c.volume} ({c.year}) {c.articleNumber}.
       </>
     )}
-    {w.doi && (
+    {c.kind === 'inproceedings' && (
+      <>
+        <i>{c.booktitle}</i>, {c.address} ({c.year}).
+      </>
+    )}
+    {c.kind === 'zenodo' && (
+      <>
+        Version {c.version}. <i>Zenodo</i> ({c.year}).
+      </>
+    )}
+    {c.doi && (
       <>
         {' '}
-        <DoiLink doi={w.doi} />
+        <DoiLink doi={c.doi} />
       </>
     )}
   </>
 );
 
 /**
- * "How to cite" on the welcome page: the platform paper, always, plus any
- * module the reader selects — each module's models have their own Zenodo
- * record. Nothing is selected by default; the reader decides what to cite.
+ * "How to cite" on the welcome page. The reader picks the ONE module they
+ * used, and sees the ONE work that cites it (CITATION_CHOICES); nothing is
+ * picked by default, so nothing is cited until they choose.
  */
 const CitationSection = () => {
   const { t } = useLanguage();
-  const paper = SPHEROSEG_PAPER;
-  const [selected, setSelected] = useState<readonly ProjectType[]>([]);
-  // A module with no record of its own is cited through the paper, which is
-  // always cited: this toggle explains that and adds NOTHING to the BibTeX.
-  const [otherModule, setOtherModule] = useState(false);
+  const [choiceId, setChoiceId] = useState<CitationChoiceId | ''>('');
+  const choice = CITATION_CHOICES.find(c => c.id === choiceId);
   // One derivation for both: what is shown is exactly what is copied.
-  const chosen = selectedModules(selected);
-  const bibtex = citationBibtex(chosen);
-
-  const toggle = (type: ProjectType) =>
-    setSelected(prev =>
-      prev.includes(type) ? prev.filter(x => x !== type) : [...prev, type]
-    );
+  const bibtex = choice ? citationBibtex(choice.citation) : '';
 
   const handleCopy = async () => {
     try {
@@ -128,128 +108,71 @@ const CitationSection = () => {
           </div>
 
           <div className="min-w-0 max-w-2xl space-y-5">
-            <p className="leading-relaxed text-gray-600 dark:text-gray-300">
+            <p
+              id="citation-intro"
+              className="leading-relaxed text-gray-600 dark:text-gray-300"
+            >
               {t('landing.citation.intro')}
             </p>
 
-            <p data-testid="citation-reference" className={REFERENCE_CLASS}>
-              {paper.authors.join(', ')} {paper.title}. <i>{paper.journal}</i>{' '}
-              {paper.volume} ({paper.year}) {paper.articleNumber}.{' '}
-              <DoiLink doi={paper.doi} />
-            </p>
-
-            {MODULE_CITATIONS.length > 0 && (
-              <div>
-                <span id="citation-modules-label" className={CAPTION_CLASS}>
-                  {t('landing.citation.modulesLabel')}
-                </span>
-                <p
-                  id="citation-modules-intro"
-                  className="mt-2 text-sm leading-relaxed text-gray-600 dark:text-gray-300"
-                >
-                  {t('landing.citation.modulesIntro')}
-                </p>
-                <div
-                  role="group"
-                  aria-labelledby="citation-modules-label"
-                  aria-describedby="citation-modules-intro"
-                  className="mt-3 flex flex-wrap gap-2"
-                >
-                  {MODULE_CITATIONS.map(({ projectType }) => (
-                    <ToggleChip
-                      key={projectType}
-                      on={selected.includes(projectType)}
-                      onClick={() => toggle(projectType)}
-                    >
-                      {t(`projects.types.${projectType}`)}
-                    </ToggleChip>
-                  ))}
-                  <ToggleChip
-                    on={otherModule}
-                    onClick={() => setOtherModule(on => !on)}
-                  >
-                    {t('landing.citation.otherModule')}
-                  </ToggleChip>
-                </div>
-              </div>
-            )}
-
-            {chosen.map(m => (
-              <div
-                key={m.projectType}
-                data-testid={`citation-module-${m.projectType}`}
-                className="space-y-2"
-              >
-                {/* "Version" is not translated, like the journal name above:
-                    a reference is text a reader copies into a manuscript, in
-                    the language of the citation (DataCite's own rendering of
-                    this record reads "(Version 1.0.0)"), not of the UI. */}
-                <p
-                  data-testid={`citation-module-reference-${m.projectType}`}
-                  className={REFERENCE_CLASS}
-                >
-                  {referenceAuthors(m.creators).join(', ')} {m.title}. Version{' '}
-                  {m.version}. <i>Zenodo</i> ({m.year}). <DoiLink doi={m.doi} />
-                </p>
-                {m.alsoCite && m.alsoCite.length > 0 && (
-                  <div className="space-y-2 pl-4">
-                    <p className="text-sm text-gray-600 dark:text-gray-300">
-                      {t('landing.citation.alsoCite')}
-                    </p>
-                    <ul className="space-y-2">
-                      {m.alsoCite.map(w => (
-                        <li
-                          key={w.bibtexKey}
-                          data-testid={`citation-work-${w.bibtexKey}`}
-                          className={`text-sm ${REFERENCE_CLASS}`}
-                        >
-                          <WorkReference work={w} />
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                {m.noteKey && (
-                  <p className="pl-4 text-sm leading-relaxed text-gray-500 dark:text-gray-400">
-                    {t(m.noteKey)}
-                  </p>
-                )}
-              </div>
-            ))}
-
-            {otherModule && (
-              <p
-                data-testid="citation-other-module"
-                className={`text-sm ${REFERENCE_CLASS}`}
-              >
-                {t('landing.citation.otherModuleNote')}
-              </p>
-            )}
-
             <div>
-              <div className="flex items-center justify-between gap-4">
-                <span className={CAPTION_CLASS}>BibTeX</span>
-                <button
-                  type="button"
-                  onClick={handleCopy}
-                  className="rounded-md border border-gray-300 px-3 py-1 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
-                >
-                  {t('landing.citation.copyBibtex')}
-                </button>
-              </div>
-              <pre className="mt-2 overflow-x-auto rounded-md bg-gray-100 p-4 font-mono text-xs leading-relaxed text-gray-800 ring-1 ring-inset ring-gray-200 dark:bg-white/5 dark:text-gray-200 dark:ring-white/10">
-                <code>{bibtex}</code>
-              </pre>
+              <span id="citation-modules-label" className={CAPTION_CLASS}>
+                {t('landing.citation.modulesLabel')}
+              </span>
+              <RadioGroupPrimitive.Root
+                value={choiceId}
+                onValueChange={value => setChoiceId(value as CitationChoiceId)}
+                aria-labelledby="citation-modules-label"
+                aria-describedby="citation-intro"
+                orientation="horizontal"
+                className="mt-2 flex flex-wrap gap-2"
+              >
+                {CITATION_CHOICES.map(c => (
+                  <RadioGroupPrimitive.Item
+                    key={c.id}
+                    value={c.id}
+                    className={CHOICE_CLASS}
+                  >
+                    <RadioGroupPrimitive.Indicator>
+                      <Check className="h-3.5 w-3.5" aria-hidden />
+                    </RadioGroupPrimitive.Indicator>
+                    {t(c.labelKey)}
+                  </RadioGroupPrimitive.Item>
+                ))}
+              </RadioGroupPrimitive.Root>
             </div>
 
-            <a
-              href={SPHEROSEG_PAPER_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-block text-sm text-blue-600 underline-offset-4 hover:underline dark:text-blue-400"
-            >
-              {t('landing.citation.readPaper')} →
-            </a>
+            {choice && (
+              <>
+                <p data-testid="citation-reference" className={REFERENCE_CLASS}>
+                  <CitationReference citation={choice.citation} />
+                </p>
+                {choice.noteKey && (
+                  <p
+                    data-testid="citation-note"
+                    className="pl-4 text-sm leading-relaxed text-gray-500 dark:text-gray-400"
+                  >
+                    {t(choice.noteKey)}
+                  </p>
+                )}
+
+                <div>
+                  <div className="flex items-center justify-between gap-4">
+                    <span className={CAPTION_CLASS}>BibTeX</span>
+                    <button
+                      type="button"
+                      onClick={handleCopy}
+                      className="rounded-md border border-gray-300 px-3 py-1 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+                    >
+                      {t('landing.citation.copyBibtex')}
+                    </button>
+                  </div>
+                  <pre className="mt-2 overflow-x-auto rounded-md bg-gray-100 p-4 font-mono text-xs leading-relaxed text-gray-800 ring-1 ring-inset ring-gray-200 dark:bg-white/5 dark:text-gray-200 dark:ring-white/10">
+                    <code>{bibtex}</code>
+                  </pre>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>

@@ -165,19 +165,13 @@ export default {
       badge: 'Citace',
       title: 'Jak citovat SpheroSeg',
       intro:
-        'Pokud vám SpheroSeg pomohl ve výzkumu, citujte prosím náš článek:',
+        'Pokud vám SpheroSeg pomohl ve výzkumu, citujte ho prosím. Citace závisí na modulu, který jste použili, proto ho vyberte níže:',
       copyBibtex: 'Kopírovat BibTeX',
       copied: 'BibTeX zkopírován do schránky',
       copyFailed:
         'Kopírování se nezdařilo. Označte text a zkopírujte ho ručně.',
-      readPaper: 'Přečíst článek',
-      modulesLabel: 'Moduly',
-      modulesIntro:
-        'Použili jste konkrétní modul? Jeho natrénované modely mají vlastní záznam na Zenodu, který uvádí i ty, kdo poskytli a anotovali trénovací data. Vyberte moduly, které jste použili, a jejich citace se přidají:',
+      modulesLabel: 'Modul',
       otherModule: 'Jiný modul / SpheroSeg jako celek',
-      otherModuleNote:
-        'Modul bez vlastního záznamu se cituje článkem SpheroSeg výše: vztahuje se na celou platformu a v BibTeXu níže už je.',
-      alsoCite: 'Záznam žádá citovat také:',
       notes: {
         dinov3:
           'Tyto váhy jsou odvozeným dílem DINOv3 a šíří se pod licencí DINOv3: pokud publikujete výsledky získané s jejich pomocí, uveďte, že jste použili DINOv3.',

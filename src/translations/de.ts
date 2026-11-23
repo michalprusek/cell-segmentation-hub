@@ -166,19 +166,13 @@ export default {
       badge: 'Zitieren',
       title: 'So zitieren Sie SpheroSeg',
       intro:
-        'Wenn SpheroSeg zu Ihrer Forschung beigetragen hat, zitieren Sie bitte unseren Artikel:',
+        'Wenn SpheroSeg zu Ihrer Forschung beigetragen hat, zitieren Sie es bitte. Die Referenz hängt vom verwendeten Modul ab, wählen Sie es daher unten aus:',
       copyBibtex: 'BibTeX kopieren',
       copied: 'BibTeX in die Zwischenablage kopiert',
       copyFailed:
         'Kopieren fehlgeschlagen. Markieren Sie den Text und kopieren Sie ihn manuell.',
-      readPaper: 'Artikel lesen',
-      modulesLabel: 'Module',
-      modulesIntro:
-        'Haben Sie ein bestimmtes Modul verwendet? Seine trainierten Modelle haben einen eigenen Eintrag auf Zenodo, der auch diejenigen nennt, die die Trainingsdaten bereitgestellt und annotiert haben. Wählen Sie die verwendeten Module aus, um ihre Zitate hinzuzufügen:',
+      modulesLabel: 'Modul',
       otherModule: 'Anderes Modul / SpheroSeg als Ganzes',
-      otherModuleNote:
-        'Ein Modul ohne eigenen Eintrag wird über den SpheroSeg-Artikel oben zitiert: Er deckt die gesamte Plattform ab und ist bereits im BibTeX unten enthalten.',
-      alsoCite: 'Dieser Eintrag bittet, zusätzlich zu zitieren:',
       notes: {
         dinov3:
           'Diese Gewichte sind ein abgeleitetes Werk von DINOv3 und stehen unter der DINOv3-Lizenz: Wenn Sie damit erzielte Ergebnisse veröffentlichen, geben Sie die Verwendung von DINOv3 an.',

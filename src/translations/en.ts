@@ -172,18 +172,12 @@ export default {
       badge: 'Citation',
       title: 'How to cite SpheroSeg',
       intro:
-        'If SpheroSeg contributed to your research, please cite our paper:',
+        'If SpheroSeg contributed to your research, please cite it. The reference depends on the module you used, so choose it below:',
       copyBibtex: 'Copy BibTeX',
       copied: 'BibTeX copied to the clipboard',
       copyFailed: 'Could not copy. Select the text and copy it by hand.',
-      readPaper: 'Read the paper',
-      modulesLabel: 'Modules',
-      modulesIntro:
-        'Used a specific module? Its trained models have their own record on Zenodo, which also credits the people who provided and annotated the training data. Select the modules you used to add their citations:',
+      modulesLabel: 'Module',
       otherModule: 'Other module / SpheroSeg as a whole',
-      otherModuleNote:
-        'A module without its own record is cited through the SpheroSeg paper above: it covers the whole platform and is already in the BibTeX below.',
-      alsoCite: 'This record also asks you to cite:',
       notes: {
         dinov3:
           'These weights are a derivative of DINOv3 and are distributed under the DINOv3 License: if you publish results obtained with them, acknowledge the use of DINOv3.',
