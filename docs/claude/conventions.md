@@ -43,10 +43,10 @@ GitHub Actions is intentionally minimal (4 chronically-broken workflows were rem
 
 ## Scope: proceed on stated defaults, in full
 
-The maintainer is decisive and has twice rejected multi-question
-`AskUserQuestion` prompts: over-asking frustrates more than a stated
-assumption does. Default: take the most reasonable reading, say the
-assumption in one line, do the work and show the evidence.
+Default: take the most reasonable reading, say the assumption in one
+line, do the work and show the evidence. In this repo a stated
+assumption costs less than a round of clarifying questions, and
+multi-question prompts slow the work down more than they help.
 
 Ask ONE short question first only where a wrong guess is costly to undo:
 

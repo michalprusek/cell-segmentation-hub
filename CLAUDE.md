@@ -8,7 +8,7 @@ Detail lives in `docs/claude/` (moved verbatim on 2026-11-02, brought up to `git
 
 ## Scope: proceed on stated defaults, ask only for real choices
 
-The maintainer is decisive and has rejected multi-question `AskUserQuestion` prompts: take the most reasonable reading, say the assumption in one line, and do the work. Stop and ask one short question first only when a wrong guess is costly: **destructive operations on shared data** (even on a test account), or a genuine scope fork such as **"all / everything"** statements with likely exceptions, **project-type or polyline-kind gating**, an **FE-only fix vs a broader BE/ML refactor**, or **"rotate / re-orient"** where the current orientation may already be right. If you realise mid-way that the reading was wrong, stop and say so; don't keep building on the guess.
+Take the most reasonable reading, say the assumption in one line, and do the work; a stated assumption costs less here than a round of questions. Stop and ask one short question first only when a wrong guess is costly: **destructive operations on shared data** (even on a test account), or a genuine scope fork such as **"all / everything"** statements with likely exceptions, **project-type or polyline-kind gating**, an **FE-only fix vs a broader BE/ML refactor**, or **"rotate / re-orient"** where the current orientation may already be right. If you realise mid-way that the reading was wrong, stop and say so; don't keep building on the guess.
 
 ## Production Safety
 
