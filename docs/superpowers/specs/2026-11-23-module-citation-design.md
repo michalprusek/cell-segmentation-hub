@@ -22,6 +22,7 @@ work — nothing more**:
 | Spheroids                           | the SpheroSeg paper, _CMPB_ 286 (2026) 109602, doi:10.1016/j.cmpb.2026.109602                  |
 | Wound healing                       | the ICIP 2026 workshop paper (LBDL II), Veškrna et al. — no DOI yet                            |
 | Sperm                               | the SpermSeg Zenodo record, doi:10.5281/zenodo.24415067 (v1.0.0) + DINOv3 acknowledgement note |
+| Microtubules                        | the MicrotubuleSeg Zenodo record, doi:10.5281/zenodo.24415383 (v1.0.0); MIT, no note           |
 | Other module / SpheroSeg as a whole | the SpheroSeg paper                                                                            |
 
 Not cited anywhere: the SpheroidSeg and ScratchSeg Zenodo records, the
@@ -40,7 +41,10 @@ ScratchSeg dataset, the datasets inside SpheroMix.
   paper's included; its generated entry is pinned byte for byte to the
   hand-written one it replaced. `latexEscape` decomposes each letter (NFD)
   into base + one combining mark and THROWS on anything it cannot escape.
-  Hyphenated compounds are case-protected as one word ("{U-Net}").
+  Hyphenated compounds are case-protected as one word ("{U-Net}"), and so is
+  a capital with a digit ("{V16}"). Words are found in the RAW title and
+  escaped one by one: bracing after escaping split "DEB\_S4" into
+  "{DEB}\{_S4}", an escaped brace to LaTeX.
 - The three possible entries were typeset in the five styles: 0 errors; one
   warning, elsarticle-num "empty pages" for the workshop paper until it has
   pages. Add its `doi` when the proceedings are out.
