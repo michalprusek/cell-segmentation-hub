@@ -171,6 +171,12 @@ export default {
       copyFailed:
         'Kopírování se nezdařilo. Označte text a zkopírujte ho ručně.',
       readPaper: 'Přečíst článek',
+      modulesIntro:
+        'Použili jste konkrétní modul? Jeho natrénované modely mají vlastní záznam na Zenodu, který uvádí i ty, kdo poskytli a anotovali trénovací data. Vyberte moduly, které jste použili, a jejich citace se přidají:',
+      notes: {
+        dinov3:
+          'Tyto váhy jsou odvozeným dílem DINOv3 a šíří se pod licencí DINOv3: pokud publikujete výsledky získané s jejich pomocí, uveďte, že jste použili DINOv3.',
+      },
     },
     acknowledgments: {
       badge: 'Poděkování',

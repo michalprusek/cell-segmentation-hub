@@ -172,6 +172,12 @@ export default {
       copyFailed:
         'Échec de la copie. Sélectionnez le texte et copiez-le manuellement.',
       readPaper: 'Lire l’article',
+      modulesIntro:
+        'Vous avez utilisé un module en particulier ? Ses modèles entraînés ont leur propre notice sur Zenodo, qui crédite aussi les personnes ayant fourni et annoté les données d’entraînement. Sélectionnez les modules utilisés pour ajouter leurs citations :',
+      notes: {
+        dinov3:
+          'Ces poids sont une œuvre dérivée de DINOv3 et sont distribués sous la licence DINOv3 : si vous publiez des résultats obtenus avec eux, mentionnez l’utilisation de DINOv3.',
+      },
     },
     acknowledgments: {
       badge: 'Remerciements',

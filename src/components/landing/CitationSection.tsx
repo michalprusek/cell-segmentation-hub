@@ -1,19 +1,39 @@
+import { useState } from 'react';
+import { Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { useLanguage } from '@/contexts/useLanguage';
 import {
-  SPHEROSEG_BIBTEX,
+  MODULE_CITATIONS,
   SPHEROSEG_PAPER,
   SPHEROSEG_PAPER_URL,
+  citationBibtex,
+  doiUrl,
 } from '@/lib/citation';
+import type { ProjectType } from '@/types';
 
-/** "How to cite" on the welcome page: the reference, its DOI and BibTeX. */
+const DOI_LINK_CLASS =
+  'break-words font-medium text-blue-600 underline-offset-4 hover:underline dark:text-blue-400';
+
+/**
+ * "How to cite" on the welcome page: the platform paper, always, plus any
+ * module the reader selects — each module's models have their own Zenodo
+ * record. Nothing is selected by default; the reader decides what to cite.
+ */
 const CitationSection = () => {
   const { t } = useLanguage();
   const paper = SPHEROSEG_PAPER;
+  const [selected, setSelected] = useState<readonly ProjectType[]>([]);
+  const chosen = MODULE_CITATIONS.filter(m => selected.includes(m.projectType));
+  const bibtex = citationBibtex(selected);
+
+  const toggle = (type: ProjectType) =>
+    setSelected(prev =>
+      prev.includes(type) ? prev.filter(x => x !== type) : [...prev, type]
+    );
 
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(SPHEROSEG_BIBTEX);
+      await navigator.clipboard.writeText(bibtex);
       toast.success(t('landing.citation.copied'));
     } catch {
       // No clipboard permission, or an insecure context. The BibTeX is on
@@ -53,11 +73,77 @@ const CitationSection = () => {
                 href={SPHEROSEG_PAPER_URL}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="break-words font-medium text-blue-600 underline-offset-4 hover:underline dark:text-blue-400"
+                className={DOI_LINK_CLASS}
               >
                 doi:{paper.doi}
               </a>
             </p>
+
+            {MODULE_CITATIONS.length > 0 && (
+              <div>
+                <p
+                  id="citation-modules-intro"
+                  className="text-sm leading-relaxed text-gray-600 dark:text-gray-300"
+                >
+                  {t('landing.citation.modulesIntro')}
+                </p>
+                <div
+                  role="group"
+                  aria-labelledby="citation-modules-intro"
+                  className="mt-3 flex flex-wrap gap-2"
+                >
+                  {MODULE_CITATIONS.map(({ projectType }) => {
+                    const on = selected.includes(projectType);
+                    return (
+                      <button
+                        key={projectType}
+                        type="button"
+                        aria-pressed={on}
+                        onClick={() => toggle(projectType)}
+                        className={
+                          'inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ' +
+                          (on
+                            ? 'border-blue-600 bg-blue-600 text-white hover:bg-blue-700 dark:border-blue-400 dark:bg-blue-400 dark:text-gray-950 dark:hover:bg-blue-300'
+                            : 'border-gray-300 text-gray-700 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800')
+                        }
+                      >
+                        {on && <Check className="h-3.5 w-3.5" aria-hidden />}
+                        {t(`projects.types.${projectType}`)}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {chosen.map(m => (
+              <div
+                key={m.projectType}
+                data-testid={`citation-module-${m.projectType}`}
+                className="space-y-2"
+              >
+                <p
+                  data-testid={`citation-module-reference-${m.projectType}`}
+                  className="border-l-2 border-blue-600 pl-4 leading-relaxed text-gray-800 dark:border-blue-400 dark:text-gray-200"
+                >
+                  {m.authors.join(', ')} {m.title}. Version {m.version}.{' '}
+                  <i>Zenodo</i> ({m.year}).{' '}
+                  <a
+                    href={doiUrl(m.doi)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={DOI_LINK_CLASS}
+                  >
+                    doi:{m.doi}
+                  </a>
+                </p>
+                {m.noteKey && (
+                  <p className="pl-4 text-sm leading-relaxed text-gray-500 dark:text-gray-400">
+                    {t(m.noteKey)}
+                  </p>
+                )}
+              </div>
+            ))}
 
             <div>
               <div className="flex items-center justify-between gap-4">
@@ -73,7 +159,7 @@ const CitationSection = () => {
                 </button>
               </div>
               <pre className="mt-2 overflow-x-auto rounded-md bg-gray-100 p-4 font-mono text-xs leading-relaxed text-gray-800 ring-1 ring-inset ring-gray-200 dark:bg-white/5 dark:text-gray-200 dark:ring-white/10">
-                <code>{SPHEROSEG_BIBTEX}</code>
+                <code>{bibtex}</code>
               </pre>
             </div>
 

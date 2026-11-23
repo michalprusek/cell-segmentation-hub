@@ -171,6 +171,12 @@ export default {
       copyFailed:
         'No se pudo copiar. Seleccione el texto y cópielo manualmente.',
       readPaper: 'Leer el artículo',
+      modulesIntro:
+        '¿Ha utilizado un módulo concreto? Sus modelos entrenados tienen su propio registro en Zenodo, que también reconoce a quienes aportaron y anotaron los datos de entrenamiento. Seleccione los módulos que utilizó para añadir sus citas:',
+      notes: {
+        dinov3:
+          'Estos pesos son una obra derivada de DINOv3 y se distribuyen bajo la licencia DINOv3: si publica resultados obtenidos con ellos, indique que ha utilizado DINOv3.',
+      },
     },
     acknowledgments: {
       badge: 'Agradecimientos',
