@@ -172,6 +172,10 @@ export default {
       modulesLabel: '模块',
       modulesIntro:
         '使用了某个具体模块？其训练好的模型在 Zenodo 上有独立的记录，记录中也署名了提供和标注训练数据的人员。选择您使用过的模块即可添加相应的引用：',
+      otherModule: '其他模块 / SpheroSeg 整体',
+      otherModuleNote:
+        '没有独立记录的模块请引用上方的 SpheroSeg 论文：它涵盖整个平台，且已包含在下方的 BibTeX 中。',
+      alsoCite: '该记录还要求引用：',
       notes: {
         dinov3:
           '这些权重是 DINOv3 的衍生作品，依据 DINOv3 许可证分发：如发表使用这些权重得到的结果，须注明使用了 DINOv3。',

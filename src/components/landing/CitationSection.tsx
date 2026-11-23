@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { useLanguage } from '@/contexts/useLanguage';
@@ -10,6 +10,7 @@ import {
   doiUrl,
   referenceAuthors,
   selectedModules,
+  type CitedWork,
 } from '@/lib/citation';
 import type { ProjectType } from '@/types';
 
@@ -20,6 +21,64 @@ const REFERENCE_CLASS =
 const CAPTION_CLASS =
   'font-mono text-[11px] uppercase tracking-[0.14em] text-gray-500 dark:text-gray-400';
 
+const ToggleChip = ({
+  on,
+  onClick,
+  children,
+}: {
+  on: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) => (
+  <button
+    type="button"
+    aria-pressed={on}
+    onClick={onClick}
+    className={
+      'inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ' +
+      (on
+        ? 'border-blue-600 bg-blue-600 text-white hover:bg-blue-700 dark:border-blue-400 dark:bg-blue-400 dark:text-gray-950 dark:hover:bg-blue-300'
+        : 'border-gray-300 text-gray-700 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800')
+    }
+  >
+    {on && <Check className="h-3.5 w-3.5" aria-hidden />}
+    {children}
+  </button>
+);
+
+const DoiLink = ({ doi }: { doi: string }) => (
+  <a
+    href={doiUrl(doi)}
+    target="_blank"
+    rel="noopener noreferrer"
+    className={DOI_LINK_CLASS}
+  >
+    doi:{doi}
+  </a>
+);
+
+/** A work in the paper's reference style; a conference paper has no DOI until published. */
+const WorkReference = ({ work: w }: { work: CitedWork }) => (
+  <>
+    {referenceAuthors(w.creators).join(', ')} {w.title}.{' '}
+    {w.kind === 'article' ? (
+      <>
+        <i>{w.journal}</i> {w.volume} ({w.year}) {w.articleNumber}.
+      </>
+    ) : (
+      <>
+        <i>{w.booktitle}</i>, {w.address} ({w.year}).
+      </>
+    )}
+    {w.doi && (
+      <>
+        {' '}
+        <DoiLink doi={w.doi} />
+      </>
+    )}
+  </>
+);
+
 /**
  * "How to cite" on the welcome page: the platform paper, always, plus any
  * module the reader selects — each module's models have their own Zenodo
@@ -29,6 +88,9 @@ const CitationSection = () => {
   const { t } = useLanguage();
   const paper = SPHEROSEG_PAPER;
   const [selected, setSelected] = useState<readonly ProjectType[]>([]);
+  // A module with no record of its own is cited through the paper, which is
+  // always cited: this toggle explains that and adds NOTHING to the BibTeX.
+  const [otherModule, setOtherModule] = useState(false);
   // One derivation for both: what is shown is exactly what is copied.
   const chosen = selectedModules(selected);
   const bibtex = citationBibtex(chosen);
@@ -73,14 +135,7 @@ const CitationSection = () => {
             <p data-testid="citation-reference" className={REFERENCE_CLASS}>
               {paper.authors.join(', ')} {paper.title}. <i>{paper.journal}</i>{' '}
               {paper.volume} ({paper.year}) {paper.articleNumber}.{' '}
-              <a
-                href={SPHEROSEG_PAPER_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={DOI_LINK_CLASS}
-              >
-                doi:{paper.doi}
-              </a>
+              <DoiLink doi={paper.doi} />
             </p>
 
             {MODULE_CITATIONS.length > 0 && (
@@ -100,26 +155,21 @@ const CitationSection = () => {
                   aria-describedby="citation-modules-intro"
                   className="mt-3 flex flex-wrap gap-2"
                 >
-                  {MODULE_CITATIONS.map(({ projectType }) => {
-                    const on = selected.includes(projectType);
-                    return (
-                      <button
-                        key={projectType}
-                        type="button"
-                        aria-pressed={on}
-                        onClick={() => toggle(projectType)}
-                        className={
-                          'inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ' +
-                          (on
-                            ? 'border-blue-600 bg-blue-600 text-white hover:bg-blue-700 dark:border-blue-400 dark:bg-blue-400 dark:text-gray-950 dark:hover:bg-blue-300'
-                            : 'border-gray-300 text-gray-700 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800')
-                        }
-                      >
-                        {on && <Check className="h-3.5 w-3.5" aria-hidden />}
-                        {t(`projects.types.${projectType}`)}
-                      </button>
-                    );
-                  })}
+                  {MODULE_CITATIONS.map(({ projectType }) => (
+                    <ToggleChip
+                      key={projectType}
+                      on={selected.includes(projectType)}
+                      onClick={() => toggle(projectType)}
+                    >
+                      {t(`projects.types.${projectType}`)}
+                    </ToggleChip>
+                  ))}
+                  <ToggleChip
+                    on={otherModule}
+                    onClick={() => setOtherModule(on => !on)}
+                  >
+                    {t('landing.citation.otherModule')}
+                  </ToggleChip>
                 </div>
               </div>
             )}
@@ -138,17 +188,27 @@ const CitationSection = () => {
                   data-testid={`citation-module-reference-${m.projectType}`}
                   className={REFERENCE_CLASS}
                 >
-                  {referenceAuthors(m).join(', ')} {m.title}. Version{' '}
-                  {m.version}. <i>Zenodo</i> ({m.year}).{' '}
-                  <a
-                    href={doiUrl(m.doi)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className={DOI_LINK_CLASS}
-                  >
-                    doi:{m.doi}
-                  </a>
+                  {referenceAuthors(m.creators).join(', ')} {m.title}. Version{' '}
+                  {m.version}. <i>Zenodo</i> ({m.year}). <DoiLink doi={m.doi} />
                 </p>
+                {m.alsoCite && m.alsoCite.length > 0 && (
+                  <div className="space-y-2 pl-4">
+                    <p className="text-sm text-gray-600 dark:text-gray-300">
+                      {t('landing.citation.alsoCite')}
+                    </p>
+                    <ul className="space-y-2">
+                      {m.alsoCite.map(w => (
+                        <li
+                          key={w.bibtexKey}
+                          data-testid={`citation-work-${w.bibtexKey}`}
+                          className={`text-sm ${REFERENCE_CLASS}`}
+                        >
+                          <WorkReference work={w} />
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
                 {m.noteKey && (
                   <p className="pl-4 text-sm leading-relaxed text-gray-500 dark:text-gray-400">
                     {t(m.noteKey)}
@@ -156,6 +216,15 @@ const CitationSection = () => {
                 )}
               </div>
             ))}
+
+            {otherModule && (
+              <p
+                data-testid="citation-other-module"
+                className={`text-sm ${REFERENCE_CLASS}`}
+              >
+                {t('landing.citation.otherModuleNote')}
+              </p>
+            )}
 
             <div>
               <div className="flex items-center justify-between gap-4">

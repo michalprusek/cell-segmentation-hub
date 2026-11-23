@@ -175,6 +175,10 @@ export default {
       modulesLabel: 'Modules',
       modulesIntro:
         'Vous avez utilisé un module en particulier ? Ses modèles entraînés ont leur propre notice sur Zenodo, qui crédite aussi les personnes ayant fourni et annoté les données d’entraînement. Sélectionnez les modules utilisés pour ajouter leurs citations :',
+      otherModule: 'Autre module / SpheroSeg dans son ensemble',
+      otherModuleNote:
+        'Un module sans notice propre se cite via l’article SpheroSeg ci-dessus : il couvre toute la plateforme et figure déjà dans le BibTeX ci-dessous.',
+      alsoCite: 'Cette notice demande de citer également :',
       notes: {
         dinov3:
           'Ces poids sont une œuvre dérivée de DINOv3 et sont distribués sous la licence DINOv3 : si vous publiez des résultats obtenus avec eux, mentionnez l’utilisation de DINOv3.',

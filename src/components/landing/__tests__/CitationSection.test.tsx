@@ -15,9 +15,13 @@ import {
   citationBibtex,
   latexEscape,
   moduleBibtex,
+  referenceAuthors,
   selectedModules,
+  workBibtex,
+  type CitedWork,
   type ModuleCitation,
 } from '@/lib/citation';
+import * as PINNED from './citationFixtures';
 import { PROJECT_TYPES } from '@/types';
 import en from '@/translations/en';
 import cs from '@/translations/cs';
@@ -146,23 +150,7 @@ describe('SPHEROSEG_BIBTEX', () => {
 const SPERM_DOI = '10.5281/zenodo.24415067';
 const SPERM_TOGGLE = { name: 'projects.types.sperm' };
 
-/*
- * The sperm entry exactly as first shipped and typeset (plainnat,
- * elsarticle-num, IEEEtran, biblatex: 0 warnings, 0 errors). It is now
- * GENERATED from the record's fields, and must still come out byte for byte.
- */
-const SPERM_BIBTEX = String.raw`@misc{prusek2026spermweights,
-  title        = {{SpheroSeg} sperm morphology models (three-part and two-part): trained weights},
-  author       = {Pr{\r{u}}{\v{s}}ek, Michal and Novoz{\'a}msk{\'y}, Adam and {\v{S}}roubek, Filip and Nesn{\'i}dalov{\'a}, So{\v{n}}a and Albrechtov{\'a}, Jana and Albrecht, Tom{\'a}{\v{s}}},
-  howpublished = {Zenodo},
-  version      = {1.0.0},
-  year         = {2026},
-  doi          = {10.5281/zenodo.24415067},
-  url          = {https://doi.org/10.5281/zenodo.24415067}
-}`;
-
-const spermRecord = () =>
-  MODULE_CITATIONS.find(m => m.projectType === 'sperm')!;
+const SPERM_BIBTEX = PINNED.BIB_PRUSEK2026SPERMSEG;
 
 const bibtexBlock = () =>
   screen.getByText(/@article\{prusek2026spheroseg,/).textContent;
@@ -190,7 +178,10 @@ describe('CitationSection — module citations', () => {
     });
     expect(
       Array.from(group.querySelectorAll('button')).map(b => b.textContent)
-    ).toEqual(MODULE_CITATIONS.map(m => `projects.types.${m.projectType}`));
+    ).toEqual([
+      ...MODULE_CITATIONS.map(m => `projects.types.${m.projectType}`),
+      'landing.citation.otherModule',
+    ]);
   });
 
   it('adds the record’s full reference, its DOI link and its licence note', async () => {
@@ -207,8 +198,9 @@ describe('CitationSection — module citations', () => {
       screen.getByTestId('citation-module-reference-sperm').textContent
     ).toBe(
       'Průšek M., Novozámský A., Šroubek F., Nesnídalová S., Albrechtová J., ' +
-        'Albrecht T. SpheroSeg sperm morphology models (three-part and ' +
-        'two-part): trained weights. Version 1.0.0. Zenodo (2026). ' +
+        'Albrecht T. SpermSeg: sperm morphology module of SpheroSeg ' +
+        '(three-part and two-part models, trained weights). Version 1.0.0. ' +
+        'Zenodo (2026). ' +
         `doi:${SPERM_DOI}`
     );
     const link = screen.getByRole('link', { name: `doi:${SPERM_DOI}` });
@@ -268,7 +260,10 @@ describe('MODULE_CITATIONS', () => {
     const types = MODULE_CITATIONS.map(m => m.projectType);
     expect(new Set(types).size).toBe(types.length);
     for (const type of types) expect(PROJECT_TYPES).toContain(type);
-    const keys = MODULE_CITATIONS.map(m => m.bibtexKey);
+    const keys = MODULE_CITATIONS.flatMap(m => [
+      m.bibtexKey,
+      ...(m.alsoCite ?? []).map(w => w.bibtexKey),
+    ]);
     expect(new Set([...keys, 'prusek2026spheroseg']).size).toBe(
       keys.length + 1
     );
@@ -288,10 +283,6 @@ describe('MODULE_CITATIONS', () => {
         expect((value as string).length).toBeGreaterThan(20);
       }
     }
-  });
-
-  it('generates the sperm BibTeX byte for byte as first shipped', () => {
-    expect(moduleBibtex(spermRecord())).toBe(SPERM_BIBTEX);
   });
 
   it('generates a well-formed entry: braces balance and never go negative', () => {
@@ -374,5 +365,359 @@ describe('selectedModules / citationBibtex', () => {
     expect(citationBibtex(modules)).toBe(
       [SPHEROSEG_BIBTEX, ...modules.map(moduleBibtex)].join('\n\n')
     );
+  });
+});
+
+/*
+ * SpheroidSeg and ScratchSeg, and the works their records ask to be cited
+ * with them. Literal metadata from the Zenodo API (24439099, 24416067) and
+ * Crossref (the three dataset DOIs), read 2026-11-23.
+ */
+const moduleOf = (type: ModuleCitation['projectType']) =>
+  MODULE_CITATIONS.find(m => m.projectType === type)!;
+const work = (key: string): CitedWork =>
+  MODULE_CITATIONS.flatMap(m => m.alsoCite ?? []).find(
+    w => w.bibtexKey === key
+  )!;
+
+describe('Spheroid and wound-healing records', () => {
+  it('lists the modules in project-type order', () => {
+    expect(MODULE_CITATIONS.map(m => m.projectType)).toEqual([
+      'spheroid',
+      'wound',
+      'sperm',
+    ]);
+  });
+
+  it('cites the versioned DOIs, never the concept DOIs', () => {
+    expect(moduleOf('spheroid').doi).toBe('10.5281/zenodo.24439099');
+    expect(moduleOf('wound').doi).toBe('10.5281/zenodo.24416067');
+    const concept = [
+      '10.5281/zenodo.24439098',
+      '10.5281/zenodo.24416066',
+      '10.5281/zenodo.24415066',
+      // The ScratchSeg DATASET is deliberately not offered.
+      '10.5281/zenodo.24416065',
+    ];
+    for (const m of MODULE_CITATIONS) expect(concept).not.toContain(m.doi);
+  });
+
+  it('asks for exactly the works each record asks for', () => {
+    expect(moduleOf('spheroid').alsoCite!.map(w => w.doi)).toEqual([
+      '10.1038/s41597-025-04441-x',
+      '10.1016/j.cmpb.2020.105837',
+      '10.1016/j.neucom.2023.127105',
+    ]);
+    expect(moduleOf('wound').alsoCite!.map(w => w.bibtexKey)).toEqual([
+      'veskrna2026wound',
+    ]);
+    expect(moduleOf('sperm').alsoCite).toBeUndefined();
+    // The platform paper is always cited, so no record repeats it.
+    for (const w of MODULE_CITATIONS.flatMap(m => m.alsoCite ?? []))
+      expect(w.doi).not.toBe('10.1016/j.cmpb.2026.109602');
+  });
+
+  it('keeps every Crossref author, in order', () => {
+    const atlas = work('blondeel2025atlas').creators;
+    expect(atlas).toHaveLength(23);
+    expect(atlas[0]).toEqual({ family: 'Blondeel', given: 'Eva' });
+    expect(atlas[22]).toEqual({ family: 'De Wever', given: 'Olivier' });
+    expect(work('lacalle2021spheroidj').creators).toHaveLength(10);
+    expect(work('garciadominguez2024style').creators).toHaveLength(5);
+  });
+
+  it('generates every entry byte for byte as typeset', () => {
+    const generated = [
+      moduleBibtex(moduleOf('spheroid')),
+      ...moduleOf('spheroid').alsoCite!.map(workBibtex),
+      moduleBibtex(moduleOf('wound')),
+      ...moduleOf('wound').alsoCite!.map(workBibtex),
+      moduleBibtex(moduleOf('sperm')),
+    ];
+    expect(generated).toEqual([
+      PINNED.BIB_PRUSEK2026SPHEROIDSEG,
+      PINNED.BIB_BLONDEEL2025ATLAS,
+      PINNED.BIB_LACALLE2021SPHEROIDJ,
+      PINNED.BIB_GARCIADOMINGUEZ2024STYLE,
+      PINNED.BIB_VESKRNA2026SCRATCHSEG,
+      PINNED.BIB_VESKRNA2026WOUND,
+      PINNED.BIB_PRUSEK2026SPERMSEG,
+    ]);
+  });
+
+  it('writes the identifiers Crossref gives', () => {
+    const field = (entry: string, name: string) =>
+      entry.match(
+        new RegExp(String.raw`^\s*${name}\s*=\s*\{(.*)\},?$`, 'm')
+      )?.[1];
+    const atlas = workBibtex(work('blondeel2025atlas'));
+    expect([
+      field(atlas, 'journal'),
+      field(atlas, 'volume'),
+      field(atlas, 'pages'),
+      field(atlas, 'year'),
+    ]).toEqual(['Scientific Data', '12', '283', '2025']);
+    const spheroidj = workBibtex(work('lacalle2021spheroidj'));
+    expect([
+      field(spheroidj, 'journal'),
+      field(spheroidj, 'volume'),
+      field(spheroidj, 'pages'),
+      field(spheroidj, 'year'),
+    ]).toEqual([
+      'Computer Methods and Programs in Biomedicine',
+      '200',
+      '105837',
+      '2021',
+    ]);
+    const style = workBibtex(work('garciadominguez2024style'));
+    expect([
+      field(style, 'journal'),
+      field(style, 'volume'),
+      field(style, 'pages'),
+      field(style, 'year'),
+    ]).toEqual(['Neurocomputing', '569', '127105', '2024']);
+  });
+
+  it('gives the workshop paper no DOI until it has one', () => {
+    const entry = workBibtex(work('veskrna2026wound'));
+    expect(entry).toMatch(/^@inproceedings\{veskrna2026wound,$/m);
+    expect(entry).not.toMatch(/doi|url/);
+    const withDoi = workBibtex({
+      ...(work('veskrna2026wound') as CitedWork),
+      doi: '10.1109/x',
+    });
+    expect(withDoi).toContain('  doi       = {10.1109/x},');
+    expect(withDoi).toContain('  url       = {https://doi.org/10.1109/x}');
+  });
+});
+
+describe('title case protection', () => {
+  it('braces a hyphenated model name as ONE word', () => {
+    const entry = workBibtex({
+      kind: 'article',
+      bibtexKey: 'k',
+      creators: [{ family: 'Doe', given: 'Jane' }],
+      title: 'U-Net and SegFormer-B0 beat three-part models on DINOv3',
+      journal: 'J',
+      volume: '1',
+      articleNumber: '1',
+      year: '2026',
+      doi: '10.0/k',
+    });
+    expect(entry).toContain(
+      'title   = {{U-Net} and {SegFormer-B0} beat three-part models on {DINOv3}},'
+    );
+  });
+});
+
+describe('referenceAuthors', () => {
+  const people = (n: number) =>
+    Array.from({ length: n }, (_, i) => ({
+      family: `F${i}`,
+      given: 'Ann Bea',
+    }));
+
+  it('lists up to six authors in full, initials of every given name', () => {
+    expect(referenceAuthors(people(6))).toEqual(
+      Array.from({ length: 6 }, (_, i) => `F${i} A. B.`)
+    );
+  });
+
+  it('shortens seven or more to the first six and "et al."', () => {
+    expect(referenceAuthors(people(7))).toEqual([
+      ...Array.from({ length: 6 }, (_, i) => `F${i} A. B.`),
+      'et al.',
+    ]);
+  });
+});
+
+describe('citationBibtex with works', () => {
+  const shared: CitedWork = {
+    kind: 'article',
+    bibtexKey: 'shared2026',
+    creators: [{ family: 'Doe', given: 'Jane' }],
+    title: 'Shared data',
+    journal: 'J',
+    volume: '1',
+    articleNumber: '1',
+    year: '2026',
+    doi: '10.0/shared',
+  };
+  const mod = (projectType: ModuleCitation['projectType']): ModuleCitation => ({
+    projectType,
+    bibtexKey: `${projectType}2026`,
+    creators: [{ family: 'Doe', given: 'Jane' }],
+    title: projectType,
+    version: '1',
+    year: '2026',
+    doi: `10.0/${projectType}`,
+    alsoCite: [shared],
+  });
+
+  it('follows each module by its works, and writes a shared work once', () => {
+    const [a, b] = [mod('wound'), mod('sperm')];
+    expect(citationBibtex([a, b])).toBe(
+      [
+        SPHEROSEG_BIBTEX,
+        moduleBibtex(a),
+        workBibtex(shared),
+        moduleBibtex(b),
+      ].join('\n\n')
+    );
+  });
+});
+
+describe('CitationSection — records with works to cite', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('shows the spheroid record, then the three datasets it asks for', async () => {
+    const user = userEvent.setup();
+    render(<CitationSection />);
+    await user.click(
+      screen.getByRole('button', { name: 'projects.types.spheroid' })
+    );
+
+    expect(
+      screen.getByTestId('citation-module-reference-spheroid').textContent
+    ).toBe(
+      'Průšek M., Novozámský A., Škubník J., Svobodová Pavlíčková V., ' +
+        'Rimpelová S. SpheroidSeg: tumour-spheroid segmentation module of ' +
+        'SpheroSeg (HRNet, CBAM-ResUNet, U-Net, SegFormer-B0, Mamba-UNet; ' +
+        'trained weights). Version 1.0.0. Zenodo (2026). ' +
+        'doi:10.5281/zenodo.24439099'
+    );
+    const module = screen.getByTestId('citation-module-spheroid');
+    expect(module.textContent).toContain('landing.citation.alsoCite');
+    expect(
+      screen.getByTestId('citation-work-blondeel2025atlas').textContent
+    ).toBe(
+      'Blondeel E., Peirsman A., Vermeulen S., Piccinini F., De Vuyst F., ' +
+        'Estêvão D., et al. The Spheroid Light Microscopy Image Atlas for ' +
+        'morphometrical analysis of three-dimensional cell cultures. ' +
+        'Scientific Data 12 (2025) 283. doi:10.1038/s41597-025-04441-x'
+    );
+    expect(
+      screen.getByTestId('citation-work-garciadominguez2024style').textContent
+    ).toBe(
+      'García-Domínguez M., Domínguez C., Heras J., Mata E., Pascual V. ' +
+        'Deep style transfer to deal with the domain shift problem on ' +
+        'spheroid segmentation. Neurocomputing 569 (2024) 127105. ' +
+        'doi:10.1016/j.neucom.2023.127105'
+    );
+    expect(
+      screen.getByRole('link', { name: 'doi:10.1016/j.cmpb.2020.105837' })
+    ).toHaveAttribute('href', 'https://doi.org/10.1016/j.cmpb.2020.105837');
+    expect(bibtexBlock()).toBe(
+      [
+        SPHEROSEG_BIBTEX,
+        PINNED.BIB_PRUSEK2026SPHEROIDSEG,
+        PINNED.BIB_BLONDEEL2025ATLAS,
+        PINNED.BIB_LACALLE2021SPHEROIDJ,
+        PINNED.BIB_GARCIADOMINGUEZ2024STYLE,
+      ].join('\n\n')
+    );
+  });
+
+  it('shows the workshop paper without a DOI link', async () => {
+    const user = userEvent.setup();
+    render(<CitationSection />);
+    await user.click(
+      screen.getByRole('button', { name: 'projects.types.wound' })
+    );
+
+    const paper = screen.getByTestId('citation-work-veskrna2026wound');
+    expect(paper.textContent).toBe(
+      'Veškrna L., Průšek M., Novozámský A., Šroubek F., Svobodová ' +
+        'Pavlíčková V., Rimpelová S. Generalizing Wound Healing ' +
+        'Segmentation: From Semi-Automatic Annotation to Robust Inference. ' +
+        'IEEE ICIP 2026 Workshop Learning Beyond Deep Learning (LBDL) II, ' +
+        'Tampere (2026).'
+    );
+    expect(paper.querySelector('a')).toBeNull();
+  });
+
+  it('copies every selected module with its works, in page order', async () => {
+    const user = userEvent.setup();
+    const writeText = vi
+      .spyOn(navigator.clipboard, 'writeText')
+      .mockResolvedValue(undefined);
+    render(<CitationSection />);
+    // Clicked in REVERSE page order on purpose.
+    await user.click(
+      screen.getByRole('button', { name: 'projects.types.sperm' })
+    );
+    await user.click(
+      screen.getByRole('button', { name: 'projects.types.wound' })
+    );
+    await user.click(
+      screen.getByRole('button', { name: 'landing.citation.copyBibtex' })
+    );
+
+    expect(writeText).toHaveBeenCalledWith(
+      [
+        SPHEROSEG_BIBTEX,
+        PINNED.BIB_VESKRNA2026SCRATCHSEG,
+        PINNED.BIB_VESKRNA2026WOUND,
+        PINNED.BIB_PRUSEK2026SPERMSEG,
+      ].join('\n\n')
+    );
+  });
+});
+
+describe('CitationSection — "Other module / SpheroSeg as a whole"', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  const otherToggle = () =>
+    screen.getByRole('button', { name: 'landing.citation.otherModule' });
+
+  it('is off by default and explains nothing until chosen', () => {
+    render(<CitationSection />);
+    expect(otherToggle()).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.queryByTestId('citation-other-module')).toBeNull();
+  });
+
+  it('explains that the paper covers it, and adds nothing to the BibTeX', async () => {
+    const user = userEvent.setup();
+    const writeText = vi
+      .spyOn(navigator.clipboard, 'writeText')
+      .mockResolvedValue(undefined);
+    render(<CitationSection />);
+
+    await user.click(otherToggle());
+
+    expect(otherToggle()).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByTestId('citation-other-module').textContent).toBe(
+      'landing.citation.otherModuleNote'
+    );
+    expect(screen.getByTestId('citation-reference')).toBeInTheDocument();
+    expect(bibtexBlock()).toBe(SPHEROSEG_BIBTEX);
+    await user.click(
+      screen.getByRole('button', { name: 'landing.citation.copyBibtex' })
+    );
+    expect(writeText).toHaveBeenCalledWith(SPHEROSEG_BIBTEX);
+  });
+
+  it('combines with a module: the module is still cited', async () => {
+    const user = userEvent.setup();
+    render(<CitationSection />);
+    await user.click(otherToggle());
+    await user.click(screen.getByRole('button', SPERM_TOGGLE));
+
+    expect(screen.getByTestId('citation-other-module')).toBeInTheDocument();
+    expect(bibtexBlock()).toBe(`${SPHEROSEG_BIBTEX}\n\n${SPERM_BIBTEX}`);
+  });
+
+  it('hides the explanation again when toggled off', async () => {
+    const user = userEvent.setup();
+    render(<CitationSection />);
+    await user.click(otherToggle());
+    await user.click(otherToggle());
+
+    expect(otherToggle()).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.queryByTestId('citation-other-module')).toBeNull();
   });
 });

@@ -63,6 +63,26 @@ add the module they used to the citation.
 - Module label = the project-type name (`projects.types.<type>`), the existing
   single source of that name.
 
+## Added 2026-11-23 (owner's decisions)
+
+- **Three records**: SpheroidSeg (spheroid, doi:10.5281/zenodo.24439099),
+  ScratchSeg weights (wound, doi:10.5281/zenodo.24416067) and SpermSeg (sperm,
+  doi:10.5281/zenodo.24415067, renamed from "SpheroSeg sperm morphology
+  models…" on Zenodo). The ScratchSeg DATASET (…24416065) is not offered.
+  All deposited model files have the MD5 of the deployed ones.
+- **What a record asks to be cited with it goes into the BibTeX too**
+  (owner's choice over a note or a link): SpheroidSeg → the three external
+  datasets inside SpheroMix (Blondeel 2025, Lacalle 2021, García-Domínguez
+  2024; Crossref metadata); ScratchSeg → the ICIP 2026 workshop paper as the
+  record gives it, with no DOI until the proceedings are out (elsarticle-num
+  warns "empty pages" for it until then). A work two modules share is written
+  once. The page shortens author lists past six to "et al." (Vancouver); the
+  BibTeX never does.
+- **"Other module / SpheroSeg as a whole"**: some modules will never get a
+  record. A last toggle explains that such a module is cited through the
+  paper, which is always in the BibTeX; it adds nothing to it (owner's choice
+  over a permanently visible sentence).
+
 ## Approaches considered
 
 1. **Toggles for published modules only** — chosen.

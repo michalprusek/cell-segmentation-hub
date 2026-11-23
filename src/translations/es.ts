@@ -174,6 +174,10 @@ export default {
       modulesLabel: 'Módulos',
       modulesIntro:
         '¿Ha utilizado un módulo concreto? Sus modelos entrenados tienen su propio registro en Zenodo, que también reconoce a quienes aportaron y anotaron los datos de entrenamiento. Seleccione los módulos que utilizó para añadir sus citas:',
+      otherModule: 'Otro módulo / SpheroSeg en conjunto',
+      otherModuleNote:
+        'Un módulo sin registro propio se cita mediante el artículo de SpheroSeg de arriba: abarca toda la plataforma y ya está en el BibTeX de abajo.',
+      alsoCite: 'Este registro pide citar también:',
       notes: {
         dinov3:
           'Estos pesos son una obra derivada de DINOv3 y se distribuyen bajo la licencia DINOv3: si publica resultados obtenidos con ellos, indique que ha utilizado DINOv3.',

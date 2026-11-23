@@ -53,6 +53,34 @@ export interface Creator {
   readonly given: string;
 }
 
+interface WorkBase {
+  readonly bibtexKey: string;
+  /** All of them, in order; the page shortens long lists, the BibTeX never does. */
+  readonly creators: readonly Creator[];
+  readonly title: string;
+  readonly year: string;
+}
+
+/** A journal article. Metadata from Crossref for its DOI. */
+export interface JournalArticle extends WorkBase {
+  readonly kind: 'article';
+  readonly journal: string;
+  readonly volume: string;
+  readonly articleNumber: string;
+  readonly doi: string;
+}
+
+/** A conference paper; `doi` is absent until the proceedings are out. */
+export interface ConferencePaper extends WorkBase {
+  readonly kind: 'inproceedings';
+  readonly booktitle: string;
+  readonly address: string;
+  readonly doi?: string;
+}
+
+/** A work a module's record asks to be cited together with it. */
+export type CitedWork = JournalArticle | ConferencePaper;
+
 /**
  * A module's trained models, deposited as their own Zenodo record. Its
  * creators include the people who provided and annotated the training data,
@@ -84,17 +112,31 @@ export interface ModuleCitation {
   readonly doi: string;
   /** An obligation the record's licence attaches to publications. */
   readonly noteKey?: CitationNoteKey;
+  /**
+   * Works the record asks to be cited WITH it (its README's "How to cite" or
+   * training-data section) — external datasets, the module's own paper. The
+   * platform paper is not listed: it is always cited.
+   */
+  readonly alsoCite?: readonly CitedWork[];
 }
 
-/** "Průšek M.", "Svobodová Pavlíčková V." — the paper's reference style. */
+/** "Průšek M.", "Oliveira M. J." — the paper's reference style. */
 export const referenceAuthor = ({ family, given }: Creator) =>
   `${family} ${given
     .split(/\s+/)
     .map(part => `${part[0]}.`)
     .join(' ')}`;
 
-export const referenceAuthors = (m: ModuleCitation) =>
-  m.creators.map(referenceAuthor);
+/** Vancouver's rule: up to six authors, else the first six and "et al.". */
+export const REFERENCE_MAX_AUTHORS = 6;
+
+export const referenceAuthors = (creators: readonly Creator[]) =>
+  creators.length > REFERENCE_MAX_AUTHORS
+    ? [
+        ...creators.slice(0, REFERENCE_MAX_AUTHORS).map(referenceAuthor),
+        'et al.',
+      ]
+    : creators.map(referenceAuthor);
 
 /*
  * Diacritics are LaTeX-escaped for the reason given at SPHEROSEG_BIBTEX
@@ -136,14 +178,33 @@ export function latexEscape(text: string): string {
 }
 
 /**
- * Brace every word with a capital after its first letter ("SpheroSeg",
- * "DINOv3"), so a style that lower-cases titles cannot print "Spheroseg".
+ * Brace every word with a capital after its first letter, so a style that
+ * sentence-cases titles cannot print "Spheroseg". A hyphenated compound is ONE
+ * word: per part, "U-Net" would brace nothing ("U" and "Net" have no inner
+ * capital) and print "u-net", and "SegFormer-B0" would print "{SegFormer}-b0".
  */
 const protectCase = (title: string) =>
-  title.replace(/\b\w+\b/g, w => (/[A-Z]/.test(w.slice(1)) ? `{${w}}` : w));
+  title.replace(/\w+(?:-\w+)*/g, w =>
+    /[A-Z]/.test(w.slice(1)) ? `{${w}}` : w
+  );
 
-const bibtexField = (name: string, value: string) =>
-  `  ${name.padEnd(12)} = {${value}}`;
+/** Fields aligned on the longest name, the layout of SPHEROSEG_BIBTEX. */
+function bibtexEntry(
+  type: string,
+  key: string,
+  fields: readonly (readonly [string, string])[]
+): string {
+  const width = Math.max(...fields.map(([name]) => name.length));
+  const body = fields
+    .map(([name, value]) => `  ${name.padEnd(width)} = {${value}}`)
+    .join(',\n');
+  return `@${type}{${key},\n${body}\n}`;
+}
+
+const bibtexAuthors = (creators: readonly Creator[]) =>
+  creators
+    .map(c => `${latexEscape(c.family)}, ${latexEscape(c.given)}`)
+    .join(' and ');
 
 /*
  * BibTeX entry type for a Zenodo record: `@misc` with `howpublished`, NOT the
@@ -158,19 +219,45 @@ const bibtexField = (name: string, value: string) =>
  * `note = {Version …}` would add it there but biblatex then prints it twice.
  */
 export function moduleBibtex(m: ModuleCitation): string {
-  const author = m.creators
-    .map(c => `${latexEscape(c.family)}, ${latexEscape(c.given)}`)
-    .join(' and ');
-  const fields = [
-    bibtexField('title', protectCase(latexEscape(m.title))),
-    bibtexField('author', author),
-    bibtexField('howpublished', 'Zenodo'),
-    bibtexField('version', m.version),
-    bibtexField('year', m.year),
-    bibtexField('doi', m.doi),
-    bibtexField('url', doiUrl(m.doi)),
-  ];
-  return `@misc{${m.bibtexKey},\n${fields.join(',\n')}\n}`;
+  return bibtexEntry('misc', m.bibtexKey, [
+    ['title', protectCase(latexEscape(m.title))],
+    ['author', bibtexAuthors(m.creators)],
+    ['howpublished', 'Zenodo'],
+    ['version', m.version],
+    ['year', m.year],
+    ['doi', m.doi],
+    ['url', doiUrl(m.doi)],
+  ]);
+}
+
+/** The fields every style needs: @article as SPHEROSEG_BIBTEX has it. */
+export function workBibtex(w: CitedWork): string {
+  const head = [
+    ['title', protectCase(latexEscape(w.title))],
+    ['author', bibtexAuthors(w.creators)],
+  ] as const;
+  const link = w.doi
+    ? ([
+        ['doi', w.doi],
+        ['url', doiUrl(w.doi)],
+      ] as const)
+    : [];
+  return w.kind === 'article'
+    ? bibtexEntry('article', w.bibtexKey, [
+        ...head,
+        ['journal', latexEscape(w.journal)],
+        ['volume', w.volume],
+        ['pages', w.articleNumber],
+        ['year', w.year],
+        ...link,
+      ])
+    : bibtexEntry('inproceedings', w.bibtexKey, [
+        ...head,
+        ['booktitle', protectCase(latexEscape(w.booktitle))],
+        ['address', latexEscape(w.address)],
+        ['year', w.year],
+        ...link,
+      ]);
 }
 
 /**
@@ -181,7 +268,7 @@ export function moduleBibtex(m: ModuleCitation): string {
  */
 const SPERM_MODELS: ModuleCitation = {
   projectType: 'sperm',
-  bibtexKey: 'prusek2026spermweights',
+  bibtexKey: 'prusek2026spermseg',
   creators: [
     { family: 'Průšek', given: 'Michal' },
     { family: 'Novozámský', given: 'Adam' },
@@ -190,8 +277,11 @@ const SPERM_MODELS: ModuleCitation = {
     { family: 'Albrechtová', given: 'Jana' },
     { family: 'Albrecht', given: 'Tomáš' },
   ],
+  // Renamed on Zenodo on 2026-11-23 (revision 8; was "SpheroSeg sperm
+  // morphology models (three-part and two-part): trained weights"). Same DOI,
+  // same files: a metadata edit, not a new version.
   title:
-    'SpheroSeg sperm morphology models (three-part and two-part): trained weights',
+    'SpermSeg: sperm morphology module of SpheroSeg (three-part and two-part models, trained weights)',
   version: '1.0.0',
   year: '2026',
   doi: '10.5281/zenodo.24415067',
@@ -200,8 +290,171 @@ const SPERM_MODELS: ModuleCitation = {
   noteKey: 'landing.citation.notes.dinov3',
 };
 
+/*
+ * The three externally published datasets inside SpheroMix, which the
+ * SpheroidSeg record asks every user of its models to cite (README,
+ * "Training data": all five models were trained on SpheroMix at some stage).
+ * Metadata from Crossref for each DOI, read 2026-11-23.
+ */
+const SPHEROID_ATLAS: JournalArticle = {
+  kind: 'article',
+  bibtexKey: 'blondeel2025atlas',
+  creators: [
+    { family: 'Blondeel', given: 'Eva' },
+    { family: 'Peirsman', given: 'Arne' },
+    { family: 'Vermeulen', given: 'Stephanie' },
+    { family: 'Piccinini', given: 'Filippo' },
+    { family: 'De Vuyst', given: 'Felix' },
+    { family: 'Estêvão', given: 'Diogo' },
+    { family: 'Al-Jamei', given: 'Sayida' },
+    { family: 'Bedeschi', given: 'Martina' },
+    { family: 'Castellani', given: 'Gastone' },
+    { family: 'Cruz', given: 'Tânia' },
+    { family: 'Dedeyne', given: 'Sándor' },
+    { family: 'Oliveira', given: 'Maria José' },
+    { family: 'Kawakita', given: 'Satoru' },
+    { family: 'Nguyen', given: 'Huu Tuan' },
+    { family: 'Kunz-Schughart', given: 'Leoni A.' },
+    { family: 'Lee', given: 'Soojung' },
+    { family: 'Marino', given: 'Noemi' },
+    { family: 'Steigemann', given: 'Patrick' },
+    { family: 'Takayama', given: 'Shuichi' },
+    { family: 'Tesei', given: 'Anna' },
+    { family: 'Zablowsky', given: 'Nina' },
+    { family: 'Blondeel', given: 'Phillip' },
+    { family: 'De Wever', given: 'Olivier' },
+  ],
+  title:
+    'The Spheroid Light Microscopy Image Atlas for morphometrical analysis of three-dimensional cell cultures',
+  journal: 'Scientific Data',
+  volume: '12',
+  articleNumber: '283',
+  year: '2025',
+  doi: '10.1038/s41597-025-04441-x',
+};
+
+const SPHEROIDJ: JournalArticle = {
+  kind: 'article',
+  bibtexKey: 'lacalle2021spheroidj',
+  creators: [
+    { family: 'Lacalle', given: 'David' },
+    { family: 'Castro-Abril', given: 'Héctor Alfonso' },
+    { family: 'Randelovic', given: 'Teodora' },
+    { family: 'Domínguez', given: 'César' },
+    { family: 'Heras', given: 'Jónathan' },
+    { family: 'Mata', given: 'Eloy' },
+    { family: 'Mata', given: 'Gadea' },
+    { family: 'Méndez', given: 'Yolanda' },
+    { family: 'Pascual', given: 'Vico' },
+    { family: 'Ochoa', given: 'Ignacio' },
+  ],
+  title: 'SpheroidJ: An Open-Source Set of Tools for Spheroid Segmentation',
+  journal: 'Computer Methods and Programs in Biomedicine',
+  volume: '200',
+  articleNumber: '105837',
+  year: '2021',
+  doi: '10.1016/j.cmpb.2020.105837',
+};
+
+const SPHEROID_STYLE_TRANSFER: JournalArticle = {
+  kind: 'article',
+  bibtexKey: 'garciadominguez2024style',
+  creators: [
+    { family: 'García-Domínguez', given: 'Manuel' },
+    { family: 'Domínguez', given: 'César' },
+    { family: 'Heras', given: 'Jónathan' },
+    { family: 'Mata', given: 'Eloy' },
+    { family: 'Pascual', given: 'Vico' },
+  ],
+  title:
+    'Deep style transfer to deal with the domain shift problem on spheroid segmentation',
+  journal: 'Neurocomputing',
+  volume: '569',
+  articleNumber: '127105',
+  year: '2024',
+  doi: '10.1016/j.neucom.2023.127105',
+};
+
+/**
+ * Spheroids (`hrnet`, `cbam_resunet`, `unet_spherohq`, `segformer`,
+ * `mamba_unet`): SpheroidSeg, doi:10.5281/zenodo.24439099, version 1.0.0,
+ * published 2026-11-23; concept DOI 10.5281/zenodo.24439098. Metadata from
+ * the record's API. The MD5 of all six model files equals that of the
+ * deployed `weights/*.pth` and `models/segformer_config.json`.
+ */
+const SPHEROID_MODELS: ModuleCitation = {
+  projectType: 'spheroid',
+  bibtexKey: 'prusek2026spheroidseg',
+  creators: [
+    { family: 'Průšek', given: 'Michal' },
+    { family: 'Novozámský', given: 'Adam' },
+    { family: 'Škubník', given: 'Jan' },
+    { family: 'Svobodová Pavlíčková', given: 'Vladimíra' },
+    { family: 'Rimpelová', given: 'Silvie' },
+  ],
+  title:
+    'SpheroidSeg: tumour-spheroid segmentation module of SpheroSeg (HRNet, CBAM-ResUNet, U-Net, SegFormer-B0, Mamba-UNet; trained weights)',
+  version: '1.0.0',
+  year: '2026',
+  doi: '10.5281/zenodo.24439099',
+  alsoCite: [SPHEROID_ATLAS, SPHEROIDJ, SPHEROID_STYLE_TRANSFER],
+};
+
+/**
+ * The paper the ScratchSeg record asks to be cited with it, as the record
+ * gives it. No DOI yet (Crossref has no entry for the title on 2026-11-23):
+ * add `doi` once the workshop proceedings are published.
+ */
+const WOUND_PAPER: ConferencePaper = {
+  kind: 'inproceedings',
+  bibtexKey: 'veskrna2026wound',
+  creators: [
+    { family: 'Veškrna', given: 'Lukáš' },
+    { family: 'Průšek', given: 'Michal' },
+    { family: 'Novozámský', given: 'Adam' },
+    { family: 'Šroubek', given: 'Filip' },
+    { family: 'Svobodová Pavlíčková', given: 'Vladimíra' },
+    { family: 'Rimpelová', given: 'Silvie' },
+  ],
+  title:
+    'Generalizing Wound Healing Segmentation: From Semi-Automatic Annotation to Robust Inference',
+  booktitle: 'IEEE ICIP 2026 Workshop Learning Beyond Deep Learning (LBDL) II',
+  address: 'Tampere',
+  year: '2026',
+};
+
+/**
+ * Wound healing (`wound`): ScratchSeg, doi:10.5281/zenodo.24416067, version
+ * 1.0.0, published 2026-11-23; concept DOI 10.5281/zenodo.24416066. Metadata
+ * from the record's API. The MD5 of `wound_mitb5.ckpt` equals that of the
+ * deployed `weights/wound_mitb5.ckpt`. (The record's dataset,
+ * doi:10.5281/zenodo.24416065, is deliberately not offered here.)
+ */
+const WOUND_MODELS: ModuleCitation = {
+  projectType: 'wound',
+  bibtexKey: 'veskrna2026scratchseg',
+  creators: [
+    { family: 'Veškrna', given: 'Lukáš' },
+    { family: 'Průšek', given: 'Michal' },
+    { family: 'Novozámský', given: 'Adam' },
+    { family: 'Šroubek', given: 'Filip' },
+    { family: 'Svobodová Pavlíčková', given: 'Vladimíra' },
+    { family: 'Rimpelová', given: 'Silvie' },
+  ],
+  title:
+    'ScratchSeg: wound-healing assay module of SpheroSeg (SpheroSeg wound model, fair-recipe benchmark of 11 models and leave-one-cell-line-out models; trained weights)',
+  version: '1.0.0',
+  year: '2026',
+  doi: '10.5281/zenodo.24416067',
+  alsoCite: [WOUND_PAPER],
+};
+
 /** Modules with a published record, in the order the page lists them. */
-export const MODULE_CITATIONS: readonly ModuleCitation[] = [SPERM_MODELS];
+export const MODULE_CITATIONS: readonly ModuleCitation[] = [
+  SPHEROID_MODELS,
+  WOUND_MODELS,
+  SPERM_MODELS,
+];
 
 /**
  * The selected modules in `modules` order — never in click order, so the same
@@ -215,7 +468,25 @@ export function selectedModules(
   return modules.filter(m => selected.includes(m.projectType));
 }
 
-/** The BibTeX to copy: the paper first, then each given module. */
+/**
+ * The BibTeX to copy: the paper first, then each given module followed by
+ * the works its record asks to be cited with it. A work two modules share is
+ * written once — BibTeX rejects a repeated key.
+ */
 export function citationBibtex(modules: readonly ModuleCitation[]): string {
-  return [SPHEROSEG_BIBTEX, ...modules.map(moduleBibtex)].join('\n\n');
+  const seen = new Set<string>();
+  const entries: string[] = [];
+  for (const m of modules) {
+    for (const [key, entry] of [
+      [m.bibtexKey, () => moduleBibtex(m)] as const,
+      ...(m.alsoCite ?? []).map(
+        w => [w.bibtexKey, () => workBibtex(w)] as const
+      ),
+    ]) {
+      if (seen.has(key)) continue;
+      seen.add(key);
+      entries.push(entry());
+    }
+  }
+  return [SPHEROSEG_BIBTEX, ...entries].join('\n\n');
 }
