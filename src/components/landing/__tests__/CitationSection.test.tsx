@@ -350,6 +350,27 @@ describe('bibtexTitle (through citationBibtex)', () => {
   });
 });
 
+describe('bibtexTitle with a decomposed (NFD) title', () => {
+  it('reads it as the composed word, not as a letter and a stray mark', () => {
+    const entry = (title: string) =>
+      citationBibtex({
+        kind: 'zenodo',
+        bibtexKey: 'k',
+        creators: [{ family: 'Doe', given: 'Jane' }],
+        title,
+        version: '1',
+        year: '2026',
+        doi: '10.0/k',
+      });
+    // "S" + U+030C COMBINING CARON: split before composing, the mark alone
+    // has no LaTeX escape and the whole entry would throw.
+    expect(entry('S\u030CroubekSeg V16')).toBe(entry('\u0160roubekSeg V16'));
+    expect(entry('\u0160roubekSeg V16')).toContain(
+      String.raw`{{\v{S}}roubekSeg} {V16}`
+    );
+  });
+});
+
 describe('referenceAuthors', () => {
   it('writes the family name and the initial of every given name', () => {
     expect(
