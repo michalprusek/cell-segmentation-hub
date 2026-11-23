@@ -96,16 +96,33 @@ export function latexEscape(text: string): string {
   return [...text.normalize('NFC')].map(ch => latexChar(ch, text)).join('');
 }
 
-/**
- * Brace every word with a capital after its first letter, so a style that
- * sentence-cases titles cannot print "Spheroseg". A hyphenated compound is ONE
- * word: per part, "U-Net" would brace nothing ("U" and "Net" have no inner
- * capital) and print "u-net", and "SegFormer-B0" would print "{SegFormer}-b0".
+/*
+ * A title for BibTeX: escaped, and every word a sentence-casing style must not
+ * lower-case braced — "SpheroSeg", "IRM", "V16", "DEB_S4". Words are found in
+ * the RAW text and escaped one by one: bracing after escaping split "DEB\_S4"
+ * at the backslash into "{DEB}\{_S4}", which LaTeX reads as an escaped brace.
+ * A hyphenated compound is ONE word: per part, "U-Net" would brace nothing and
+ * print "u-net", and "SegFormer-B0" would print "{SegFormer}-b0".
  */
-const protectCase = (title: string) =>
-  title.replace(/\w+(?:-\w+)*/g, w =>
-    /[A-Z]/.test(w.slice(1)) ? `{${w}}` : w
-  );
+const TITLE_WORD = /[\p{L}\p{N}_]+(?:-[\p{L}\p{N}_]+)*/gu;
+
+/** A capital after the first letter ("SpheroSeg"), or a capital with a digit ("V16"). */
+const needsCaseProtection = (word: string) =>
+  /\p{Lu}/u.test(word.slice(1)) ||
+  (/^\p{Lu}/u.test(word) && /\p{N}/u.test(word));
+
+function bibtexTitle(title: string): string {
+  const text = title.normalize('NFC');
+  let out = '';
+  let last = 0;
+  for (const m of text.matchAll(TITLE_WORD)) {
+    const word = latexEscape(m[0]);
+    out += latexEscape(text.slice(last, m.index));
+    out += needsCaseProtection(m[0]) ? `{${word}}` : word;
+    last = m.index + m[0].length;
+  }
+  return out + latexEscape(text.slice(last));
+}
 
 /** Fields aligned on the longest name. */
 function bibtexEntry(
@@ -147,7 +164,7 @@ const doiFields = (doi: string | undefined) =>
  */
 export function citationBibtex(c: Citation): string {
   const head = [
-    ['title', protectCase(latexEscape(c.title))],
+    ['title', bibtexTitle(c.title)],
     ['author', bibtexAuthors(c.creators)],
   ] as const;
   switch (c.kind) {
@@ -163,7 +180,7 @@ export function citationBibtex(c: Citation): string {
     case 'inproceedings':
       return bibtexEntry('inproceedings', c.bibtexKey, [
         ...head,
-        ['booktitle', protectCase(latexEscape(c.booktitle))],
+        ['booktitle', bibtexTitle(c.booktitle)],
         ['address', latexEscape(c.address)],
         ['year', c.year],
         ...doiFields(c.doi),
@@ -253,9 +270,39 @@ export const SPERMSEG_RECORD: ZenodoRecord = {
   doi: '10.5281/zenodo.24415067',
 };
 
+/**
+ * MicrotubuleSeg (`microtubule`): doi:10.5281/zenodo.24415383, version 1.0.0,
+ * published 2026-11-23; concept DOI 10.5281/zenodo.24415382. Metadata from
+ * the record's API. The MD5 of `microtubule_v16_deb_s4_ep040.pth` and
+ * `params_v16.json` equals that of the deployed weights and of
+ * `models/microtubule/params_v16.json` in the running ml container. MIT
+ * licence: no obligation for publications, so no note.
+ */
+export const MICROTUBULESEG_RECORD: ZenodoRecord = {
+  kind: 'zenodo',
+  bibtexKey: 'prusek2026microtubuleseg',
+  creators: [
+    { family: 'Průšek', given: 'Michal' },
+    { family: 'Novozámský', given: 'Adam' },
+    { family: 'Šroubek', given: 'Filip' },
+    { family: 'Dodoková', given: 'Alica' },
+    { family: 'Ondrúšková', given: 'Denisa' },
+    { family: 'Podhájecký', given: 'Roman' },
+    { family: 'Karhanová', given: 'Adéla' },
+    { family: 'Siahaan', given: 'Valerie' },
+    { family: 'Hogner', given: 'Marika' },
+  ],
+  title:
+    'MicrotubuleSeg: IRM microtubule detection module of SpheroSeg (nnU-Net ResEnc-M V16 DEB_S4 ep040, trained on synthetic data; trained weights)',
+  version: '1.0.0',
+  year: '2026',
+  doi: '10.5281/zenodo.24415383',
+};
+
 export const SPHEROSEG_BIBTEX = citationBibtex(SPHEROSEG_PAPER);
 
-export type CitationChoiceId = 'spheroid' | 'wound' | 'sperm' | 'other';
+export type CitationChoiceId =
+  'spheroid' | 'wound' | 'sperm' | 'microtubules' | 'other';
 
 /** One choice on the page, and the ONE work it cites — nothing more. */
 export interface CitationChoice {
@@ -286,6 +333,11 @@ export const CITATION_CHOICES: readonly CitationChoice[] = [
     // The weights are a DINOv3 derivative under the DINOv3 License, which
     // requires publications to acknowledge DINOv3 (record README + LICENSE).
     noteKey: 'landing.citation.notes.dinov3',
+  },
+  {
+    id: 'microtubules',
+    labelKey: 'projects.types.microtubules',
+    citation: MICROTUBULESEG_RECORD,
   },
   {
     id: 'other',

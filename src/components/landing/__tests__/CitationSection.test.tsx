@@ -38,6 +38,7 @@ vi.mock('@/contexts/useLanguage', () => ({
 
 const CMPB_DOI = '10.1016/j.cmpb.2026.109602';
 const SPERM_DOI = '10.5281/zenodo.24415067';
+const MT_DOI = '10.5281/zenodo.24415383';
 
 const CMPB_REFERENCE =
   'Průšek M., Novozámský A., Škubník J., Svobodová Pavlíčková V., ' +
@@ -68,6 +69,7 @@ describe('CitationSection', () => {
       'projects.types.spheroid',
       'projects.types.wound',
       'projects.types.sperm',
+      'projects.types.microtubules',
       'landing.citation.otherModule',
     ]);
     for (const r of radios) {
@@ -139,6 +141,26 @@ describe('CitationSection', () => {
     expect(bibtexBlock()).toBe(PINNED.BIB_PRUSEK2026SPERMSEG);
   });
 
+  it('microtubules cite the MicrotubuleSeg record only, with no note', async () => {
+    const user = userEvent.setup();
+    render(<CitationSection />);
+    await choose(user, 'projects.types.microtubules');
+
+    expect(screen.getByTestId('citation-reference').textContent).toBe(
+      'Průšek M., Novozámský A., Šroubek F., Dodoková A., Ondrúšková D., ' +
+        'Podhájecký R., Karhanová A., Siahaan V., Hogner M. MicrotubuleSeg: ' +
+        'IRM microtubule detection module of SpheroSeg (nnU-Net ResEnc-M V16 ' +
+        'DEB_S4 ep040, trained on synthetic data; trained weights). Version ' +
+        `1.0.0. Zenodo (2026). doi:${MT_DOI}`
+    );
+    expect(screen.getByRole('link', { name: `doi:${MT_DOI}` })).toHaveAttribute(
+      'href',
+      `https://doi.org/${MT_DOI}`
+    );
+    expect(screen.queryByTestId('citation-note')).toBeNull();
+    expect(bibtexBlock()).toBe(PINNED.BIB_PRUSEK2026MICROTUBULESEG);
+  });
+
   it('holds one choice at a time: a second choice replaces the first', async () => {
     const user = userEvent.setup();
     render(<CitationSection />);
@@ -202,15 +224,18 @@ describe('CITATION_CHOICES', () => {
       ['spheroid', 'prusek2026spheroseg'],
       ['wound', 'veskrna2026wound'],
       ['sperm', 'prusek2026spermseg'],
+      ['microtubules', 'prusek2026microtubuleseg'],
       ['other', 'prusek2026spheroseg'],
     ]);
   });
 
-  it('cites the versioned SpermSeg DOI and no other Zenodo record', () => {
+  it('cites the versioned module DOIs and no other Zenodo record', () => {
     const dois = CITATION_CHOICES.map(c => c.citation.doi);
     expect(dois).toContain(SPERM_DOI);
+    expect(dois).toContain(MT_DOI);
     for (const notCited of [
       '10.5281/zenodo.24415066', // SpermSeg concept DOI
+      '10.5281/zenodo.24415382', // MicrotubuleSeg concept DOI
       '10.5281/zenodo.24439099', // SpheroidSeg
       '10.5281/zenodo.24416067', // ScratchSeg weights
       '10.5281/zenodo.24416065', // ScratchSeg dataset
@@ -275,6 +300,7 @@ describe('citationBibtex', () => {
       PINNED.BIB_PRUSEK2026SPHEROSEG,
       PINNED.BIB_VESKRNA2026WOUND,
       PINNED.BIB_PRUSEK2026SPERMSEG,
+      PINNED.BIB_PRUSEK2026MICROTUBULESEG,
       PINNED.BIB_PRUSEK2026SPHEROSEG,
     ]);
   });
@@ -301,6 +327,25 @@ describe('citationBibtex', () => {
     });
     expect(entry).toContain(
       'title   = {{U-Net} and {SegFormer-B0} beat three-part models on {DINOv3}},'
+    );
+  });
+});
+
+describe('bibtexTitle (through citationBibtex)', () => {
+  it('braces version and run tags, and escapes an underscore INSIDE the brace', () => {
+    const entry = citationBibtex({
+      kind: 'zenodo',
+      bibtexKey: 'k',
+      creators: [{ family: 'Doe', given: 'Jane' }],
+      title: 'Model V16 DEB_S4 ep040 on 3D data',
+      version: '1',
+      year: '2026',
+      doi: '10.0/k',
+    });
+    // Bracing AFTER escaping split "DEB\_S4" at the backslash into
+    // "{DEB}\{_S4}", which LaTeX reads as an escaped brace.
+    expect(entry).toContain(
+      String.raw`title        = {Model {V16} {DEB\_S4} ep040 on {3D} data},`
     );
   });
 });

@@ -74,6 +74,7 @@ vi.mock('@/contexts/useLanguage', () => ({
         'projects.types.sperm': 'Sperm',
         'projects.types.spheroid': 'Spheroids (standard)',
         'projects.types.wound': 'Wound healing',
+        'projects.types.microtubules': 'Microtubules',
         'landing.acknowledgments.badge': 'Acknowledgments',
         'landing.acknowledgments.title': 'Special Thanks',
         'landing.acknowledgments.lukasIntro': 'We thank',

@@ -1,5 +1,5 @@
 /**
- * The three BibTeX entries the page can produce, as typeset on 2026-11-23 in
+ * The four BibTeX entries the page can produce, as typeset on 2026-11-23 in
  * TeX Live 2026 (plainnat, elsarticle-num, IEEEtran, unsrt, biblatex numeric):
  * 0 errors; one warning, elsarticle-num "empty pages in veskrna2026wound" — the
  * workshop paper has no pages until its proceedings are out.
@@ -36,4 +36,14 @@ export const BIB_PRUSEK2026SPERMSEG = String.raw`@misc{prusek2026spermseg,
   year         = {2026},
   doi          = {10.5281/zenodo.24415067},
   url          = {https://doi.org/10.5281/zenodo.24415067}
+}`;
+
+export const BIB_PRUSEK2026MICROTUBULESEG = String.raw`@misc{prusek2026microtubuleseg,
+  title        = {{MicrotubuleSeg}: {IRM} microtubule detection module of {SpheroSeg} ({nnU-Net} {ResEnc-M} {V16} {DEB\_S4} ep040, trained on synthetic data; trained weights)},
+  author       = {Pr{\r{u}}{\v{s}}ek, Michal and Novoz{\'a}msk{\'y}, Adam and {\v{S}}roubek, Filip and Dodokov{\'a}, Alica and Ondr{\'u}{\v{s}}kov{\'a}, Denisa and Podh{\'a}jeck{\'y}, Roman and Karhanov{\'a}, Ad{\'e}la and Siahaan, Valerie and Hogner, Marika},
+  howpublished = {Zenodo},
+  version      = {1.0.0},
+  year         = {2026},
+  doi          = {10.5281/zenodo.24415383},
+  url          = {https://doi.org/10.5281/zenodo.24415383}
 }`;
