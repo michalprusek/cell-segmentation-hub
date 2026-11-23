@@ -48,6 +48,18 @@ add the module they used to the citation.
   prints the version; classic styles do not, and the versioned DOI identifies
   it there. A `note = {Version …}` was rejected: biblatex prints it twice.
 - Diacritics LaTeX-escaped, as in the paper's entry.
+- **A record's fields are stated once** and both the reference and the
+  BibTeX are generated from them (review of #652: a hand-written BibTeX
+  string beside the fields would drift when the weights get a new version).
+  `latexEscape` decomposes each letter (NFD) into base + one combining mark
+  and THROWS on anything it cannot escape rather than writing a wrong name.
+  The generated sperm entry is pinned byte for byte to the one first shipped
+  and typeset.
+- "Version" in the on-page reference is not translated: a reference is text
+  copied into a manuscript, in the citation's language (DataCite's own APA
+  rendering of the record reads "(Version 1.0.0)"), like the journal name.
+- One record per module (project type), enforced by a test: a second record
+  for one type would need a label of its own, so it must be a decision.
 - Module label = the project-type name (`projects.types.<type>`), the existing
   single source of that name.
 
