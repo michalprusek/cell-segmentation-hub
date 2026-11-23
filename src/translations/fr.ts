@@ -172,6 +172,7 @@ export default {
       copyFailed:
         'Échec de la copie. Sélectionnez le texte et copiez-le manuellement.',
       readPaper: 'Lire l’article',
+      modulesLabel: 'Modules',
       modulesIntro:
         'Vous avez utilisé un module en particulier ? Ses modèles entraînés ont leur propre notice sur Zenodo, qui crédite aussi les personnes ayant fourni et annoté les données d’entraînement. Sélectionnez les modules utilisés pour ajouter leurs citations :',
       notes: {

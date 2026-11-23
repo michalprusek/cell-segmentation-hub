@@ -71,6 +71,7 @@ vi.mock('@/contexts/useLanguage', () => ({
         'landing.citation.copyFailed': 'Copy failed',
         'landing.citation.readPaper': 'Read the paper',
         'landing.citation.modulesIntro': 'Used a specific module?',
+        'landing.citation.modulesLabel': 'Modules',
         'projects.types.sperm': 'Sperm',
         'landing.acknowledgments.badge': 'Acknowledgments',
         'landing.acknowledgments.title': 'Special Thanks',

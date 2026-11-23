@@ -171,6 +171,7 @@ export default {
       copyFailed:
         'Kopírování se nezdařilo. Označte text a zkopírujte ho ručně.',
       readPaper: 'Přečíst článek',
+      modulesLabel: 'Moduly',
       modulesIntro:
         'Použili jste konkrétní modul? Jeho natrénované modely mají vlastní záznam na Zenodu, který uvádí i ty, kdo poskytli a anotovali trénovací data. Vyberte moduly, které jste použili, a jejich citace se přidají:',
       notes: {

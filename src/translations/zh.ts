@@ -169,6 +169,7 @@ export default {
       copied: 'BibTeX 已复制到剪贴板',
       copyFailed: '复制失败。请手动选择并复制文本。',
       readPaper: '阅读论文',
+      modulesLabel: '模块',
       modulesIntro:
         '使用了某个具体模块？其训练好的模型在 Zenodo 上有独立的记录，记录中也署名了提供和标注训练数据的人员。选择您使用过的模块即可添加相应的引用：',
       notes: {

@@ -8,11 +8,17 @@ import {
   SPHEROSEG_PAPER_URL,
   citationBibtex,
   doiUrl,
+  referenceAuthors,
+  selectedModules,
 } from '@/lib/citation';
 import type { ProjectType } from '@/types';
 
 const DOI_LINK_CLASS =
   'break-words font-medium text-blue-600 underline-offset-4 hover:underline dark:text-blue-400';
+const REFERENCE_CLASS =
+  'border-l-2 border-blue-600 pl-4 leading-relaxed text-gray-800 dark:border-blue-400 dark:text-gray-200';
+const CAPTION_CLASS =
+  'font-mono text-[11px] uppercase tracking-[0.14em] text-gray-500 dark:text-gray-400';
 
 /**
  * "How to cite" on the welcome page: the platform paper, always, plus any
@@ -23,8 +29,9 @@ const CitationSection = () => {
   const { t } = useLanguage();
   const paper = SPHEROSEG_PAPER;
   const [selected, setSelected] = useState<readonly ProjectType[]>([]);
-  const chosen = MODULE_CITATIONS.filter(m => selected.includes(m.projectType));
-  const bibtex = citationBibtex(selected);
+  // One derivation for both: what is shown is exactly what is copied.
+  const chosen = selectedModules(selected);
+  const bibtex = citationBibtex(chosen);
 
   const toggle = (type: ProjectType) =>
     setSelected(prev =>
@@ -63,10 +70,7 @@ const CitationSection = () => {
               {t('landing.citation.intro')}
             </p>
 
-            <p
-              data-testid="citation-reference"
-              className="border-l-2 border-blue-600 pl-4 leading-relaxed text-gray-800 dark:border-blue-400 dark:text-gray-200"
-            >
+            <p data-testid="citation-reference" className={REFERENCE_CLASS}>
               {paper.authors.join(', ')} {paper.title}. <i>{paper.journal}</i>{' '}
               {paper.volume} ({paper.year}) {paper.articleNumber}.{' '}
               <a
@@ -81,15 +85,19 @@ const CitationSection = () => {
 
             {MODULE_CITATIONS.length > 0 && (
               <div>
+                <span id="citation-modules-label" className={CAPTION_CLASS}>
+                  {t('landing.citation.modulesLabel')}
+                </span>
                 <p
                   id="citation-modules-intro"
-                  className="text-sm leading-relaxed text-gray-600 dark:text-gray-300"
+                  className="mt-2 text-sm leading-relaxed text-gray-600 dark:text-gray-300"
                 >
                   {t('landing.citation.modulesIntro')}
                 </p>
                 <div
                   role="group"
-                  aria-labelledby="citation-modules-intro"
+                  aria-labelledby="citation-modules-label"
+                  aria-describedby="citation-modules-intro"
                   className="mt-3 flex flex-wrap gap-2"
                 >
                   {MODULE_CITATIONS.map(({ projectType }) => {
@@ -122,12 +130,16 @@ const CitationSection = () => {
                 data-testid={`citation-module-${m.projectType}`}
                 className="space-y-2"
               >
+                {/* "Version" is not translated, like the journal name above:
+                    a reference is text a reader copies into a manuscript, in
+                    the language of the citation (DataCite's own rendering of
+                    this record reads "(Version 1.0.0)"), not of the UI. */}
                 <p
                   data-testid={`citation-module-reference-${m.projectType}`}
-                  className="border-l-2 border-blue-600 pl-4 leading-relaxed text-gray-800 dark:border-blue-400 dark:text-gray-200"
+                  className={REFERENCE_CLASS}
                 >
-                  {m.authors.join(', ')} {m.title}. Version {m.version}.{' '}
-                  <i>Zenodo</i> ({m.year}).{' '}
+                  {referenceAuthors(m).join(', ')} {m.title}. Version{' '}
+                  {m.version}. <i>Zenodo</i> ({m.year}).{' '}
                   <a
                     href={doiUrl(m.doi)}
                     target="_blank"
@@ -147,9 +159,7 @@ const CitationSection = () => {
 
             <div>
               <div className="flex items-center justify-between gap-4">
-                <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-gray-500 dark:text-gray-400">
-                  BibTeX
-                </span>
+                <span className={CAPTION_CLASS}>BibTeX</span>
                 <button
                   type="button"
                   onClick={handleCopy}

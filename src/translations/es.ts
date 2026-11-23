@@ -171,6 +171,7 @@ export default {
       copyFailed:
         'No se pudo copiar. Seleccione el texto y cópielo manualmente.',
       readPaper: 'Leer el artículo',
+      modulesLabel: 'Módulos',
       modulesIntro:
         '¿Ha utilizado un módulo concreto? Sus modelos entrenados tienen su propio registro en Zenodo, que también reconoce a quienes aportaron y anotaron los datos de entrenamiento. Seleccione los módulos que utilizó para añadir sus citas:',
       notes: {

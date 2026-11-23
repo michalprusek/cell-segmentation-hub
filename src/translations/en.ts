@@ -177,6 +177,7 @@ export default {
       copied: 'BibTeX copied to the clipboard',
       copyFailed: 'Could not copy. Select the text and copy it by hand.',
       readPaper: 'Read the paper',
+      modulesLabel: 'Modules',
       modulesIntro:
         'Used a specific module? Its trained models have their own record on Zenodo, which also credits the people who provided and annotated the training data. Select the modules you used to add their citations:',
       notes: {

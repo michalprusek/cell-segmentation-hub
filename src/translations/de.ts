@@ -172,6 +172,7 @@ export default {
       copyFailed:
         'Kopieren fehlgeschlagen. Markieren Sie den Text und kopieren Sie ihn manuell.',
       readPaper: 'Artikel lesen',
+      modulesLabel: 'Module',
       modulesIntro:
         'Haben Sie ein bestimmtes Modul verwendet? Seine trainierten Modelle haben einen eigenen Eintrag auf Zenodo, der auch diejenigen nennt, die die Trainingsdaten bereitgestellt und annotiert haben. Wählen Sie die verwendeten Module aus, um ihre Zitate hinzuzufügen:',
       notes: {
