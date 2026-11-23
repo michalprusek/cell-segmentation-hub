@@ -4,39 +4,11 @@ Guidance for Claude Code in this repository. **Read this fully before any non-tr
 
 The most important section is **[Verification Rules](#verification-rules)**. Read it twice. Failing to follow it is the #1 cause of production bugs in this project.
 
----
+Detail lives in `docs/claude/` (moved verbatim on 2026-11-02, brought up to `github/main` #644 on 2026-11-23): [verification](docs/claude/verification.md), [test suite](docs/claude/test-suite.md), [failure patterns](docs/claude/failure-patterns.md), [documentation rule](docs/claude/documentation-rule.md), [architecture notes](docs/claude/architecture.md), [conventions](docs/claude/conventions.md), [deploy gotchas](docs/claude/deploy-gotchas.md), [best practices](docs/claude/best-practices.md). Read the page for the area you touch before changing it. A code comment saying "see CLAUDE.md" or "CLAUDE.md records" may mean one of those pages.
 
-## Ask when unclear — do not assume scope
+## Scope: proceed on stated defaults, ask only for real choices
 
-When a request is ambiguous or could be interpreted multiple ways,
-**use `AskUserQuestion` BEFORE coding**. Guessing what the user meant
-and shipping the wrong interpretation wastes a round-trip and erodes
-trust. Concrete situations that demand a clarification question:
-
-- **"All / everything"** statements that might have exceptions. Example
-  ("all today's changes should affect only MT projects") may exclude
-  changes the user actually wants kept universal (hover radius, slice
-  geometry). Ask which specific changes are in scope.
-- **Project-type or polyline-kind gating decisions** — features that
-  could plausibly belong to one project type, all of them, or some
-  subset. Don't assume; ask.
-- **Destructive operations on shared data** — even on a test account,
-  ask before wiping fixtures the user might still need.
-- **Choice between a simple FE-only fix and a broader BE/ML
-  refactor** — ask which trade-off the user wants.
-- **"Rotate / reformat / re-orient"** UI requests where the existing
-  orientation might already be correct (kymograph axes are a recent
-  example).
-
-When asking, surface 2–3 concrete options via `AskUserQuestion` rather
-than open-ended "what do you want?" — the user can compare side-by-side
-and pick. Always state the trade-offs.
-
-If you've already coded something and only THEN realise it was
-ambiguous, stop and ask before going further; don't keep building on
-the guess.
-
----
+Take the most reasonable reading, say the assumption in one line, and do the work; a stated assumption costs less here than a round of questions. Stop and ask one short question first only when a wrong guess is costly: **destructive operations on shared data** (even on a test account), or a genuine scope fork such as **"all / everything"** statements with likely exceptions, **project-type or polyline-kind gating**, an **FE-only fix vs a broader BE/ML refactor**, or **"rotate / re-orient"** where the current orientation may already be right. If you realise mid-way that the reading was wrong, stop and say so; don't keep building on the guess.
 
 ## Production Safety
 
@@ -44,502 +16,86 @@ Production runs on `docker-compose.production.yml` with `.env.production`. Singl
 
 Deploys are autonomous — build the changed service, recreate it, restart nginx after a backend recreate, and verify (see [Production](#production-single-stack-post-2026-05-15)). Still exercise judgment: verify in a real browser after deploying, and never run destructive DB operations without care.
 
----
-
 ## Verification Rules
 
-### The non-negotiable rule
+**"Done" is not "TypeScript compiles + ESLint clean".** Types prove "compiles", lint proves "follows rules", Vitest on mocks proves nothing about real data, and the minified bundle behaves differently than the dev server. **A change is "done" only when the runtime path that uses it has been observed working.** User-facing: a real browser. API: a real curl. DB: a real query. No exceptions. "It should work because the code looks right" is forbidden as a completion claim.
 
-**"Done" is not "TypeScript compiles + ESLint clean".** Production bugs in this repo have repeatedly shipped despite green pre-commit because:
+**Test account:** `claude.e2e.test@example.com`, credentials in `~/.claude/spheroseg-e2e-account.txt`. Use it for every browser check; **never verify against the user's own account or data.** If the flow needs data the account lacks, MAKE the data rather than handing the check back. There is no excuse for stopping at the login page.
 
-- Types prove "compiles", not "behaves correctly".
-- Lint proves "follows rules", not "logic is right".
-- Vitest passing on isolated mocks proves nothing about real data.
-- The production-build minified bundle behaves differently than the dev server.
+Apply **every** gate that matches (full sequences in [verification](docs/claude/verification.md)):
 
-**A change is "done" only when the runtime path that uses it has been observed working.** For user-facing changes, that means a real browser. For API changes, a real curl. For DB changes, a real query. No exceptions.
+- **A. UI:** Playwright MCP: navigate, snapshot, screenshot, console messages, click/type, wait, snapshot again.
+- **B. API / response shape:** curl the wire response AND inspect FE state. A field present in the DATABASE proves nothing about the API.
+- **C. WebSocket / async / queue:** trigger in the browser, tail the service log, verify each transition independently.
+- **D. DB / Prisma:** inspect the resulting schema and column types. Production: **always `prisma migrate deploy`, never `migrate dev`.**
+- **E. ML / Python:** test inside the ML container, print shapes and dtypes at boundaries, assert `len(centerlines[i]) == embedding_samples[i].shape[0]` where it applies.
+- **F. Cross-stack:** an end-to-end Playwright walk-through is mandatory.
+- **G. Build / deps:** `make build-service SERVICE=<x>`, then click through the production-mode preview.
 
-### The test account — there is no excuse for stopping at the login page
-
-Production has a dedicated verification account. Credentials live OUTSIDE every
-repo, in `~/.claude/spheroseg-e2e-account.txt` (mode 600):
-
-```
-email: claude.e2e.test@example.com
-```
-
-Sign-up is open and e-mail verification is off, so a fresh account can be
-created the same way if that one is ever removed. Use it for every browser
-check; never verify against the user's own account or data.
-
-If the flow needs data the account does not have, MAKE the data rather than
-handing the check back: create a project, and synthesise an input. A multi-page
-16-bit TIFF is accepted as a video and is enough to exercise the multi-channel
-editor —
-
-```python
-import numpy as np, tifffile
-tifffile.imwrite('stack.tif', np.stack([...]), photometric='minisblack')
-```
-
-Playwright can only upload from inside the repo root, so stage the file in
-`.playwright-mcp/` first.
-
-This section exists because the rule above it was ignored for a whole session:
-a decode pipeline was rewritten, measured in Node, deployed, and handed over —
-and the user opened the editor to a console full of 404s that one
-`browser_console_messages` call would have shown. Server logs, unit tests and
-`curl` all looked clean. None of them run the app.
-
-### Verification gates per change category
-
-The mandatory verification depends on what changed. Apply **every** gate that matches; ignoring "minor" UI tweaks is how regressions slip in.
-
-#### A. UI / component / layout / styling change
-
-Always use **Playwright MCP** (`mcp__playwright__browser_*` tools). Sequence:
-
-```
-1. browser_navigate           → open the relevant route on https://spherosegapp.utia.cas.cz
-2. browser_snapshot           → a11y tree confirms the element exists in DOM
-3. browser_take_screenshot    → visual confirmation; review the screenshot
-4. browser_console_messages   → ANY error/warning means the feature is broken
-5. browser_click / _type      → trigger the user action this PR is about
-6. browser_wait_for           → for the post-action state (text appears, request settles)
-7. browser_snapshot again     → confirm the DOM changed as expected
-```
-
-Do not claim "the new panel renders correctly" without `browser_take_screenshot` showing it. Do not claim "the button works" without `browser_click` followed by a state verification step. **"It should work because the code looks right" is forbidden as a completion claim.**
-
-#### B. API endpoint / backend response shape change
-
-Three options, pick at least one:
-
-1. **`curl` against dev or production**: `curl -s -H "Authorization: Bearer $TOKEN" $URL | jq` — verify the exact field is present with the expected type. Don't trust the controller code; trust the wire response.
-2. **`browser_network_requests`** in Playwright: navigate to the page that calls the endpoint, inspect the actual request + response in the network panel.
-3. **`browser_evaluate`** to read React Query cache: `window.__REACT_QUERY_DEVTOOLS_GLOBAL_HOOK__` or by accessing the QueryClient via a known component's props.
-
-Common bug: backend exposes a field but the FE mapper strips it. Run BOTH the backend curl AND the FE state inspection to be sure.
-
-**A field present in the DATABASE proves nothing about the API.** The ML → DB
-write path does not go through `PolygonValidator`; both `parsePolygonData` call
-sites are READS, and `validateSinglePolygon` builds its output from the
-`OPTIONAL_POLYGON_FIELDS` whitelist. So an unregistered field survives in
-postgres, is stripped on the way OUT to the editor, and the editor's next save
-writes the loss back. `class` did exactly that until 2026-09-04, and
-`metricsCalculator` splits microcapsule membranes from capsules on it — a
-stripped `class` silently doubles every microcapsule export row.
-
-Diagnose by curling the endpoint, not by querying the table. The tell-tale data
-signature is a field present on every row EXCEPT the ones a user has edited.
-
-#### C. WebSocket / async / queue / state machine change
-
-- Trigger the action in the browser via Playwright.
-- Tail the relevant service log in parallel (`docker logs -f spheroseg-backend` or `spheroseg-ml`) and grep for the event.
-- Confirm the FE state actually changed (poll React state via `browser_evaluate` or visual via screenshot).
-- For multi-step flows (e.g. upload → queue → segment → display), verify each transition independently — don't rely on the final state alone.
-
-Bugs in this category include: queue worker stuck on `isProcessing=true`, WebSocket emit race with React Query invalidation, Socket.io reconnect dropping subscriptions. None are catchable by unit tests.
-
-#### D. Database / Prisma schema change
-
-- Run the migration in the dev container: `docker exec spheroseg-backend npx prisma migrate dev --name <name>`.
-- Inspect the resulting schema: `docker exec spheroseg-postgres psql -U spheroseg -d spheroseg_dev -c "\d <table>"`.
-- Verify column types, constraints, indexes match intent.
-- For production: **always** `prisma migrate deploy`, never `migrate dev` (the latter creates new migration files against the live DB).
-- BigInt vs Int4 has bitten this codebase before (fileSize overflow); double-check numeric column types match the JS-side number ranges.
-
-#### E. ML pipeline / Python / model wrapper change
-
-- Test inside the ML container: `docker exec spheroseg-ml python -c "..."` with a minimal repro.
-- Verify ndarray shapes and dtypes via `print(arr.shape, arr.dtype)` at boundaries — these are runtime contracts, not type-checked.
-- For changes that affect tracking embeddings or polyline output: assert the cross-frame invariant `len(centerlines[i]) == embedding_samples[i].shape[0]`. Misalignment silently corrupts Hungarian matching.
-- If the change is performance-sensitive (CUDA OOM territory), monitor with `nvidia-smi -l 1` during a real inference call.
-
-#### F. Cross-stack feature (frontend ↔ backend ↔ ML)
-
-End-to-end Playwright walk-through of the user journey is **mandatory**. Unit tests are insufficient because they mock the layer boundaries; real bugs live in the seams. Example sequence for "segment a microtubule video":
-
-```
-1. browser_navigate → project page
-2. browser_click "Segment All" → channel picker dialog should appear
-3. browser_click channel option + Confirm → toast + queue stats update
-4. (background) docker logs spheroseg-ml | grep -i microtubule → confirm inference
-5. browser_navigate → editor of frame 0
-6. browser_snapshot → confirm polylines render with per-MT colors
-7. browser_navigate → editor of frame 5
-8. browser_snapshot → same MTs keep same color (trackId stable)
-```
-
-#### G. Build / dependency / bundle config change
-
-- Always run `make build-service SERVICE=frontend` (or backend / ml-service) locally before claiming done. Minified production bundles strip dead code, rename identifiers, and split chunks differently from dev.
-- After a successful build, hit the **production-mode local preview** (`docker compose -f docker-compose.production.yml up -d --no-deps --force-recreate frontend`) and click through key flows in a browser. Dev-server HMR-friendly code can break under tree-shaking.
-
-### The "no console errors" policy
-
-**Any error in the browser console during a Playwright check is a bug.** Treat it as a blocker. Warnings are case-by-case: React `key` warnings = bug; deprecation warnings from libraries = file in tech debt log.
-
-```
-browser_console_messages → if length > 0 with severity 'error', the change is NOT done.
-```
-
-### The production-parity rule
-
-**A feature works locally ≠ a feature works in production.** Things that differ:
-
-- Bundled minified code (Vite tree-shake + chunk split)
-- Real network latency (200 ms+ vs 0 ms local)
-- Cold caches (no React Query memo, no service worker)
-- Nginx upstream DNS caching (a backend recreate may need `docker restart spheroseg-nginx`)
-- Real auth state (expired tokens mid-action, refresh races)
-- Real user data shapes (ND2 with IRM channel, missing frames, 200-frame videos)
-
-If the change is going to production, **build the production bundle locally and click through it** before deploying. The dev server is a development convenience, not a production proxy.
-
-### What to do when verification finds a bug
-
-1. Don't paper over it with `try/catch` or fallbacks unless that's the actual fix.
-2. Identify the root cause; verification revealed the symptom, the real bug may be one layer up.
-3. Reproduce minimally — confirm the bug exists in the smallest possible setup.
-4. Fix the root cause; re-run the same verification sequence; confirm it now passes.
-5. Add a regression test if and only if the test would have caught the bug. Don't pad the suite with shallow assertions.
-
----
-
-## Test Suite Reality
-
-Measured 2026-09-04 after a 15-PR audit that rewrote most of this section; the
-counts in the table were re-measured 2026-10-06. The
-headline number is not the interesting part — **the interesting part is that a
-suite can be green, red, or wired to nothing, and this repo has all three.**
-
-### 1. Green and actually run
-
-| Suite                   | State                                                                                                                               |
-| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| Vitest (frontend)       | **5424 pass**, 295 files, **~117 s** (re-measured 2026-10-06). `npx vitest run`.                                                    |
-| Vitest (backend)        | **4443 pass / 6 skipped**, 222 files, ~35 s. Not Jest. Must run in the container — see **Backend tests** below.                     |
-| Python (`make test-py`) | **731 pass / 3 skipped**. Step 7 of `make ci`; pytest is NOT in the ml image, `make ci` pip-installs it into a throwaway container. |
-
-The old "400 pass / 401" figure was wrong, not stale: `make test-py` ran three
-of the four paths CI runs and silently omitted the 112 `focus_qc` tests.
-
-### 2. Flaky under load — and the blame MOVES
-
-Until 2026-09-04 the frontend suite was clean on roughly **2 runs in 5** on a
-busy machine, and the file it blamed changed every time (`ThemeContext`,
-`ProtectedRoute`, `CanvasImage`, `SegmentationEditor.orchestration`). That is
-the signature to recognise: **a leaked timer poisons whichever file the
-scheduler runs next, so the victim is random and the cause is not.**
-
-Root cause was a 500 ms `setTimeout` in a `SegmentationEditor.tsx` `useEffect`
-that returned **no cleanup at all**, firing after unmount. The existing abort
-signal could not have covered it — the timer is scheduled _after an await_, so
-a fast unmount tears the effect down before the handle exists. Fixed, with two
-more of identical shape (`ProjectDetail.tsx`, `useEnhancedSegmentationEditor.tsx`);
-5/5 clean runs after. **If flakiness returns, look for an uncleaned timer
-before you look at the test that failed.** Unfixed leaks of this shape are
-listed in PR #484 — `ShareAccept.tsx:103` is the live one.
-
-### 3. Red, or wired to nothing — the category nobody was tracking
-
-This is where the real risk was, and none of it showed up as a failure:
-
-- **`make test-e2e` does not run at all** (no `docker-compose.yml`), and 55 of
-  its 71 testids no longer exist in `src/`. Last touched 2026-05-12.
-- **`backend/src/test/integration/**`** — 3 798 lines, excluded from vitest,
-  and its jest runner collects **zero** tests.
-- **`make test-ml` was RED on `main`** and nothing ran it. Same for
-  `backend/segmentation/models/microtubule/tests` — the instancer's real
-  identity proofs, collected by **nothing**. Both now wired up; `make test-ml`
-  is 670 pass / 1 skip / 11 errors (the 11 are documented async-fixture errors).
-  **2026-11-05:** 759 pass / 2 skip. It had gone red again unnoticed (two
-  assertions older than the code they checked) and hung after its summary:
-  `test_inference_timeout` left an executor worker blocked, and
-  `concurrent.futures` joins every worker at interpreter exit.
-- **GitHub CI cannot run the ML suite at all**: the runner has no GPU, so
-  `import api.main` dies in `mamba_ssm` -> Triton -> "0 active drivers". See the
-  comment above the "Python files parse" step in `ci.yml`.
-- The backend coverage gate is **global**, with ~2 points of branch headroom —
-  an entirely untested new module can hide behind it.
-
-**So a green suite is a real gate for the code it covers, and says nothing
-whatsoever about the code it does not.** It is still not a substitute for
-[Verification](#verification-rules), and 2026-09-04 gave four fresh
-demonstrations:
-
-- A localisation fix shipped with green tests, a green `make ci` and green CI —
-  and one of six upload phases still rendered English, found only by a real
-  300-frame upload in a browser with the locale set.
-- A membrane tracer was diagnosed against the _mean_ radial profile, which
-  peaked at the right radius while the per-ray maximum — the thing the code
-  actually uses — pointed 10 px elsewhere.
-- Two mutations survived a fully green new test file, and they were the two the
-  whole change rested on. See [Mutation testing](#mutation-testing) below.
-- A test named _"should handle points with Infinity coordinates"_ passed for
-  months while `CanvasPolygon` emitted `d="MInfinity,10 ..."`, silently erasing
-  the polygon — because `isNaN(Infinity)` is `false`. Use `Number.isFinite`.
-
-### Backend tests need the container
-
-Canvas ABI: host Node 22 vs container 20.
-
-```bash
-docker run --rm --user root --entrypoint /bin/sh \
-  -v $PWD/backend:/app -v /app/node_modules -w /app \
-  cell-segmentation-hub-backend -c "npx vitest run <path>"
-```
-
-`--user root` is needed to read `.env`; `-v /app/node_modules` keeps the image's
-modules instead of the host's. Bind-mounting the whole `backend` dir is what
-makes it test the WORKING TREE rather than the image's baked copy — the image
-bakes `src`, so without the mount you are testing whatever was last built.
-
-### Mutation testing
-
-**Revert the fix, confirm the test goes red, restore.** A test that passes with
-the fix removed is not evidence. This is not optional and it repeatedly earns
-its keep: on 2026-09-04 it caught, in one session, a test asserting only on
-state while the whole change was about rendered output, a test whose fixture
-could not distinguish the two branches, and an "invariant" test that passed
-against a deliberately quadratic implementation.
-
-Two rules learned the hard way:
-
-- **Verify the mutation actually applied.** Assert the anchor string is present
-  AND unique before replacing; a short anchor can match a different site (a
-  10-space indent is a substring of a 12-space one) and the result reads
-  exactly like a surviving mutant.
-- **A survived mutation means the test is too weak, not that the mutation is
-  equivalent.** Strengthen it until it fails, or delete the claim.
-
-### When to write tests
-
-- **Pure utility function with a deterministic contract** → unit test. See `instanceColors.test.ts` for the pattern.
-- **Regression fix for a real production bug** → write a test that fails before the fix and passes after. The bug provided the spec; encode it.
-- **Cross-frame / cross-layer invariant** → integration test with mocked layer boundaries (see `test_rdp_preserves_embedding_alignment` for the pattern).
-
-### Timing assertions: check the clock before you trust the number
-
-**`performance.now()` resolves to a whole MILLISECOND under vitest/jsdom.**
-Measured 2026-09-04: over 2000 consecutive samples the only distinct delta is
-exactly `1`. Bare node in the same shell resolves microseconds, so this is the
-environment, not the machine.
-
-So any assertion built on a duration under ~10 ms is measuring the tick
-boundary. A ratio of two such durations is built from small integers — 1 ms vs
-4 ms is _exactly_ 0.5 — which is how `cancel-performance.test.ts` produced
-`expected 0.5 to be greater than 0.5` at roughly 1 run in 6 under load.
-
-**Repeating the work for a time budget fixes the resolution, and often reveals
-that the test could never have worked.** On that same file, with each volume
-repeated to 25 ms, a genuinely `O(n²)` implementation still passed: per-op cost
-is dominated by fixed per-pass overhead and _falls_ as volume rises. An
-absolute ceiling failed too — under a 10-core load clean runs span 3.5–62.5
-µs/op and a 2000×-work regression spans 6.1–320 µs/op, so the distributions
-**overlap** and no threshold exists.
-
-Before defending any timing threshold, **measure both distributions — clean and
-deliberately regressed — under realistic load.** If they overlap, tuning the
-number is self-deception; drop the timing claim and assert the deterministic
-behaviour instead (every operation actually cancelled, nothing left behind, the
-thing terminates). Loosening a flaky threshold only moves the coin flip.
-
-Also: a "performance" test driving a `vi.fn()` mock from the test helpers is not
-measuring production code, so its speed was never going to inform anything.
-
-### When NOT to write tests
-
-- Shallow render tests that just confirm a component mounts — these are noise. They pass even when the feature is broken.
-- Tests against modules with broken imports — fix the import chain first.
-- Tests requiring infrastructure not gated on availability (e.g. ML model loaded) — guard with `pytest.importorskip` / `vi.skipIf`.
-- Padding existing suites to hit a coverage number.
-
-### Tests are not a substitute for verification
-
-Even if every test passes, **you still must Playwright-verify the user-facing change**. Tests prove "this assertion held under this scenario"; verification proves "the feature works in a real browser against real services". They are complementary, not interchangeable.
-
----
-
-## Production Failure Patterns (Recognize and Prevent)
-
-Each of these shipped to production at least once in 2026 despite green pre-commit. Recognize and proactively check:
-
-1. **Field-missing-from-API-response**. Backend forgot to expose a field; FE renders empty/null. Check: `curl` the endpoint and assert field present.
-
-2. **FE mapper strips field**. Backend exposes field, but a `useProjectData`-style mapper drops it before it reaches components. Check: `browser_evaluate` on React Query state, not just the controller.
-
-3. **SyntheticEvent as first arg**. `onClick={handleX}` passes a React SyntheticEvent as the first argument, so `handleX(opt?: string)` treats the event as `opt`. Check: `typeof arg === 'string'` in handlers + Playwright click test.
-
-4. **Per-inference randomness claimed stable**. Claiming an ID is preserved across frames when it's `uuid.uuid4()` per call. Check: read the model code (`backend/segmentation/ml/model_loader.py`) before claiming behavior; for cross-frame stability use `trackId` (written by tracker), not `instanceId`.
-
-5. **Incomplete React.memo comparator**. Adding a new prop to a memoized component but forgetting to compare it; component never re-renders on prop change. Check: when touching a `React.memo` component's props, always update the comparator (`CanvasPolygon.tsx:387` style).
-
-6. **Build succeeds but bundle breaks**. ESLint/TS clean, but `make build-service SERVICE=frontend` fails on minification or chunk split, or the minified code behaves differently. Check: run the production build locally + open the production preview.
-
-7. **Migration runs but column is wrong type**. Prisma migration creates an Int4 where the FE will eventually push a number > 2³¹. Check: schema after migration + a real overflow value.
-
-8. **Nginx upstream DNS cache**. Backend recreated; nginx still points at old container IP → 502s. Check: after a backend `--force-recreate`, also restart nginx.
-
-9. **Docker compose without `--env-file`**. Env vars (e.g. `PG_PASSWORD`, `JWT_SECRET`) silently empty in the container. Check: `docker exec ... env | grep <VAR>` after recreate.
-
-10. **Queue worker stuck on `isProcessing=true`**. ML recreate during an in-flight axios POST leaves the backend in a deadlock state. Check: tail backend logs after deploy; if no progress, restart backend.
-
-11. **TDZ on useCallback referencing a later `const`**. New `useCallback` / `useMemo` / `useEffect` placed BEFORE a `const x = ...` it captures in its deps array (or body) throws `Cannot access '<single letter>' before initialization` at runtime — TS doesn't catch it because the component body looks like a flat scope. Production minified bundle shows the error as a single letter (`'A'`, `'b'`). Check: when reordering hooks in `SegmentationEditor.tsx`, ensure any hook that touches `video.*`, `editor.*`, `selectedImage.*` is placed AFTER the corresponding `const video = ...`, etc.
-
-12. **Frame slider seed/reverse-sync race**. `useVideoFrames` defaults `frameIndex=0`. If reverse-sync (frameIndex→URL) fires before seed (URL→frameIndex) propagates a `setFrameIndex(N)`, the URL flips to `frames[0]` and oscillates with seed at ~7 Hz on multi-hundred-frame videos. Check: tests on a 600+-frame video; the editor must converge within 1-2 render commits. Pattern: 3-effect choreography with ref-tracked seed marker — see memory `project_frame_slider_race_pattern`.
-
-13. **Editor doesn't refresh after resegment (same-count)**. The editor's polygon-sync effect in `useEnhancedSegmentationEditor.tsx` only pulls new data into the canvas when the polygon **count** or `imageId` changes. A resegment usually returns the **same count** with new geometry, so a reload (`setSegmentationPolygons`) updates page state but the canvas keeps the stale polygons. Fix pattern: a `reloadNonce` that increments on every reload and is part of the sync effect's `isNewData`. Also: the WebSocket completion event is NOT a dependable refresh trigger (it can silently not reach `handleSegmentationStatusUpdate`); a resegment must have a non-WS path (background poll on `getSegmentationResults().updatedAt`) to reload + show the success toast on completion. Check: delete a polygon → resegment → the new polygon must reappear AND the success toast fire WITHOUT a manual F5.
-
-14. **Removing an npm dep breaks the prod build via `vite.config.ts`**. Dropping a package from `package.json` (or via `npm audit fix`) passes locally — it lingers in `node_modules` — AND passes CI, because the FE `npx tsc --noEmit` is **vacuous** (root `tsconfig.json` is `files: []` + project references → it type-checks nothing; Vite doesn't type-check either). But the production `vite build` fails with `Could not resolve entry module 'X'` when `X` is still named in `manualChunks` / `optimizeDeps`. Check: when removing a dep, grep the build config too (`vite.config.ts`, `tailwind.config.ts`) — not just `src/` — and run `make build-service SERVICE=frontend` before claiming done. (Caught `cmdk`/`vaul`/`input-otp` left in `manualChunks`, 2026-06-17.)
-
-15. **Phantom (transitive-only) dependency**. A package imported directly in code but absent from `package.json`, satisfied only transitively via another dep. Removing that parent (e.g. `bull`) drops the phantom (`ioredis`, imported directly by `healthCheckService.ts`) from a fresh `npm ci` → the service crash-loops at startup (`ERR_MODULE_NOT_FOUND`). The host `node_modules` still has it, so `make ci` and a local run pass; only a fresh-install Docker build/deploy catches it. Check: before removing a package, `npm ls <suspect>` for direct importers that resolve only through it, and declare any such import as a direct dependency.
-
-16. **Yanked or load-bearing dependency pins**. A pinned `requirements.txt` version can be **yanked** from PyPI — pip warns `Reason for being yanked` but still installs the explicit pin. `torch==2.6.0` / `torchvision==0.21.0` / `numpy==1.26.4` are load-bearing: mamba-ssm + causal-conv1d ship CUDA kernels source-built against torch 2.6.0+cu124, and numpy is what that torch was built against. **`transformers` is pinned at 5.5.4 and the ceiling was re-measured 2026-09-04 — it is 5.9.0, not the 5.16.1 the old comment claimed.** 5.6.2 / 5.7.0 / 5.8.1 are clean and bit-identical; **5.9.0** renames the SegFormer state-dict layout (`segformer.encoder.block.N.M` → `stages.N.blocks.M`, `attention.self.{query,key,value}` → `{q,k,v}_proj`, …) so the checkpoint stops loading; **5.10.x will not even import** on torch 2.6.0 (it evaluates `torch.float8_e8m0fnu` at module scope, and pip cannot warn because transformers declares `torch>=2.5` only under `extra == "torch"`). The HIGH advisory GHSA-xrqw-3rrv-vx5w fixes in 5.10.0 and therefore **cannot be taken** — it is also unreachable here: `grep -rn save_pretrained backend/` has no Python call site. **`opencv-python-headless` and `ml_dtypes` are `ResolutionImpossible` against numpy 1.26.4** (opencv's wall is 4.12, a wheel BUILD property, so there is no intermediate release) and both are Dependabot-ignored. Guarded by `backend/essays/tests/test_transformers_pin.py`. See memory `reference_dependency_pin_constraints`.
-
-17. **Cross-frame MT identity is geometric since v5H (2026-08-17).** The model no longer emits 32-d embeddings; `/api/v1/track` matches on symmetric curve distance plus an overlap gate, with common-mode stage drift removed by normal-flow least squares. A `trackId` regression therefore shows up as a _geometry_ problem — gate too tight, drift misestimated on a field of parallel filaments — not a decode problem. Check `api/mt_geometry_cost.py` first. **There is no hard gate any more.** `GATE_MAX_SHIFT` was removed in the same series that added the geometry (it fragmented tracks 3.14x) and is now `CURVE_SCALE_PX` — a saturation _scale_, not a rejection threshold: a pair beyond it is expensive, never `inf`. The only surviving `inf` is geometry too degenerate to compare (a centerline with fewer than two points), where a distance of 0 would otherwise read as a perfect match. `GATE_MIN_OVERLAP`, `OVERLAP_TOL` and `overlap_fraction` still exist in that file and are still tested, but the tracker **does not import them** — as a hard gate overlap caused the fragmentation, and folded in as a cost term it measured no better while doubling wall-clock, because it rebuilds cKDTrees `curve_distance` has already built. They are kept as a geometry primitive for a possible future use (splitting a merged detection), so treat them as a library, not as something in the matching path: tuning them changes nothing. The request's `embedding` and `emb_template_alpha` fields are accepted-and-ignored, and `corrupt_count` / `degraded` are pinned to `0` / `false`; rows written by v7 still carry an `_embedding` and `extra="forbid"` would 400 them otherwise.
-
-18. **`process.env` in a browser bundle blanks the page.** There is no `process` global in the browser, and Vite only substitutes the literal text `process.env.NODE_ENV` — so a `process.env.VITE_*` read survives into the served module and throws `ReferenceError: process is not defined` while the enclosing object literal is evaluated. That takes the whole module down, and with it everything importing it; the dev server rendered a blank page. Production escaped only because rollup tree-shook the offending object out of the bundle entirely, so one new import of it would have shipped the crash. Use `import.meta.env` in `src/` — `import.meta.env.MODE` is the exact equivalent of a NODE_ENV compare ('development' under `vite dev`, 'production' under `vite build`, 'test' under vitest). Live readers today are `services/webSocketManager.ts` and `components/DashboardHeader.tsx`. (This note used to live in `src/lib/constants.ts`, which no longer reads env at all.)
-
-19. **A test that defines its own subject.** `webSocketService.cancel.test.ts` declared `class WebSocketService` at line 172 **of the test file**, with `emitOperationCancelled` / `emitExportCancelled` / `emitCancelError` — none of which exist in the real service — and imported nothing from this repo. `queueCancel.test.ts` was headed _"Mock Express App for Testing (TDD - to be implemented)"_ and defined its endpoint in-file, for a route that has never existed. Six such shadow suites were found (2026-09-04), 195 tests, ~4 000 lines, green forever, measuring nothing; deleting them **raised** coverage. The proof they were worthless: breaking the real cancel button turned its real test red twice while a 23-test shadow — including one named _"should call onCancel when clicked"_ — stayed fully green. Check: **does the test file import the thing it claims to test?**
-
-20. **`async def` on a single-worker uvicorn blocks everything.** `/mt-metrics` and `/mt-background-rois` were `async def` doing CPU work on a `--workers 1` server, so a 24-minute export blocked `/segment`, `/track`, `/kymograph` **and the compose healthcheck's `/health`** for its whole duration (measured: `/health` 9.84 s → 0.02 s after the fix). The obvious fix is worse: plain `def` hands the route to Starlette's 40-slot threadpool, and each slot calls a 3.4 GB `_load_volume` — that is an OOM, not a fix. Use a **one-slot executor**, the pattern `/kymograph` already uses.
-
-21. **A generated baseline file hides the error it is regenerated over.** `typecheck-baseline.json` and `eslint-baseline.json` record tolerated problems; re-running `npm run type-check:update` after a conflict silently accepts anything new. When you must regenerate, **diff the result against both parents** and account for every entry that appears in neither. On 2026-09-04 all five such entries turned out to be pre-existing errors whose message text changed because `AuthContextType` gained `isAdmin` — but the total was FALLING (1649 → 1608), so a genuinely new error would have been invisible.
-
-22. **A stale Prisma client makes the host TS check lie.** After any `schema.prisma` change, `npx tsc` on the host reports `Property 'x' does not exist` until the client is regenerated — and `npx prisma generate` **fails on the host** (`EACCES: permission denied, unlink .prisma/client/index.d.ts`) because `backend/node_modules` is root-owned, written by the containers. Regenerate through the container:
-
-    ```bash
-    docker run --rm --user root --entrypoint /bin/sh \
-      -v $PWD/backend:/app -w /app cell-segmentation-hub-backend -c "npx prisma generate"
-    ```
-
-    Same root cause makes `cp -al node_modules` fail silently for a non-root user (`fs.protected_hardlinks=1`): it creates the directory tree and **zero files**.
-
-23. **Start-up code that needs something a migration creates.** Anything on
-    the server's start-up path that reads a table — a worker re-queuing its
-    interrupted work, a cache warm-up — turns "the migration has not run yet"
-    from a failing endpoint into a server that cannot start. Two rules, both
-    learned from the 2026-10-06 outage described under
-    [Production](#production-single-stack-post-2026-05-15): migrate before
-    recreating, and keep optional subsystems out of the critical start-up
-    `try` (the job worker's `startJobWorker` now touches no database at all;
-    its recovery runs in the first tick, where a failure is logged and
-    retried).
-
----
-
-## Documentation is part of the change, not a follow-up
-
-**Every application change updates the documentation that describes it, in the
-same PR, and the update is VERIFIED the same way the code is.** Docs that
-describe a UI which no longer exists are worse than no docs: a reader follows
-them, cannot find the control, and concludes the feature is broken.
-
-This is not a style preference. Documentation here lives in four places that
-drift independently, and a change usually touches more than one:
-
-1. **`docs/**.md`** — architecture, reference, API, testing guide.
-2. **The in-app Documentation page** (`src/pages/documentation/`) — what USERS
-   read. It is rendered from the `docs:` block in
-   `src/translations/{en,cs,es,de,fr,zh}.ts`, so a change here is a change in
-   SIX files. Note there are TWO blocks named `modelSelection` in those
-   files — one under `settings:`, one under `docs:` — and editing the wrong one
-   is easy.
-3. **`CLAUDE.md`** (this file) — every "X lives at Y" claim it makes.
-4. **Code comments carrying measured numbers** — see the rule about not
-   "simplifying" `rasterize_band`, `vicinity_mask` and `focus_qc/metrics.py`.
-
-### The check, before you call a change done
-
-- `grep` the docs for the names of everything you deleted, moved or renamed —
-  components, routes, URL query params, settings tabs, env vars, endpoints.
-  A deleted `ModelSettingsSection` or a removed `?tab=models` leaves prose
-  pointing at it.
-- If the change is user-visible, **open the in-app Documentation page in the
-  browser** and read the section that covers it, exactly as a user would. The
-  i18n validator cannot tell you a sentence became false — it only checks that
-  keys exist in all six files.
-- If a doc states a NUMBER (a default, a threshold, a count, a duration),
-  re-measure it rather than copying it forward. This repo's own comments have
-  been wrong by seven minor versions.
-- State in the PR description which docs you checked, including the ones you
-  concluded needed no change. "I did not look" and "I looked and it was fine"
-  are different answers.
-
-### When docs and code disagree
-
-Fix the docs to match the code only after confirming the CODE is right. The
-`_arc_length_resample_polyline` case is the precedent: the docstring cited the
-wrong ImageJ method for years, and the code was correct — "fixing" the code to
-match the comment would have been the bug.
-
----
+**No console errors:** any error in the browser console during a Playwright check is a bug and a blocker. **Production parity:** a feature working locally is not working in production (minified bundle, latency, cold caches, nginx DNS, real auth state, real data shapes). **When verification finds a bug:** don't paper over it with `try/catch`; find the root cause, reproduce minimally, fix, re-run the same sequence, add a regression test only if it would have caught the bug.
 
 ## Do NOT hand back unverified fixes
 
-**Test comprehensively yourself BEFORE telling the user to try it.** Repeatedly shipping "should work" fixes that the user has to bounce back is the worst failure mode — it wastes their time and erodes trust. For any user-facing change, reproduce the user's exact flow end-to-end and observe the fixed behavior with your own tools (Playwright MCP + service logs + DB) before handoff.
+**Test comprehensively yourself BEFORE telling the user to try it.** Reproduce the user's exact flow end-to-end with your own tools (Playwright MCP + service logs + DB). When the harness cannot exercise a path (the injected-token Playwright session has an unstable WebSocket), make the fix not depend on the unverifiable path, verify that path, and escalate only once you have observed it working.
 
-When your test harness genuinely cannot exercise a path (e.g. the injected-token Playwright session has an **unstable WebSocket** — it flaps connect/disconnect and triggers an abort storm that cancels in-flight fetches, so WS-completion-driven editor refreshes can't be observed), do NOT hand back and hope. Instead: (a) make the fix **not depend on the unverifiable path** (e.g. a background HTTP poll with a non-cancellable final fetch, independent of the WebSocket), then (b) verify THAT path, which the harness can exercise. Only escalate to the user once you have observed the fix working.
+## Test Suite Reality
+
+A suite can be green, red, or wired to nothing, and this repo has all three: see [test suite](docs/claude/test-suite.md) before trusting one. Backend tests are Vitest, not Jest, and must run in the container. Pytest is not in the ml image. **Does the test file import the thing it tests?** **Mutate the claim:** revert the fix, confirm RED, restore. **Never assert on wall-clock**; assert renders counted, queries issued, calls made.
+
+## Production Failure Patterns (Recognize and Prevent)
+
+Each shipped to production at least once in 2026. Code comments cite these numbers. Checks and measurements: [failure patterns](docs/claude/failure-patterns.md).
+
+1. Field missing from API response: `curl` the endpoint.
+2. FE mapper strips a field (enumerative mappers): check React Query state, not just the controller.
+3. SyntheticEvent as first arg of `onClick={handleX}`.
+4. Per-inference randomness claimed stable: use `trackId`, not `instanceId`, across frames.
+5. Incomplete `React.memo` comparator: update it whenever props change.
+6. Build succeeds but bundle breaks: run the production build and preview.
+7. Migration creates the wrong column type (Int4 vs BigInt).
+8. Nginx upstream DNS cache: restart nginx after a backend `--force-recreate`.
+9. Docker compose without `--env-file`: env vars silently empty.
+10. Queue worker stuck on `isProcessing=true` after an ML recreate mid-POST: tail logs, restart backend.
+11. TDZ: a hook placed BEFORE the `const` it captures throws a single-letter error in the minified bundle.
+12. Frame slider seed/reverse-sync race on long videos.
+13. Editor doesn't refresh after a same-count resegment: needs `reloadNonce` and a non-WS path.
+14. Removing an npm dep breaks the prod build via `vite.config.ts`: grep the build config; the FE `tsc --noEmit` is vacuous.
+15. Phantom transitive dependency: `npm ls` before removing a parent.
+16. Yanked or load-bearing pins: `torch==2.6.0`, `numpy==1.26.4`, `transformers==5.5.4` (ceiling 5.9.0 breaks, 5.10 won't import). Read the full note before any bump.
+17. Cross-frame MT identity is geometric since v5H: check `api/mt_geometry_cost.py`; there is no hard gate any more.
+18. `process.env` in a browser bundle blanks the page: use `import.meta.env` in `src/`.
+19. A test that defines its own subject measures nothing.
+20. `async def` on single-worker uvicorn blocks `/health` and everything else; plain `def` is an OOM. Use a one-slot executor.
+21. A regenerated baseline file hides new errors: diff against both parents.
+22. Stale Prisma client makes the host TS check lie; regenerate through the container.
+23. Start-up code that needs a migration: migrate before recreating, keep optional subsystems out of the critical start-up `try`.
+
+## Documentation is part of the change, not a follow-up
+
+**Every application change updates the documentation that describes it, in the same PR, verified like code.** It lives in four places that drift apart: `docs/**.md`; the in-app Documentation page (the `docs:` block in SIX `src/translations/*.ts` files; there are TWO `modelSelection` blocks); `docs/claude/<area>.md` for every "X lives at Y" claim (`CLAUDE.md` itself holds only rules and pointers, keep it under ~20 KB because it loads into every session); code comments with measured numbers. `grep` the docs for everything you deleted or renamed, open the in-app page for user-visible changes, re-measure any number instead of copying it, and state in the PR which docs you checked. When docs and code disagree, confirm the CODE is right first. Full: [documentation rule](docs/claude/documentation-rule.md).
 
 ## Commands
 
 **Docker-first project. Never run npm/node directly on the host — use `make` targets or container shells.**
 
-### Daily development
-
 ```bash
-make up                          # Start all services (FE :3000, BE :3001, ML :8000)
-make down                        # Stop services
-make logs-f                      # Tail all logs
-make health                      # Health check
-make shell-fe / shell-be / shell-ml  # Container shells
-```
-
-### Code quality (runs on host)
-
-```bash
-make ci                          # Full local CI gate, 9 steps: TS (FE+BE) + ESLint (FE+BE) + i18n + doc links + Python suites + model-id parity + shared constants. ~80 s (measured 2026-10-06), not the ~30 s this line used to claim.
-make ci-test                     # Frontend Vitest — the same suite the required CI job runs
-npx tsc --noEmit                 # Frontend type check
-make lint                        # ESLint in Docker
-npm run lint:backend             # backend/src ESLint baseline gate (step 4 of `make ci`)
-npm run lint:backend:update      # Accept new backend lint debt (rewrites the committed baseline)
-npm run lint:backend:self-test   # Prove the gate still fails on a new problem
-```
-
-**`npx eslint src/` is the FRONTEND only.** The root `eslint.config.js` ignores
-`backend/**`, so for a long time nothing linted `backend/src` — not `make ci`,
-not CI, not lint-staged (its `*.{ts,tsx}` entry hands backend files to the root
-config, which ignores them). A hard ESLint error shipped through a green
-`make ci` that way. `scripts/eslint-baseline.mjs` now gates that tree against a
-committed `eslint-baseline.json`, the same design as
-`scripts/type-check-baseline.mjs`: pre-existing problems are recorded and
-tolerated, anything new fails. Backend **test** files are still unlinted —
-`backend/eslint.config.js` ignores `**/*.test.ts` and `**/__tests__/**`.
-
-### Database (inside `make shell-be`)
-
-```bash
-npx prisma migrate dev --name <name>     # Dev migration (creates file)
-npx prisma migrate deploy                # Production migration (applies existing file)
-npx prisma generate
-npx prisma studio                        # Visual DB browser
-```
-
-### Building (always optimized)
-
-```bash
+make up / down / logs-f / health         # Start (FE :3000, BE :3001, ML :8000), stop, tail, health check
+make shell-fe / shell-be / shell-ml      # Container shells
+make ci                                  # Full local CI gate, 9 steps, ~80 s: TS + ESLint (FE+BE) + i18n + doc links + Python + model-id parity + shared constants
+make ci-test                             # Frontend Vitest, the same suite the required CI job runs
+npx tsc --noEmit                         # Frontend type check
+make lint                                # ESLint in Docker
+npm run lint:backend                     # backend/src ESLint baseline gate; lint:backend:update accepts new debt, lint:backend:self-test proves the gate fails
 make build-optimized                     # Smart build with auto-cleanup
-make build-service SERVICE=frontend      # Build single service
-make build-clean                         # Full no-cache rebuild
+make build-service SERVICE=frontend      # Build single service; make build-clean = full no-cache rebuild
+npx prisma migrate dev --name <name>     # Dev migration, inside make shell-be (also: migrate deploy, generate, studio)
 ```
+
+**`npx eslint src/` is the FRONTEND only**; the root config ignores `backend/**`. Backend test files are still unlinted.
 
 ### Production (single-stack, post-2026-05-15)
 
-Blue-green is gone (see memory `project_blue_green_removal_2026_05_15`). Deploy is just a rebuild + recreate of the affected services:
+Blue-green is gone. Deploy is a rebuild + recreate of the affected services:
 
 ```bash
 # 1. Build the changed services
@@ -558,673 +114,51 @@ docker restart spheroseg-nginx
 curl https://spherosegapp.utia.cas.cz/health           # → "production-healthy"
 ```
 
-**Migrate before you recreate, not after.** The other order — recreate, then
-`docker exec spheroseg-backend npx prisma migrate deploy` — works only while
-no code touches the new table until a request asks for it. On 2026-10-06 a
-worker queried its new table at START-UP, inside the server's "critical
-services" `try`: the table did not exist yet, the query threw, the server
-exited, and `restart: always` turned that into twelve restarts and about four
-minutes with the whole app down. `docker exec` cannot even run while the
-container is restarting, so the documented fix was unavailable; the table was
-created by piping the (idempotent) migration SQL into `psql`. Step 1b runs the
-migration in a throwaway container from the NEW image, on the production
-network, and does not touch the running backend.
-
-`make prod` rebuilds and recreates everything; useful for big changes but unnecessary for service-scoped updates.
-
-There are no longer `scripts/deploy-production.sh` / `rollback-deployment.sh` / `migrate-database.sh` etc. — those orchestrated blue↔green switching that doesn't exist now.
-
-| Service     | Production      | Dev  |
-| ----------- | --------------- | ---- |
-| nginx (SSL) | 80/443          | —    |
-| Frontend    | 4000            | 3000 |
-| Backend     | 4001            | 3001 |
-| ML          | 4008            | 8000 |
-| PostgreSQL  | 5432 (internal) | 5432 |
-| Redis       | 6379 (internal) | 6379 |
-
----
-
-## Tech Stack
-
-| Layer      | Technology                                                                                                                                                                                                                                                                                                                                             |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Frontend   | React 18 + TypeScript + Vite + shadcn/ui (Radix + Tailwind)                                                                                                                                                                                                                                                                                            |
-| Backend    | Node.js + Express + TypeScript + Prisma                                                                                                                                                                                                                                                                                                                |
-| ML Service | Python + FastAPI + PyTorch (SegFormer, HRNet, CBAM-ResUNet, U-Net, Mamba-UNet, Spheroid Disintegration, Sperm, Sperm 2-part (head + tail), Wound, Microcapsule, Neurite/Soma, Neurite/Soma classical (`neurite_soma_classical`: Meijering ridge filter + shape rules on a merge of user-ticked channels; CPU, no weights), Microtubule SPARSE35 ep040) |
-| Database   | PostgreSQL (dev + prod via Docker compose)                                                                                                                                                                                                                                                                                                             |
-| Real-time  | Socket.io with auto-reconnect + exponential backoff                                                                                                                                                                                                                                                                                                    |
-| Auth       | JWT access + refresh tokens                                                                                                                                                                                                                                                                                                                            |
-| i18n       | 6 languages (EN, CS, ES, DE, FR, ZH) via a hand-rolled `LanguageContext` — **not i18next**                                                                                                                                                                                                                                                             |
-
----
-
-## Architecture (skim level — read `docs/architecture/` for depth)
-
-### Frontend state
-
-- **Server state**: React Query (TanStack) with optimistic updates + query invalidation.
-- **Client state**: React Contexts — Auth, Theme, Language, WebSocket, Upload, Export, Model, ImageDisplayContext. `ModelContext` is down to `detectHoles` alone (see below).
-- **Real-time**: Socket.io events (`segmentationStatus`, `segmentationCompleted/Failed`, `queueStats`).
-
-### The segmentation model belongs to the PROJECT (since 2026-09-20, PRs #553/#554)
-
-It used to be one per-user value in `localStorage`, chosen in Settings → Models
-and shown as a badge in the header. Both of those are **gone**: there is no
-models tab (`?tab=models` falls back to the profile tab), and the header shows
-only a bare ML-status dot.
-
-- **`projects.segmentationModel`**, nullable. `NULL` means "follow the type's
-  default" and is **never backfilled** — a backfill would freeze today's
-  default into every row. Resolve it with `resolveProjectModel()`, which also
-  falls back when the stored value is stale (a type change strands it, and a
-  model can leave the registry).
-- **`DEFAULT_MODEL_BY_PROJECT_TYPE`** in BOTH registry SSOTs picks the most
-  ACCURATE compatible model, not the fastest: `spheroid` → `segformer` on
-  93 % IoU. Parity between the two copies is enforced by
-  `scripts/verify-shared-types.cjs`, NOT by either side's own unit test. It
-  runs as step 9 of `make ci`, in the `frontend` job of `ci.yml`, and from
-  lint-staged when either `modelRegistry.ts` is staged. **Until 2026-10-06 it
-  ran only from lint-staged and only for files under `types/`**, so editing
-  the registry — where the map lives — triggered nothing; and
-  `scripts/check-model-parity.cjs` (model-id sets across both TS registries,
-  Python `AVAILABLE_MODELS` and the `ModelType` enum; ids only) was run by
-  nothing at all while three documents said it guarded them. It is now step 8
-  of `make ci` and a step of the same CI job. Both gates were mutation-tested
-  on a scratch copy: dropping an id from any one of the four sources, or
-  changing one default in either copy, exits 1.
-- **Only `spheroid` (5 models), `sperm` (2: `sperm`, the default, and
-  `sperm_2part` — head + tail, no midpiece; PR #566) and `neurite` (2:
-  `neurite_soma`, the default, and `neurite_soma_merged`) have a real
-  choice**; the other four project types have exactly one each, so their
-  picker is a single disabled row.
-- **The server must read the column too.** It shipped once with
-  `resolveProjectModel` having zero backend call sites and a docstring claiming
-  otherwise, while the queue defaulted to `'hrnet'` — a model compatible with
-  exactly one of the seven types. Both enqueue paths now resolve from the
-  project, and a `model` in the request body is honoured **only for the owner**.
-- **Hole detection is offered on `spheroid` and `wound` only**
-  (`PROJECT_TYPES_WITH_HOLE_DETECTION`). Elsewhere the request carries the
-  default `true`, normalised on both sides by `resolveDetectHoles` — a
-  parameter the user cannot see must not be one they are silently subject to.
-- **`projects.pixelSizeUm` is read at segmentation by `spheroid_disintegration`
-  only** (2026-11-08). `requestSegmentation` sends `pixel_size_um` from the
-  frame's container, else the image row, else the project
-  (`services/segmentationPixelSize.ts`); the ML `/segment` resamples the frame
-  to 1.28 µm/px when it is more than 2 % off and within 0.5–2×, scores it there
-  and maps the mask back (`api/disintegration_scale.py`), and answers **400**
-  to the field for any other model. Without a pixel size, or within 2 %,
-  nothing is resized. The header shows the box for `spheroid_invasive` only:
-  an ungated one was removed on 2026-09-13 because nothing read it. Changing
-  the value re-runs nothing; it applies to new segmentations. **Values typed
-  into that ungated box (2026-09-07 to 09-13, #501 → #541) may still be
-  stored, and are now read at segmentation**: query `projects` and `images`
-  of `spheroid_invasive` projects for non-null `pixelSizeUm` before deploying.
-  The export's polygon fallback (an edited image) resamples ONLY with the
-  pixel size its stale read-out was resampled from
-  (`readStoredImageMetrics().staleResample`), else scores the uploaded grid —
-  never with the image row's or the export's scale, which would put one
-  edited row on a grid its unedited siblings never used. The box is
-  `type="text"`: as `type="number"` a typo read as `''` and cleared the
-  stored value on blur.
-- **Rename / type / model are owner-only**; `verified` is not. `getProjectById`
-  reports `isOwned`, and `mapProjectFields` must list it — the enumerative
-  mapper stripped it on the first attempt, as it does every new field.
-
-### Segmentation editor (`/src/pages/segmentation/`)
-
-Most complex feature in the repo (~51 KB orchestrator). Key files:
-
-- `SegmentationEditor.tsx` — top-level orchestrator
-- `useEnhancedSegmentationEditor` — core state (polygons, selection, undo/redo, transforms)
-- `useAdvancedInteractions` — mouse/keyboard, polygon creation, vertex editing
-- `EditMode` enum — state machine: `View | EditVertices | Slice | AddPoints | DeletePolygon | CreatePolygon | CreatePolyline`
-- `Polygon` model — closed polygons (`geometry: 'polygon'`) + open polylines (`geometry: 'polyline'`) with optional `partClass` + `instanceId` (sperm) or `trackId` + `_embedding` (microtubule cross-frame tracking). UI state (hide/select/rename) keys on `polygonKey(p) = p.trackId ?? p.id` so it survives frame scrubs — branded `PolygonKey` type for compile-time safety.
-- Canvas layers: `CanvasPolygon` (per-polygon, React.memo with custom comparator), `CanvasVertex`, `CanvasTemporaryGeometryLayer`
-- **Delete mode (`D`) is a scribble eraser** (2026-11-16): a press starts a stroke, every shape it touches fades (`isPendingDelete`, 20 %), the release deletes them in ONE `updatePolygons` (one undo step), Esc / right-click cancel only the stroke. Hit test: `utils/scribbleErase.ts` (Excalidraw's eraser — SEGMENT tests, because moves are rAF-coalesced; 6 screen px; a hole is hit, its parent is not). Session: `hooks/useScribbleErase.ts`, a REF, because one release reaches both the canvas `onMouseUp` and the window listener. Candidates are `visiblePolygons` — hidden shapes are never deleted. Tracked MTs go to `useDeleteTrackScope.requestDeleteMany`: one scope question for all. `CanvasPolygon` ignores clicks in this mode; the press already acted.
-- Toolbars: `TopToolbar` carries Undo / Redo / **Resegment** (multi-channel videos open `SegmentChannelDialog` first) / Save. `VerticalToolbar` is left rail with edit-mode buttons + zoom + reset only — no resegment there since PR #195.
-- Frame slider in `EditorHeader` uses 3-effect choreography in `SegmentationEditor` (seed + observation + reverse-sync with ref-tracked `lastSeededIdx`) — required on multi-hundred-frame videos to prevent oscillation. See memory `project_frame_slider_race_pattern`.
-- **Zoom rendering (2026-10-08) — five measured facts, each of which looks like something to "optimise" back.** Measured on production data in Chrome 152 on the A5000 at DPR 1 and 2, plus Firefox 144 and WebKit 26.0 for the CSS.
-  - **`CanvasContent` is one plain 2D `translate() scale()`, with NO `will-change`, `perspective`, `backfaceVisibility` or `translate3d`.** `will-change: transform` makes a zoom gesture ~10x cheaper (41 ms against 437 ms over 72 frames of 2000 polylines) by pinning the layer's raster to the scale it had when promoted — which IS the blur: applied before zooming 2 → 10, the stroke edge measured 5.05 px instead of 0.6 px. Without it Chrome re-rasters per scale change and every presented frame is sharp. `perspective` drew nothing (no child has a 3D transform) but, together with a CSS `filter` on the bitmap, bled one screen pixel across every image-pixel boundary (adjacent pixels differing 0.70–0.80 of the time at zoom 2.35–2.5 where nearest neighbour gives 0.40–0.43).
-  - **The rendered translate is snapped to whole DEVICE pixels** (`utils/devicePixelSnap.ts`): `round(translate * devicePixelRatio) / devicePixelRatio`. A fractional offset makes Chrome resample the whole overlay — stroke 10–90 % edge 1.14–1.55 device px before, 0.76–0.93 after, at device scale 1, 1.25, 1.5 and 2 (0.78 is the box-filter limit of a 45° edge). **Only the translate — NOT "container centre + translate".** That was the first version and the obvious one, since the content's origin is the container's centre and that is a half pixel when the container is odd-sized; but Chrome rounds a transformed box's position by itself, so compensating put every stroke exactly between two pixels: 1.50 on a 1229×827 container, worse than not snapping. It was caught only because the measurement was repeated in a window one pixel wider. **Render only; the stored transform stays unsnapped** — pan deltas are sub-pixel and hit-testing (`src/lib/coordinateUtils.ts`) reads the state, so drawn and logical positions differ by at most half a device pixel (measured 0.40). **A fractional DPR set by DevTools/Playwright emulation is not a real 150 % display**: under emulation Chrome rounds the box to a CSS pixel, so the same build measures 0.77 in a 1600×1000 viewport and 1.56 in 1602×1002. Verify fractional scaling with `--force-device-scale-factor=1.5`, never with `deviceScaleFactor: 1.5`.
-  - **The bitmap gets a CSS `filter` only when brightness or contrast differ from 100** (`utils/displayStyle.ts`). An identity `brightness(1) contrast(1)` still promotes a compositor surface: that is the other half of the bleed above, and it halved the pan frame rate on a software GPU (33 → 17 ms).
-  - **"Smooth image" is `image-rendering: auto` (on, the default — CVAT's) or `pixelated` (off); never `crisp-edges`**, which Chrome accepts only from 148 and silently computes to `auto` before that, so the "sharp" mode was smooth there. It is a style on all three bitmap paths (`<img>`, the 16-bit `<canvas>`, the WebGL `<canvas>`) and must never become a `key`: on the WebGL path CSS alone gives both looks (0.26 / 0.82 adjacent-pixel difference at zoom 2.5) even though its textures are `NEAREST`, because they are sampled 1:1 into a frame-sized backing store and the magnification is the browser's. State lives in `ImageDisplayContext`, persisted per BROWSER (`spheroseg.editor.smoothImage`), untouched by Reset and by a container switch. The switch is the FIRST row of the Display card (`sidebar/DisplaySection.tsx`), on stills and videos.
-  - **Overlay sizes are CSS, not props.** `SegmentationEditorLayout` writes `--overlay-px` (1/zoom) and `--overlay-stroke` on the overlay `<svg>` (`utils/overlayScale.ts`); stroke widths, the polyline hit band, vertex radii (`.overlay-dot { r: … }`) and the selection glow read them through `calc()`. So `CanvasPolygon`, `PolygonVertices` and `CanvasVertex` take **no `zoom` prop** and a zoom step re-renders none of them — do not add one back; the old `isZooming` comparator guard it needed left every size stale for the whole wheel gesture. Constant on screen from zoom 0.7 up: polygon 2 px, polyline 3 px (5 hovered), hit band 24 px (it was 60 px at zoom 10, in user units), vertex 5 px radius. The two exceptions take `zoom` as a prop of `CanvasSvgFilters`, because `stdDeviation` cannot read `var()`: `#blue-glow` (hover) and `#soma-highlight`. **Do not convert `#blue-glow` to a CSS `drop-shadow()` class** — WebKit paints no CSS filter function on an SVG child at all (0 of 255 where Chromium and Firefox paint 31), so the class would remove the hover glow in Safari; for the same reason the SELECTION glow, which is such a class, has never painted in Safari. **A circle has no `r` attribute, so its radius exists only as class `OVERLAY_DOT_CLASS` + the `.overlay-dot` rule in `src/index.css`**, and jsdom applies no stylesheet: deleting that one declaration left the whole `src/pages/segmentation` suite green with every handle at radius 0. `overlayScale.test.ts` reads the CSS as text and pins the rule to the exported names; a new circle must use the constant, not a literal. The stripes of a shared neurite (colour by soma) follow the same rule, dash included: 10 screen px per colour (`SOMA_STRIPE_DASH_PX`), where the attribute `10` was user units — 100 px at zoom 10.
-  - Found on the way, by watching the DOM during a real zoom: `CanvasImage` had `onLoad` in its probe effect's deps, and `VideoFrameImage` hands it a fresh arrow per render — so **every pan or zoom step re-fetched and re-decoded a 16-bit still and showed the bare `<img>` (no window/level) for the 40–80 ms that took**: 18 wheel steps, 18 canvas → `<img>` → canvas swaps. It is a ref now. If a still flickers while zooming, look for an unstable prop in an effect's deps before looking at the compositor. The re-probe had one accidental use: it re-reported the image's size after `useSegmentationLoader` cleared it, which the load effect did on EVERY run — a status change on Resegment, a language switch — not only for a new image. With the size now reported once per `src`, a still whose row stores no width/height was drawn at the container's size until segmentation data arrived; the loader therefore clears dimensions only when `imageId` changes.
-
-### Backend (`/backend/`)
-
-```
-Controllers → Services → Prisma ORM → Storage (local FS / S3)
-```
-
-- API routes: `/backend/src/api/routes/`, Swagger at `:3001/api-docs`
-- Queue: `SegmentationQueue` model, controller `queueController.ts`, supports 10 000 imgs/batch
-- Export: COCO / YOLO / JSON in `/backend/src/services/export/`
-- **Admin + impersonation** (2026-09-04): `users.isAdmin`, an append-only `impersonation_logs` table, `requireAdmin` middleware, and `GET /api/admin/users` + `POST /api/admin/impersonate/:userId` + `/impersonate/stop`. Three things about it are load-bearing and non-obvious:
-  - **The impersonation lives on the Redis refresh record beside `family`, NOT in the JWT.** `authService.refreshToken()` rebuilds the payload from the DB row, and the frontend refreshes every 13 minutes — so a token-only claim is silently dropped and the admin is ejected mid-session.
-  - **"Stop" mints a fresh admin session** rather than restoring the old tokens: the refresh cookie is path-scoped to `/api/auth`, so the server never receives it, and stashing a copy would undo the 2026-08 work that stopped keeping raw tokens in Redis.
-  - **The migration grants the flag to NOBODY**, deliberately — sign-up is open, so pinning an e-mail would hand admin to whoever registers it first. Granting is an explicit operator action: `docker exec -e ADMIN_EMAIL=... spheroseg-backend npx tsx src/db/grantAdmin.ts`.
-  - `accessLogger` writes `admin@x(as:user@y)`; during impersonation `req.user` IS the target, so without this the security log attributes admin actions to the wrong person.
-
-### Sessions, and ending them (2026-10-07)
-
-- **A session is a Redis refresh record, keyed by SHA-256 of the token.** They
-  cannot be listed per user. The `sessions` TABLE is gone (dropped by
-  `20261007_drop_legacy_sessions`): nothing read it, password change used to
-  set `isValid = false` on its rows — which revoked nothing — and it held
-  registration refresh tokens in the clear.
-- **"Sign out everywhere" is `users.sessionsValidAfter`** (`auth/sessionCutoff.ts`).
-  It is checked in FOUR places and a new way of authenticating a user needs a
-  fifth: `authenticate`, `optionalAuthenticate`, the WebSocket handshake (all
-  by the access token's `iatMs`) and `authService.refreshToken` (by the
-  PRESENTED refresh record's `createdAt`, judged AFTER the rotation against
-  the user row read after it — a check made before the rotation can be stale
-  by the time the successor is written). An impersonated session is exempt
-  everywhere. Open sockets are closed too (`services/liveConnections.ts`); the
-  frontend already reconnects on `io server disconnect`.
-- **The cut-off is exact to the millisecond**, which is why access tokens
-  carry `iatMs` beside the standard whole-second `iat`: a password change and
-  the replacement session it issues share a second. A token without `iatMs`
-  falls back to the START of its second — revoked too eagerly, never kept too
-  long.
-- **Refresh rotation is idempotent, not exclusive** (`sessionService.rotateRefreshToken`).
-  The successor is `HMAC(JWT_REFRESH_SECRET, 'rotate:' + oldToken)`, so any
-  number of concurrent rotations of one token agree on one successor and the
-  session cannot fork — and the grace-period replay (30 s, Okta's default)
-  can hand the same token out again without it ever being stored. A replay
-  AFTER the grace period is reuse and revokes the whole session by setting a
-  `refresh-revoked:<family>` FLAG that every verify and rotate checks — not a
-  pointer to "the family's current token", which was the first design and
-  races (a delayed A→B rotation can write its pointer after B→C has, so the
-  revocation deletes a key that is already gone and C lives on). The used
-  marker lives as long as the session can (7 / 30 days), not 24 h: a copy
-  replayed on day two must still be recognised. Do not "improve" this with a `SET NX` claim: it
-  was tried, mutation testing showed it changed no outcome, and after a crash
-  between claim and store it reads the owner's retry as theft.
-- **A login refresh token carries a random `jti`.** Without it the JWT is a
-  function of (user, second, lifetime): two logins in one second got the
-  identical string and shared a session, and the session re-issued by a
-  password change could be the very token of one it was ending. Found only
-  over real HTTP — a fake clock in a unit test either always or never
-  collides.
-- **`rememberMe` lives on the refresh record** and is carried across rotation
-  like `family`. The refresh controller used to pass `true`, which made every
-  session a 30-day one 13 minutes after login.
-- **Account deletion removes files by PROJECT, never by folder**
-  (`services/accountFiles.ts`). An upload is stored under
-  `<uploaderId>/<projectId>/`, and projects are shared, so `rm -r <userId>/`
-  would destroy other people's images. Deleting a single PROJECT goes through
-  the same module (`collectProjectFiles`) — until 2026-10-07 it removed the
-  rows and left every still image on disk. The file list is written to
-  `<UPLOAD_DIR>/.pending-cleanup/` BEFORE the rows are deleted and removed
-  only when every file went; `sweepPendingCleanups` (start-up and every 10
-  min) finishes what a restart interrupted. **The sweeper acts on a list only
-  when its owner ROW is gone** — a list can exist for a live project if the
-  process died between writing it and deleting the rows, and acting on the
-  list alone would delete that project's images.
-- **`AuthContext.deleteAccount` must not touch the global `loading` flag.**
-  `ProtectedRoute` renders a spinner in place of the page while it is set, which
-  unmounted Settings and took the dialog and its error message with it. Found
-  in a browser on the first run after the route existed; no unit test saw it
-  until one recorded every rendered value of `loading` rather than the last.
-- `DELETE /api/auth/profile` and `POST /api/auth/change-password` are refused
-  to an impersonated session, like minting API keys.
-
-### Public API (`/api/v1`) and API keys (2026-10-06)
-
-`backend/src/api/v1/` is a second, self-contained surface for scripts. It
-shares nothing with the app's routes except the database:
-
-- **Auth is `authenticateApiKey`, never `authenticate`.** `Authorization:
-Bearer sseg_…` only. A key in the query string is refused with 400 rather
-  than ignored, because `accessLogger` writes full URLs; the session cookie is
-  not consulted, because cookie auth here has no CSRF token. Conversely
-  `/api/api-keys` (create / list / revoke, used by Settings → API) takes the
-  cookie and must **not** accept a key — a leaked key could then mint its own
-  replacements. Minting and revoking are also refused to an impersonated
-  session, or support could leave behind a credential that outlives it.
-- **Errors are RFC 9457 `application/problem+json`, via `sendProblem`.** Never
-  `ResponseHelper` — its defaults are Czech and its envelope is the app's. And
-  never `res.json` for a problem: `server.ts` wraps `res.json` to force
-  `application/json`, which silently replaces the media type. The router ends
-  in its own 404 and error handler so nothing falls through to the global ones.
-- **The key is never stored.** `api_keys.keyHash` is an unsalted SHA-256 (the
-  key is 256 random bits; same reasoning as the refresh-token key). The CRC-32
-  suffix only lets a mistyped key be refused without a database read — it is
-  not a security control. Revoking deletes the row.
-- **A key-authenticated `req.user` has `isAdmin: false` whatever the account
-  is**, and `req.apiKey` set. `accessLogger` writes `user@x(key:sseg_AbCd)`.
-- **`POST /api/v1/segment` is stateless** — one image in, one result out, no
-  `Image` row, no project. It therefore cannot use
-  `SegmentationService.requestSegmentation` (welded to an `Image` row) and has
-  its own `mlClient.ts`: ONE inference at a time process-wide with a bounded
-  queue, because the ML service serialises everything anyway and more
-  parallelism here would only let the API jump the app's own queue.
-- **A parameter a model does not read is REFUSED (422), never dropped.**
-  `v1/models.ts` records, per model, what
-  `segmentation/api/routes.py::_dispatch_inference` does with `threshold` and
-  `detect_holes` (six models ignore the first, eight read the second). Those
-  flags are facts about the dispatch; change them only together with it.
-  `openapi.test.ts` pins both lists.
-- **Objects own their holes.** The ML service returns a flat list where a
-  hole — and an island inside that hole — are siblings typed `internal`.
-  `v1/objects.ts` rebuilds the tree: even depth is an object, odd depth a
-  hole. Every output format is rendered from that one model.
-- **The label rasteriser's reference is OpenCV**, because the polygons are
-  `cv2.findContours` output: a region is its interior AND its outline, a hole
-  only its strict interior. `raster.test.ts` requires the round trip
-  mask → OpenCV contours → rasterise to return the mask pixel for pixel, on
-  fixtures regenerated by the script beside them. A textbook half-open fill
-  erodes every object by half a pixel.
-- **Mask outputs are written by hand-rolled 16-bit PNG/TIFF encoders**, not
-  `sharp` — the same 16-bit hazard `imageService` documents. Always 16-bit,
-  so the pixel type never depends on the object count.
-- **The OpenAPI document is generated from the code's constants**
-  (`v1/openapi.ts`) and `docs/api/public-v1.md` is checked against them by
-  `docs.test.ts`, which is SKIPPED when only `backend/` is mounted — it needs
-  the repo root.
-- **Jobs (`/api/v1/jobs`, table `api_jobs`, files under
-  `<UPLOAD_DIR>/api-jobs/<id>/`) are a separate mechanism from
-  `SegmentationQueue`**, which has hard foreign keys to `Image` and `Project`
-  and cannot hold a stateless job. `jobs/worker.ts` runs in the backend
-  process, ONE image per tick, through the same single-slot `mlClient` as
-  `/segment` — so jobs add no parallelism. Fairness is `ORDER BY updatedAt`:
-  processing an image touches its job, so waiting jobs take turns.
-- **A job stores the model's result, not a rendering.** `output_format` is
-  chosen at `GET /jobs/:id/results/:index`; it is not a field of `POST /jobs`.
-- **The worker is the only writer of `items`.** A request never rewrites it:
-  cancel sets `cancelRequested` (its own column) and the next tick acts on
-  it; DELETE removes the row and the worker notices its save found nothing.
-- **Idempotency is decided by the unique index** `(userId, idempotencyKey)`,
-  in the `P2002` handler — there is no look-up-first step, so a retry and two
-  racing requests take the same path. "Same request" includes a SHA-256 of
-  every uploaded file.
-- **`spheroid_disintegration` keeps the synchronous pixel ceiling in a job**
-  (`jobMaxPixels`): it runs at native resolution with no tiling, so a larger
-  frame costs GPU memory, not just time. Every other model may take 8192².
-- Admission to `POST /jobs` (active-job limit, storage budget) runs BEFORE the
-  upload is read, like the slot reservation on `/segment`.
-- Results expire 24 h after a job finishes (`sweep`, every 10 min); the row
-  stays as `expired` for 7 days. Inputs are deleted as each image is used.
-- **The ML service's routes are also called `/api/v1/*`** on its own port.
-  Unrelated. Never add an nginx `location /api/v1/` pointing at `ml_service`,
-  which has no authentication at all.
-- **Refusing a key in the URL is not the same as not logging it.** The first
-  version answered `?api_key=…` with 400 and then wrote the key to access.log
-  and stdout anyway, because both loggers record every URL — found by grepping
-  the logs after a real request, which no unit test did. `utils/redactUrl.ts`
-  is the one list of credential-bearing query parameters; `accessLogger` and
-  `createRequestLogger` redact through it and `authenticateApiKey` refuses by
-  it. nginx's own access log is out of its reach.
-- **`/api/v1` is exempt from the global limiter in `server.ts`** and has two
-  of its own: per IP before auth (no `RateLimit` headers), per key after.
-  With all three, every response carried two `RateLimit-Policy` headers in two
-  different syntaxes. Also only visible on a real response.
-- Swagger UI at `/api-docs` is mounted unconditionally and is **public in
-  production**; this file and `docs/api/README.md` used to say development only.
-
-### ML service (`/backend/segmentation/`)
-
-- FastAPI + PyTorch, CUDA with CPU fallback
-- Models: SegFormer (~200 ms — **the spheroid default** since 2026-09-20), HRNet (~200 ms), CBAM-ResUNet (~400 ms), U-Net (~200 ms), Mamba-UNet (~240 ms), Spheroid Disintegration, Sperm, Sperm 2-part (`sperm_2part`: head + tail, same Mask2Former pipeline, `weights/sperm_2part.pth`), Wound, Microcapsule, Neurite/Soma, Neurite/Soma classical (`neurite_soma_classical`: Meijering ridge filter + shape rules on a merge of user-ticked channels; CPU, no weights), Microtubule SPARSE35 ep040 (nnU-Net ResEnc-M + curvature-bounded instancer, NATIVE-scale inference since 2026-09-19, ~0.6 s per 1024x1024 frame on the A5000; `backend/segmentation/models/microtubule/MODEL_CARD.md` is the reference for the model, its numbers and its rollback)
-- Weights from Google Drive; `make check-weights`. Microtubule: `scripts/download-microtubule-weights.sh [name]` stages `weights/microtubule_v16_deb_s4_ep040.pth` (interactive and essays) or `weights/microtubule_sparse35_ep040.pth` (no service loads it; reference tests, older runs) and refuses any file whose sha256 is not the pinned one (a wrong checkpoint of the right shape loads without an error). `microtubule_v5h.pth` + `params_v5h.json` stay on disk/in git as the rollback. **No `HF_TOKEN`** — the checkpoint is a complete `state_dict` with no frozen backbone, so MT segmentation needs no network at run time. (As of 2026-09-20 **no model fetches on its shipped path** — see the HF note below.)
-- **High-bit-depth input is stretched, not clipped (2026-10-06).** Ten of the
-  thirteen models go through PIL `convert('RGB'/'L')`, which CLIPS a 16-bit /
-  32-bit / float image at 255. Measured on every such still in production (3
-  of 3 475): the model saw 1, 1 and 5 grey levels and found nothing. They now
-  get a 0.1–99.9 percentile stretch first (`api/input_depth.py`), reported as
-  `input_conversion`. **Not min-max**: one hot pixel (51 586 vs a p99.9 of
-  16 851) squeezed a real frame into 125 dark levels and changed the result
-  from a core with a fragmented corona to one blob. `microtubule`,
-  `neurite_soma` and `neurite_soma_classical` keep the native depth. 8-bit input is returned as the same
-  object — 62 real results across all twelve models of that date were identical
-  before and after. It is three frames with no ground truth; re-measure before moving
-  either percentile.
-- **`neurite_soma_merged` replaced the classical model in the picker
-  (2026-11-03).** The network of `neurite_soma`, 4 folds, retrained on 15
-  hand-corrected frames merged by `neurite_classical.merge_channels`; held-out
-  Dice 0.843 / 0.879, ~2.6 s per 1024² frame, weights in
-  `weights/neurite_soma_merged/`. It is NOT a replacement for `neurite_soma`, which
-  stays the default: on Leica confocal tubulin the merged model scores 0.465 / 0.825
-  against 0.851 / 0.924, and on merged frames `neurite_soma` scores 0.622 / 0.834.
-  Known limit: dim staining, where it finds part of the neurites and no somas.
-  `neurite_soma_classical` has `compatibleProjectTypes: []`, so the picker omits it
-  and a stored value resolves to the default; migration
-  `20261103_retire_classical_neurite` moved its projects. It stays a known id:
-  stored results name it and the public API serves it. It left the picker on the
-  owner's decision, knowing it found more on dim frames.
-- **`neurite_soma_classical` is a classical model that segments a MERGE of
-  channels (2026-10-08).** `models/neurite_classical.py`: no network, no
-  weights, CPU only; ~1.3 s per 1024² frame (1.13–1.46 s on four production
-  frames); parameters are `PARAMS` in that file; `threshold` does not apply;
-  images over 64 Mpx are refused. The channels are merged **in Python at
-  native depth, never in Node** — each normalised to its own noise
-  (median / MAD), then pixel-wise maximum — and reach `/segment` as `file`
-  plus the multipart field `extra_channels`, which only this model accepts.
-  The registry flag `mergesChannels` (both `modelRegistry.ts`) is what turns
-  `SegmentChannelDialog` into checkboxes (`multiple`): nothing ticked by
-  default, Confirm disabled until one is. The request field `channels[]` (1–8
-  names, on `POST /api/queue/batch` and `POST /api/segmentation/batch`,
-  refused for a model that does not merge) and the column
-  `segmentation_queue.mergeChannels` are **separate from the single
-  `channel`**. Holes are emitted as `type:'internal'` polygons with a
-  `parent_id` and **NO class** — by BOTH neurite models (the learned one via
-  `PostprocessingService.mask_to_polygons(emit_holes=True)` +
-  `holes_to_internal`; without the flag that shared polygoniser keeps a
-  region's outer ring only, which is what every other caller wants). On the
-  read side `splitNeuritePolygons` folds two things into the parent's `holes`:
-  those internal polygons, and any polygon with NO class that lies wholly
-  inside a soma or a neurite (the way to cut a hole by hand; it goes to the
-  smallest region around it). A nested polygon that HAS a class is never a
-  hole. So a loop closed by crossing neurites is not measured — or
-  skeletonised — with the background inside it. Known limit: faint, diffuse somas are found only some of the time
-  (2 of 3, 1 and 0 on three dim production frames), so the user is expected to
-  add them — and a polygon drawn by hand has NO class and is ignored by every
-  neurite table until it is given one, which is what the context menu's
-  **Set as soma / Set as neurite** (closed polygons, neurite projects only) is
-  for. The neurite export (BOTH
-  neurite models) gains an **Intensity** table in `neurite_metrics/` — one row
-  per frame × channel × class, on the union of the stored polygons, on EVERY
-  channel of the file at native depth whichever were ticked, via
-  `POST /api/v1/neurite-intensity` (`models/neurite_intensity.py`,
-  `neuriteIntensityExporter.ts`); it needs no pixel size.
-- **`/segment` takes `page` and `max_pixels`**, answers 400 for an unknown
-  model or bytes that are not an image (both used to be 500, and an unknown
-  model could evict a loaded one first), and does NOT decode at open: the
-  route is `async def`, so `image.load()` there would stall `/health` on a
-  498 Mpx frame and let four requests each hold a decoded frame.
-- **The microtubule model is IRM-only, and its threshold is NOT a user setting.** The `/segment` route deliberately passes no threshold for `microtubule`; the model applies `prob_thr` from `params_v16.json` (0.995, chosen on the validation blocks by a declared rule; SPARSE35 used 0.98, v5H 0.97). Do not "fix" a low detection count by lowering it. **Verify a model swap with `docker exec spheroseg-ml python scripts/verify_microtubule_model.py`**: it runs the committed fixture through the container's own forward pass and compares the map and the polylines with what the research harness measured (identity on the harness's own torch 2.5.1 + A5000; a different torch or GPU may move a few probabilities by thousandths, which `reference_check.CUDA_TOL` absorbs). The evidence below was measured on v5H at 0.97 and is kept as the record of WHY the cut is not a setting; re-measure before moving it. Measured 2026-08-17 by sampling background-flattened image contrast along every detected centerline against the same curve translated elsewhere (a real MT in IRM is darker than its surround): on a pure IRM frame, 0.97 gives 128 MTs at **−1.73 SD** separation, and dropping to 0.35 gives 155 at only −1.44 SD — more detections, worse evidence. On a **TIRF** frame separation is ~**−0.02 SD at every threshold**, i.e. the output does not track image content at all, so lowering the threshold there manufactures hundreds of false positives. Symptom of feeding it TIRF: plenty of confident-looking polylines with no contrast under them. Check the project's `channels` JSON. IRM detection now requires POSITIVE evidence — a label-free name (IRM/BF/DIC/TL) or an explicitly **zero** emission wavelength; the old "unknown wavelength ⇒ irm" fallback was removed because multi-page TIFFs carry no wavelength at all and so had every channel typed `irm` (the 3-frame `DNA_origami` fixture is exactly that). The failure mode is now a QUIETER version of the same one, not the opposite one — this sentence used to say such a stack "gets **no** segmentation source, and must be set by hand", and neither half was true. What the code does (traced 2026-10-06): no channel is MARKED (`buildChannelMeta`, `pythonExtractor.ts:206-237`), but `resolveSegmentationSource` (`backend/src/services/video/types.ts:75-79`) is `find(isSegmentationSource) ?? channels[0]`, and every frame's `originalPath` is written from it at upload (`videoUploadService.ts:417-442`), so a segmentation request that names no channel reads **channel 0** (`resolveChannelPath`, `segmentationService.ts:842`). **Known hazard, stated plainly: the IRM-only model can run on an unidentified first channel — TIRF on seven production containers, per the comment at `pythonExtractor.ts:441-444` — and nothing warns.** In the UI a multi-channel container always passes through `SegmentChannelDialog`, and since 2026-10-07 both pickers (project page and the editor's Resegment) preselect ONLY a channel the container marks as its segmentation source and otherwise NOTHING, leaving Confirm disabled (`src/lib/segmentationChannelDefault.ts`) — until then the project page preselected the alphabetically first channel name and ignored the mark, so `488_nm` was offered ahead of a correctly identified `IRM`, and both fell back to the first channel. With NO dialog at all: a single-channel container, and any direct call to `POST /api/queue/batch`, `/api/segmentation/batch` or `/api/queue/images/:id` (the last has no `channel` field) that omits the channel. Also taken from channel 0 without anyone choosing: stage-drift correction at upload (`videoUploadService.ts:321`), the thumbnail, the static-share projection and the kymograph export's fallback. And it cannot be "set by hand" in the app: no component writes `isSegmentationSource` — `ChannelOverlayList` only renders the "● src" badge and renames — so the mark changes only via `PATCH /api/images/:id/channels` or by adding an IRM-named channel to a container with no source (`addChannelService.ts:737-780`); the dialog's choice is per batch and is not stored on the container.
-- **Temporal vote before the tracker** (2026-11-04): `services/tracking/temporalVote.ts` re-decodes each interior frame of a queue-segmented microtubule video through `POST /api/v1/microtubule/temporal-vote` (`instance/instancer_lh_vote.py`) with its neighbours' stored per-frame curves, inside the tracker's in-flight slot and before the tracker reads polygons (its write-back rewrites what it read). Unlike the tracker it REPLACES geometry, so it is fenced: only frames the queue noted in this pass (in memory; consumed once, so never re-voted), never a row whose `updatedAt` moved, never a frame whose recomputed per-frame curves differ from the stored ones (the route refuses), never the end frames, and only when both neighbours were noted in the same pass and are untouched (their curves must be per-frame; voted neighbours were never measured). Curves travel as multipart FILE parts (Starlette's 1 MB cap on fields); three failed calls in a row end the pass. The editor's synchronous re-segment notes nothing. `MT_TEMPORAL_VOTE=off` disables it. Deploy ml before the backend. Numbers: `MODEL_CARD.md` §0.
-- Cross-frame routes: `/api/v1/track` (Hungarian matching on **geometry** — symmetric curve distance + overlap gate, with common-mode stage drift removed via normal-flow least squares; see `api/mt_geometry_cost.py`) + `/api/v1/kymograph` (line-profile + viridis) in `api/tracker_kymograph.py`. `/api/v1/kymograph/batch` takes N of those bodies in one call and decodes each frame ONCE for all of them — the MT export builds one kymograph per (microtubule x channel) over the same frames, and the sampled-row cache never hits for it because every job has a different polyline. Same bodies, byte-identical per-item results; **deploy ml before the backend that calls it**, the route 404s on an older container.
-- **Kymograph column counts from before 2026-09-01 are not comparable with later ones.** The **column cap is gone**: a kymograph is now one column per pixel of the seed polyline's arc length, unclamped, where it used to be capped at 200 (`target_width`). Measured over all 146 216 production MT polylines the median arc is 118 px (unaffected) but **33 % exceed 200** — p95 625, p99 985, max 2076 — so a third of real kymographs change width, the p95 by 3.1x. It is not cosmetic: on a real 299-frame kymograph of a 1250 px MT, 200 columns yielded 5 trajectories and 1251 yielded 13, because 6.3 image pixels per column merges neighbouring tracks. `px_per_column` is therefore 1.0 to within rounding now; it stays on the wire and Node still multiplies by it. `target_width` is **accepted-and-ignored** on the ML model (same pattern as `/track`'s `embedding` — `extra="forbid"` would 422 an un-recreated Node) and no longer sent. Because the response is now O(frames x columns) and no longer O(items), the batch endpoint is bounded by `_BATCH_MAX_OUTPUT_PIXELS` (3 840 000 = the old 64 x 300 x 200 envelope) as well as by item count, and `buildKymographBatch` splits a batch that would exceed it — 2 of the 60 production MT containers do.
-- **Every kymograph pixel moved on 2026-09-01: sampling is BILINEAR now, not nearest-neighbour.** `_sample_line_profile` in `api/tracker_kymograph.py` passes `order=1` to `map_coordinates`. The old `order=0` was justified by a comment claiming it matched "ImageJ's `getInterpolatedValue` zero-fill" — only the zero-fill half was true; `getInterpolatedValue` (`ij/process/ImageProcessor.java` L2005-2013) is bilinear, and so is every ImageJ polyline path (`ProfilePlot`, `Straightener`) and KymoResliceWide. Nearest was the outlier, used only by KymographBuilder. Measured on a real 299 x 1251 kymograph (container `4972cad8`, `polyline_39`, 488 nm): **99.7 % of cells change**, by a mean of 0.99 % of the frame's range, p95 2.7 %, **max 39 %** — the max lands on punctate spots, exactly where a kymograph is read, because nearest snaps to whichever pixel centre is closest and makes a particle's intensity flicker with sub-pixel position. Frame-to-frame noise drops from 24.7 to 20.7 counts. Also corrected in the same change: `_arc_length_resample_polyline`'s docstring cited `Roi.getInterpolatedPolygon` (a chord walk that DROPS an open polyline's endpoint); the code has always implemented `PolygonRoi.getEquidistantPoints` (`round(L)+1` points, endpoint forced). The **code was right and the citation was wrong** — do not "fix" the code to match the old comment.
-- **`line_width` samples a BAND across the polyline** (`KymographRequest.line_width`, 1..51, default **1** = today's single-pixel line profile, so an omitted field renders the identical kymograph; `line_reduce` is `mean` (default, ImageJ's convention) or `max` (KymoResliceWide's default)). Transcribed from `UU-cellbiology/KymoResliceWide` @ `506760c4` (`getIrregularProfileWide` L679-824 + `processWideLine` L843-914): backward-difference tangent, normal by `(dx,dy) -> (-dy,dx)`, samples at 1.0 px spacing. It deviates in ONE place, deliberately: offsets are `-(w-1)/2 … +(w-1)/2` for **both** parities (ImageJ `Straightener.java` L181-182) instead of KymoResliceWide's asymmetric `w/2`, which is 0.5 px off-centre for even widths — so "width 5" spans 4 px between the outermost samples. **Do NOT copy ImageJ's `Straightener`**: `straightenLine` unconditionally calls `fitSplineForStraightening()` (L149) and `ProfilePlot` routes every width>1 polyline through it (L74-79), silently replacing the drawn polyline with a natural cubic spline — measured deviation 5.77 px / +3.0 % arc on a right angle, 4.99 px / +2.3 % on an MT-like wiggle, i.e. a path error larger than the band being added. **Do NOT copy Multi Kymograph**: its `Linewidth` adds the offset to x and y _identically_ (`MultipleKymograph_.java` L150-151, L299-302) — a fixed 45° shift with no normal anywhere — and mutates the caller's ROI so offsets accumulate. Every band test in `test_tracker_kymograph.py` uses a **diagonal** feature for exactly that reason; a horizontal/vertical fixture passes with that bug present. Two things no reference implementation handles are matched rather than invented: a sharp vertex is **not mitred** (unsampled wedge outside the corner, double count inside) and out-of-image samples are **zero-filled and counted in the mean**, so a band overhanging the border is biased toward zero. Useful widths are modality-dependent and small — measured over all 60 MTs of `4972cad8`, the fraction of single-pixel contrast a band still carries is 100/80/50/26/10/0 % at widths 1/3/5/7/9/11 on **IRM** (the dark core sits inside a bright interference halo peaking at ±4-5 px, so past width 11 the sign _inverts_) but 100/96/93/88/83/79 % on **488 nm**. 51 is a guard rail, not a setting. Cost is negligible: sampling the whole 299 x 1251 kymograph takes 0.018 s at width 1, 0.100 s at width 5, 0.572 s at width 51, against ~2.7 s of PNG decode either way. `line_width`/`line_reduce` are in the sampled-**row** cache key and travel on the `_RowJob`, so a batch may mix widths of one frame. Node omits both at the defaults (byte-identical body to before) and clamps out-of-range input; **deploy ml before the backend**, as always — the ML model is `extra="forbid"`.
-- **Kymograph trajectory intensities from before 2026-09-01 are not comparable with later ones either**, for two independent reasons that landed the same day. (1) `intensity_width` **default 3 → 5**, which widens the signal band and the background ring together; three places must agree — the ML `KymographRequest`, `kymographService.ts`, `KymographModal.tsx`. (2) `intensity_signal` / `intensity_background` / `intensity_minus_background` in `velocity_metrics.xlsx` changed for EVERY trajectory when the metric moved onto the shared per-microtubule code (`models/mt_measure.py`, the same file the export and the essays batch use). The old 1-D estimator read a `width`-column band out of each row plus two `width`-column background blocks offset `bg_gap = 2` columns either side, pooled over the trajectory's entire temporal extent, and took `numpy.median`. It is now the microtubule's own region and statistics: an ImageJ `Roi.convertLineToArea` band measured PERPENDICULAR to the trajectory, a background ring `dilate(band, intensity_width * intensity_bg_margin)` **minus the union of every trajectory's band**, and ImageJ's histogram tie-rule median. A neighbouring streak can therefore no longer be counted as background — measured on real production kymographs, 17 of 47 trajectories of container `4972cad8` (300 frames, 640 nm, `intensity_width` 5) had a contaminated background, up to 18.5 % of its pixels, and 17 of 41 on a denser container, up to 42.7 %. Across those two sets `intensity_background` moved by a median of +0.3 % / +1.7 % (max 45.6 %) and `intensity_minus_bg` by −10.1 % / −4.1 % (max 46.3 %). At the new defaults (`intensity_width` 5, `intensity_bg_margin` 2.0) a trajectory and a microtubule are measured by the identical geometry in the identical numbers — those are `mt_measure`'s own `thickness_px` / `margin_multiplier`. **The two changes of that day do not multiply.** Cost is flat in the column axis — re-measured on `4972cad8`/488 nm, `tracks_intensity` costs the same per trajectory at 200, 1251 (the microtubule's true width) and 2077 columns alike, because `rasterize_band` costs one fill per FRAME the trajectory lives on and `vicinity_mask` dilates only the band's bounding box. That per-trajectory cost was 12.7 ms until both were vectorised on 2026-09-01 (see below) and is 1.3 ms now, so the worst case production can ask for — 47 trajectories on a 299 × 2077 kymograph — went from 0.57 s to 0.060 s. And the wider axis makes the ring matter MORE, not less: on that container the old background was neighbour-contaminated for 3 of the 5 trajectories the capped 200 columns revealed and for 8 of the 13 the true 1251 columns reveal. The ring is **isotropic on axes that are not the same quantity** — rows are frames, columns are arc-length pixels, so `dilate(band, r)` means ±r frames AND ±r columns. That is deliberate (it is the microtubule region, and an anisotropic variant would need an acquisition-dependent frames-per-pixel scale) and it is still strictly MORE local in time than the estimator it replaced, which pooled the whole trajectory. `intensity_bg_margin` (`KymographRequest`, default 2.0, mirroring `MTMetricsRequest.margin_multiplier`) is the knob; nothing on the Node side sets it yet. Do not try to restore the old numbers.
-- **The trajectory intensity floor (`min_intensity_minus_bg`) is an ABSOLUTE number, and that is only sound because of where it is applied.** Frames are decoded at native bit depth (`_sample_frame_rows` never converts a 16-bit frame to 8-bit) and `tracks_intensity` measures on that raw matrix, so `intensity_minus_bg` is in camera counts; the min/max normalisation later in the endpoint exists only to paint the PNG. A floor on the DETECTOR could not be absolute — KymoButler consumes `preprocess_array`'s row-normalised copy, whose units are arbitrary — so this can only drop trajectories the detector already found. It runs AFTER `tracks_intensity` (the background ring is the union of every trajectory's band, so filtering first would measure each survivor as if its dropped neighbours were empty field) and BEFORE `render_overlay` and `flag_bright_outliers`, exactly like the velocity cut-off, so overlay = table = exported CSV. It takes **no polarity argument, and adding one is a bug** — it shipped with one and deleted every trajectory on a dark-on-bright movie. `tracks_intensity` already signs `intensity_minus_bg` (`polarity * (signal - background)`), so the field always means "contrast above the local background" and is positive on either polarity; multiplying again inverts it. `flag_bright_outliers` genuinely does need a polarity factor, because it reads the UNSIGNED `intensity_signal` — copying that pattern here is what broke it. A `None` intensity is KEPT — a failed measurement is not evidence of a dim trajectory. **It is NOT comparable between channels**: measured on two production containers, `intensity_minus_bg` runs 9-51 counts on 488 nm and 93-228 on 640 nm of the SAME container, because subtracting the background removes the offset and not the scale (dye, exposure, gain). `snr` is the dimensionless alternative and is already per track. Default 0 = off, and the field is omitted from the ML body at 0, so an un-recreated ml container cannot 422 — **deploy ml before the backend**, as always. It is part of the kymograph cache key; without that, nudging it would be served the previous threshold's tracks and the control would look inert.
-
-- **Competition between two fluorescent proteins** (2026-09-05, PR #495) is `models/mt_competition.py` — pure NumPy, beside `mt_measure` and outside the `microtubule` package for the same reason (comparing profiles needs no torch). Per (frame, MT, fluorescent channel PAIR): each channel's intensity profile along the filament is normalised to **unit area**, and `competition = 1 - Σ min(f, g)` — the total variation distance, i.e. one minus the overlap, in `[0, 1]`. `anticorrelation` (Pearson on the same profiles) ships beside it and is **not redundant**: a distance cannot separate "B displaces A" from "B binds elsewhere" — with A uniform and B a spot, competition reads ~1 either way — whereas `r = -1` means A falls exactly where B rises. Five things are load-bearing: **unit AREA not unit peak** (`max()` is an extreme-value statistic, so one hot pixel would set a whole profile's scale); **per-channel normalisation is required**, since `intensity_minus_bg` runs 9-51 counts on 488 nm against 93-228 on 640 nm of the SAME container; **negatives are clamped to 0 before normalising**, because the unit-area divisor is `Σ I` and negatives can drive it to zero or flip its sign; **a null is not a zero** (0.0 would assert the proteins are co-distributed, which is the opposite of an absent measurement); and the profile comes from the KYMOGRAPH's `_sample_line_profiles`, never a second sampler. `fluorescent_channels` is optional on both the ML and Node sides so an un-recreated ml container cannot 422 — **deploy ml before the backend**. Which channels count as fluorescent is decided on the NODE side, where the "IRM needs POSITIVE evidence" rule already lives. Noise biases the metric UPWARD, so a dim MT scores as more competitive than a bright one carrying the same biology; read it with `snr`.
-
-### Automated Essays worker (`/backend/essays/`)
-
-Batch microtubule assay of ND2 wells. `essays_api.py` is a thin FastAPI job runner that shells out to `module/evaluate.py`; the `essays` image is built `FROM` the ml image so it inherits the exact validated stack (torch 2.6.0+cu124, transformers 5.5.4 — see the pin warning in [Deploy Gotchas](#deploy-gotchas)).
-
-- **A well is one ND2 file OR one file per channel** (since 2026-10-07).
-  `mt_pipeline.nd2_io.group_wells` pairs files by the `Well<id>` in their
-  names: a well id on ONE file is that file and is not even opened (every
-  older folder takes its old path — proven byte-identical on a real well),
-  several files none of which is complete are assembled, and two files for
-  one role are a FAILED well, never a guess. The first per-channel folder
-  (330 files) had produced 330 failures and an empty table: each file was read
-  as a whole well lacking "the other" channels. Three things about it are easy
-  to get wrong:
-  - **The TIRF file may be a time series** (5 frames per position there).
-    Each position is segmented ONCE, on IRM, and measured on EVERY TIRF frame:
-    `results.csv` is then one row per microtubule PER FRAME (`tirf_frame`).
-    The run's `[ok] … N MT` lines and the `[done]` total count MICROTUBULES,
-    not rows — `essays_api.py` sums them into `mtCount`.
-  - **Per-channel files are separate passes over the positions**, so the stage
-    leaves each field and returns between the IRM and the TIRF frame. Do not
-    assume that registers: MEASURE it by sliding the IRM centerlines over the
-    TIRF frame and finding where the signal peaks. On the first folder
-    (55 positions sampled across 110 wells) the 17 positions WITH fluorescence
-    on their filaments peaked at a median 1.0 px (max 2.2) and zero shift kept
-    a median 99.9 % of the contrast, so nothing is shifted — but that is one
-    microscope. **Classify by contrast before reading a shift**: 36 of the 55
-    had no TIRF signal on the filaments at all, and there the "offset" is a
-    noise peak of 14 px that changes from frame to frame.
-  - **Files of one well are refused unless they show the same fields**: same
-    position count, same frame size, stage XY within 5 µm.
-- **The module is vendored at `backend/essays/module`** (it was a separate private repo cloned at image build until 2026-08-11 — no more git clone, build secret, or network at build time).
-- **The model code has ONE copy**, in `backend/segmentation/models/microtubule` (`wrapper.py`, `net.py`, `instance/`, `vendor/dynamic_network_architectures/`, `params_sparse35.json`, `params_v16.json`). The checkpoint's file name selects the pipeline. **Essays runs the model interactive runs (owner's standing rule, 2026-11-03): when the interactive model changes, essays moves in the same change**, and `backend/essays/tests/test_batch_follows_interactive.py` fails if they differ. The essays module imports it via `_mt_package.ensure_on_path()` (`MT_PACKAGE_DIR=/app/models` in the image, populated by a `COPY` from the repo — _not_ inherited from the ml base image, so a stale ml image can never make the worker run older model code). Before this, the two copies drifted in opposite directions for months and neither side got the other's fix. **Do not re-introduce a second copy**; a change to `wrapper.py` or anything under `instance/` reaches both callers, so re-verify BOTH the essays batch run and interactive MT segmentation when touching them.
-- **The metrics have ONE copy too**, in `backend/segmentation/models/mt_measure.py` — band rasterisation (ImageJ `Roi.convertLineToArea`), the per-MT background ring, and the ImageJ statistics (histogram-tie median, `ddof=1`). `api/mt_metrics.py` (project export), `module/mt_pipeline/measure.py` (essays batch) and `api/kymograph_velocity.py` (kymograph trajectory intensities, since 2026-09-01) all import that one file; the essays adapter only swaps `(row,col)`→`(x,y)` and names CSV columns, and the kymograph one only swaps `(frame,x)`→`(x,y)`. Before 2026-08-13 they were separate implementations and had drifted: the export was aligned to ImageJ in 2026-07 (PRs #301, #304) while the essays module was still a private repo, so on one real frame with identical centerlines the two disagreed on band area by −7.8 %…+26.5 %, on ring area by 2.2×, and on the **net signal by a median of +9.9 % (max +33.2 %)** — only length agreed. **Do not re-introduce a local band/ring/statistic**; `test_metrics_match_export.py` asserts the adapter defines nothing but `measure_frame`, and `test_mt_metrics_band.py` asserts the export's helpers _are_ the shared objects. Note `mt_measure.py` sits BESIDE the `microtubule` package, not inside it: importing that package loads the model wrapper and therefore torch, which measuring pixels does not need (and which would make the export's tests skip on a driverless box). **`rasterize_band` and `vicinity_mask` were vectorised on 2026-09-01 and the result is deliberately harder to read than the loops it replaced — do not "simplify" either back.** `rasterize_band` builds every offset quadrilateral and joint triangle for the whole polyline at once and fills them in one flattened pixel pass (`_fill_convex_polygons`), because a fill's cost was ~80 µs of numpy CALL overhead regardless of whether it covered 30 pixels or 3 000; `vicinity_mask` finds the band's bounding box with two `any` reductions instead of `np.nonzero`, which on a 2048² frame was **1.190 s of that function's 1.220 s** for 162 MTs. Together: `frame_geometry` 1.977 s → 0.220 s per essays position and 0.676 s → 0.072 s per export frame, `tracks_intensity` 12.7 → 1.3 ms per trajectory. It is **bit-identical, not close**: 8 820 randomised + real-production `rasterize_band` cases and 10 965 `vicinity_mask` combinations compare equal under `np.array_equal`, and a real `/mt-metrics` export (7 200 rows) and a real essays well (162 MTs) byte-diff clean. The arithmetic is kept in the scalar form's exact groupings for that reason — the `_EPS` 1e-9 tie-breaker has only ~10× of headroom over the rounding noise of an algebraically-equal rewrite at 2048² coordinates, so an "obvious" hoist in `cross` is not safe. The docstrings carry the numbers.
-- **The out-of-focus check is a DIAGNOSTIC and must stay one.** `focus_qc/` is vendored inside `backend/essays/module` (pure NumPy/SciPy — no weights, no GPU, no network) and `mt_pipeline/nd2_io.judge_focus` calls it in-process on the **raw 16-bit** frames `iter_positions` holds, because the descriptor thresholds at 5σ of the frame's own noise and the 8-bit display PNGs destroy exactly that. It appends four columns to `results.csv` (`focus_irm_score`, `focus_tirf_score`, `focus_flagged`, `focus_reason`) and writes `focus_qc.csv`, one row per position **read** — including zero-MT positions and positions whose segmentation failed, neither of which reaches `results.csv`, and a defocused field is exactly the kind that yields no microtubules. **Never wire any of it to an exit code**: `essays_api.py` treats a non-zero exit as a failed job and would withhold the whole zip, and the descriptor conflates focus with field density and fails PERMISSIVE (one validation field dropped only 15.0× → 11.6× under a 0.5 µm defocus where the calibration fields drop 88 %). `out_of_calibration` is advisory and **fires on healthy real data** — 3/3 positions of a 2048² well, TIRF σ 27.8–33.1 against a fitted 5.79–5.89; the remedy is `python -m focus_qc.cli calibrate` plus `ESSAYS_FOCUS_CALIBRATION`, not a code change. The 488 in-solution channel is never scored (uniform dye; it measures ~0 and would flag every row). The published 0.959 balanced accuracy is leave-one-**stack**-out inside one acquisition session and does not support a cross-session transfer claim. `focus_qc/metrics.py` was rewritten for speed on 2026-08-31 **bit-identically** (proven on real wells at 1400² and 2048²); the IRM separation margin is only 1.97× and `test_in_focus_and_out_of_focus_scores_stay_separated` fails below 1.8×, so never buy speed there with a "close enough" approximation.
-- **Essays numbers from before 2026-11-03 are not comparable with later ones**: the model changed (SPARSE35 + `instance_a` → V16 + L+H, cut 0.995). `results.csv` now names the checkpoint and decoder on every row (`segmentation_model`, `decoder`); `decoder` reads `instance_a_fallback` on a position past the L+H arc limit, so grep for it before comparing dense wells.
-- **Essays numbers from before 2026-08-13 are not comparable with later ones.** The geometry changed with the unification: `--bg-gap`/`--bg-width` (a 6 px ring with a 1 px guard) became `--bg-margin` (a multiple of `--mt-width`, default 2 → 10 px, excluding exactly the bands), matching the export's `margin_multiplier`. `results.csv` gained `mt_median_intensity` and `signal_minus_background` (mean − **median** background, the export's readout); `net_mean_intensity` still means mean − **mean** background.
-- **Nothing is downloaded at run time.** The checkpoint carries every weight, so neither the batch nor the interactive path needs `HF_TOKEN`, a HuggingFace account, or network access. The `MT_BACKBONE_CONFIG` offline-backbone escape hatch and its bundled `config/dinov3_vitl16` directory were deleted with the v7 model — there is no gated download left to work around.
-- Checkpoint: staged once by `scripts/download-microtubule-weights.sh` into `backend/segmentation/weights/`, bind-mounted read-only at `/app/mt_weights`. Interactive loads `microtubule_v16_deb_s4_ep040.pth`, essays `microtubule_sparse35_ep040.pth`.
-- **A capped run does not bit-match an uncapped one.** `sitecustomize.py` applies `set_per_process_memory_fraction` (`ESSAYS_APPLY_GPU_CAP=1`) to the `evaluate.py` subprocess, which shrinks cuDNN's workspace and changes convolution algorithm selection. The numbers stay valid and MT counts hold, but a filament endpoint can move ~1 px — and because a background ring excludes _neighbouring_ MTs, that shifts an adjacent MT's `bg_*` columns while its centerline is unchanged. So when diffing a local run against production, hold the cap constant or you will chase a phantom regression. (Measured 2026-08-11: identical output for capped-vs-capped and uncapped-vs-uncapped; 2 of 73 rows differ across the cap boundary. The cap's **value** matters the same way — 2026-08-13, 0.6 → 0.75 moved 2 of the same 73 rows.)
-- **V16 (2026-11-03): working set 1.22 GiB reserved / 0.93 allocated in the essays container (direct probe of `predict()` with no cap, not a job), flat from 1024² to 2048²; the cap stays 0.12.**
-- **The GPU cap was re-measured for v5H on 2026-08-17 and lowered.** `ESSAYS_GPU_MEM_FRACTION` **0.75 → 0.12** (17.67 → 2.83 GiB) and `ESSAYS_GPU_MIN_FREE_GB` **17 → 4**. Measured on a real `evaluate.py` run over 3 positions of a 2048² IRM well (162 MTs): the working set is **1.41 GiB reserved** / 1.05 GiB allocated, and FLAT across caps of 17.99 / 4.80 / 2.88 / 1.92 GiB. Runtime was flat too (43.0 / 43.6 / 44.0 / 43.9 s) and `results.csv` came out **byte-identical at all four caps** — unlike v7, where the cap sized cuDNN's workspace and 0.6 → 0.75 moved a centerline by 1.10 px. The equivalence holds only because 1.41 GiB sits far below every cap tested, so the workspace is never constrained; re-check it if either number moves. This returned ~15 GiB of reservation and dropped the start gate from 17 GB to 4 GB — the gate mattered more in practice, because it made a batch _wait_ for memory it was never going to use.
-- **The rule that produced the old numbers still stands: set the cap ABOVE the model's working set, never below.** v7's was 16.36 GiB on a 2048² well; the cap was once 0.6 (14.13 GiB), i.e. _under_ it, so torch hit the ceiling on every position, released ~3.7 GiB of cached blocks back to the driver and had to re-win them from a card shared with `ml` and Maptimize. Losing that race is an `OutOfMemoryError`, which is why one folder lost 255 wells in one run and 68 in the next. Demand does not grow into the ceiling, so raising the cap past ~2× the working set buys nothing and only takes room interactive segmentation needs. A cap below the working set protects nobody: it hands other tenants memory the batch immediately tries to take back. `backend/essays/tests/test_gpu_budget.py` asserts both directions (cap ≥ 1.5× working set, cap ≤ working set + 2 GiB, start gate ≥ cap + CUDA context) and that the compose defaults match the module defaults.
-
-### Grid previews and storage GC (2026-10-24)
-
-- **A preview is addressed by its inputs, not invalidated by its writers.**
-  `previewUrl = /api/images/:id/preview?v=<version>`, the version a hash of
-  `originalPath` + the segmentation row's `id`/`updatedAt` + `PREVIEW_RENDERER_VERSION`
-  (`services/previews/previewVersion.ts`). The old scheme re-rendered a file
-  from 3 of the ~15 paths that change a segmentation; deleting one, every
-  cross-frame track op, static projection, neurite soma assignment and
-  type-label clean-up left the old picture, and nothing told the browser. Any
-  write that moves `updatedAt` now moves the URL — a new write path needs
-  nothing to stay correct. **Bump `PREVIEW_RENDERER_VERSION` whenever
-  `previewRenderer.ts` changes what it draws**, or every cached preview stays.
-- **Rendered on first request, 512 px, aspect kept, in preview space**:
-  1 851 → 30 ms for a 4080×3072 JPEG and 700 → 75 ms for a 16-bit frame with
-  311 polylines, measured on production files. A 16-bit source is stretched
-  over its own min..max (the editor's opening window), scaled to 0..65535 —
-  sharp's `grey16 → b-w` divides by 256, so a 0..255 stretch came out black.
-  Colours come from `resolvePolygonColor`, shared with the export
-  visualization (whose output was proven byte-identical across the refactor).
-- `previewService.notifyChanged` / `notifyContainerChanged` emit
-  `imagePreviewsUpdated` to the PROJECT room (collaborators too) and pre-render
-  at low priority. They are a liveness path, not a correctness one.
-- **The FE has ONE gallery mapper (`mapGalleryImage`) and ONE re-list
-  (`reloadImages`, replace-not-merge).** Five hand-written copies used to
-  "preserve the existing thumbnail if the API sent none", which is exactly how a
-  deleted segmentation kept its overlay, and four of them dropped the video
-  fields. After an upload the page also fetched the full polygons of EVERY
-  segmented image, unbounded — data the grid never reads.
-- `images.segmentationThumbnailPath` is **unused and kept only as the rollback
-  target**; drop it (and the old `segmentation_thumbnails/` dirs, which the GC
-  keeps while a row references them) in a follow-up once the new previews have
-  run in production.
-- **Storage GC** (`services/maintenance/storageGc.ts`, every 6 h,
-  `STORAGE_GC_MODE=off|dry-run|delete`, JSONL report per run in
-  `<LOG_DIR>/storage-gc/`). The first production dry-run (2026-10-24) planned
-  74 000 files / 40.2 GB of 306 GB — 27.6 GB from projects deleted before #580,
-  11.5 GB of video dirs the batch delete left behind, 38 190 superseded
-  thumbnails, 4 353 v1 proxies — and matched an independent file-by-file audit
-  exactly, every difference being the grace period. Safety rules that look
-  like over-engineering and are not: **inside a live container nothing is
-  judged by reference** (non-source channel PNGs are referenced by no row, and
-  removeChannel can repoint a frame at one); **grace is the NEWEST file mtime
-  in the subtree**, never a directory's (the GC's own deletes move that);
-  `(parentVideoId, frameIndex)` is **not unique**, so a frame dir goes only when
-  no row has its index; `projects/segmenter/` is a namespace of its own. Each
-  of these is a mutation-tested case in `storageGc.test.ts`.
-- The delete paths now remove a row's files AFTER the row commits (the batch
-  path used to delete files inside the transaction, before the row), and a
-  cascaded container takes its whole directory, display cache and previews.
-
-### Video projects
-
-- Video container = one `Image` row with `isVideoContainer=true` + `channels` JSON. Each frame is a child `Image` row with `parentVideoId` + `frameIndex` + `displayOrder`. Containers are never enqueued.
-- Formats: MP4 / AVI / MOV / MKV / WebM (ffmpeg-static), multi-page TIFF (`tifffile`), Nikon ND2 (`nd2`).
-- Storage: `projects/<pid>/images/<videoId>/{original.ext, thumbnail.jpg, frames/NNNN/<channel>.png, ...}`.
-- Channels: ND2 + TIFF expose per-channel PNGs. IRM auto-detected by name (IRM / BF / DIC / TL). Segmentation uses the channel marked `isSegmentationSource=true`.
-- Cross-frame MT tracking: auto-triggers when all frames reach `'segmented'`. `trackerService.ts` POSTs to ML `/track`, patches `trackId` into `Segmentation.polygons`.
-- Queue fairness: `getBatchItems` deprioritizes users recently processed so a 200-frame video can't monopolize.
-
-### Key shared libraries (`/src/lib/`)
-
-- `api.ts` — Axios client with JWT interceptors, token refresh, retry
-- `polygonGeometry.ts` — area, perimeter, point-in-polygon, vertex ops (don't duplicate)
-- `segmentation.ts` — `Polygon` + `Point` types
-- `metricCalculations.ts` (under `pages/segmentation/utils/`) — Feret diameter, polyline length, ImageJ-convention perimeter
-- `constants.ts` — timeouts, retry, file limits, storage TTLs, HTTP status codes
-
----
-
-## Code Conventions
-
-### Pre-commit (Husky)
-
-`.husky/pre-commit` validates every commit:
-
-- No `console.log` / `debugger`
-- ESLint **0 warnings** (strict) on **staged** frontend files, via lint-staged. The hook's separate whole-tree `npx eslint .` (step 7) is **advisory only** — it swallows the output and increments a warning counter, so an unstaged frontend lint error does not block the commit. `make ci` and the CI `frontend` job do gate it.
-- ESLint baseline gate on `backend/src` (step 7b) — **blocks** on any problem not in `eslint-baseline.json`, and blocks when the gate itself cannot run
-- Prettier formatting
-- Frontend + backend TypeScript check
-- Conventional commits required (`feat:`, `fix:`, `chore:`, `refactor:`, `test:`, `docs:`, `perf:`)
-- Direct commits to `main` blocked — use feature branches + PRs
-
-### i18n
-
-All user-facing strings must exist in all 6 translation files (`/src/translations/{en,cs,es,de,fr,zh}.ts`). Validate: `node scripts/check-i18n.cjs`.
-
-**`t()` is not reachable everywhere.** `UploadProvider` is mounted OUTSIDE `LanguageProvider` in `App.tsx`, so nothing in the upload state machine can translate — for a long time every line of the upload card's status text was English in all six locales, and the validator could not see it because there was no key to check. Code in such a position must carry a translation KEY and let the render site resolve it (`UploadOperation` in `src/lib/uploadUtils.ts`, resolved in `FloatingUploadProgress`). **The server has the same problem** and for the same reason: it cannot know the browser's locale, so a progress event carries `messageKey`/`messageParams`, never a composed sentence. `videoUploadService.test.ts` scans the source and fails on any `reportProgress` without a key — four NESTED ones were missed on the first pass and shipped English onto a Czech UI.
-
-The i18n validator only checks that keys exist in every file. It cannot tell you a string was never keyed in the first place, so **grep for user-visible string literals in any code path you touch**.
-
-### React patterns in this codebase
-
-- **React.memo with custom comparators** — used heavily in canvas (`CanvasPolygon`, `CanvasVertex`). When adding props, update the comparator. Missed comparator entries are a recurring bug.
-- **`useCallback` / `useMemo` stability** — parent callbacks passed to memoized children must be stable. Arrays passed for reference-equality need stabilized refs (see `availableInstanceIds` two-stage memo pattern).
-- **`editor.getPolygons()`** — use this (reads latest ref) instead of `editor.polygons` (closure snapshot) when updating polygons from event handlers.
-
-### CI surface
-
-GitHub Actions is intentionally minimal (4 chronically-broken workflows were removed in PR #161):
-
-- `ci.yml` — the merge gate: jobs `frontend`, `backend`, `pins`, `python-tests`. The `frontend` job also runs the two parity scripts (`check-model-parity.cjs`, `verify-shared-types.cjs`) since 2026-10-06 — they read every source as text, Python included, so they need Node only
-- `codeql.yml` — passive security scanning (Security tab)
-- `nightly-drift.yml` — daily TS/ESLint/i18n + npm audit on `main`; opens labelled issue on failure, doesn't block PRs
-- GitGuardian App — secret leak detection
-
-`frontend` and `backend` are REQUIRED checks (ruleset `main-protection`, strict), so a red run blocks the merge. They are a gate for what they cover and nothing more: the pre-commit hook, `make ci`, a real browser and a real request are still what catch the rest — see every "found only on the wire" note in this file.
-
----
+**Migrate before you recreate, not after:** on 2026-10-06 the other order caused twelve restarts and about four minutes with the whole app down. `make prod` rebuilds and recreates everything. Ports production/dev: nginx 80/443, FE 4000/3000, BE 4001/3001, ML 4008/8000, PostgreSQL 5432, Redis 6379 (internal).
 
 ## Deploy Gotchas
 
-- **The service images BAKE their source; only weights/uploads/caches are mounted.** `docker inspect spheroseg-ml` shows three mounts — `weights`, `sperm_final`, `uploads` — and everything under `backend/segmentation/` is COPIED in. Same for `backend/src`. So **a merged PR does not reach production until that service is rebuilt**, and production can silently run older code than `main` while every file in git looks correct. Caught 2026-09-04: the ml container was built at 12:45 and matched commit `28144dba` exactly, two commits behind `main`, and a user-visible bug was nearly diagnosed against code they were not running. **Before diagnosing anything, pin the container to a commit:**
-  ```bash
-  docker exec spheroseg-ml md5sum /app/models/<file>.py
-  git show <commit>:backend/segmentation/models/<file>.py | md5sum
-  ```
-  To A/B the repo version without touching the running container, import it from a scratch path (`importlib.util.spec_from_file_location`) rather than overwriting `/app`.
-- **Production migrations use `prisma migrate deploy`**, never `migrate dev` (dev creates new files; deploy applies existing ones to a live DB).
-- **Bind-mounted configs need `--force-recreate`**, not just `nginx -s reload`. `sed -i` rewrites the inode; the running container holds the old one. Use `docker compose up -d --no-deps --force-recreate <service>`.
-- **Upload limits coupled across 3 layers** — images 20 MB (`FILE_LIMITS.MAX_FILE_SIZE_BYTES` + image multer + nginx). Videos/ND2 100 GB (`MAX_VIDEO_FILE_SIZE_BYTES` + separate `videoUpload` multer + `client_max_body_size 100G`). The smallest wins. **A `.tif` over 20 MB is routed to `/videos` by SIZE** (`isVideoLikeUpload`), which is wrong for one real kind of file: an uncompressed colour photograph (a 4104 × 2174 RGB frame is 26.8 MB). The stack extractor has no branch for `YXS` and must not grow one — every frame it writes is one grayscale plane per channel — so `colourStillTiff.ts` asks `extract_tiff_stack.py --classify` (header only: the backend image has no `imagecodecs`, so tifffile cannot decode LZW/JPEG there) and stores a single-page RGB/YCbCr TIFF through the ordinary image path, up to 512 MB. The `S` axis alone does not mean colour: a multi-sample `minisblack` page is `YXS` too. Measured 2026-10-09 on every production TIFF: 0 of 206 container originals classify as a photograph, and 290 of 325 stills already had exactly this layout.
-- **No model fetches from HuggingFace at load time any more** (2026-09-20, PR #556). This used to say `HF_TOKEN` and `.hf-cache` were load-bearing "for SegFormer + sperm, which still call `from_pretrained`". Both halves are now false:
-  - **SegFormer**: it only ever fetched the tiny `config.json` — never the ADE weights, which our own checkpoint overwrites wholesale — so the config is vendored at `models/segformer_config.json` and built with `SegformerConfig.from_dict`. Proven bit-identical (208 tensors, same keys and shapes, `max|diff| = 0.000e+00` on the same checkpoint) and proven offline: with `--network none` and no cache the new code loads and the old code dies on `couldn't connect to huggingface.co`. This mattered because SegFormer became the **spheroid default**, so a cold cache or a bad `transformers` bump would have broken the commonest project type rather than only opt-in users.
-  - **Sperm**: it never fetched on the shipped path. `Dinov2Model.from_pretrained` (`sperm_final/models/backbone.py:33`) sits on the `DINOv2Backbone` branch, but production takes the **ConvNeXt** branch — the checkpoint's 342 backbone tensors are named `backbone.backbone.stages.N.downsample_layers.*`, and `convnext_backbone.py` contains no fetch of any kind.
-    **The trace, so the claim is not larger than its evidence.** `grep -rnE "from_pretrained|hf_hub_download|snapshot_download|huggingface_hub|AutoModel|AutoConfig|AutoProcessor|timm.create_model|torch.hub"` over `backend/segmentation/` and `backend/essays/` returns exactly ONE live call: the dead DINOv2 branch above. Everything else is comments. So no model reaches the Hub through any known entry point, and SegFormer was additionally proven offline empirically (`--network none`, no cache).
-  - **Both are now REMOVED from the `ml` service** (PR #559). The deploy-shaped verification the grep could not supply: every model in the production image was loaded with **no cache, no `HF_TOKEN` and `--network none`**, so a fetch could not silently succeed — **11 of 11 loaded**. Run that before adding either back:
-    ```bash
-    docker run --rm --gpus all --network none \
-      -v $PWD/backend/segmentation/weights:/app/weights:ro \
-      -v $PWD/backend/segmentation/sperm_final/best_model.pth:/app/sperm_final/best_model.pth:ro \
-      --entrypoint python cell-segmentation-hub-ml -c "…loader.get_model(n) for every n…"
-    ```
-    **Enumerate the models from the loader's own source and assert the count**, or the check silently shrinks: the first version of this script sliced `model_loader.py` starting AT `'hrnet': {` and its `^\s{8}` anchor then dropped that very key, so it tested 10 of 11 and printed a clean `10/10`. The cache that was mounted held **SAM 3** (used to distil the microcapsule model — the distilled checkpoint is local), **DINOv3** and **DINOv2** (the v7 microtubule model and the sperm model's untaken branch) and SegFormer's 32 KB config, now vendored. All leftovers.
-- **Always `--env-file .env.production`** when running `docker compose` against production. Without it, env vars silently empty.
-- **After backend `--force-recreate`, restart nginx too** — DNS cache pins old container IP.
-- **GPU access is granted by `device_cgroup_rules`, not `devices:`** (ml + essays). `runtime: nvidia` alone injects the allowlist via a hook that runs _after_ the OCI spec is built, so `docker update` / `systemctl daemon-reload` / any systemd cgroup rewrite silently strips the GPU from a **running** container — `open('/dev/nvidiactl')` returns EPERM on a mode-0666 node and `torch.cuda.is_available()` flips to False while `/health` keeps saying it is fine. Do **not** "fix" this by switching to `devices:`: docker re-resolves those host paths on every `docker start`, and `/dev/nvidia-uvm` is created lazily by `nvidia-modprobe` — on the 2026-01-13 boot the toolkit hook logged `Could not locate /dev/nvidia-uvm` _while docker was restoring containers_, ~0.6 s before the node appeared. The hook warns and continues; an explicit `devices:` entry fails hard, so with `restart: always` that becomes a crash-loop instead of a degradation. (Wall-clock timestamps from that boot are unusable — the clock jumped +2 h at monotonic 4.65 s; use `journalctl -o short-monotonic`.) If a driver upgrade moves the **dynamic** nvidia-uvm major, `grep nvidia-uvm /proc/devices` and update the `236` rule; the symptom is silent CPU, not a hard failure.
-- **Volume names still carry `_blue_data` suffix** (postgres_blue_data, redis_blue_data). Cosmetic-only — internal Docker identifiers, never user-facing. Renaming requires manual volume copy; not worth the downtime for "spheroseg_data" prettiness.
-- **Upload directory still mounted from `./backend/uploads/blue`** on host, but container sees neutral `/app/uploads`. 17 GB of production data lives there; renaming the host path would need `docker compose down` + `mv` + remount. Same trade-off as volume names.
-- **The DB password is a fixed literal that reads like a DB name** — it carries the obsolete `blue` suffix and is NOT a reference to any database. Its value lives only in `.env.production` (gitignored) as `PG_PASSWORD`; never paste it here. Database itself is `spheroseg` since 2026-05-15. Rotating the password means changing the live user's `PG_PASSWORD` first.
+Full text and measurements: [deploy gotchas](docs/claude/deploy-gotchas.md).
 
----
+- **Images BAKE their source; a merged PR does not reach production until that service is rebuilt.** Before diagnosing anything, pin the container to a commit: `docker exec spheroseg-ml md5sum /app/models/<file>.py` against `git show <commit>:backend/segmentation/models/<file>.py | md5sum`.
+- **`prisma migrate deploy`, never `migrate dev`, in production.** **Always `--env-file .env.production`.** **After backend `--force-recreate`, restart nginx.**
+- Bind-mounted configs need `--force-recreate`, not `nginx -s reload`.
+- Upload limits are coupled across 3 layers; the smallest wins. A `.tif` over 20 MB is routed to `/videos` by size unless `colourStillTiff.ts` classifies it as a photograph.
+- No model fetches from HuggingFace at load time since PR #556/#559. Before adding `HF_TOKEN` or a cache back, run the `--network none` load check and assert the model count from the loader's own source.
+- **GPU access is granted by `device_cgroup_rules`; do NOT "fix" it by switching to `devices:`** (crash-loop on boot). Symptom of a stripped GPU is silent CPU with a healthy `/health`.
+- `_blue_data` volume names, `./backend/uploads/blue` and the `blue`-suffixed DB password are cosmetic leftovers; renaming needs downtime. Never paste the password anywhere; it lives only in `.env.production`.
+
+## Tech Stack
+
+React 18 + TS + Vite + shadcn/ui · Node + Express + TS + Prisma · Python + FastAPI + PyTorch · PostgreSQL · Socket.io · JWT access + refresh · i18n in 6 languages (EN, CS, ES, DE, FR, ZH) via a hand-rolled `LanguageContext`, **not i18next**. Models: `docs/reference/ml-models.md`.
+
+## Architecture invariants
+
+Skim-level subsystem notes: [architecture notes](docs/claude/architecture.md); depth in `docs/architecture/`.
+
+### The segmentation model belongs to the PROJECT (since 2026-09-20, PRs #553/#554)
+
+`projects.segmentationModel`, nullable, `NULL` = the type's default, **never backfilled**; resolve with `resolveProjectModel()` on both sides. Rename / type / model are owner-only. Full section in the architecture notes.
+
+- **Mappers are enumerative:** `mapProjectFields` and `validateSinglePolygon` strip every field not listed. A new field must be added there.
+- **Public API `/api/v1`:** auth is `authenticateApiKey`, never `authenticate`; errors go through `sendProblem`, never `res.json`; the key is never stored; a parameter a model does not read is REFUSED (422), never dropped; the worker is the only writer of `items`; never add an nginx `location /api/v1/` pointing at `ml_service`.
+- **Sessions:** do not "improve" refresh replay with a `SET NX` claim. Account deletion removes files by PROJECT, never by folder. `AuthContext.deleteAccount` must not touch the global `loading` flag.
+- **Microtubules:** the model is IRM-only and its threshold is NOT a user setting. Model code and metrics each have ONE copy (`models/microtubule`, `models/mt_measure.py`). The out-of-focus check is a DIAGNOSTIC and must stay one. Set GPU caps ABOVE the model's working set, never below. Kymograph intensities from before 2026-09-01 and Essays numbers from before 2026-11-03 (SPARSE35 → V16 DEB_S4 ep040) are not comparable with later ones.
+- **`projects.pixelSizeUm` is read at segmentation by `spheroid_disintegration` only** (2026-11-08): the ML resamples to 1.28 µm/px and answers 400 to the field for any other model.
+- Video containers are never enqueued. `polygonGeometry.ts` holds geometry, don't duplicate it. `editor.getPolygons()`, not `editor.polygons`, in event handlers.
+
+## Code Conventions
+
+Details: [conventions](docs/claude/conventions.md). Pre-commit (Husky): no `console.log` / `debugger`, ESLint 0 warnings on staged files, backend baseline gate, Prettier, TS check, conventional commits (`feat:`, `fix:`, `chore:`, `refactor:`, `test:`, `docs:`, `perf:`). **Direct commits to `main` are blocked: feature branches + PRs.** All user-facing strings exist in all 6 translation files (`node scripts/check-i18n.cjs`); `t()` is not reachable in `UploadProvider` or on the server, carry a key instead. CI: `ci.yml` `frontend` and `backend` are required; they gate what they cover and nothing more.
 
 ## Email
 
 UTIA mail server (`hermes.utia.cas.cz:25`, STARTTLS, no auth). 2-10 min delays are normal (background queue). Config in `.env.production`.
 
----
-
 ## Best Practices
 
-Distilled from the 2026-09-04 audit (14 parallel work units, 15 PRs). Each line
-below cost something to learn; none of it is generic advice.
-
-### Before you trust a test
-
-1. **Does the test file import the thing it tests?** Six suites here did not —
-   they declared the component or endpoint inside the test file. 195 tests,
-   green forever, measuring nothing. Deleting them raised coverage.
-2. **Mutate the claim.** Revert the fix, confirm RED, restore. Assert the
-   anchor string is present AND unique before replacing, or a short anchor
-   matches a different site and reads exactly like a surviving mutant.
-3. **Make the fixture discriminate.** If both branches produce the same output,
-   the fixture is too nice. A polyline fixture must BEND (a straight line hid a
-   sign error in the shared band rasteriser through two whole suites). Three
-   synthetic fixtures let a `_render_profiles` mutation survive; real kymograph
-   rows killed it instantly.
-4. **Never assert on wall-clock.** `performance.now()` resolves to a whole
-   millisecond under vitest, and measured clean-vs-regressed distributions here
-   **overlap** under load — so no threshold exists and tuning one is
-   self-deception. Assert the deterministic thing: renders counted, queries
-   issued, calls made, work cancelled.
-5. **Check what actually runs it.** A suite can be red or unwired for months.
-   Before trusting coverage, ask which command reaches the file.
-
-### Before you trust a measurement
-
-6. **Measure both distributions, not just the improved one.** "Faster" without
-   a regressed baseline is a story, not a result.
-7. **Validate on real production data.** Synthetic fixtures pass because you
-   built them to match your assumption. Every performance claim in this batch
-   that survived was proven byte-identical on real containers.
-8. **A green build proves the build, not the behaviour.** CI here cannot run the
-   ML suite at all (no GPU on the runner), the frontend `tsc` is vacuous, and
-   backend test files are unlinted.
-
-### Before you trust a document
-
-9. **Re-measure a number before repeating it.** The `transformers` ceiling in
-   this repo's own comments was wrong by seven minors, and a brief written from
-   it would have shipped a broken ML service.
-10. **Rehearse the runbook.** `docs/database-backup.md` documented a restore
-    against a database that does not exist, with a glob matching no files. It
-    failed twice, and only under an actual incident would anyone find out.
-
-### When changing dependencies
-
-11. `npm ls <pkg>` before removing anything — a direct import may resolve only
-    transitively (`qs`, `ioredis`). Grep the BUILD config too (`vite.config.ts`
-    `manualChunks`), not just `src/`.
-12. Prefer bumping the real parent; reach for `overrides` only when no parent
-    admits the patched version, and say why. This repo moved away from
-    hand-maintained overrides because they went stale unnoticed.
-13. If a bot regenerates the PR you closed, closing it again is a treadmill —
-    fix the `ignore` rule.
-
-### When automating against GitHub
-
-14. After a rebase the API still reports the PREVIOUS run's checks; poll on the
-    new run, and keep an independent `mergeStateStatus` guard.
-15. `UNSTABLE` means required checks passed and something non-required did not.
-16. `git branch -r --merged` reports 0 **by construction** in a squash-merge
-    repo — it can never be evidence of anything here.
-
-### When you are about to be clever
-
-17. Don't weaken a guard for your own convenience. `allow_auto_merge` is off
-    **on purpose**, and `dependabot.yml` documents why.
-18. Don't route around a soft-denied command. If a gate blocks you, finish
-    everything else and hand over the exact steps.
-19. Don't "simplify" code whose docstring carries measured numbers —
-    `rasterize_band`, `vicinity_mask` and `focus_qc/metrics.py` are deliberately
-    harder to read than the loops they replaced.
-
----
+From the 2026-09-04 audit, in full in [best practices](docs/claude/best-practices.md). Re-measure a number before repeating it. Rehearse a runbook before relying on it. A green build proves the build, not the behaviour. `npm ls <pkg>` before removing anything. **Don't weaken a guard for your own convenience** (`allow_auto_merge` is off on purpose). **Don't route around a soft-denied command:** finish everything else and hand over the exact steps. **Don't "simplify" code whose docstring carries measured numbers** (`rasterize_band`, `vicinity_mask`, `focus_qc/metrics.py`).
 
 ## Documentation Index
 
-| Topic                          | File                                                                                                                                                                                                                                                   |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Architecture overview          | [`docs/architecture/README.md`](docs/architecture/README.md)                                                                                                                                                                                           |
-| Frontend architecture          | [`docs/architecture/frontend.md`](docs/architecture/frontend.md)                                                                                                                                                                                       |
-| Backend architecture           | [`docs/architecture/backend.md`](docs/architecture/backend.md)                                                                                                                                                                                         |
-| ML service                     | [`docs/architecture/ml-service.md`](docs/architecture/ml-service.md)                                                                                                                                                                                   |
-| Database schema                | [`docs/reference/database-schema.md`](docs/reference/database-schema.md)                                                                                                                                                                               |
-| Testing guide                  | [`docs/testing-guide.md`](docs/testing-guide.md)                                                                                                                                                                                                       |
-| i18n guide                     | [`docs/i18n-guide.md`](docs/i18n-guide.md)                                                                                                                                                                                                             |
-| Git hooks                      | [`docs/hooks-guide.md`](docs/hooks-guide.md)                                                                                                                                                                                                           |
-| API documentation              | [`docs/api/README.md`](docs/api/README.md)                                                                                                                                                                                                             |
-| Getting started                | [`docs/development/getting-started.md`](docs/development/getting-started.md)                                                                                                                                                                           |
-| Polygon rendering optimization | [`docs/polygon-rendering-optimization.md`](docs/polygon-rendering-optimization.md) _(accurate as of 2026-06-22 — reflects the live render path: a single `visiblePolygons` filter + `.map()`, no frustum culling, plus the quadtree vertex hot paths)_ |
+[Architecture](docs/architecture/README.md) · [Frontend](docs/architecture/frontend.md) · [Backend](docs/architecture/backend.md) · [ML service](docs/architecture/ml-service.md) · [Database schema](docs/reference/database-schema.md) · [Testing guide](docs/testing-guide.md) · [i18n guide](docs/i18n-guide.md) · [Git hooks](docs/hooks-guide.md) · [API](docs/api/README.md) · [Getting started](docs/development/getting-started.md) · [Polygon rendering](docs/polygon-rendering-optimization.md), accurate as of 2026-06-22.
